@@ -42,3 +42,27 @@ def registrar_confirmacao(dados: dict):
         datetime.now().strftime("%d/%m/%Y %H:%M")
     ]
     aba.append_row(nova_linha)
+
+def buscar_membro(telegram_id):
+    planilha = conectar_planilha()
+    aba = planilha.worksheet("Membros")
+    registros = aba.get_all_records()
+    for membro in registros:
+        if str(membro.get("Telegram ID", "")) == str(telegram_id):
+            return membro
+    return None
+
+def cadastrar_membro(dados: dict):
+    planilha = conectar_planilha()
+    aba = planilha.worksheet("Membros")
+    nova_linha = [
+        dados.get("telegram_id", ""),
+        dados.get("nome", ""),
+        dados.get("loja", ""),
+        dados.get("grau", ""),
+        dados.get("oriente", ""),
+        dados.get("potencia", ""),
+        datetime.now().strftime("%d/%m/%Y %H:%M")
+    ]
+    aba.append_row(nova_linha)
+

@@ -1,25 +1,21 @@
 import os
 import asyncio
 import sys
+from dotenv import load_dotenv
+from telegram.ext import ApplicationBuilder, CallbackQueryHandler
+from src.cadastro import cadastro_handler
+from src.bot import botao_handler
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from dotenv import load_dotenv
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler
-from src.bot import start, botao_handler
-
-# Carrega as variáveis do arquivo .env
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
-
-    # Registra os handlers
-    app.add_handler(CommandHandler("start", start))
+    app.add_handler(cadastro_handler)
     app.add_handler(CallbackQueryHandler(botao_handler))
-
     print("Bot iniciado!")
     app.run_polling()
 

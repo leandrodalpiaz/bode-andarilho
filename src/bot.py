@@ -1,39 +1,23 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
-from src.messages import BOAS_VINDAS, BOAS_VINDAS_RETORNO, MENU_PRINCIPAL
+from src.eventos import mostrar_eventos, mostrar_detalhes_evento, confirmar_presenca
 
 def menu_principal_teclado():
-    teclado = [
+    teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("📅 Ver eventos", callback_data="ver_eventos")],
-        [InlineKeyboardButton("✅ Minhas confirmações", callback_data="minhas_confirmacoes")],
-        [InlineKeyboardButton("👤 Meus Dados", callback_data="meus_dados")],
-    ]
-    return InlineKeyboardMarkup(teclado)
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Por enquanto todos os membros são tratados como primeiro acesso
-    # O reconhecimento de membros cadastrados será adicionado em breve
-    await update.message.reply_text(
-        BOAS_VINDAS,
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("Vamos lá!", callback_data="iniciar_cadastro")]
-        ])
-    )
+        [InlineKeyboardButton("👤 Meu cadastro", callback_data="meu_cadastro")],
+    ])
+    return teclado
 
 async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    data = query.data
 
-    if query.data == "iniciar_cadastro":
-        await query.edit_message_text(
-            "Em breve o cadastro estará disponível aqui. 🐐",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("Voltar", callback_data="menu")]
-            ])
-        )
-
-    elif query.data == "menu":
-        await query.edit_message_text(
-            MENU_PRINCIPAL,
-            reply_markup=menu_principal_teclado()
-        )
+    if data == "ver_eventos":
+        await mostrar_eventos(update, context)
+    elif data.startswith("evento_"):
+        await mostrar_detalhes_evento(update, context)
+    elif data.startswith("confirmar_"):
+        await confirmar_presenca(update, context)
+    else:
+        await query.answer("Função em desenvolvimento.")
