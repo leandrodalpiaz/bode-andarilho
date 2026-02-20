@@ -1,3 +1,5 @@
+import os
+import json
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
@@ -8,7 +10,12 @@ SCOPES = [
 ]
 
 def conectar_planilha():
-    creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
+    creds_json = os.getenv("GOOGLE_CREDENTIALS")
+    if creds_json:
+        creds_dict = json.loads(creds_json)
+        creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+    else:
+        creds = Credentials.from_service_account_file("credentials.json", scopes=SCOPES)
     cliente = gspread.authorize(creds)
     planilha = cliente.open("Bode Andarilho")
     return planilha
@@ -17,7 +24,6 @@ def listar_eventos():
     planilha = conectar_planilha()
     aba = planilha.worksheet("Eventos")
     registros = aba.get_all_records()
-    # Retorna apenas eventos com status Ativo
     return [e for e in registros if str(e.get("Status", "")).lower() == "ativo"]
 
 def buscar_evento_por_indice(indice):
@@ -65,4 +71,3 @@ def cadastrar_membro(dados: dict):
         datetime.now().strftime("%d/%m/%Y %H:%M")
     ]
     aba.append_row(nova_linha)
-
