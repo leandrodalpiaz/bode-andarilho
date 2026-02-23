@@ -3,7 +3,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from src.sheets import buscar_membro
 from src.cadastro import cadastro_start
-from src.eventos import mostrar_eventos, mostrar_detalhes_evento, confirmar_presenca, cancelar_presenca
+from src.eventos import mostrar_eventos, mostrar_detalhes_evento, cancelar_presenca # 'confirmar_presenca' removido
 from src.perfil import mostrar_perfil
 from src.permissoes import get_nivel
 
@@ -47,8 +47,8 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await mostrar_eventos(update, context)
     elif data.startswith("evento_"):
         await mostrar_detalhes_evento(update, context)
-    elif data.startswith("confirmar_"):
-        await confirmar_presenca(update, context)
+    # elif data.startswith("confirmar_"): # Esta linha foi removida, pois o ConversationHandler em main.py lida com isso
+    #     await iniciar_confirmacao_presenca(update, context) # A função agora é iniciar_confirmacao_presenca
     elif data.startswith("cancelar_"):
         await cancelar_presenca(update, context)
     elif data == "meu_cadastro":
@@ -101,7 +101,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📅 Cadastrar evento", callback_data="cadastrar_evento")], # Adicionado aqui
+        [InlineKeyboardButton("📅 Cadastrar evento", callback_data="cadastrar_evento")],
         [InlineKeyboardButton("👥 Ver todos os membros", callback_data="admin_ver_membros")],
         [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
         [InlineKeyboardButton("🗑️ Excluir membro", callback_data="admin_excluir_membro")],
