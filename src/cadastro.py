@@ -1,71 +1,79 @@
 from telegram import Update
 from telegram.ext import (
-    ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
+    ContextTypes, ConversationHandler, CommandHandler,
+    MessageHandler, filters
 )
 from src.sheets import buscar_membro, cadastrar_membro
-from src.messages import BOAS_VINDAS, BOAS_VINDAS_RETORNO, MENU_PRINCIPAL
-from src.bot import menu_principal_teclado
+from src.permissoes import get_nivel
 
 NOME, LOJA, GRAU, ORIENTE, POTENCIA = range(5)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from src.bot import menu_principal_teclado
     telegram_id = update.effective_user.id
     membro = buscar_membro(telegram_id)
 
     if membro:
+        nivel = get_nivel(telegram_id)
         await update.message.reply_text(
-            BOAS_VINDAS_RETORNO.format(nome=membro["Nome"]),
-            reply_markup=menu_principal_teclado()
+            f"Bem-vindo de volta, irmão {membro.get('Nome', '')}! 🐐\n\nO que deseja fazer?",
+            reply_markup=menu_principal_teclado(nivel)
         )
         return ConversationHandler.END
 
-    await update.message.reply_text(BOAS_VINDAS)
-    await update.message.reply_text("Qual é o seu nome completo, irmão?")
+    await update.message.reply_text(
+        "Olá! Bem-vindo ao bot do Bode Andarilho. 🐐\n\n"
+        "Vou precisar de algumas informações para te cadastrar.\n\n"
+        "Qual é o seu nome completo?"
+    )
     return NOME
 
 async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["nome"] = update.message.text.strip()
-    await update.message.reply_text("Qual é o nome da sua loja?")
+    context.user_data["nome"] = update.message.text
+    await update.message.reply_text("Qual é o nome da sua loja de origem?")
     return LOJA
 
 async def receber_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["loja"] = update.message.text.strip()
-    await update.message.reply_text(
-        "Qual é o seu grau?\n\n1 — Aprendiz\n2 — Companheiro\n3 — Mestre"
-    )
+    context.user_data["loja"] = update.message.text
+    await update.message.reply_text("Qual é o seu grau? (Aprendiz, Companheiro ou Mestre)")
     return GRAU
 
 async def receber_grau(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["grau"] = update.message.text.strip()
-    await update.message.reply_text("Qual é o seu oriente? (cidade da sua loja)")
+    context.user_data["grau"] = update.message.text
+    await update.message.reply_text("Qual é o oriente da sua loja? (cidade)")
     return ORIENTE
 
 async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["oriente"] = update.message.text.strip()
-    await update.message.reply_text("Qual é a sua potência? (ex: GOB, GOBR, GLMB...)")
+    context.user_data["oriente"] = update.message.text
+    await update.message.reply_text("Qual é a potência da sua loja? (ex: GOB, GLESP, COMAB...)")
     return POTENCIA
 
 async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["potencia"] = update.message.text.strip()
+    from src.bot import menu_principal_teclado
+    context.user_data["potencia"] = update.message.text
+    telegram_id = update.effective_user.id
 
     dados = {
-        "telegram_id": update.effective_user.id,
-        "nome": context.user_data["nome"],
-        "loja": context.user_data["loja"],
-        "grau": context.user_data["grau"],
-        "oriente": context.user_data["oriente"],
-        "potencia": context.user_data["potencia"],
+        "telegram_id": telegram_id,
+        "nome": context.user_data.get("nome", ""),
+        "loja": context.user_data.get("loja", ""),
+        "grau": context.user_data.get("grau", ""),
+        "oriente": context.user_data.get("oriente", ""),
+        "potencia": context.user_data.get("potencia", ""),
     }
+
     cadastrar_membro(dados)
+    nivel = get_nivel(telegram_id)
 
     await update.message.reply_text(
-        f"Cadastro realizado, irmão {dados['nome']}! Bem-vindo ao Bode Andarilho. 🐐",
-        reply_markup=menu_principal_teclado()
+        f"Cadastro realizado com sucesso, irmão {dados['nome']}! 🐐\n\n"
+        f"Bem-vindo ao Bode Andarilho!\n\nO que deseja fazer?",
+        reply_markup=menu_principal_teclado(nivel)
     )
     return ConversationHandler.END
 
 async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Cadastro cancelado. Envie /start para recomeçar.")
+    await update.message.reply_text("Cadastro cancelado.")
     return ConversationHandler.END
 
 cadastro_handler = ConversationHandler(
@@ -77,5 +85,5 @@ cadastro_handler = ConversationHandler(
         ORIENTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_oriente)],
         POTENCIA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_potencia)],
     },
-    fallbacks=[CommandHandler("cancelar", cancelar)],
+    fallbacks=[CommandHandler("cancelar", cancelar)]
 )
