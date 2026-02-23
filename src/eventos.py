@@ -1,6 +1,6 @@
 # src/eventos.py
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler, MessageHandler, filters, CommandHandler
+from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler, MessageHandler, filters, CommandHandler # CommandHandler adicionado aqui
 from src.sheets import (
     listar_eventos, buscar_membro, registrar_confirmacao,
     cancelar_confirmacao, buscar_confirmacao
