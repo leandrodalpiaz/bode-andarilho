@@ -1,6 +1,6 @@
 # src/cadastro_evento.py
 from telegram import Update
-from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, CommandHandler, filters
+from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, CommandHandler, filters, CallbackQueryHandler # Adicionado CallbackQueryHandler
 from src.sheets import cadastrar_evento
 from datetime import datetime
 import os
@@ -9,14 +9,12 @@ import os
 DATA, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, OBSERVACOES, ID_GRUPO, ID_SECRETARIO, ENDERECO = range(14)
 
 async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # O check de admin já é feito no botao_handler antes de chamar esta função
-    # Mas é bom ter uma redundância aqui ou garantir que o entry_point seja protegido
     admin_id = os.getenv("ADMIN_TELEGRAM_ID")
     if admin_id and str(update.effective_user.id) != admin_id:
-        await update.message.reply_text("Você não tem permissão para cadastrar eventos.")
+        await update.callback_query.edit_message_text("Você não tem permissão para cadastrar eventos.")
         return ConversationHandler.END
 
-    await update.callback_query.answer() # Responde ao callback_query do botão "Cadastrar evento"
+    await update.callback_query.answer()
     await update.callback_query.edit_message_text("Certo, vamos cadastrar um novo evento.\n\nQual a *Data do evento*? (Ex: 25/03/2026)", parse_mode="Markdown")
     return DATA
 
@@ -122,7 +120,7 @@ async def cancelar_cadastro_evento(update: Update, context: ContextTypes.DEFAULT
     return ConversationHandler.END
 
 cadastro_evento_handler = ConversationHandler(
-    entry_points=[CallbackQueryHandler(novo_evento_start, pattern="^cadastrar_evento$")], # Inicia pelo botão
+    entry_points=[CallbackQueryHandler(novo_evento_start, pattern="^cadastrar_evento$")],
     states={
         DATA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_data)],
         NOME_LOJA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome_loja)],
