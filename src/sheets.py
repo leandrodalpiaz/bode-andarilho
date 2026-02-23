@@ -52,8 +52,39 @@ def registrar_confirmacao(dados: dict):
 def listar_confirmacoes(id_evento: str):
     planilha = conectar_planilha()
     aba = planilha.worksheet("Confirmações")
-    registros = aba.get_all_records()
-    return [r for r in registros if r.get("ID Evento", "") == id_evento]
+    valores = aba.get_all_values()
+    resultado = []
+    for linha in valores[1:]:
+        if len(linha) >= 2 and str(linha[0]) == str(id_evento):
+            resultado.append({
+                "ID Evento": linha[0],
+                "Telegram ID": linha[1],
+                "Nome": linha[2] if len(linha) > 2 else ""
+            })
+    return resultado
+
+def buscar_confirmacao(id_evento: str, telegram_id):
+    planilha = conectar_planilha()
+    aba = planilha.worksheet("Confirmações")
+    valores = aba.get_all_values()
+    for linha in valores[1:]:
+        if len(linha) >= 2:
+            if str(linha[0]).strip() == str(id_evento).strip() and str(linha[1]).strip() == str(telegram_id).strip():
+                return True
+    return False
+
+def cancelar_confirmacao(id_evento: str, telegram_id):
+    planilha = conectar_planilha()
+    aba = planilha.worksheet("Confirmações")
+    valores = aba.get_all_values()
+    for i, linha in enumerate(valores):
+        if i == 0:
+            continue
+        if len(linha) >= 2:
+            if str(linha[0]).strip() == str(id_evento).strip() and str(linha[1]).strip() == str(telegram_id).strip():
+                aba.delete_rows(i + 1)
+                return True
+    return False
 
 def buscar_membro(telegram_id):
     planilha = conectar_planilha()
