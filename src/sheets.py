@@ -49,6 +49,12 @@ def registrar_confirmacao(dados: dict):
     ]
     aba.append_row(nova_linha)
 
+def listar_confirmacoes(id_evento: str):
+    planilha = conectar_planilha()
+    aba = planilha.worksheet("Confirmações")
+    registros = aba.get_all_records()
+    return [r for r in registros if r.get("ID Evento", "") == id_evento]
+
 def buscar_membro(telegram_id):
     planilha = conectar_planilha()
     aba = planilha.worksheet("Membros")
