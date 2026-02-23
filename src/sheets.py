@@ -2,9 +2,20 @@
 import gspread
 import os
 from datetime import datetime
+import json # Importa o módulo json
 
 # Configuração do Google Sheets
-gc = gspread.service_account_from_dict(os.environ.get("GOOGLE_CREDENTIALS"))
+# Converte a string JSON da variável de ambiente em um dicionário Python
+credentials_json_str = os.environ.get("GOOGLE_CREDENTIALS")
+if credentials_json_str:
+    try:
+        credentials_dict = json.loads(credentials_json_str)
+        gc = gspread.service_account_from_dict(credentials_dict)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Erro ao decodificar GOOGLE_CREDENTIALS como JSON: {e}")
+else:
+    raise ValueError("Variável de ambiente GOOGLE_CREDENTIALS não definida.")
+
 spreadsheet = gc.open("Bode Andarilho") # Nome da sua planilha
 
 # --- Funções para Membros ---
@@ -23,7 +34,6 @@ def buscar_membro(telegram_id: int):
 def cadastrar_membro(dados: dict):
     try:
         ws = spreadsheet.worksheet("Membros")
-        # Mapeia os dados para as colunas da planilha
         row = [
             dados.get("nome", ""),
             dados.get("loja", ""),
@@ -32,7 +42,7 @@ def cadastrar_membro(dados: dict):
             dados.get("potencia", ""),
             dados.get("telefone", ""),
             dados.get("telegram_id", ""),
-            dados.get("nivel", "membro") # Nível padrão
+            dados.get("nivel", "membro")
         ]
         ws.append_row(row)
         return True
@@ -45,7 +55,6 @@ def listar_eventos():
     try:
         ws = spreadsheet.worksheet("Eventos")
         data = ws.get_all_records()
-        # Filtra apenas eventos com status "Ativo"
         eventos_ativos = [evento for evento in data if evento.get("Status") == "Ativo"]
         return eventos_ativos
     except Exception as e:
@@ -55,7 +64,6 @@ def listar_eventos():
 def cadastrar_evento(dados: dict):
     try:
         ws = spreadsheet.worksheet("Eventos")
-        # Mapeia os dados para as colunas da planilha
         row = [
             dados.get("data", ""),
             dados.get("dia_semana", ""),
@@ -71,7 +79,7 @@ def cadastrar_evento(dados: dict):
             dados.get("observacoes", ""),
             dados.get("telegram_id_grupo", ""),
             dados.get("telegram_id_secretario", ""),
-            dados.get("status", "Ativo"), # Status padrão
+            dados.get("status", "Ativo"),
             dados.get("endereco", ""),
         ]
         ws.append_row(row)
@@ -84,9 +92,8 @@ def cadastrar_evento(dados: dict):
 def registrar_confirmacao(dados: dict):
     try:
         ws = spreadsheet.worksheet("Confirmações")
-        # Verifica se a confirmação já existe para evitar duplicidade
         if buscar_confirmacao(dados["id_evento"], dados["telegram_id"]):
-            return False # Já confirmado
+            return False
 
         row = [
             dados.get("id_evento", ""),
@@ -98,7 +105,7 @@ def registrar_confirmacao(dados: dict):
             dados.get("oriente", ""),
             dados.get("potencia", ""),
             dados.get("agape", ""),
-            datetime.now().strftime("%d/%m/%Y %H:%M:%S") # Data/Hora da confirmação
+            datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         ]
         ws.append_row(row)
         return True
@@ -121,11 +128,10 @@ def buscar_confirmacao(id_evento: str, telegram_id: int):
 def cancelar_confirmacao(id_evento: str, telegram_id: int):
     try:
         ws = spreadsheet.worksheet("Confirmações")
-        # Encontra a linha da confirmação
-        cell_list = ws.findall(id_evento, in_column=1) # Busca pelo ID Evento na primeira coluna
+        cell_list = ws.findall(id_evento, in_column=1)
         for cell in cell_list:
             row_data = ws.row_values(cell.row)
-            if len(row_data) > 1 and row_data[1] == str(telegram_id): # Verifica o Telegram ID na segunda coluna
+            if len(row_data) > 1 and row_data[1] == str(telegram_id):
                 ws.delete_rows(cell.row)
                 return True
         return False
@@ -137,5 +143,5 @@ def cancelar_confirmacao(id_evento: str, telegram_id: int):
 def get_nivel_membro(telegram_id: int):
     membro = buscar_membro(telegram_id)
     if membro:
-        return membro.get("Nivel", "membro") # Retorna o nível do membro, padrão "membro"
-    return "visitante" # Se não encontrar, é um visitante
+        return membro.get("Nivel", "membro")
+    return "visitante"
