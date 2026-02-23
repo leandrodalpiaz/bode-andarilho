@@ -1,6 +1,6 @@
 # src/eventos.py
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler, MessageHandler, filters, CommandHandler # CommandHandler adicionado aqui
+from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler, MessageHandler, filters, CommandHandler
 from src.sheets import (
     listar_eventos, buscar_membro, registrar_confirmacao,
     cancelar_confirmacao, buscar_confirmacao
@@ -62,7 +62,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
 
     texto = (
         f"📅 *{data} — {nome_loja} {numero_loja} - {potencia}*\n"
-        f"🕐 Horário: {horario}\n"
+        f"🕐 Horário: {horario if horario else 'Não informado'}\n" # Exibe "Não informado" se vazio
         f"📍 Endereço: {endereco}\n"
         f"🔷 Grau mínimo: {grau}\n"
         f"📋 Tipo: {tipo}\n"
@@ -72,8 +72,12 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         f"🍽️ Ágape: {agape}\n"
     )
 
+    # Ajuste para exibir "Sem observações"
     if obs and obs.lower() != "n/a":
         texto += f"\n📝 Obs: {obs}"
+    else:
+        texto += "\n📝 Obs: Sem observações"
+
 
     telegram_id = update.effective_user.id
     id_evento = data + " — " + nome_loja
@@ -188,7 +192,7 @@ async def finalizar_confirmacao_presenca(update: Update, context: ContextTypes.D
 
     resposta_final += "*Resumo da Sessão Confirmada:*\n"
     resposta_final += f"📅 {data} — {nome_loja} {numero_loja} - {potencia_evento}\n"
-    resposta_final += f"🕐 Horário: {horario}\n"
+    resposta_final += f"🕐 Horário: {horario if horario else 'Não informado'}\n" # Exibe "Não informado" se vazio
     resposta_final += f"📍 Endereço: {endereco}\n"
     resposta_final += f"🍽️ Participação no Ágape: {participacao_agape}\n\n"
 

@@ -6,7 +6,7 @@ from datetime import datetime
 import os
 
 # Estados da conversação para o cadastro de evento
-DATA, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, AGAPE_TIPO, OBSERVACOES, ID_GRUPO, ID_SECRETARIO, ENDERECO = range(15)
+DATA, HORARIO, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, AGAPE_TIPO, OBSERVACOES, ID_GRUPO, ID_SECRETARIO, ENDERECO = range(16) # HORARIO adicionado, range ajustado
 
 async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     admin_id = os.getenv("ADMIN_TELEGRAM_ID")
@@ -20,6 +20,11 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["novo_evento_data"] = update.message.text
+    await update.message.reply_text("Qual o *Horário do evento*? (Ex: 19:30)", parse_mode="Markdown") # Nova pergunta
+    return HORARIO # Novo estado
+
+async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE): # Nova função
+    context.user_data["novo_evento_horario"] = update.message.text
     await update.message.reply_text("Qual o *Nome da loja*?", parse_mode="Markdown")
     return NOME_LOJA
 
@@ -131,6 +136,7 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
     dados_evento = {
         "data": context.user_data["novo_evento_data"],
         "dia_semana": "",
+        "hora": context.user_data["novo_evento_horario"], # Campo "hora" adicionado
         "nome_loja": context.user_data["novo_evento_nome_loja"],
         "numero_loja": context.user_data["novo_evento_numero_loja"],
         "oriente": context.user_data["novo_evento_oriente"],
@@ -165,6 +171,7 @@ cadastro_evento_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(novo_evento_start, pattern="^cadastrar_evento$")],
     states={
         DATA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_data)],
+        HORARIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_horario)], # Novo estado
         NOME_LOJA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome_loja)],
         NUMERO_LOJA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_numero_loja)],
         ORIENTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_oriente)],
