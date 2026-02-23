@@ -1,8 +1,7 @@
 # src/cadastro.py
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, CommandHandler, filters
-from src.sheets import buscar_membro, cadastrar_membro # Importa funções de sheets
-# Removida a importação de 'start' e 'menu_principal_teclado' de src.bot para evitar circularidade
+from src.sheets import buscar_membro, cadastrar_membro
 
 # Estados da conversação para o cadastro de membro
 NOME, LOJA, GRAU, ORIENTE, POTENCIA, TELEFONE, FINALIZAR = range(7)
@@ -12,8 +11,6 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     membro = buscar_membro(telegram_id)
 
     if membro:
-        # Se já cadastrado, apenas informa e encerra a conversação.
-        # O comando /start em src/bot.py já vai mostrar o menu principal.
         await update.message.reply_text(
             f"Você já está cadastrado como {membro.get('Nome', '')}. "
             "Seus dados são:\n"
@@ -22,7 +19,7 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Oriente: {membro.get('Oriente', '')}\n"
             f"Potência: {membro.get('Potencia', '')}\n"
             f"Telefone: {membro.get('Telefone', '')}\n\n"
-            "Para editar seu cadastro, entre em contato com um administrador."
+            "Para editar seu cadastro, entre em contato com um administrador. Use /start para o menu principal."
         )
         return ConversationHandler.END
     else:
@@ -73,7 +70,7 @@ async def finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "potencia": context.user_data["cadastro_potencia"],
             "telefone": context.user_data["cadastro_telefone"],
             "telegram_id": update.effective_user.id,
-            "nivel": "membro", # Nível padrão ao cadastrar
+            "nivel": "membro",
         }
         cadastrar_membro(dados_membro)
         await update.message.reply_text("✅ Cadastro realizado com sucesso! Bem-vindo, irmão! Agora você pode usar o comando /start para acessar o menu principal.")
@@ -86,9 +83,8 @@ async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Cadastro cancelado. Você pode iniciar novamente com /start.")
     return ConversationHandler.END
 
-# O ConversationHandler para o cadastro de membros
 cadastro_handler = ConversationHandler(
-    entry_points=[CommandHandler("start", cadastro_start)], # O /start inicia o cadastro se não for cadastrado
+    entry_points=[CommandHandler("start", cadastro_start)],
     states={
         NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome)],
         LOJA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_loja)],

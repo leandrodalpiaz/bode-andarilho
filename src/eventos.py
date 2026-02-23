@@ -1,3 +1,4 @@
+# src/eventos.py
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from src.sheets import (
@@ -21,7 +22,7 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = evento.get("Data do evento", "")
         numero_loja = evento.get("Número da loja", "")
         potencia = evento.get("Potência", "")
-        # Alterado para o formato "Data - Nome da loja Número da loja - Potência"
+        # Formato: "Data - Nome da loja Número da loja - Potência"
         botoes.append([InlineKeyboardButton(
             f"{data} - {nome} {numero_loja} - {potencia}",
             callback_data=f"evento_{i}"
@@ -47,9 +48,9 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     data = evento.get("Data do evento", "")
     nome_loja = evento.get("Nome da loja", "")
     numero_loja = evento.get("Número da loja", "")
-    horario = evento.get("Hora", "")
+    horario = evento.get("Hora", "") # Assumindo que existe uma coluna "Hora"
     endereco = evento.get("Endereço da sessão", "")
-    grau = evento.get("Grau mínimo", "")
+    grau = evento.get("Grau", "") # Corrigido para "Grau" (antes estava "Grau mínimo")
     tipo = evento.get("Tipo de sessão", "")
     rito = evento.get("Rito", "")
     potencia = evento.get("Potência", "")
@@ -57,7 +58,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     agape = evento.get("Ágape", "")
     obs = evento.get("Observações", "")
 
-    # Alterado para o formato "Data - Nome da loja Número da loja - Potência"
+    # Formato: "Data — Nome da loja Número da loja - Potência"
     texto = (
         f"📅 *{data} — {nome_loja} {numero_loja} - {potencia}*\n"
         f"🕐 Horário: {horario}\n"
@@ -74,7 +75,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         texto += f"\n📝 Obs: {obs}"
 
     telegram_id = update.effective_user.id
-    id_evento = data + " — " + nome_loja
+    id_evento = data + " — " + nome_loja # ID para buscar na planilha de confirmações
     ja_confirmou = buscar_confirmacao(id_evento, telegram_id)
 
     if ja_confirmou:
@@ -113,20 +114,22 @@ async def confirmar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "telegram_id": telegram_id,
         "nome": membro.get("Nome", ""),
         "grau": membro.get("Grau", ""),
-        "cargo": membro.get("Cargo", ""),
+        "cargo": membro.get("Cargo", ""), # Assumindo que existe uma coluna "Cargo" no cadastro de membro
         "loja": membro.get("Loja", ""),
         "oriente": membro.get("Oriente", ""),
         "potencia": membro.get("Potência", ""),
         "agape": evento.get("Ágape", ""),
     }
 
-    registrar_confirmacao(dados)
+    if registrar_confirmacao(dados):
+        await query.edit_message_text(
+            f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
+            f"Evento: {id_evento}\n\n"
+            f"Até lá! 🐐"
+        )
+    else:
+        await query.edit_message_text("Você já confirmou presença para este evento.")
 
-    await query.edit_message_text(
-        f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
-        f"Evento: {id_evento}\n\n"
-        f"Até lá! 🐐"
-    )
 
 async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -148,4 +151,4 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Se mudar de ideia, basta confirmar novamente. 🐐"
         )
     else:
-        await query.edit_message_text("Não foi possível cancelar. Tente novamente.")
+        await query.edit_message_text("Não foi possível cancelar. Você não estava confirmado para este evento.")

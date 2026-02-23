@@ -1,5 +1,5 @@
 # src/cadastro_evento.py
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, CommandHandler, filters
 from src.sheets import cadastrar_evento
 from datetime import datetime
@@ -9,12 +9,15 @@ import os
 DATA, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, OBSERVACOES, ID_GRUPO, ID_SECRETARIO, ENDERECO = range(14)
 
 async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin_id = int(os.getenv("ADMIN_TELEGRAM_ID"))
-    if update.effective_user.id != admin_id:
+    # O check de admin já é feito no botao_handler antes de chamar esta função
+    # Mas é bom ter uma redundância aqui ou garantir que o entry_point seja protegido
+    admin_id = os.getenv("ADMIN_TELEGRAM_ID")
+    if admin_id and str(update.effective_user.id) != admin_id:
         await update.message.reply_text("Você não tem permissão para cadastrar eventos.")
         return ConversationHandler.END
 
-    await update.message.reply_text("Certo, vamos cadastrar um novo evento.\n\nQual a *Data do evento*? (Ex: 25/03/2026)", parse_mode="Markdown")
+    await update.callback_query.answer() # Responde ao callback_query do botão "Cadastrar evento"
+    await update.callback_query.edit_message_text("Certo, vamos cadastrar um novo evento.\n\nQual a *Data do evento*? (Ex: 25/03/2026)", parse_mode="Markdown")
     return DATA
 
 async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -87,7 +90,7 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
 
     dados_evento = {
         "data": context.user_data["novo_evento_data"],
-        "dia_semana": "", # Será preenchido automaticamente
+        "dia_semana": "",
         "nome_loja": context.user_data["novo_evento_nome_loja"],
         "numero_loja": context.user_data["novo_evento_numero_loja"],
         "oriente": context.user_data["novo_evento_oriente"],
@@ -104,24 +107,22 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
         "status": "Ativo",
     }
 
-    # Lógica para calcular o dia da semana a partir da data
     try:
         data_obj = datetime.strptime(dados_evento["data"], "%d/%m/%Y")
-        dados_evento["dia_semana"] = data_obj.strftime("%A") # Nome do dia da semana
+        dados_evento["dia_semana"] = data_obj.strftime("%A")
     except ValueError:
-        dados_evento["dia_semana"] = "Inválido" # Ou deixar vazio, dependendo da sua preferência
+        dados_evento["dia_semana"] = "Inválido"
 
     cadastrar_evento(dados_evento)
-    await update.message.reply_text("✅ Evento cadastrado com sucesso!")
+    await update.message.reply_text("✅ Evento cadastrado com sucesso! Use /start para voltar ao menu principal.")
     return ConversationHandler.END
 
 async def cancelar_cadastro_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Cadastro de evento cancelado.")
+    await update.message.reply_text("Cadastro de evento cancelado. Use /start para voltar ao menu principal.")
     return ConversationHandler.END
 
-# O ConversationHandler para o cadastro de eventos
 cadastro_evento_handler = ConversationHandler(
-    entry_points=[CommandHandler("novo_evento", novo_evento_start)],
+    entry_points=[CallbackQueryHandler(novo_evento_start, pattern="^cadastrar_evento$")], # Inicia pelo botão
     states={
         DATA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_data)],
         NOME_LOJA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome_loja)],

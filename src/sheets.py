@@ -1,136 +1,141 @@
+# src/sheets.py
 import gspread
-from google.oauth2.service_account import Credentials
 import os
-import json
 from datetime import datetime
 
+# Configuração do Google Sheets
+gc = gspread.service_account_from_dict(os.environ.get("GOOGLE_CREDENTIALS"))
+spreadsheet = gc.open("Bode Andarilho") # Nome da sua planilha
 
-def conectar_sheets():
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-    ]
-    credenciais_json = os.getenv("GOOGLE_CREDENTIALS")
-    credenciais_dict = json.loads(credenciais_json)
-    creds = Credentials.from_service_account_info(credenciais_dict, scopes=scopes)
-    client = gspread.authorize(creds)
-    return client.open("Bode Andarilho")
-
-
+# --- Funções para Membros ---
 def buscar_membro(telegram_id: int):
-    sheet = conectar_sheets()
-    aba = sheet.worksheet("Membros")
-    registros = aba.get_all_records()
-    for registro in registros:
-        if str(registro.get("Telegram ID", "")) == str(telegram_id):
-            return registro
-    return None
-
+    try:
+        ws = spreadsheet.worksheet("Membros")
+        data = ws.get_all_records()
+        for row in data:
+            if row.get("Telegram ID") == telegram_id:
+                return row
+        return None
+    except Exception as e:
+        print(f"Erro ao buscar membro: {e}")
+        return None
 
 def cadastrar_membro(dados: dict):
-    sheet = conectar_sheets()
-    aba = sheet.worksheet("Membros")
-    linha = [
-        dados.get("nome", ""),
-        dados.get("loja", ""),
-        dados.get("grau", ""),
-        dados.get("oriente", ""),
-        dados.get("potencia", ""),
-        dados.get("telefone", ""),
-        dados.get("telegram_id", ""),
-        dados.get("nivel", "membro"),
-    ]
-    aba.append_row(linha)
+    try:
+        ws = spreadsheet.worksheet("Membros")
+        # Mapeia os dados para as colunas da planilha
+        row = [
+            dados.get("nome", ""),
+            dados.get("loja", ""),
+            dados.get("grau", ""),
+            dados.get("oriente", ""),
+            dados.get("potencia", ""),
+            dados.get("telefone", ""),
+            dados.get("telegram_id", ""),
+            dados.get("nivel", "membro") # Nível padrão
+        ]
+        ws.append_row(row)
+        return True
+    except Exception as e:
+        print(f"Erro ao cadastrar membro: {e}")
+        return False
 
-
+# --- Funções para Eventos ---
 def listar_eventos():
-    sheet = conectar_sheets()
-    aba = sheet.worksheet("Eventos")
-    registros = aba.get_all_records()
-    hoje = datetime.today().date()
-    eventos_futuros = []
-    for r in registros:
-        if r.get("Status", "").strip().lower() == "ativo":
-            try:
-                data_evento = datetime.strptime(r.get("Data do evento", ""), "%d/%m/%Y").date()
-                if data_evento >= hoje:
-                    eventos_futuros.append(r)
-            except ValueError:
-                eventos_futuros.append(r)
-    return eventos_futuros
-
-
-def buscar_confirmacao(id_evento: str, telegram_id: int):
-    sheet = conectar_sheets()
-    aba = sheet.worksheet("Confirmações")
-    registros = aba.get_all_records()
-    for registro in registros:
-        if (str(registro.get("ID Evento", "")) == str(id_evento) and
-                str(registro.get("Telegram ID", "")) == str(telegram_id)):
-            return registro
-    return None
-
-
-def registrar_confirmacao(dados: dict):
-    sheet = conectar_sheets()
-    aba = sheet.worksheet("Confirmações")
-
-    id_evento = dados.get("id_evento", "")
-    telegram_id = str(dados.get("telegram_id", ""))
-
-    registros = aba.get_all_records()
-    for registro in registros:
-        if (str(registro.get("ID Evento", "")) == id_evento and
-                str(registro.get("Telegram ID", "")) == telegram_id):
-            return False
-
-    linha = [
-        id_evento,
-        telegram_id,
-        dados.get("nome", ""),
-        dados.get("grau", ""),
-        dados.get("cargo", ""),
-        dados.get("loja", ""),
-        dados.get("oriente", ""),
-        dados.get("potencia", ""),
-        dados.get("agape", ""),
-        "Confirmado",
-    ]
-    aba.append_row(linha)
-    return True
-
-
-def cancelar_confirmacao(id_evento: str, telegram_id: int):
-    sheet = conectar_sheets()
-    aba = sheet.worksheet("Confirmações")
-    registros = aba.get_all_records()
-    for i, registro in enumerate(registros):
-        if (str(registro.get("ID Evento", "")) == str(id_evento) and
-                str(registro.get("Telegram ID", "")) == str(telegram_id)):
-            aba.delete_rows(i + 2)
-            return True
-    return False
-
+    try:
+        ws = spreadsheet.worksheet("Eventos")
+        data = ws.get_all_records()
+        # Filtra apenas eventos com status "Ativo"
+        eventos_ativos = [evento for evento in data if evento.get("Status") == "Ativo"]
+        return eventos_ativos
+    except Exception as e:
+        print(f"Erro ao listar eventos: {e}")
+        return []
 
 def cadastrar_evento(dados: dict):
-    sheet = conectar_sheets()
-    aba = sheet.worksheet("Eventos")
-    linha = [
-        dados.get("data", ""),
-        dados.get("dia_semana", ""),
-        dados.get("nome_loja", ""),
-        dados.get("numero_loja", ""),
-        dados.get("oriente", ""),
-        dados.get("grau", ""),
-        dados.get("tipo_sessao", ""),
-        dados.get("rito", ""),
-        dados.get("potencia", ""),
-        dados.get("traje", ""),
-        dados.get("agape", ""),
-        dados.get("observacoes", ""),
-        dados.get("telegram_id_grupo", ""),
-        dados.get("telegram_id_secretario", ""),
-        dados.get("status", "Ativo"),
-        dados.get("endereco", ""),
-    ]
-    aba.append_row(linha)
+    try:
+        ws = spreadsheet.worksheet("Eventos")
+        # Mapeia os dados para as colunas da planilha
+        row = [
+            dados.get("data", ""),
+            dados.get("dia_semana", ""),
+            dados.get("nome_loja", ""),
+            dados.get("numero_loja", ""),
+            dados.get("oriente", ""),
+            dados.get("grau", ""),
+            dados.get("tipo_sessao", ""),
+            dados.get("rito", ""),
+            dados.get("potencia", ""),
+            dados.get("traje", ""),
+            dados.get("agape", ""),
+            dados.get("observacoes", ""),
+            dados.get("telegram_id_grupo", ""),
+            dados.get("telegram_id_secretario", ""),
+            dados.get("status", "Ativo"), # Status padrão
+            dados.get("endereco", ""),
+        ]
+        ws.append_row(row)
+        return True
+    except Exception as e:
+        print(f"Erro ao cadastrar evento: {e}")
+        return False
+
+# --- Funções para Confirmações ---
+def registrar_confirmacao(dados: dict):
+    try:
+        ws = spreadsheet.worksheet("Confirmações")
+        # Verifica se a confirmação já existe para evitar duplicidade
+        if buscar_confirmacao(dados["id_evento"], dados["telegram_id"]):
+            return False # Já confirmado
+
+        row = [
+            dados.get("id_evento", ""),
+            dados.get("telegram_id", ""),
+            dados.get("nome", ""),
+            dados.get("grau", ""),
+            dados.get("cargo", ""),
+            dados.get("loja", ""),
+            dados.get("oriente", ""),
+            dados.get("potencia", ""),
+            dados.get("agape", ""),
+            datetime.now().strftime("%d/%m/%Y %H:%M:%S") # Data/Hora da confirmação
+        ]
+        ws.append_row(row)
+        return True
+    except Exception as e:
+        print(f"Erro ao registrar confirmação: {e}")
+        return False
+
+def buscar_confirmacao(id_evento: str, telegram_id: int):
+    try:
+        ws = spreadsheet.worksheet("Confirmações")
+        data = ws.get_all_records()
+        for row in data:
+            if row.get("ID Evento") == id_evento and row.get("Telegram ID") == telegram_id:
+                return row
+        return None
+    except Exception as e:
+        print(f"Erro ao buscar confirmação: {e}")
+        return None
+
+def cancelar_confirmacao(id_evento: str, telegram_id: int):
+    try:
+        ws = spreadsheet.worksheet("Confirmações")
+        # Encontra a linha da confirmação
+        cell_list = ws.findall(id_evento, in_column=1) # Busca pelo ID Evento na primeira coluna
+        for cell in cell_list:
+            row_data = ws.row_values(cell.row)
+            if len(row_data) > 1 and row_data[1] == str(telegram_id): # Verifica o Telegram ID na segunda coluna
+                ws.delete_rows(cell.row)
+                return True
+        return False
+    except Exception as e:
+        print(f"Erro ao cancelar confirmação: {e}")
+        return False
+
+# --- Funções para Permissões (Nível) ---
+def get_nivel_membro(telegram_id: int):
+    membro = buscar_membro(telegram_id)
+    if membro:
+        return membro.get("Nivel", "membro") # Retorna o nível do membro, padrão "membro"
+    return "visitante" # Se não encontrar, é um visitante

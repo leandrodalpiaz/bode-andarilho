@@ -1,21 +1,12 @@
+# src/permissoes.py
+from src.sheets import get_nivel_membro
 import os
-from src.sheets import buscar_membro
 
-ADMIN_ID = os.getenv("ADMIN_TELEGRAM_ID", "")
-
-def is_admin(telegram_id: int) -> bool:
-    return str(telegram_id) == str(ADMIN_ID)
-
-def is_secretario(telegram_id: int) -> bool:
-    membro = buscar_membro(telegram_id)
-    if not membro:
-        return False
-    cargo = str(membro.get("Cargo", "")).lower()
-    return cargo in ["secretário", "secretario", "administrador"]
-
-def get_nivel(telegram_id: int) -> str:
-    if is_admin(telegram_id):
+def get_nivel(telegram_id: int):
+    # Verifica se é o ADMIN_TELEGRAM_ID do ambiente
+    admin_id = os.getenv("ADMIN_TELEGRAM_ID")
+    if admin_id and str(telegram_id) == admin_id:
         return "admin"
-    if is_secretario(telegram_id):
-        return "secretario"
-    return "membro"
+
+    # Busca o nível na planilha de membros
+    return get_nivel_membro(telegram_id)
