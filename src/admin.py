@@ -1,8 +1,6 @@
-# src/cadastro_evento.py
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, CommandHandler, filters
+from telegram import Update
+from telegram.ext import ContextTypes, ConversationHandler
 from src.sheets import cadastrar_evento
-from datetime import datetime
 import os
 
 # Estados da conversação para o cadastro de evento
@@ -87,7 +85,7 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
 
     dados_evento = {
         "data": context.user_data["novo_evento_data"],
-        "dia_semana": "", # Será preenchido automaticamente
+        "dia_semana": "", # Será preenchido automaticamente ou removido se não for necessário
         "nome_loja": context.user_data["novo_evento_nome_loja"],
         "numero_loja": context.user_data["novo_evento_numero_loja"],
         "oriente": context.user_data["novo_evento_oriente"],
@@ -101,15 +99,17 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
         "telegram_id_grupo": context.user_data["novo_evento_telegram_id_grupo"],
         "telegram_id_secretario": context.user_data["novo_evento_telegram_id_secretario"],
         "endereco": context.user_data["novo_evento_endereco"],
-        "status": "Ativo",
+        "status": "Ativo", # Define o status padrão como Ativo
     }
 
-    # Lógica para calcular o dia da semana a partir da data
-    try:
-        data_obj = datetime.strptime(dados_evento["data"], "%d/%m/%Y")
-        dados_evento["dia_semana"] = data_obj.strftime("%A") # Nome do dia da semana
-    except ValueError:
-        dados_evento["dia_semana"] = "Inválido" # Ou deixar vazio, dependendo da sua preferência
+    # TODO: Adicionar lógica para calcular o dia da semana a partir da data
+    # Exemplo:
+    # from datetime import datetime
+    # try:
+    #     data_obj = datetime.strptime(dados_evento["data"], "%d/%m/%Y")
+    #     dados_evento["dia_semana"] = data_obj.strftime("%A") # Nome do dia da semana
+    # except ValueError:
+    #     pass # Lidar com erro de formato de data
 
     cadastrar_evento(dados_evento)
     await update.message.reply_text("✅ Evento cadastrado com sucesso!")
@@ -119,24 +119,3 @@ async def cancelar_cadastro_evento(update: Update, context: ContextTypes.DEFAULT
     await update.message.reply_text("Cadastro de evento cancelado.")
     return ConversationHandler.END
 
-# O ConversationHandler para o cadastro de eventos
-cadastro_evento_handler = ConversationHandler(
-    entry_points=[CommandHandler("novo_evento", novo_evento_start)],
-    states={
-        DATA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_data)],
-        NOME_LOJA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome_loja)],
-        NUMERO_LOJA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_numero_loja)],
-        ORIENTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_oriente)],
-        GRAU: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_grau)],
-        TIPO_SESSAO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_tipo_sessao)],
-        RITO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_rito)],
-        POTENCIA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_potencia)],
-        TRAJE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_traje)],
-        AGAPE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_agape)],
-        OBSERVACOES: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_observacoes)],
-        ID_GRUPO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_id_grupo)],
-        ID_SECRETARIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_id_secretario)],
-        ENDERECO: [MessageHandler(filters.TEXT & ~filters.COMMAND, finalizar_cadastro_evento)],
-    },
-    fallbacks=[CommandHandler("cancelar", cancelar_cadastro_evento)],
-)
