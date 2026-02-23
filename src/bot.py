@@ -1,5 +1,7 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
+from src.sheets import buscar_membro # Importa a função para buscar membro
+from src.cadastro import cadastro_start # Importa a função para iniciar o cadastro
 from src.eventos import mostrar_eventos, mostrar_detalhes_evento, confirmar_presenca, cancelar_presenca
 from src.perfil import mostrar_perfil
 from src.permissoes import get_nivel
@@ -18,8 +20,26 @@ def menu_principal_teclado(nivel: str):
 
     return InlineKeyboardMarkup(botoes)
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    telegram_id = update.effective_user.id
+    membro = buscar_membro(telegram_id)
+
+    if membro:
+        # Usuário já cadastrado, mostra o menu principal
+        nivel = get_nivel(telegram_id) # Pega o nível do usuário
+        await update.message.reply_text(
+            f"Bem-vindo de volta, irmão {membro.get('Nome', '')}!\n\n"
+            "O que deseja fazer?",
+            reply_markup=menu_principal_teclado(nivel) # Usa o teclado dinâmico
+        )
+    else:
+        # Usuário não cadastrado, inicia o fluxo de cadastro
+        await cadastro_start(update, context) # Chama a função de início de cadastro
+
 async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    await query.answer() # Sempre responda ao callback_query
+
     telegram_id = update.effective_user.id
     nivel = get_nivel(telegram_id)
     data = query.data
@@ -39,13 +59,21 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "area_admin":
         await mostrar_area_admin(update, context)
     elif data == "menu_principal":
-        await query.answer()
         await query.edit_message_text(
             "O que deseja fazer?",
             reply_markup=menu_principal_teclado(nivel)
         )
+    # Adicione aqui os handlers para os botões da área do secretário e admin
+    # Por exemplo, para o botão "Cadastrar evento" da área do secretário:
+    elif data == "cadastrar_evento":
+        # Assumindo que 'novo_evento_start' é o entry_point do ConversationHandler de cadastro de evento
+        # e que ele está em src/cadastro_evento.py
+        from src.cadastro_evento import novo_evento_start
+        await novo_evento_start(update, context)
+    # ... outros handlers para botões específicos ...
     else:
-        await query.answer("Função em desenvolvimento.")
+        await query.edit_message_text("Função em desenvolvimento ou comando não reconhecido.")
+
 
 async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
