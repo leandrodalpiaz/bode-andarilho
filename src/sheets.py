@@ -14,8 +14,7 @@ def conectar_sheets():
     credenciais_dict = json.loads(credenciais_json)
     creds = Credentials.from_service_account_info(credenciais_dict, scopes=scopes)
     client = gspread.authorize(creds)
-    sheet_id = os.getenv("SHEET_ID")
-    return client.open_by_key(sheet_id)
+    return client.open("Bode Andarilho")
 
 
 def buscar_membro(telegram_id: int):
