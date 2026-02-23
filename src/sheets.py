@@ -50,53 +50,64 @@ def listar_eventos():
     registros = aba.get_all_records()
     hoje = datetime.today().date()
     eventos_futuros = []
-    for i, registro in enumerate(registros):
-        data_str = registro.get("Data", "")
-        try:
-            data_evento = datetime.strptime(data_str, "%d/%m/%Y").date()
-            if data_evento >= hoje and registro.get("Status", "").lower() == "ativo":
-                eventos_futuros.append((i + 2, registro))
-        except ValueError:
-            continue
+    for r in registros:
+        if r.get("Status", "").strip().lower() == "ativo":
+            try:
+                data_evento = datetime.strptime(r.get("Data do evento", ""), "%d/%m/%Y").date()
+                if data_evento >= hoje:
+                    eventos_futuros.append(r)
+            except ValueError:
+                eventos_futuros.append(r)
     return eventos_futuros
 
 
-def buscar_evento_por_linha(numero_linha: int):
-    sheet = conectar_sheets()
-    aba = sheet.worksheet("Eventos")
-    registros = aba.get_all_records()
-    if numero_linha - 2 < len(registros):
-        return registros[numero_linha - 2]
-    return None
-
-
-def buscar_confirmacoes_evento(numero_linha: int):
-    sheet = conectar_sheets()
-    aba = sheet.worksheet("Confirmações")
-    registros = aba.get_all_records()
-    confirmados = [r for r in registros if str(r.get("Linha Evento", "")) == str(numero_linha)]
-    return confirmados
-
-
-def confirmar_presenca_sheets(telegram_id: int, numero_linha: int, nome: str):
+def buscar_confirmacao(id_evento: str, telegram_id: int):
     sheet = conectar_sheets()
     aba = sheet.worksheet("Confirmações")
     registros = aba.get_all_records()
     for registro in registros:
-        if (str(registro.get("Telegram ID", "")) == str(telegram_id) and
-                str(registro.get("Linha Evento", "")) == str(numero_linha)):
+        if (str(registro.get("ID Evento", "")) == str(id_evento) and
+                str(registro.get("Telegram ID", "")) == str(telegram_id)):
+            return registro
+    return None
+
+
+def registrar_confirmacao(dados: dict):
+    sheet = conectar_sheets()
+    aba = sheet.worksheet("Confirmações")
+
+    id_evento = dados.get("id_evento", "")
+    telegram_id = str(dados.get("telegram_id", ""))
+
+    registros = aba.get_all_records()
+    for registro in registros:
+        if (str(registro.get("ID Evento", "")) == id_evento and
+                str(registro.get("Telegram ID", "")) == telegram_id):
             return False
-    aba.append_row([str(numero_linha), str(telegram_id), nome, "Confirmado"])
+
+    linha = [
+        id_evento,
+        telegram_id,
+        dados.get("nome", ""),
+        dados.get("grau", ""),
+        dados.get("cargo", ""),
+        dados.get("loja", ""),
+        dados.get("oriente", ""),
+        dados.get("potencia", ""),
+        dados.get("agape", ""),
+        "Confirmado",
+    ]
+    aba.append_row(linha)
     return True
 
 
-def cancelar_presenca_sheets(telegram_id: int, numero_linha: int):
+def cancelar_confirmacao(id_evento: str, telegram_id: int):
     sheet = conectar_sheets()
     aba = sheet.worksheet("Confirmações")
     registros = aba.get_all_records()
     for i, registro in enumerate(registros):
-        if (str(registro.get("Telegram ID", "")) == str(telegram_id) and
-                str(registro.get("Linha Evento", "")) == str(numero_linha)):
+        if (str(registro.get("ID Evento", "")) == str(id_evento) and
+                str(registro.get("Telegram ID", "")) == str(telegram_id)):
             aba.delete_rows(i + 2)
             return True
     return False
