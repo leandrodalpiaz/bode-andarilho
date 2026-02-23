@@ -22,7 +22,6 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = evento.get("Data do evento", "")
         numero_loja = evento.get("Número da loja", "")
         potencia = evento.get("Potência", "")
-        # Formato: "Data - Nome da loja Número da loja - Potência"
         botoes.append([InlineKeyboardButton(
             f"{data} - {nome} {numero_loja} - {potencia}",
             callback_data=f"evento_{i}"
@@ -48,17 +47,16 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     data = evento.get("Data do evento", "")
     nome_loja = evento.get("Nome da loja", "")
     numero_loja = evento.get("Número da loja", "")
-    horario = evento.get("Hora", "") # Assumindo que existe uma coluna "Hora"
+    horario = evento.get("Hora", "")
     endereco = evento.get("Endereço da sessão", "")
-    grau = evento.get("Grau", "") # Corrigido para "Grau" (antes estava "Grau mínimo")
+    grau = evento.get("Grau", "")
     tipo = evento.get("Tipo de sessão", "")
     rito = evento.get("Rito", "")
     potencia = evento.get("Potência", "")
     traje = evento.get("Traje obrigatório", "")
-    agape = evento.get("Ágape", "")
+    agape = evento.get("Ágape", "") # Pega o valor completo do Ágape (Sim (Gratuito), Não, etc.)
     obs = evento.get("Observações", "")
 
-    # Formato: "Data — Nome da loja Número da loja - Potência"
     texto = (
         f"📅 *{data} — {nome_loja} {numero_loja} - {potencia}*\n"
         f"🕐 Horário: {horario}\n"
@@ -71,7 +69,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         f"🍽️ Ágape: {agape}\n"
     )
 
-    if obs:
+    if obs and obs.lower() != "n/a": # Verifica se há observações e não é "N/A"
         texto += f"\n📝 Obs: {obs}"
 
     telegram_id = update.effective_user.id
@@ -114,19 +112,33 @@ async def confirmar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "telegram_id": telegram_id,
         "nome": membro.get("Nome", ""),
         "grau": membro.get("Grau", ""),
-        "cargo": membro.get("Cargo", ""), # Assumindo que existe uma coluna "Cargo" no cadastro de membro
+        "cargo": membro.get("Cargo", ""),
         "loja": membro.get("Loja", ""),
         "oriente": membro.get("Oriente", ""),
         "potencia": membro.get("Potência", ""),
-        "agape": evento.get("Ágape", ""),
+        "agape": evento.get("Ágape", ""), # Pega o Ágape do evento para a confirmação
     }
 
     if registrar_confirmacao(dados):
-        await query.edit_message_text(
-            f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
-            f"Evento: {id_evento}\n\n"
-            f"Até lá! 🐐"
+        # Mensagem inicial de confirmação
+        resposta_final = f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
+
+        # Mensagem 1: Compromisso com o Ágape (condicional)
+        # Verifica se o campo Ágape do evento indica que haverá Ágape
+        if evento.get("Ágape", "").lower().startswith("sim"):
+            resposta_final += (
+                "Irmão, sua confirmação para o Ágape é muito valiosa! Ela nos ajuda a organizar tudo com carinho e evitar desperdícios. Contamos com sua colaboração!\n\n"
+            )
+
+        # Mensagem 2: Reconhecimento e Potências (sempre)
+        resposta_final += (
+            "Sua confirmação aqui é um passo importante! Contudo, recordamos que o reconhecimento no dia do evento segue os protocolos de cada Loja e Potência. Certifique-se de estar em dia com as verificações necessárias.\n\n"
         )
+
+        # Finalização da mensagem
+        resposta_final += f"Evento: {id_evento}\n\nFraterno abraço! 🐐" # Substituído "Até lá"
+
+        await query.edit_message_text(resposta_final)
     else:
         await query.edit_message_text("Você já confirmou presença para este evento.")
 
@@ -148,7 +160,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             f"❌ Presença cancelada.\n\n"
             f"Evento: {id_evento}\n\n"
-            f"Se mudar de ideia, basta confirmar novamente. 🐐"
+            f"Se mudar de ideia, basta confirmar novamente. Fraterno abraço! 🐐" # Substituído "Até lá"
         )
     else:
         await query.edit_message_text("Não foi possível cancelar. Você não estava confirmado para este evento.")

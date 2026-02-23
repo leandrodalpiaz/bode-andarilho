@@ -6,7 +6,7 @@ from datetime import datetime
 import os
 
 # Estados da conversação para o cadastro de evento
-DATA, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, AGAPE_TIPO, OBSERVACOES, ID_GRUPO, ID_SECRETARIO, ENDERECO = range(15) # AGAPE_TIPO adicionado
+DATA, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, AGAPE_TIPO, OBSERVACOES, ID_GRUPO, ID_SECRETARIO, ENDERECO = range(15)
 
 async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     admin_id = os.getenv("ADMIN_TELEGRAM_ID")
@@ -71,7 +71,7 @@ async def receber_traje(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    resposta_agape = query.data.split("_")[1] # 'sim' ou 'nao'
+    resposta_agape = query.data.split("_")[1]
 
     if resposta_agape == "sim":
         context.user_data["novo_evento_agape"] = "Sim"
@@ -83,17 +83,17 @@ async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return AGAPE_TIPO
     elif resposta_agape == "nao":
         context.user_data["novo_evento_agape"] = "Não"
-        context.user_data["novo_evento_agape_tipo"] = "N/A" # Define como N/A se não houver ágape
+        context.user_data["novo_evento_agape_tipo"] = "N/A"
         await query.edit_message_text("Certo. Alguma *Observação*? (Se não houver, digite 'N/A')", parse_mode="Markdown")
         return OBSERVACOES
     else:
         await query.edit_message_text("Opção inválida para Ágape. Por favor, selecione 'Sim' ou 'Não'.")
-        return AGAPE # Permanece no estado AGAPE para nova tentativa
+        return AGAPE
 
 async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    tipo_agape = query.data.split("_")[1] # 'gratuito' ou 'dividido'
+    tipo_agape = query.data.split("_")[1]
 
     if tipo_agape == "gratuito":
         context.user_data["novo_evento_agape_tipo"] = "Gratuito"
@@ -101,7 +101,7 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context.user_data["novo_evento_agape_tipo"] = "Dividido entre os Irmãos"
     else:
         await query.edit_message_text("Opção inválida para tipo de Ágape. Por favor, selecione 'Gratuito' ou 'Dividido'.")
-        return AGAPE_TIPO # Permanece no estado AGAPE_TIPO para nova tentativa
+        return AGAPE_TIPO
 
     await query.edit_message_text("Certo. Alguma *Observação*? (Se não houver, digite 'N/A')", parse_mode="Markdown")
     return OBSERVACOES
@@ -124,7 +124,6 @@ async def receber_id_secretario(update: Update, context: ContextTypes.DEFAULT_TY
 async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["novo_evento_endereco"] = update.message.text
 
-    # Concatena Ágape e Tipo de Ágape
     agape_final = context.user_data["novo_evento_agape"]
     if agape_final == "Sim":
         agape_final += f" ({context.user_data.get('novo_evento_agape_tipo', 'N/A')})"
@@ -140,7 +139,7 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
         "rito": context.user_data["novo_evento_rito"],
         "potencia": context.user_data["novo_evento_potencia"],
         "traje": context.user_data["novo_evento_traje"],
-        "agape": agape_final, # Usa o valor final formatado
+        "agape": agape_final,
         "observacoes": context.user_data["novo_evento_observacoes"],
         "telegram_id_grupo": context.user_data["novo_evento_telegram_id_grupo"],
         "telegram_id_secretario": context.user_data["novo_evento_telegram_id_secretario"],
@@ -174,8 +173,8 @@ cadastro_evento_handler = ConversationHandler(
         RITO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_rito)],
         POTENCIA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_potencia)],
         TRAJE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_traje)],
-        AGAPE: [CallbackQueryHandler(receber_agape, pattern="^agape_(sim|nao)$")], # Agora usa CallbackQueryHandler
-        AGAPE_TIPO: [CallbackQueryHandler(receber_agape_tipo, pattern="^agape_(gratuito|dividido)$")], # Novo estado
+        AGAPE: [CallbackQueryHandler(receber_agape, pattern="^agape_(sim|nao)$")],
+        AGAPE_TIPO: [CallbackQueryHandler(receber_agape_tipo, pattern="^agape_(gratuito|dividido)$")],
         OBSERVACOES: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_observacoes)],
         ID_GRUPO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_id_grupo)],
         ID_SECRETARIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_id_secretario)],
