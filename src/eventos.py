@@ -19,10 +19,11 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for i, evento in enumerate(eventos):
         nome = evento.get("Nome da loja", "Evento")
         data = evento.get("Data do evento", "")
-        numero_loja = evento.get("Número da loja", "") # Adicionado
-        potencia = evento.get("Potência", "") # Adicionado
+        numero_loja = evento.get("Número da loja", "")
+        potencia = evento.get("Potência", "")
+        # Alterado para o formato "Data - Nome da loja Número da loja - Potência"
         botoes.append([InlineKeyboardButton(
-            f"{data} - {nome} - {numero_loja} - {potencia}", # Alterado
+            f"{data} - {nome} {numero_loja} - {potencia}",
             callback_data=f"evento_{i}"
         )])
 
@@ -45,7 +46,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
 
     data = evento.get("Data do evento", "")
     nome_loja = evento.get("Nome da loja", "")
-    numero_loja = evento.get("Número da loja", "") # Adicionado
+    numero_loja = evento.get("Número da loja", "")
     horario = evento.get("Hora", "")
     endereco = evento.get("Endereço da sessão", "")
     grau = evento.get("Grau mínimo", "")
@@ -56,8 +57,9 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     agape = evento.get("Ágape", "")
     obs = evento.get("Observações", "")
 
+    # Alterado para o formato "Data - Nome da loja Número da loja - Potência"
     texto = (
-        f"📅 *{data} — {nome_loja} - {numero_loja} - {potencia}*\n" # Alterado
+        f"📅 *{data} — {nome_loja} {numero_loja} - {potencia}*\n"
         f"🕐 Horário: {horario}\n"
         f"📍 Endereço: {endereco}\n"
         f"🔷 Grau mínimo: {grau}\n"
@@ -114,7 +116,7 @@ async def confirmar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "cargo": membro.get("Cargo", ""),
         "loja": membro.get("Loja", ""),
         "oriente": membro.get("Oriente", ""),
-        "potencia": membro.get("Potencia", ""), # Corrigido para "Potência"
+        "potencia": membro.get("Potência", ""),
         "agape": evento.get("Ágape", ""),
     }
 
