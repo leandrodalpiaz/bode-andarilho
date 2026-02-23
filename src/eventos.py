@@ -1,10 +1,13 @@
 # src/eventos.py
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler, MessageHandler, filters, CommandHandler # CommandHandler adicionado aqui
 from src.sheets import (
     listar_eventos, buscar_membro, registrar_confirmacao,
     cancelar_confirmacao, buscar_confirmacao
 )
+
+# Estados da conversação para confirmação de presença
+AGAPE_CHOICE = range(1)
 
 async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -42,7 +45,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         return
 
     evento = eventos[indice]
-    context.user_data["evento_selecionado"] = indice
+    context.user_data["evento_selecionado_indice"] = indice # Armazena o índice para uso posterior
 
     data = evento.get("Data do evento", "")
     nome_loja = evento.get("Nome da loja", "")
@@ -54,7 +57,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     rito = evento.get("Rito", "")
     potencia = evento.get("Potência", "")
     traje = evento.get("Traje obrigatório", "")
-    agape = evento.get("Ágape", "") # Pega o valor completo do Ágape (Sim (Gratuito), Não, etc.)
+    agape = evento.get("Ágape", "")
     obs = evento.get("Observações", "")
 
     texto = (
@@ -69,11 +72,11 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         f"🍽️ Ágape: {agape}\n"
     )
 
-    if obs and obs.lower() != "n/a": # Verifica se há observações e não é "N/A"
+    if obs and obs.lower() != "n/a":
         texto += f"\n📝 Obs: {obs}"
 
     telegram_id = update.effective_user.id
-    id_evento = data + " — " + nome_loja # ID para buscar na planilha de confirmações
+    id_evento = data + " — " + nome_loja
     ja_confirmou = buscar_confirmacao(id_evento, telegram_id)
 
     if ja_confirmou:
@@ -90,7 +93,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     teclado = InlineKeyboardMarkup(botoes)
     await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=teclado)
 
-async def confirmar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
@@ -103,45 +106,108 @@ async def confirmar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if not membro:
         await query.edit_message_text("Seu cadastro não foi encontrado. Envie /start para se cadastrar.")
-        return
+        return ConversationHandler.END
+
+    id_evento = evento.get("Data do evento", "") + " — " + evento.get("Nome da loja", "")
+    ja_confirmou = buscar_confirmacao(id_evento, telegram_id)
+
+    if ja_confirmou:
+        await query.edit_message_text("Você já confirmou presença para este evento.")
+        return ConversationHandler.END
+
+    context.user_data["evento_confirmando"] = evento
+    context.user_data["membro_confirmando"] = membro
+
+    if evento.get("Ágape", "").lower().startswith("sim"):
+        agape_info = evento.get("Ágape", "Sim").replace("Sim ", "").strip()
+        if agape_info:
+            agape_info = f"*Tipo:* {agape_info.replace('(', '').replace(')', '')}\n"
+        else:
+            agape_info = ""
+
+        teclado_agape = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Sim", callback_data="agape_participar_sim")],
+            [InlineKeyboardButton("Não", callback_data="agape_participar_nao")]
+        ])
+        await query.edit_message_text(
+            f"Este evento oferece Ágape!\n{agape_info}Você deseja participar do Ágape?",
+            parse_mode="Markdown",
+            reply_markup=teclado_agape
+        )
+        return AGAPE_CHOICE
+    else:
+        context.user_data["participacao_agape"] = "Não aplicável"
+        return await finalizar_confirmacao_presenca(update, context)
+
+async def handle_agape_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    escolha_agape = query.data.split("_")[-1]
+
+    if escolha_agape == "sim":
+        context.user_data["participacao_agape"] = "Confirmada"
+        await query.edit_message_text(
+            "Irmão, sua confirmação para o Ágape é muito valiosa! Ela nos ajuda a organizar tudo com carinho e evitar desperdícios. Contamos com sua colaboração!\n\n"
+            "Preparando sua confirmação final..."
+        )
+    else:
+        context.user_data["participacao_agape"] = "Não selecionada"
+        await query.edit_message_text("Certo, sua participação no Ágape não será registrada. Preparando sua confirmação final...")
+
+    return await finalizar_confirmacao_presenca(update, context)
+
+async def finalizar_confirmacao_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    evento = context.user_data["evento_confirmando"]
+    membro = context.user_data["membro_confirmando"]
+    participacao_agape = context.user_data.get("participacao_agape", "Não aplicável")
 
     id_evento = evento.get("Data do evento", "") + " — " + evento.get("Nome da loja", "")
 
-    dados = {
+    dados_confirmacao = {
         "id_evento": id_evento,
-        "telegram_id": telegram_id,
+        "telegram_id": membro.get("Telegram ID", ""),
         "nome": membro.get("Nome", ""),
         "grau": membro.get("Grau", ""),
         "cargo": membro.get("Cargo", ""),
         "loja": membro.get("Loja", ""),
         "oriente": membro.get("Oriente", ""),
         "potencia": membro.get("Potência", ""),
-        "agape": evento.get("Ágape", ""), # Pega o Ágape do evento para a confirmação
+        "agape": participacao_agape,
     }
 
-    if registrar_confirmacao(dados):
-        # Mensagem inicial de confirmação
-        resposta_final = f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
+    registrar_confirmacao(dados_confirmacao)
 
-        # Mensagem 1: Compromisso com o Ágape (condicional)
-        # Verifica se o campo Ágape do evento indica que haverá Ágape
-        if evento.get("Ágape", "").lower().startswith("sim"):
-            resposta_final += (
-                "Irmão, sua confirmação para o Ágape é muito valiosa! Ela nos ajuda a organizar tudo com carinho e evitar desperdícios. Contamos com sua colaboração!\n\n"
-            )
+    data = evento.get("Data do evento", "")
+    nome_loja = evento.get("Nome da loja", "")
+    numero_loja = evento.get("Número da loja", "")
+    horario = evento.get("Hora", "")
+    endereco = evento.get("Endereço da sessão", "")
+    potencia_evento = evento.get("Potência", "")
 
-        # Mensagem 2: Reconhecimento e Potências (sempre)
-        resposta_final += (
-            "Sua confirmação aqui é um passo importante! Contudo, recordamos que o reconhecimento no dia do evento segue os protocolos de cada Loja e Potência. Certifique-se de estar em dia com as verificações necessárias.\n\n"
-        )
+    resposta_final = f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
 
-        # Finalização da mensagem
-        resposta_final += f"Evento: {id_evento}\n\nFraterno abraço! 🐐" # Substituído "Até lá"
+    resposta_final += "*Resumo da Sessão Confirmada:*\n"
+    resposta_final += f"📅 {data} — {nome_loja} {numero_loja} - {potencia_evento}\n"
+    resposta_final += f"🕐 Horário: {horario}\n"
+    resposta_final += f"📍 Endereço: {endereco}\n"
+    resposta_final += f"🍽️ Participação no Ágape: {participacao_agape}\n\n"
 
-        await query.edit_message_text(resposta_final)
+    resposta_final += (
+        "Sua confirmação aqui é um passo importante! Contudo, recordamos que o reconhecimento no dia do evento segue os protocolos de cada Loja e Potência. Certifique-se de estar em dia com as verificações necessárias.\n\n"
+    )
+
+    resposta_final += "Fraterno abraço! 🐐"
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(resposta_final, parse_mode="Markdown")
     else:
-        await query.edit_message_text("Você já confirmou presença para este evento.")
+        await update.message.reply_text(resposta_final, parse_mode="Markdown")
 
+    context.user_data.pop("evento_confirmando", None)
+    context.user_data.pop("membro_confirmando", None)
+    context.user_data.pop("participacao_agape", None)
+
+    return ConversationHandler.END
 
 async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -160,7 +226,18 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             f"❌ Presença cancelada.\n\n"
             f"Evento: {id_evento}\n\n"
-            f"Se mudar de ideia, basta confirmar novamente. Fraterno abraço! 🐐" # Substituído "Até lá"
+            f"Se mudar de ideia, basta confirmar novamente. Fraterno abraço! 🐐"
         )
     else:
         await query.edit_message_text("Não foi possível cancelar. Você não estava confirmado para este evento.")
+
+confirmacao_presenca_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(iniciar_confirmacao_presenca, pattern="^confirmar_")],
+    states={
+        AGAPE_CHOICE: [CallbackQueryHandler(handle_agape_choice, pattern="^agape_participar_(sim|nao)$")],
+    },
+    fallbacks=[CommandHandler("cancelar", cancelar_presenca)],
+    map_to_parent={
+        ConversationHandler.END: ConversationHandler.END,
+    }
+)
