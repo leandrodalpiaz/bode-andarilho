@@ -64,9 +64,11 @@ def listar_eventos():
 def cadastrar_evento(dados: dict):
     try:
         ws = spreadsheet.worksheet("Eventos")
+        # A ordem aqui DEVE corresponder EXATAMENTE à ordem das colunas na sua planilha
         row = [
             dados.get("data", ""),
             dados.get("dia_semana", ""),
+            dados.get("hora", ""), # AGORA NA POSIÇÃO CORRETA, APÓS DIA DA SEMANA
             dados.get("nome_loja", ""),
             dados.get("numero_loja", ""),
             dados.get("oriente", ""),
