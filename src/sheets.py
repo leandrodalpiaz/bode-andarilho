@@ -22,3 +22,12 @@ def cadastrar_evento(dados: dict):
     ]
 
     aba.append_row(linha)
+def buscar_membro(telegram_id: int):
+    sheet = conectar_sheets()
+    aba = sheet.worksheet("Membros")
+    registros = aba.get_all_records()
+
+    for registro in registros:
+        if str(registro.get("Telegram ID", "")) == str(telegram_id):
+            return registro
+    return None
