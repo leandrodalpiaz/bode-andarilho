@@ -43,8 +43,7 @@ def cadastrar_membro(dados: dict):
     """Insere novo membro com nível padrão '1'."""
     try:
         ws = spreadsheet.worksheet("Membros")
-        # Ordem das colunas conforme a planilha (após inclusão da coluna Nivel)
-        # Telegram ID, Nome, Loja, Grau, Oriente, Potência, Data de cadastro, Cargo, Nivel
+        # Ordem das colunas: Telegram ID, Nome, Loja, Grau, Oriente, Potência, Data de cadastro, Cargo, Nivel
         row = [
             dados.get("telegram_id", ""),
             dados.get("nome", ""),
@@ -77,8 +76,24 @@ def atualizar_nivel(telegram_id: int, novo_nivel: str):
         print(f"Erro ao atualizar nível: {e}")
         return False
 
-# (mantenha todas as funções de eventos e confirmações abaixo exatamente como estão no seu arquivo original)
-# ... (cole aqui o restante do seu arquivo sheets.py, a partir da função listar_eventos até o final)
+def listar_membros():
+    """Retorna lista de todos os membros cadastrados, com nível tratado."""
+    try:
+        ws = spreadsheet.worksheet("Membros")
+        data = ws.get_all_records()
+        membros = []
+        for row in data:
+            nivel = row.get("Nivel")
+            if nivel is None or nivel == "":
+                nivel = "1"
+            else:
+                nivel = str(int(float(nivel)))
+            row["Nivel"] = nivel
+            membros.append(row)
+        return membros
+    except Exception as e:
+        print(f"Erro ao listar membros: {e}")
+        return []
 
 # --- Funções para Eventos ---
 def listar_eventos():
@@ -98,7 +113,7 @@ def cadastrar_evento(dados: dict):
         row = [
             dados.get("data", ""),
             dados.get("dia_semana", ""),
-            dados.get("hora", ""), # AGORA NA POSIÇÃO CORRETA, APÓS DIA DA SEMANA
+            dados.get("hora", ""),
             dados.get("nome_loja", ""),
             dados.get("numero_loja", ""),
             dados.get("oriente", ""),
