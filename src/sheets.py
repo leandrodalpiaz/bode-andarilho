@@ -2,10 +2,9 @@
 import gspread
 import os
 from datetime import datetime
-import json # Importa o módulo json
+import json
 
 # Configuração do Google Sheets
-# Converte a string JSON da variável de ambiente em um dicionário Python
 credentials_json_str = os.environ.get("GOOGLE_CREDENTIALS")
 if credentials_json_str:
     try:
@@ -16,15 +15,24 @@ if credentials_json_str:
 else:
     raise ValueError("Variável de ambiente GOOGLE_CREDENTIALS não definida.")
 
-spreadsheet = gc.open("Bode Andarilho") # Nome da sua planilha
+spreadsheet = gc.open("Bode Andarilho")
 
 # --- Funções para Membros ---
 def buscar_membro(telegram_id: int):
+    """Retorna o dicionário com dados do membro, incluindo a coluna 'Nivel' como string "1","2","3"."""
     try:
         ws = spreadsheet.worksheet("Membros")
         data = ws.get_all_records()
         for row in data:
             if row.get("Telegram ID") == telegram_id:
+                # Garantir que Nivel seja string e tenha valor padrão "1"
+                nivel = row.get("Nivel")
+                if nivel is None or nivel == "":
+                    nivel = "1"
+                else:
+                    # Converte número (ex: 3.0) para string sem decimal
+                    nivel = str(int(float(nivel)))
+                row["Nivel"] = nivel
                 return row
         return None
     except Exception as e:
@@ -32,23 +40,45 @@ def buscar_membro(telegram_id: int):
         return None
 
 def cadastrar_membro(dados: dict):
+    """Insere novo membro com nível padrão '1'."""
     try:
         ws = spreadsheet.worksheet("Membros")
+        # Ordem das colunas conforme a planilha (após inclusão da coluna Nivel)
+        # Telegram ID, Nome, Loja, Grau, Oriente, Potência, Data de cadastro, Cargo, Nivel
         row = [
+            dados.get("telegram_id", ""),
             dados.get("nome", ""),
             dados.get("loja", ""),
             dados.get("grau", ""),
             dados.get("oriente", ""),
             dados.get("potencia", ""),
-            dados.get("telefone", ""),
-            dados.get("telegram_id", ""),
-            dados.get("nivel", "membro")
+            datetime.now().strftime("%d/%m/%Y %H:%M"),
+            dados.get("cargo", ""),
+            "1"  # nível padrão
         ]
         ws.append_row(row)
         return True
     except Exception as e:
         print(f"Erro ao cadastrar membro: {e}")
         return False
+
+def atualizar_nivel(telegram_id: int, novo_nivel: str):
+    """Atualiza o nível de um membro. Retorna True se bem-sucedido."""
+    try:
+        ws = spreadsheet.worksheet("Membros")
+        # Procura o telegram_id na coluna A (índice 1)
+        cell = ws.find(str(telegram_id), in_column=1)
+        if cell:
+            # A coluna Nivel é a 9ª coluna (índice 9)
+            ws.update_cell(cell.row, 9, novo_nivel)
+            return True
+        return False
+    except Exception as e:
+        print(f"Erro ao atualizar nível: {e}")
+        return False
+
+# (mantenha todas as funções de eventos e confirmações abaixo exatamente como estão no seu arquivo original)
+# ... (cole aqui o restante do seu arquivo sheets.py, a partir da função listar_eventos até o final)
 
 # --- Funções para Eventos ---
 def listar_eventos():
@@ -140,10 +170,3 @@ def cancelar_confirmacao(id_evento: str, telegram_id: int):
     except Exception as e:
         print(f"Erro ao cancelar confirmação: {e}")
         return False
-
-# --- Funções para Permissões (Nível) ---
-def get_nivel_membro(telegram_id: int):
-    membro = buscar_membro(telegram_id)
-    if membro:
-        return membro.get("Nivel", "membro")
-    return "visitante"
