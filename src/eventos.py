@@ -3,10 +3,25 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler, MessageHandler, filters, CommandHandler
 from src.sheets import (
     listar_eventos, buscar_membro, registrar_confirmacao,
-    cancelar_confirmacao, buscar_confirmacao
+    cancelar_confirmacao, buscar_confirmacao, listar_confirmacoes_por_evento
 )
 
+# Dicionário para traduzir dias da semana para português
+DIAS_SEMANA = {
+    "Monday": "Segunda-feira",
+    "Tuesday": "Terça-feira",
+    "Wednesday": "Quarta-feira",
+    "Thursday": "Quinta-feira",
+    "Friday": "Sexta-feira",
+    "Saturday": "Sábado",
+    "Sunday": "Domingo"
+}
+
 AGAPE_CHOICE = range(1)
+
+def traduzir_dia(dia_ingles):
+    """Traduz o dia da semana para português."""
+    return DIAS_SEMANA.get(dia_ingles, dia_ingles)
 
 async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -56,9 +71,14 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     traje = evento.get("Traje obrigatório", "")
     agape = evento.get("Ágape", "")
     obs = evento.get("Observações", "")
+    dia_semana_ingles = evento.get("Dia da semana", "")
+
+    # Traduz o dia da semana
+    dia_semana = traduzir_dia(dia_semana_ingles)
 
     texto = (
         f"📅 *{data} — {nome_loja} {numero_loja} - {potencia}*\n"
+        f"📆 Dia: {dia_semana}\n"
         f"🕕 Horário: {horario if horario else 'Não informado'}\n"
         f"📍 Endereço: {endereco}\n"
         f"🔷 Grau mínimo: {grau}\n"
@@ -69,7 +89,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         f"🍽️ Ágape: {agape}\n"
     )
 
-    if obs and obs.strip().lower() not in ["n/a", "n"]:
+    if obs and obs.strip().lower() not in ["n/a", "n", "nao", "não"]:
         texto += f"\n📌 Obs: {obs}"
     else:
         texto += "\n📌 Obs: Sem observações"
@@ -78,19 +98,59 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     id_evento = data + " — " + nome_loja
     ja_confirmou = buscar_confirmacao(id_evento, telegram_id)
 
+    # Botões: sempre mostra "Ver confirmados" e o botão condicional
+    botoes = []
+    
     if ja_confirmou:
-        botoes = [
-            [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar_{indice}")],
-            [InlineKeyboardButton("⬅️ Voltar", callback_data="ver_eventos")]
-        ]
+        botoes.append([InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar_{indice}")])
     else:
-        botoes = [
-            [InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar_{indice}")],
-            [InlineKeyboardButton("⬅️ Voltar", callback_data="ver_eventos")]
-        ]
+        botoes.append([InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar_{indice}")])
+    
+    botoes.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados_{indice}")])
+    botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="ver_eventos")])
 
     teclado = InlineKeyboardMarkup(botoes)
     await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=teclado)
+
+async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mostra a lista de confirmados de um evento."""
+    query = update.callback_query
+    await query.answer()
+
+    indice = int(query.data.split("_")[-1])
+    eventos = listar_eventos()
+    if indice >= len(eventos):
+        await query.edit_message_text("Evento não encontrado.")
+        return
+
+    evento = eventos[indice]
+    data = evento.get("Data do evento", "")
+    nome_loja = evento.get("Nome da loja", "")
+    id_evento = data + " — " + nome_loja
+    
+    confirmacoes = listar_confirmacoes_por_evento(id_evento)
+    
+    if not confirmacoes:
+        texto = f"Nenhum irmão confirmou presença para este evento ainda.\n\nSeja o primeiro! 🐐"
+    else:
+        texto = f"✅ *{len(confirmacoes)} irmão(s) confirmado(s):*\n\n"
+        for conf in confirmacoes:
+            nome = conf.get("Nome", "Desconhecido")
+            grau = conf.get("Grau", "")
+            loja = conf.get("Loja", "")
+            oriente = conf.get("Oriente", "")
+            agape = conf.get("Ágape", "")
+            if agape not in ["Não aplicável", "Não selecionada"]:
+                texto += f"• {grau} {nome} - {loja} ({oriente}) - 🍽 {agape}\n"
+            else:
+                texto += f"• {grau} {nome} - {loja} ({oriente})\n"
+    
+    botoes = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar_{indice}")],
+        [InlineKeyboardButton("⬅️ Voltar ao evento", callback_data=f"evento_{indice}")]
+    ])
+    
+    await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=botoes)
 
 async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -144,9 +204,6 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             return AGAPE_CHOICE
         else:
             context.user_data["participacao_agape"] = "Não aplicável"
-            # Chama finalizar_confirmacao_presenca com o update original, mas forçando chat_privado=True
-            # Precisamos passar o update correto. Como estamos no grupo, o update é do grupo.
-            # Vamos criar um novo contexto? Melhor: chamar a função passando o chat_id manualmente.
             return await finalizar_confirmacao_presenca(update, context, chat_privado=True)
 
     else:
@@ -233,34 +290,31 @@ async def finalizar_confirmacao_presenca(update: Update, context: ContextTypes.D
     horario = evento.get("Hora", "")
     endereco = evento.get("Endereço da sessão", "")
     potencia_evento = evento.get("Potência", "")
+    dia_semana_ingles = evento.get("Dia da semana", "")
+    dia_semana = traduzir_dia(dia_semana_ingles)
 
     resposta_final = f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
     resposta_final += "*Resumo da Sessão Confirmada:*\n"
     resposta_final += f"📅 {data} — {nome_loja} {numero_loja} - {potencia_evento}\n"
+    resposta_final += f"📆 Dia: {dia_semana}\n"
     resposta_final += f"🕕 Horário: {horario if horario else 'Não informado'}\n"
     resposta_final += f"📍 Endereço: {endereco}\n"
     resposta_final += f"🍽️ Participação no ágape: {participacao_agape}\n\n"
-    resposta_final += (
-        "Sua confirmação aqui é um passo importante! Contudo, recordamos que o reconhecimento no dia do evento segue os protocolos de cada Loja e Potência. Certifique-se de estar em dia com as verificações necessárias.\n\n"
-    )
+    resposta_final += "Sua confirmação aqui é um passo importante! Contudo, recordamos que o reconhecimento no dia do evento segue os protocolos de cada Loja e Potência. Certifique-se de estar em dia com as verificações necessárias.\n\n"
     resposta_final += "Fraterno abraço! 🐐"
 
-    # Determina para onde enviar a resposta
     if chat_privado:
-        # Envia para o privado do usuário
         await context.bot.send_message(
             chat_id=membro.get("Telegram ID"),
             text=resposta_final,
             parse_mode="Markdown"
         )
     else:
-        # Responde no chat atual (pode ser privado ou grupo, mas se for grupo, não deve acontecer)
         if update.callback_query:
             await update.callback_query.edit_message_text(resposta_final, parse_mode="Markdown")
         else:
             await update.message.reply_text(resposta_final, parse_mode="Markdown")
 
-    # Limpa dados da sessão
     context.user_data.pop("evento_confirmando", None)
     context.user_data.pop("membro_confirmando", None)
     context.user_data.pop("participacao_agape", None)
