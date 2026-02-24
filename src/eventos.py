@@ -1,12 +1,11 @@
 # src/eventos.py
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler, MessageHandler, filters, CommandHandler # CommandHandler adicionado aqui
+from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler, MessageHandler, filters, CommandHandler
 from src.sheets import (
     listar_eventos, buscar_membro, registrar_confirmacao,
     cancelar_confirmacao, buscar_confirmacao
 )
 
-# Estados da conversação para confirmação de presença
 AGAPE_CHOICE = range(1)
 
 async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -14,7 +13,6 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     eventos = listar_eventos()
-
     if not eventos:
         await query.edit_message_text("Não há eventos ativos no momento. Volte em breve, irmão.")
         return
@@ -39,13 +37,12 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
 
     indice = int(query.data.split("_")[1])
     eventos = listar_eventos()
-
     if indice >= len(eventos):
         await query.edit_message_text("Evento não encontrado.")
         return
 
     evento = eventos[indice]
-    context.user_data["evento_selecionado_indice"] = indice # Armazena o índice para uso posterior
+    context.user_data["evento_selecionado_indice"] = indice
 
     data = evento.get("Data do evento", "")
     nome_loja = evento.get("Nome da loja", "")
@@ -62,7 +59,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
 
     texto = (
         f"📅 *{data} — {nome_loja} {numero_loja} - {potencia}*\n"
-        f"🕐 Horário: {horario if horario else 'Não informado'}\n"
+        f"🕕 Horário: {horario if horario else 'Não informado'}\n"
         f"📍 Endereço: {endereco}\n"
         f"🔷 Grau mínimo: {grau}\n"
         f"📋 Tipo: {tipo}\n"
@@ -72,12 +69,10 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         f"🍽️ Ágape: {agape}\n"
     )
 
-    # Ajuste para exibir "Sem observações" corretamente
-    if obs and obs.strip().lower() not in ["n/a", "n"]: # Verifica se não é vazio, "n/a" ou "n"
-        texto += f"\n📝 Obs: {obs}"
+    if obs and obs.strip().lower() not in ["n/a", "n"]:
+        texto += f"\n📌 Obs: {obs}"
     else:
-        texto += "\n📝 Obs: Sem observações"
-
+        texto += "\n📌 Obs: Sem observações"
 
     telegram_id = update.effective_user.id
     id_evento = data + " — " + nome_loja
@@ -101,47 +96,94 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     query = update.callback_query
     await query.answer()
 
-    indice = int(query.data.split("_")[1])
-    eventos = listar_eventos()
-    evento = eventos[indice]
-
-    telegram_id = update.effective_user.id
-    membro = buscar_membro(telegram_id)
-
-    if not membro:
-        await query.edit_message_text("Seu cadastro não foi encontrado. Envie /start para se cadastrar.")
-        return ConversationHandler.END
-
-    id_evento = evento.get("Data do evento", "") + " — " + evento.get("Nome da loja", "")
-    ja_confirmou = buscar_confirmacao(id_evento, telegram_id)
-
-    if ja_confirmou:
-        await query.edit_message_text("Você já confirmou presença para este evento.")
-        return ConversationHandler.END
-
-    context.user_data["evento_confirmando"] = evento
-    context.user_data["membro_confirmando"] = membro
-
-    if evento.get("Ágape", "").lower().startswith("sim"):
-        agape_info = evento.get("Ágape", "Sim").replace("Sim ", "").strip()
-        if agape_info:
-            agape_info = f"*Tipo:* {agape_info.replace('(', '').replace(')', '')}\n"
-        else:
-            agape_info = ""
-
-        teclado_agape = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Sim", callback_data="agape_participar_sim")],
-            [InlineKeyboardButton("Não", callback_data="agape_participar_nao")]
-        ])
+    chat_type = update.effective_chat.type
+    if chat_type in ["group", "supergroup"]:
         await query.edit_message_text(
-            f"Este evento oferece Ágape!\n{agape_info}Você deseja participar do Ágape?",
-            parse_mode="Markdown",
-            reply_markup=teclado_agape
+            "Você será redirecionado para o chat privado para concluir a confirmação. "
+            "Por favor, verifique suas mensagens diretas com o bot."
         )
-        return AGAPE_CHOICE
+        indice = int(query.data.split("_")[1])
+        eventos = listar_eventos()
+        evento = eventos[indice]
+        context.user_data["evento_confirmando"] = evento
+        membro = buscar_membro(update.effective_user.id)
+        if not membro:
+            await context.bot.send_message(
+                chat_id=update.effective_user.id,
+                text="Seu cadastro não foi encontrado. Envie /start para se cadastrar."
+            )
+            return ConversationHandler.END
+        context.user_data["membro_confirmando"] = membro
+
+        id_evento = evento.get("Data do evento", "") + " — " + evento.get("Nome da loja", "")
+        ja_confirmou = buscar_confirmacao(id_evento, update.effective_user.id)
+        if ja_confirmou:
+            await context.bot.send_message(
+                chat_id=update.effective_user.id,
+                text="Você já confirmou presença para este evento."
+            )
+            return ConversationHandler.END
+
+        if evento.get("Ágape", "").lower().startswith("sim"):
+            agape_info = evento.get("Ágape", "Sim").replace("Sim ", "").strip()
+            if agape_info:
+                agape_info = f"*Tipo:* {agape_info.replace('(', '').replace(')', '')}\n"
+            else:
+                agape_info = ""
+
+            teclado_agape = InlineKeyboardMarkup([
+                [InlineKeyboardButton("Sim", callback_data="agape_participar_sim")],
+                [InlineKeyboardButton("Não", callback_data="agape_participar_nao")]
+            ])
+            await context.bot.send_message(
+                chat_id=update.effective_user.id,
+                text=f"Este evento oferece ágape!\n{agape_info}Você deseja participar do ágape?",
+                parse_mode="Markdown",
+                reply_markup=teclado_agape
+            )
+            return AGAPE_CHOICE
+        else:
+            context.user_data["participacao_agape"] = "Não aplicável"
+            return await finalizar_confirmacao_presenca(update, context, chat_privado=True)
+
     else:
-        context.user_data["participacao_agape"] = "Não aplicável"
-        return await finalizar_confirmacao_presenca(update, context)
+        indice = int(query.data.split("_")[1])
+        eventos = listar_eventos()
+        evento = eventos[indice]
+        membro = buscar_membro(update.effective_user.id)
+        if not membro:
+            await query.edit_message_text("Seu cadastro não foi encontrado. Envie /start para se cadastrar.")
+            return ConversationHandler.END
+
+        id_evento = evento.get("Data do evento", "") + " — " + evento.get("Nome da loja", "")
+        ja_confirmou = buscar_confirmacao(id_evento, update.effective_user.id)
+        if ja_confirmou:
+            await query.edit_message_text("Você já confirmou presença para este evento.")
+            return ConversationHandler.END
+
+        context.user_data["evento_confirmando"] = evento
+        context.user_data["membro_confirmando"] = membro
+
+        if evento.get("Ágape", "").lower().startswith("sim"):
+            agape_info = evento.get("Ágape", "Sim").replace("Sim ", "").strip()
+            if agape_info:
+                agape_info = f"*Tipo:* {agape_info.replace('(', '').replace(')', '')}\n"
+            else:
+                agape_info = ""
+
+            teclado_agape = InlineKeyboardMarkup([
+                [InlineKeyboardButton("Sim", callback_data="agape_participar_sim")],
+                [InlineKeyboardButton("Não", callback_data="agape_participar_nao")]
+            ])
+            await query.edit_message_text(
+                f"Este evento oferece ágape!\n{agape_info}Você deseja participar do ágape?",
+                parse_mode="Markdown",
+                reply_markup=teclado_agape
+            )
+            return AGAPE_CHOICE
+        else:
+            context.user_data["participacao_agape"] = "Não aplicável"
+            return await finalizar_confirmacao_presenca(update, context)
 
 async def handle_agape_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -151,16 +193,16 @@ async def handle_agape_choice(update: Update, context: ContextTypes.DEFAULT_TYPE
     if escolha_agape == "sim":
         context.user_data["participacao_agape"] = "Confirmada"
         await query.edit_message_text(
-            "Irmão, sua confirmação para o Ágape é muito valiosa! Ela nos ajuda a organizar tudo com carinho e evitar desperdícios. Contamos com sua colaboração!\n\n"
+            "Irmão, sua confirmação para o ágape é muito valiosa! Ela nos ajuda a organizar tudo com carinho e evitar desperdícios. Contamos com sua colaboração!\n\n"
             "Preparando sua confirmação final..."
         )
     else:
         context.user_data["participacao_agape"] = "Não selecionada"
-        await query.edit_message_text("Certo, sua participação no Ágape não será registrada. Preparando sua confirmação final...")
+        await query.edit_message_text("Certo, sua participação no ágape não será registrada. Preparando sua confirmação final...")
 
     return await finalizar_confirmacao_presenca(update, context)
 
-async def finalizar_confirmacao_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def finalizar_confirmacao_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE, chat_privado=False):
     evento = context.user_data["evento_confirmando"]
     membro = context.user_data["membro_confirmando"]
     participacao_agape = context.user_data.get("participacao_agape", "Não aplicável")
@@ -189,23 +231,27 @@ async def finalizar_confirmacao_presenca(update: Update, context: ContextTypes.D
     potencia_evento = evento.get("Potência", "")
 
     resposta_final = f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
-
     resposta_final += "*Resumo da Sessão Confirmada:*\n"
     resposta_final += f"📅 {data} — {nome_loja} {numero_loja} - {potencia_evento}\n"
-    resposta_final += f"🕐 Horário: {horario if horario else 'Não informado'}\n"
+    resposta_final += f"🕕 Horário: {horario if horario else 'Não informado'}\n"
     resposta_final += f"📍 Endereço: {endereco}\n"
-    resposta_final += f"🍽️ Participação no Ágape: {participacao_agape}\n\n"
-
+    resposta_final += f"🍽️ Participação no ágape: {participacao_agape}\n\n"
     resposta_final += (
         "Sua confirmação aqui é um passo importante! Contudo, recordamos que o reconhecimento no dia do evento segue os protocolos de cada Loja e Potência. Certifique-se de estar em dia com as verificações necessárias.\n\n"
     )
-
     resposta_final += "Fraterno abraço! 🐐"
 
-    if update.callback_query:
-        await update.callback_query.edit_message_text(resposta_final, parse_mode="Markdown")
+    if chat_privado or update.effective_chat.type == "private":
+        if update.callback_query:
+            await update.callback_query.edit_message_text(resposta_final, parse_mode="Markdown")
+        else:
+            await update.message.reply_text(resposta_final, parse_mode="Markdown")
     else:
-        await update.message.reply_text(resposta_final, parse_mode="Markdown")
+        await context.bot.send_message(
+            chat_id=membro.get("Telegram ID"),
+            text=resposta_final,
+            parse_mode="Markdown"
+        )
 
     context.user_data.pop("evento_confirmando", None)
     context.user_data.pop("membro_confirmando", None)
