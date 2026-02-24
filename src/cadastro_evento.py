@@ -10,7 +10,7 @@ import os
 DATA, HORARIO, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, AGAPE_TIPO, OBSERVACOES, ID_GRUPO, ID_SECRETARIO, ENDERECO = range(16)
 
 async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Inicia o cadastro de evento, com verificação de permissão e redirecionamento para privado."""
+    """Inicia o cadastro de evento, com verificação de permissão."""
     query = update.callback_query
     await query.answer()
 
@@ -22,27 +22,13 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Você não tem permissão para cadastrar eventos.")
         return ConversationHandler.END
 
-    # Se a interação veio de um grupo, redireciona para o privado
+    # Se a interação veio de um grupo, orienta a usar o privado
     if update.effective_chat.type in ["group", "supergroup"]:
         await query.edit_message_text(
             "O cadastro de eventos deve ser feito no meu chat privado. "
-            "Por favor, acesse meu privado clicando no meu nome e envie /start para começar."
+            "Por favor, acesse meu privado clicando no meu nome e utilize o menu 'Área do Secretário' para cadastrar."
         )
-        # Opcional: enviar uma mensagem privada com o início do cadastro
-        await context.bot.send_message(
-            chat_id=user_id,
-            text="Você solicitou cadastrar um evento. Vamos iniciar o processo aqui.\n\n"
-                 "Qual a *Data do evento*? (Ex: 25/03/2026)",
-            parse_mode="Markdown"
-        )
-        # Inicia a conversa no privado (o próximo passo será tratado pelo mesmo handler,
-        # mas agora o update será no privado). No entanto, precisamos armazenar que o fluxo começou.
-        # A maneira mais simples é apenas enviar a primeira pergunta e retornar o estado DATA,
-        # mas o ConversationHandler espera que o entry_point seja um callback do botão.
-        # Como estamos enviando uma mensagem privada, o usuário responderá com texto,
-        # e a função receber_data será chamada. O estado será mantido pelo ConversationHandler,
-        # que é global por usuário, então funciona.
-        return DATA  # Retorna o primeiro estado
+        return ConversationHandler.END
 
     # Se já está em privado, continua normalmente
     await query.edit_message_text(
@@ -52,7 +38,19 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return DATA
 
 async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["novo_evento_data"] = update.message.text
+    data_text = update.message.text.strip()
+    # Validação da data
+    try:
+        data_obj = datetime.strptime(data_text, "%d/%m/%Y")
+        hoje = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        if data_obj < hoje:
+            await update.message.reply_text("A data não pode ser no passado. Por favor, informe uma data futura (Ex: 25/03/2026).")
+            return DATA  # Permanece no mesmo estado
+    except ValueError:
+        await update.message.reply_text("Formato inválido. Use DD/MM/AAAA (Ex: 25/03/2026).")
+        return DATA
+
+    context.user_data["novo_evento_data"] = data_text
     await update.message.reply_text("Qual o *Horário do evento*? (Ex: 19:30)", parse_mode="Markdown")
     return HORARIO
 
@@ -200,9 +198,8 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
 
     # Publicar o evento no grupo especificado, se for um ID válido
     grupo_id = dados_evento.get("telegram_id_grupo")
-    if grupo_id and grupo_id.strip() not in ["", "N/A", "n/a", "nao", "não"]:
+    if grupo_id and grupo_id.strip() not in ["", "N/A", "n/a"]:
         try:
-            # Converte para inteiro (o ID do grupo é numérico)
             grupo_id_int = int(grupo_id)
             # Formata a mensagem do evento para publicação
             mensagem_grupo = (
@@ -218,14 +215,14 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
                 f"🔺 Grau mínimo: {dados_evento['grau']}\n"
                 f"👔 Traje: {dados_evento['traje']}\n"
                 f"🍽 Ágape: {dados_evento['agape']}\n\n"
-                f"{dados_evento['observacoes'] if dados_evento['observacoes'] not in ['N/A','n/a'] else ''}"
+                f"{dados_evento['observacoes'] if dados_evento['observacoes'] not in ['N/A', 'n/a'] else ''}"
             )
-            # Cria os botões inline
+            # Cria os botões inline (precisa de um identificador único do evento)
+            # Por enquanto, usaremos um placeholder; idealmente, deveria ser o índice ou ID do evento.
             botoes = InlineKeyboardMarkup([
-                [InlineKeyboardButton("✅ Confirmar Presença", callback_data="confirmar_0")],  # Índice do evento? Precisamos do índice real. Talvez seja melhor armazenar o ID do evento na planilha e usar um identificador único.
+                [InlineKeyboardButton("✅ Confirmar Presença", callback_data="confirmar_0")],
                 [InlineKeyboardButton("👥 Ver confirmados", callback_data="ver_confirmados_0")]
             ])
-            # Publica no grupo
             await context.bot.send_message(
                 chat_id=grupo_id_int,
                 text=mensagem_grupo,
@@ -237,7 +234,6 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
     else:
         print("Nenhum grupo especificado para publicação.")
 
-    # Mensagem de confirmação para o usuário
     await update.message.reply_text("✅ Evento cadastrado com sucesso! Use /start para voltar ao menu principal.")
     return ConversationHandler.END
 
