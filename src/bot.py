@@ -3,7 +3,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from src.sheets import buscar_membro
 from src.cadastro import cadastro_start
-from src.eventos import mostrar_eventos, mostrar_detalhes_evento, cancelar_presenca # 'confirmar_presenca' removido
+from src.eventos import mostrar_eventos, mostrar_detalhes_evento, cancelar_presenca
 from src.perfil import mostrar_perfil
 from src.permissoes import get_nivel
 
@@ -13,10 +13,11 @@ def menu_principal_teclado(nivel: str):
         [InlineKeyboardButton("👤 Meu cadastro", callback_data="meu_cadastro")],
     ]
 
-    if nivel in ["secretario", "admin"]:
+    # Nível 2 = secretário, nível 3 = admin
+    if nivel in ["2", "3"]:
         botoes.append([InlineKeyboardButton("📋 Área do Secretário", callback_data="area_secretario")])
 
-    if nivel == "admin":
+    if nivel == "3":
         botoes.append([InlineKeyboardButton("⚙️ Área do Administrador", callback_data="area_admin")])
 
     return InlineKeyboardMarkup(botoes)
@@ -47,8 +48,6 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await mostrar_eventos(update, context)
     elif data.startswith("evento_"):
         await mostrar_detalhes_evento(update, context)
-    # elif data.startswith("confirmar_"): # Esta linha foi removida, pois o ConversationHandler em main.py lida com isso
-    #     await iniciar_confirmacao_presenca(update, context) # A função agora é iniciar_confirmacao_presenca
     elif data.startswith("cancelar_"):
         await cancelar_presenca(update, context)
     elif data == "meu_cadastro":
@@ -68,7 +67,6 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.edit_message_text("Função em desenvolvimento ou comando não reconhecido.")
 
-
 async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -76,13 +74,13 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
     telegram_id = update.effective_user.id
     nivel = get_nivel(telegram_id)
 
-    if nivel not in ["secretario", "admin"]:
+    if nivel not in ["2", "3"]:
         await query.edit_message_text("Você não tem permissão para acessar esta área.")
         return
 
     teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📅 Cadastrar evento", callback_data="cadastrar_evento")],
-        [InlineKeyboardButton("👤 Cadastrar membro", callback_data="cadastrar_membro_sec")],
+        [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
+        [InlineKeyboardButton("👥 Cadastrar membro", callback_data="cadastrar_membro_sec")],
         [InlineKeyboardButton("📋 Ver confirmados por evento", callback_data="ver_confirmados")],
         [InlineKeyboardButton("🔴 Encerrar evento", callback_data="encerrar_evento")],
         [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
@@ -95,20 +93,21 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.answer()
 
     telegram_id = update.effective_user.id
+    nivel = get_nivel(telegram_id)
 
-    if get_nivel(telegram_id) != "admin":
+    if nivel != "3":
         await query.edit_message_text("Você não tem permissão para acessar esta área.")
         return
 
     teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📅 Cadastrar evento", callback_data="cadastrar_evento")],
+        [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
         [InlineKeyboardButton("👥 Ver todos os membros", callback_data="admin_ver_membros")],
         [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
         [InlineKeyboardButton("🗑️ Excluir membro", callback_data="admin_excluir_membro")],
         [InlineKeyboardButton("✏️ Editar evento", callback_data="admin_editar_evento")],
         [InlineKeyboardButton("🗑️ Excluir evento", callback_data="admin_excluir_evento")],
-        [InlineKeyboardButton("⭐ Promover secretário", callback_data="admin_promover")],
-        [InlineKeyboardButton("🔽 Rebaixar secretário", callback_data="admin_rebaixar")],
+        [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
+        [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
         [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
     ])
 
