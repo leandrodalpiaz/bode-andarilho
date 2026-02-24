@@ -17,12 +17,10 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
 
-    # Permissão: apenas nível 2 (secretário) ou 3 (admin)
     if nivel not in ["2", "3"]:
         await query.edit_message_text("Você não tem permissão para cadastrar eventos.")
         return ConversationHandler.END
 
-    # Se a interação veio de um grupo, orienta a usar o privado
     if update.effective_chat.type in ["group", "supergroup"]:
         await query.edit_message_text(
             "O cadastro de eventos deve ser feito no meu chat privado. "
@@ -30,7 +28,6 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ConversationHandler.END
 
-    # Se já está em privado, continua normalmente
     await query.edit_message_text(
         "Certo, vamos cadastrar um novo evento.\n\nQual a *Data do evento*? (Ex: 25/03/2026)",
         parse_mode="Markdown"
@@ -39,13 +36,12 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data_text = update.message.text.strip()
-    # Validação da data
     try:
         data_obj = datetime.strptime(data_text, "%d/%m/%Y")
         hoje = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         if data_obj < hoje:
             await update.message.reply_text("A data não pode ser no passado. Por favor, informe uma data futura (Ex: 25/03/2026).")
-            return DATA  # Permanece no mesmo estado
+            return DATA
     except ValueError:
         await update.message.reply_text("Formato inválido. Use DD/MM/AAAA (Ex: 25/03/2026).")
         return DATA
@@ -96,7 +92,6 @@ async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receber_traje(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["novo_evento_traje"] = update.message.text
-
     teclado_agape = InlineKeyboardMarkup([
         [InlineKeyboardButton("Sim", callback_data="agape_sim")],
         [InlineKeyboardButton("Não", callback_data="agape_nao")]
@@ -197,11 +192,12 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
     cadastrar_evento(dados_evento)
 
     # Publicar o evento no grupo especificado, se for um ID válido
-    grupo_id = dados_evento.get("telegram_id_grupo")
-    if grupo_id and grupo_id.strip() not in ["", "N/A", "n/a"]:
+    grupo_id = dados_evento.get("telegram_id_grupo", "").strip()
+    # Lista de valores que indicam "não informado"
+    valores_invalidos = ["", "N/A", "n/a", "nao", "não", "n", "N", "0"]
+    if grupo_id and grupo_id not in valores_invalidos:
         try:
-            grupo_id_int = int(grupo_id)
-            # Formata a mensagem do evento para publicação
+            grupo_id_int = int(float(grupo_id))  # converte mesmo se for string numérica com ponto
             mensagem_grupo = (
                 f"🐐 *Nova sessão disponível para visitas!*\n"
                 f"━━━━━━━━━━━━━━━━\n"
@@ -217,8 +213,7 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
                 f"🍽 Ágape: {dados_evento['agape']}\n\n"
                 f"{dados_evento['observacoes'] if dados_evento['observacoes'] not in ['N/A', 'n/a'] else ''}"
             )
-            # Cria os botões inline (precisa de um identificador único do evento)
-            # Por enquanto, usaremos um placeholder; idealmente, deveria ser o índice ou ID do evento.
+            # Botões (precisa de um identificador único do evento)
             botoes = InlineKeyboardMarkup([
                 [InlineKeyboardButton("✅ Confirmar Presença", callback_data="confirmar_0")],
                 [InlineKeyboardButton("👥 Ver confirmados", callback_data="ver_confirmados_0")]
@@ -229,8 +224,10 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
                 parse_mode="Markdown",
                 reply_markup=botoes
             )
+            print(f"Evento publicado no grupo {grupo_id_int}")
         except Exception as e:
             print(f"Erro ao publicar no grupo: {e}")
+            await update.message.reply_text(f"⚠️ Evento cadastrado, mas não foi possível publicar no grupo (ID inválido: {grupo_id}).")
     else:
         print("Nenhum grupo especificado para publicação.")
 
