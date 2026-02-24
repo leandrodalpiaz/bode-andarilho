@@ -3,13 +3,19 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from src.sheets import buscar_membro
 from src.cadastro import cadastro_start
-from src.eventos import mostrar_eventos, mostrar_detalhes_evento, cancelar_presenca
+from src.eventos import (
+    mostrar_eventos, mostrar_detalhes_evento, cancelar_presenca,
+    ver_confirmados, minhas_confirmacoes, mostrar_eventos_por_data,
+    mostrar_eventos_por_grau, fechar_mensagem
+)
 from src.perfil import mostrar_perfil
 from src.permissoes import get_nivel
 
 def menu_principal_teclado(nivel: str):
+    """Menu principal baseado no nível do usuário."""
     botoes = [
         [InlineKeyboardButton("📅 Ver eventos", callback_data="ver_eventos")],
+        [InlineKeyboardButton("✅ Minhas confirmações", callback_data="minhas_confirmacoes")],
         [InlineKeyboardButton("👤 Meu cadastro", callback_data="meu_cadastro")],
     ]
 
@@ -23,6 +29,7 @@ def menu_principal_teclado(nivel: str):
     return InlineKeyboardMarkup(botoes)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler para comando /start."""
     telegram_id = update.effective_user.id
     membro = buscar_membro(telegram_id)
 
@@ -37,6 +44,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cadastro_start(update, context)
 
 async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler genérico para botões (deve ser o último)."""
     query = update.callback_query
     await query.answer()
 
@@ -44,10 +52,21 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nivel = get_nivel(telegram_id)
     data = query.data
 
+    # Handlers de navegação de eventos
     if data == "ver_eventos":
         await mostrar_eventos(update, context)
+    elif data.startswith("data_"):
+        await mostrar_eventos_por_data(update, context)
+    elif data.startswith("grau_"):
+        await mostrar_eventos_por_grau(update, context)
     elif data.startswith("evento_"):
         await mostrar_detalhes_evento(update, context)
+    elif data.startswith("ver_confirmados_"):
+        await ver_confirmados(update, context)
+    elif data == "fechar_mensagem":
+        await fechar_mensagem(update, context)
+    elif data == "minhas_confirmacoes":
+        await minhas_confirmacoes(update, context)
     elif data.startswith("cancelar_"):
         await cancelar_presenca(update, context)
     elif data == "meu_cadastro":
@@ -64,10 +83,39 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "cadastrar_evento":
         from src.cadastro_evento import novo_evento_start
         await novo_evento_start(update, context)
+    elif data == "ver_confirmados_secretario":
+        from src.admin_acoes import ver_confirmados_secretario
+        await ver_confirmados_secretario(update, context)
+    elif data == "encerrar_evento":
+        from src.admin_acoes import encerrar_evento
+        await encerrar_evento(update, context)
+    elif data == "admin_ver_membros":
+        from src.admin_acoes import ver_todos_membros
+        await ver_todos_membros(update, context)
+    elif data == "admin_editar_membro":
+        from src.admin_acoes import editar_membro
+        await editar_membro(update, context)
+    elif data == "admin_excluir_membro":
+        from src.admin_acoes import excluir_membro
+        await excluir_membro(update, context)
+    elif data == "admin_editar_evento":
+        from src.admin_acoes import editar_evento
+        await editar_evento(update, context)
+    elif data == "admin_excluir_evento":
+        from src.admin_acoes import excluir_evento
+        await excluir_evento(update, context)
+    elif data == "admin_promover":
+        from src.admin_acoes import promover_handler
+        # Promover tem ConversationHandler próprio
+        await promover_handler(update, context)
+    elif data == "admin_rebaixar":
+        from src.admin_acoes import rebaixar_handler
+        await rebaixar_handler(update, context)
     else:
         await query.edit_message_text("Função em desenvolvimento ou comando não reconhecido.")
 
 async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu da área do secretário."""
     query = update.callback_query
     await query.answer()
 
@@ -80,15 +128,20 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
-        [InlineKeyboardButton("👥 Cadastrar membro", callback_data="cadastrar_membro_sec")],
-        [InlineKeyboardButton("📋 Ver confirmados por evento", callback_data="ver_confirmados")],
+        [InlineKeyboardButton("📋 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
         [InlineKeyboardButton("🔴 Encerrar evento", callback_data="encerrar_evento")],
         [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
     ])
 
-    await query.edit_message_text("📋 *Área do Secretário*\n\nO que deseja fazer?", parse_mode="Markdown", reply_markup=teclado)
+    await query.edit_message_text(
+        "📋 *Área do Secretário*\n\n"
+        "O que deseja fazer?",
+        parse_mode="Markdown",
+        reply_markup=teclado
+    )
 
 async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu da área do administrador."""
     query = update.callback_query
     await query.answer()
 
@@ -111,4 +164,9 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
     ])
 
-    await query.edit_message_text("⚙️ *Área do Administrador*\n\nO que deseja fazer?", parse_mode="Markdown", reply_markup=teclado)
+    await query.edit_message_text(
+        "⚙️ *Área do Administrador*\n\n"
+        "O que deseja fazer?",
+        parse_mode="Markdown",
+        reply_markup=teclado
+    )

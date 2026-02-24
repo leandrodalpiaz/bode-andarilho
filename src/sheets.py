@@ -199,3 +199,17 @@ def listar_confirmacoes_por_evento(id_evento: str):
     except Exception as e:
         print(f"Erro ao listar confirmações: {e}")
         return []
+    
+def listar_confirmacoes_por_evento(id_evento: str):
+    """Retorna lista de confirmações para um evento específico."""
+    try:
+        ws = spreadsheet.worksheet("Confirmações")
+        data = ws.get_all_records()
+        confirmacoes = []
+        for row in data:
+            if row.get("ID Evento") == id_evento:
+                confirmacoes.append(row)
+        return confirmacoes
+    except Exception as e:
+        print(f"Erro ao listar confirmações: {e}")
+        return []

@@ -10,7 +10,8 @@ from src.bot import start, botao_handler
 from src.cadastro import cadastro_handler
 from src.eventos import (
     mostrar_eventos, mostrar_detalhes_evento, cancelar_presenca,
-    confirmacao_presenca_handler
+    confirmacao_presenca_handler, ver_confirmados, fechar_mensagem,
+    minhas_confirmacoes, mostrar_eventos_por_data, mostrar_eventos_por_grau
 )
 from src.cadastro_evento import cadastro_evento_handler
 from src.admin_acoes import promover_handler, rebaixar_handler
@@ -51,9 +52,14 @@ app.add_handler(confirmacao_presenca_handler)
 app.add_handler(promover_handler)
 app.add_handler(rebaixar_handler)
 
-# Handlers de callback (botões)
+# Handlers de callback específicos (devem vir antes do genérico)
 app.add_handler(CallbackQueryHandler(mostrar_eventos, pattern="^ver_eventos$"))
+app.add_handler(CallbackQueryHandler(mostrar_eventos_por_data, pattern="^data_"))
+app.add_handler(CallbackQueryHandler(mostrar_eventos_por_grau, pattern="^grau_"))
 app.add_handler(CallbackQueryHandler(mostrar_detalhes_evento, pattern="^evento_"))
+app.add_handler(CallbackQueryHandler(ver_confirmados, pattern="^ver_confirmados_"))
+app.add_handler(CallbackQueryHandler(fechar_mensagem, pattern="^fechar_mensagem$"))
+app.add_handler(CallbackQueryHandler(minhas_confirmacoes, pattern="^minhas_confirmacoes$"))
 app.add_handler(CallbackQueryHandler(cancelar_presenca, pattern="^cancelar_"))
 
 # Handler genérico para outros callbacks (deve vir por último)
