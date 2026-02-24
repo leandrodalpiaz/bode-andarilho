@@ -144,9 +144,13 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             return AGAPE_CHOICE
         else:
             context.user_data["participacao_agape"] = "Não aplicável"
+            # Chama finalizar_confirmacao_presenca com o update original, mas forçando chat_privado=True
+            # Precisamos passar o update correto. Como estamos no grupo, o update é do grupo.
+            # Vamos criar um novo contexto? Melhor: chamar a função passando o chat_id manualmente.
             return await finalizar_confirmacao_presenca(update, context, chat_privado=True)
 
     else:
+        # Já está em privado
         indice = int(query.data.split("_")[1])
         eventos = listar_eventos()
         evento = eventos[indice]
@@ -241,18 +245,22 @@ async def finalizar_confirmacao_presenca(update: Update, context: ContextTypes.D
     )
     resposta_final += "Fraterno abraço! 🐐"
 
-    if chat_privado or update.effective_chat.type == "private":
-        if update.callback_query:
-            await update.callback_query.edit_message_text(resposta_final, parse_mode="Markdown")
-        else:
-            await update.message.reply_text(resposta_final, parse_mode="Markdown")
-    else:
+    # Determina para onde enviar a resposta
+    if chat_privado:
+        # Envia para o privado do usuário
         await context.bot.send_message(
             chat_id=membro.get("Telegram ID"),
             text=resposta_final,
             parse_mode="Markdown"
         )
+    else:
+        # Responde no chat atual (pode ser privado ou grupo, mas se for grupo, não deve acontecer)
+        if update.callback_query:
+            await update.callback_query.edit_message_text(resposta_final, parse_mode="Markdown")
+        else:
+            await update.message.reply_text(resposta_final, parse_mode="Markdown")
 
+    # Limpa dados da sessão
     context.user_data.pop("evento_confirmando", None)
     context.user_data.pop("membro_confirmando", None)
     context.user_data.pop("participacao_agape", None)
