@@ -1,14 +1,15 @@
 # src/cadastro_evento.py
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, CommandHandler, filters, CallbackQueryHandler
-from src.sheets import cadastrar_evento, listar_eventos
+from src.sheets import cadastrar_evento, listar_eventos, buscar_membro
 from src.permissoes import get_nivel
 from datetime import datetime
 import os
 import time
 
 # Estados da conversação para o cadastro de evento
-DATA, HORARIO, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, AGAPE_TIPO, OBSERVACOES, ID_GRUPO, ID_SECRETARIO, ENDERECO = range(16)
+DATA, HORARIO, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, AGAPE_TIPO, OBSERVACOES, ENDERECO = range(14)
+# Removidos ID_GRUPO e ID_SECRETARIO dos estados
 
 async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia o cadastro de evento, com verificação de permissão."""
@@ -22,13 +23,20 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Você não tem permissão para cadastrar eventos.")
         return ConversationHandler.END
 
+    # Armazena o ID do usuário que está cadastrando (será o secretário padrão)
+    context.user_data["novo_evento_telegram_id_secretario"] = str(user_id)
+    
+    # Se a interação veio de um grupo, armazena o ID do grupo
     if update.effective_chat.type in ["group", "supergroup"]:
+        context.user_data["novo_evento_telegram_id_grupo"] = str(update.effective_chat.id)
         await query.edit_message_text(
             "O cadastro de eventos deve ser feito no meu chat privado. "
-            "Por favor, acesse meu privado clicando no meu nome e utilize o menu 'Área do Secretário' para cadastrar."
+            "Por favor, acesse meu privado clicando no meu nome e utilize o menu 'Área do Secretário' para cadastrar.\n\n"
+            f"O ID do grupo ({update.effective_chat.id}) foi salvo automaticamente."
         )
         return ConversationHandler.END
 
+    # Se está em privado, pergunta a data
     await query.edit_message_text(
         "Certo, vamos cadastrar um novo evento.\n\nQual a *Data do evento*? (Ex: 25/03/2026)",
         parse_mode="Markdown"
@@ -144,16 +152,23 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def receber_observacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["novo_evento_observacoes"] = update.message.text
-    await update.message.reply_text("Qual o *Telegram ID do grupo* do evento? (Se não houver, digite 'N/A')", parse_mode="Markdown")
-    return ID_GRUPO
+    
+    # Verifica se o ID do grupo já foi definido (se veio de um grupo anteriormente)
+    if "novo_evento_telegram_id_grupo" not in context.user_data:
+        await update.message.reply_text(
+            "Qual o *Telegram ID do grupo* onde o evento será publicado?\n\n"
+            "Para obter o ID, adicione o bot ao grupo e envie /id no grupo. "
+            "Ou digite 'N/A' se não quiser publicar automaticamente.",
+            parse_mode="Markdown"
+        )
+        return ID_GRUPO
+    else:
+        # Pula direto para o endereço
+        await update.message.reply_text("Qual o *Endereço da sessão*?", parse_mode="Markdown")
+        return ENDERECO
 
 async def receber_id_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["novo_evento_telegram_id_grupo"] = update.message.text
-    await update.message.reply_text("Qual o *Telegram ID do secretário* responsável? (Se não houver, digite 'N/A')", parse_mode="Markdown")
-    return ID_SECRETARIO
-
-async def receber_id_secretario(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["novo_evento_telegram_id_secretario"] = update.message.text
     await update.message.reply_text("Qual o *Endereço da sessão*?", parse_mode="Markdown")
     return ENDERECO
 
@@ -178,8 +193,8 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
         "traje": context.user_data["novo_evento_traje"],
         "agape": agape_final,
         "observacoes": context.user_data["novo_evento_observacoes"],
-        "telegram_id_grupo": context.user_data["novo_evento_telegram_id_grupo"],
-        "telegram_id_secretario": context.user_data["novo_evento_telegram_id_secretario"],
+        "telegram_id_grupo": context.user_data.get("novo_evento_telegram_id_grupo", ""),
+        "telegram_id_secretario": context.user_data.get("novo_evento_telegram_id_secretario", ""),
         "endereco": context.user_data["novo_evento_endereco"],
         "status": "Ativo",
     }
@@ -193,10 +208,8 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
     # Salva o evento na planilha
     cadastrar_evento(dados_evento)
 
-    # Obtém a lista atualizada de eventos para encontrar o índice do evento recém-criado
+    # Obtém a lista atualizada de eventos para encontrar o índice
     eventos = listar_eventos()
-    # Encontra o índice do evento que acabamos de cadastrar (comparando dados básicos)
-    # Como pode haver eventos com mesmos dados, usamos timestamp como fallback
     indice_evento = 0
     for i, ev in enumerate(eventos):
         if (ev.get("Data do evento") == dados_evento["data"] and 
@@ -205,10 +218,9 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
             indice_evento = i
             break
     else:
-        # Se não encontrar, usa o timestamp atual como identificador único
         indice_evento = int(time.time())
 
-    # Publicar o evento no grupo especificado
+    # Publicar o evento no grupo
     grupo_id = dados_evento.get("telegram_id_grupo", "").strip()
     valores_invalidos = ["", "N/A", "n/a", "nao", "não", "n", "N", "0"]
     
@@ -234,7 +246,6 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
             if dados_evento['observacoes'] and dados_evento['observacoes'] not in ["N/A", "n/a"]:
                 mensagem_grupo += f"\n📌 Observações: {dados_evento['observacoes']}"
             
-            # Botões com índice correto do evento
             botoes = InlineKeyboardMarkup([
                 [InlineKeyboardButton("✅ Confirmar Presença", callback_data=f"confirmar_{indice_evento}")],
                 [InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados_{indice_evento}")]
@@ -263,6 +274,9 @@ async def cancelar_cadastro_evento(update: Update, context: ContextTypes.DEFAULT
     await update.message.reply_text("Cadastro de evento cancelado. Use /start para voltar ao menu principal.")
     return ConversationHandler.END
 
+# Definindo os estados restantes
+ID_GRUPO = 14  # Mantido para compatibilidade
+
 cadastro_evento_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(novo_evento_start, pattern="^cadastrar_evento$")],
     states={
@@ -280,7 +294,6 @@ cadastro_evento_handler = ConversationHandler(
         AGAPE_TIPO: [CallbackQueryHandler(receber_agape_tipo, pattern="^agape_(gratuito|dividido)$")],
         OBSERVACOES: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_observacoes)],
         ID_GRUPO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_id_grupo)],
-        ID_SECRETARIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_id_secretario)],
         ENDERECO: [MessageHandler(filters.TEXT & ~filters.COMMAND, finalizar_cadastro_evento)],
     },
     fallbacks=[CommandHandler("cancelar", cancelar_cadastro_evento)],
