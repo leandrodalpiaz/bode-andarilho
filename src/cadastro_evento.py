@@ -1,10 +1,11 @@
 # src/cadastro_evento.py
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, CommandHandler, filters, CallbackQueryHandler
-from src.sheets import cadastrar_evento
+from src.sheets import cadastrar_evento, listar_eventos
 from src.permissoes import get_nivel
 from datetime import datetime
 import os
+import time
 
 # Estados da conversação para o cadastro de evento
 DATA, HORARIO, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, AGAPE_TIPO, OBSERVACOES, ID_GRUPO, ID_SECRETARIO, ENDERECO = range(16)
@@ -189,15 +190,32 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
     except ValueError:
         dados_evento["dia_semana"] = "Inválido"
 
+    # Salva o evento na planilha
     cadastrar_evento(dados_evento)
 
-    # Publicar o evento no grupo especificado, se for um ID válido
+    # Obtém a lista atualizada de eventos para encontrar o índice do evento recém-criado
+    eventos = listar_eventos()
+    # Encontra o índice do evento que acabamos de cadastrar (comparando dados básicos)
+    # Como pode haver eventos com mesmos dados, usamos timestamp como fallback
+    indice_evento = 0
+    for i, ev in enumerate(eventos):
+        if (ev.get("Data do evento") == dados_evento["data"] and 
+            ev.get("Nome da loja") == dados_evento["nome_loja"] and
+            ev.get("Número da loja") == dados_evento["numero_loja"]):
+            indice_evento = i
+            break
+    else:
+        # Se não encontrar, usa o timestamp atual como identificador único
+        indice_evento = int(time.time())
+
+    # Publicar o evento no grupo especificado
     grupo_id = dados_evento.get("telegram_id_grupo", "").strip()
-    # Lista de valores que indicam "não informado"
     valores_invalidos = ["", "N/A", "n/a", "nao", "não", "n", "N", "0"]
+    
     if grupo_id and grupo_id not in valores_invalidos:
         try:
-            grupo_id_int = int(float(grupo_id))  # converte mesmo se for string numérica com ponto
+            grupo_id_int = int(float(grupo_id))
+            
             mensagem_grupo = (
                 f"🐐 *Nova sessão disponível para visitas!*\n"
                 f"━━━━━━━━━━━━━━━━\n"
@@ -210,28 +228,35 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
                 f"📖 Rito: {dados_evento['rito']}\n"
                 f"🔺 Grau mínimo: {dados_evento['grau']}\n"
                 f"👔 Traje: {dados_evento['traje']}\n"
-                f"🍽 Ágape: {dados_evento['agape']}\n\n"
-                f"{dados_evento['observacoes'] if dados_evento['observacoes'] not in ['N/A', 'n/a'] else ''}"
+                f"🍽 Ágape: {dados_evento['agape']}\n"
             )
-            # Botões (precisa de um identificador único do evento)
+            
+            if dados_evento['observacoes'] and dados_evento['observacoes'] not in ["N/A", "n/a"]:
+                mensagem_grupo += f"\n📌 Observações: {dados_evento['observacoes']}"
+            
+            # Botões com índice correto do evento
             botoes = InlineKeyboardMarkup([
-                [InlineKeyboardButton("✅ Confirmar Presença", callback_data="confirmar_0")],
-                [InlineKeyboardButton("👥 Ver confirmados", callback_data="ver_confirmados_0")]
+                [InlineKeyboardButton("✅ Confirmar Presença", callback_data=f"confirmar_{indice_evento}")],
+                [InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados_{indice_evento}")]
             ])
+            
             await context.bot.send_message(
                 chat_id=grupo_id_int,
                 text=mensagem_grupo,
                 parse_mode="Markdown",
                 reply_markup=botoes
             )
-            print(f"Evento publicado no grupo {grupo_id_int}")
+            print(f"✅ Evento publicado no grupo {grupo_id_int} com índice {indice_evento}")
+            await update.message.reply_text(f"✅ Evento cadastrado e publicado no grupo com sucesso!")
+            
         except Exception as e:
-            print(f"Erro ao publicar no grupo: {e}")
-            await update.message.reply_text(f"⚠️ Evento cadastrado, mas não foi possível publicar no grupo (ID inválido: {grupo_id}).")
+            print(f"❌ Erro ao publicar no grupo: {e}")
+            await update.message.reply_text(f"⚠️ Evento cadastrado, mas não foi possível publicar no grupo (ID: {grupo_id}). Erro: {str(e)}")
     else:
-        print("Nenhum grupo especificado para publicação.")
+        print("ℹ️ Nenhum grupo especificado para publicação.")
+        await update.message.reply_text("✅ Evento cadastrado com sucesso! (Nenhum grupo para publicação)")
 
-    await update.message.reply_text("✅ Evento cadastrado com sucesso! Use /start para voltar ao menu principal.")
+    await update.message.reply_text("Use /start para voltar ao menu principal.")
     return ConversationHandler.END
 
 async def cancelar_cadastro_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
