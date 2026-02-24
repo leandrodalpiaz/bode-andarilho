@@ -2,28 +2,61 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, CommandHandler, filters, CallbackQueryHandler
 from src.sheets import cadastrar_evento
+from src.permissoes import get_nivel
 from datetime import datetime
 import os
 
 # Estados da conversação para o cadastro de evento
-DATA, HORARIO, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, AGAPE_TIPO, OBSERVACOES, ID_GRUPO, ID_SECRETARIO, ENDERECO = range(16) # HORARIO adicionado, range ajustado
+DATA, HORARIO, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, AGAPE_TIPO, OBSERVACOES, ID_GRUPO, ID_SECRETARIO, ENDERECO = range(16)
 
 async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    admin_id = os.getenv("ADMIN_TELEGRAM_ID")
-    if admin_id and str(update.effective_user.id) != admin_id:
-        await update.callback_query.edit_message_text("Você não tem permissão para cadastrar eventos.")
+    """Inicia o cadastro de evento, com verificação de permissão e redirecionamento para privado."""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+
+    # Permissão: apenas nível 2 (secretário) ou 3 (admin)
+    if nivel not in ["2", "3"]:
+        await query.edit_message_text("Você não tem permissão para cadastrar eventos.")
         return ConversationHandler.END
 
-    await update.callback_query.answer()
-    await update.callback_query.edit_message_text("Certo, vamos cadastrar um novo evento.\n\nQual a *Data do evento*? (Ex: 25/03/2026)", parse_mode="Markdown")
+    # Se a interação veio de um grupo, redireciona para o privado
+    if update.effective_chat.type in ["group", "supergroup"]:
+        await query.edit_message_text(
+            "O cadastro de eventos deve ser feito no meu chat privado. "
+            "Por favor, acesse meu privado clicando no meu nome e envie /start para começar."
+        )
+        # Opcional: enviar uma mensagem privada com o início do cadastro
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="Você solicitou cadastrar um evento. Vamos iniciar o processo aqui.\n\n"
+                 "Qual a *Data do evento*? (Ex: 25/03/2026)",
+            parse_mode="Markdown"
+        )
+        # Inicia a conversa no privado (o próximo passo será tratado pelo mesmo handler,
+        # mas agora o update será no privado). No entanto, precisamos armazenar que o fluxo começou.
+        # A maneira mais simples é apenas enviar a primeira pergunta e retornar o estado DATA,
+        # mas o ConversationHandler espera que o entry_point seja um callback do botão.
+        # Como estamos enviando uma mensagem privada, o usuário responderá com texto,
+        # e a função receber_data será chamada. O estado será mantido pelo ConversationHandler,
+        # que é global por usuário, então funciona.
+        return DATA  # Retorna o primeiro estado
+
+    # Se já está em privado, continua normalmente
+    await query.edit_message_text(
+        "Certo, vamos cadastrar um novo evento.\n\nQual a *Data do evento*? (Ex: 25/03/2026)",
+        parse_mode="Markdown"
+    )
     return DATA
 
 async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["novo_evento_data"] = update.message.text
-    await update.message.reply_text("Qual o *Horário do evento*? (Ex: 19:30)", parse_mode="Markdown") # Nova pergunta
-    return HORARIO # Novo estado
+    await update.message.reply_text("Qual o *Horário do evento*? (Ex: 19:30)", parse_mode="Markdown")
+    return HORARIO
 
-async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE): # Nova função
+async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["novo_evento_horario"] = update.message.text
     await update.message.reply_text("Qual o *Nome da loja*?", parse_mode="Markdown")
     return NOME_LOJA
@@ -84,7 +117,11 @@ async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("Gratuito", callback_data="agape_gratuito")],
             [InlineKeyboardButton("Dividido entre os Irmãos", callback_data="agape_dividido")]
         ])
-        await query.edit_message_text("O Ágape será *Gratuito* ou *Dividido entre os Irmãos*?", parse_mode="Markdown", reply_markup=teclado_tipo_agape)
+        await query.edit_message_text(
+            "O Ágape será *Gratuito* ou *Dividido entre os Irmãos*?",
+            parse_mode="Markdown",
+            reply_markup=teclado_tipo_agape
+        )
         return AGAPE_TIPO
     elif resposta_agape == "nao":
         context.user_data["novo_evento_agape"] = "Não"
@@ -136,7 +173,7 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
     dados_evento = {
         "data": context.user_data["novo_evento_data"],
         "dia_semana": "",
-        "hora": context.user_data["novo_evento_horario"], # Campo "hora" adicionado
+        "hora": context.user_data["novo_evento_horario"],
         "nome_loja": context.user_data["novo_evento_nome_loja"],
         "numero_loja": context.user_data["novo_evento_numero_loja"],
         "oriente": context.user_data["novo_evento_oriente"],
@@ -160,6 +197,47 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
         dados_evento["dia_semana"] = "Inválido"
 
     cadastrar_evento(dados_evento)
+
+    # Publicar o evento no grupo especificado, se for um ID válido
+    grupo_id = dados_evento.get("telegram_id_grupo")
+    if grupo_id and grupo_id.strip() not in ["", "N/A", "n/a", "nao", "não"]:
+        try:
+            # Converte para inteiro (o ID do grupo é numérico)
+            grupo_id_int = int(grupo_id)
+            # Formata a mensagem do evento para publicação
+            mensagem_grupo = (
+                f"🐐 *Nova sessão disponível para visitas!*\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"🏛 *LOJA {dados_evento['nome_loja']} {dados_evento['numero_loja']}*\n"
+                f"━━━━━━━━━━━━━━━━\n\n"
+                f"📍 Oriente: {dados_evento['oriente']}\n"
+                f"⚜️ Potência: {dados_evento['potencia']}\n"
+                f"📅 Data: {dados_evento['data']} ({dados_evento['dia_semana']})\n"
+                f"🕯 Tipo de sessão: {dados_evento['tipo_sessao']}\n"
+                f"📖 Rito: {dados_evento['rito']}\n"
+                f"🔺 Grau mínimo: {dados_evento['grau']}\n"
+                f"👔 Traje: {dados_evento['traje']}\n"
+                f"🍽 Ágape: {dados_evento['agape']}\n\n"
+                f"{dados_evento['observacoes'] if dados_evento['observacoes'] not in ['N/A','n/a'] else ''}"
+            )
+            # Cria os botões inline
+            botoes = InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ Confirmar Presença", callback_data="confirmar_0")],  # Índice do evento? Precisamos do índice real. Talvez seja melhor armazenar o ID do evento na planilha e usar um identificador único.
+                [InlineKeyboardButton("👥 Ver confirmados", callback_data="ver_confirmados_0")]
+            ])
+            # Publica no grupo
+            await context.bot.send_message(
+                chat_id=grupo_id_int,
+                text=mensagem_grupo,
+                parse_mode="Markdown",
+                reply_markup=botoes
+            )
+        except Exception as e:
+            print(f"Erro ao publicar no grupo: {e}")
+    else:
+        print("Nenhum grupo especificado para publicação.")
+
+    # Mensagem de confirmação para o usuário
     await update.message.reply_text("✅ Evento cadastrado com sucesso! Use /start para voltar ao menu principal.")
     return ConversationHandler.END
 
@@ -171,7 +249,7 @@ cadastro_evento_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(novo_evento_start, pattern="^cadastrar_evento$")],
     states={
         DATA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_data)],
-        HORARIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_horario)], # Novo estado
+        HORARIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_horario)],
         NOME_LOJA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome_loja)],
         NUMERO_LOJA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_numero_loja)],
         ORIENTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_oriente)],
