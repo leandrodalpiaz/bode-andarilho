@@ -9,7 +9,9 @@ import time
 
 # Estados da conversação para o cadastro de evento
 DATA, HORARIO, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, AGAPE_TIPO, OBSERVACOES, ENDERECO = range(14)
-# Removidos ID_GRUPO e ID_SECRETARIO dos estados
+
+# Valores que indicam "não informado"
+VALORES_NAO_INFORMADO = ["", "N/A", "n/a", "nao", "não", "n", "N", "0", "A", "a"]
 
 async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia o cadastro de evento, com verificação de permissão."""
@@ -26,13 +28,13 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Armazena o ID do usuário que está cadastrando (será o secretário padrão)
     context.user_data["novo_evento_telegram_id_secretario"] = str(user_id)
     
-    # Se a interação veio de um grupo, armazena o ID do grupo
+    # Se a interação veio de um grupo, armazena o ID do grupo automaticamente
     if update.effective_chat.type in ["group", "supergroup"]:
         context.user_data["novo_evento_telegram_id_grupo"] = str(update.effective_chat.id)
         await query.edit_message_text(
             "O cadastro de eventos deve ser feito no meu chat privado. "
             "Por favor, acesse meu privado clicando no meu nome e utilize o menu 'Área do Secretário' para cadastrar.\n\n"
-            f"O ID do grupo ({update.effective_chat.id}) foi salvo automaticamente."
+            f"✅ O ID do grupo ({update.effective_chat.id}) foi salvo automaticamente."
         )
         return ConversationHandler.END
 
@@ -153,7 +155,7 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def receber_observacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["novo_evento_observacoes"] = update.message.text
     
-    # Verifica se o ID do grupo já foi definido (se veio de um grupo anteriormente)
+    # Verifica se o ID do grupo já foi definido automaticamente
     if "novo_evento_telegram_id_grupo" not in context.user_data:
         await update.message.reply_text(
             "Qual o *Telegram ID do grupo* onde o evento será publicado?\n\n"
@@ -163,12 +165,21 @@ async def receber_observacoes(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return ID_GRUPO
     else:
-        # Pula direto para o endereço
+        # Se já tem ID do grupo (veio do grupo), pula direto para endereço
         await update.message.reply_text("Qual o *Endereço da sessão*?", parse_mode="Markdown")
         return ENDERECO
 
 async def receber_id_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["novo_evento_telegram_id_grupo"] = update.message.text
+    """Recebe o ID do grupo digitado pelo usuário."""
+    id_grupo = update.message.text.strip()
+    
+    # Verifica se é um valor que indica "não informado"
+    if id_grupo in VALORES_NAO_INFORMADO:
+        context.user_data["novo_evento_telegram_id_grupo"] = ""
+        await update.message.reply_text("OK. Nenhum grupo será usado para publicação.")
+    else:
+        context.user_data["novo_evento_telegram_id_grupo"] = id_grupo
+    
     await update.message.reply_text("Qual o *Endereço da sessão*?", parse_mode="Markdown")
     return ENDERECO
 
@@ -222,11 +233,17 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
 
     # Publicar o evento no grupo
     grupo_id = dados_evento.get("telegram_id_grupo", "").strip()
-    valores_invalidos = ["", "N/A", "n/a", "nao", "não", "n", "N", "0"]
     
-    if grupo_id and grupo_id not in valores_invalidos:
+    # Se não tem grupo ou é valor inválido, não publica
+    if not grupo_id or grupo_id in VALORES_NAO_INFORMADO:
+        print("ℹ️ Nenhum grupo válido especificado para publicação.")
+        await update.message.reply_text("✅ Evento cadastrado com sucesso! (Nenhum grupo para publicação)")
+    else:
+        # Tenta publicar
         try:
-            grupo_id_int = int(float(grupo_id))
+            # Remove possíveis espaços e converte para inteiro
+            grupo_id_limpo = grupo_id.strip().replace(" ", "")
+            grupo_id_int = int(float(grupo_id_limpo))
             
             mensagem_grupo = (
                 f"🐐 *Nova sessão disponível para visitas!*\n"
@@ -262,11 +279,8 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
             
         except Exception as e:
             print(f"❌ Erro ao publicar no grupo: {e}")
-            await update.message.reply_text(f"⚠️ Evento cadastrado, mas não foi possível publicar no grupo (ID: {grupo_id}). Erro: {str(e)}")
-    else:
-        print("ℹ️ Nenhum grupo especificado para publicação.")
-        await update.message.reply_text("✅ Evento cadastrado com sucesso! (Nenhum grupo para publicação)")
-
+            await update.message.reply_text(f"⚠️ Evento cadastrado, mas não foi possível publicar no grupo (ID: {grupo_id}). O grupo existe e o bot está lá?")
+    
     await update.message.reply_text("Use /start para voltar ao menu principal.")
     return ConversationHandler.END
 
@@ -274,8 +288,8 @@ async def cancelar_cadastro_evento(update: Update, context: ContextTypes.DEFAULT
     await update.message.reply_text("Cadastro de evento cancelado. Use /start para voltar ao menu principal.")
     return ConversationHandler.END
 
-# Definindo os estados restantes
-ID_GRUPO = 14  # Mantido para compatibilidade
+# Definindo o estado ID_GRUPO (precisa ser um número diferente dos outros)
+ID_GRUPO = 14
 
 cadastro_evento_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(novo_evento_start, pattern="^cadastrar_evento$")],
