@@ -19,7 +19,7 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Oriente: {membro.get('Oriente', 'N/A')}\n"
             f"Potência: {membro.get('Potência', 'N/A')}\n"
             f"Telefone: {membro.get('Telefone', 'N/A')}\n"
-            f"Nível: {membro.get('Nivel', 'membro')}\n"
+            f"Nível: {membro.get('Nivel', '1')}\n"
         )
         # Botão para editar
         teclado = InlineKeyboardMarkup([

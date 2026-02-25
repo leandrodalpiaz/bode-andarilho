@@ -15,6 +15,7 @@ from src.eventos import (
 )
 from src.cadastro_evento import cadastro_evento_handler
 from src.admin_acoes import promover_handler, rebaixar_handler
+from src.editar_perfil import editar_perfil_handler  # NOVO HANDLER
 
 import os
 
@@ -50,15 +51,16 @@ app.add_handler(cadastro_evento_handler)
 app.add_handler(confirmacao_presenca_handler)
 app.add_handler(promover_handler)
 app.add_handler(rebaixar_handler)
+app.add_handler(editar_perfil_handler)  # NOVO HANDLER - ConversationHandler para edição de perfil
 
-# Handlers de callback com pipe (|) - TODOS os padrões com pipe
+# Handlers de callback com pipe (|)
 app.add_handler(CallbackQueryHandler(mostrar_eventos, pattern="^ver_eventos$"))
 app.add_handler(CallbackQueryHandler(mostrar_eventos_por_data, pattern="^data\\|"))
 app.add_handler(CallbackQueryHandler(mostrar_eventos_por_grau, pattern="^grau\\|"))
 app.add_handler(CallbackQueryHandler(mostrar_detalhes_evento, pattern="^evento\\|"))
 app.add_handler(CallbackQueryHandler(ver_confirmados, pattern="^ver_confirmados\\|"))
 app.add_handler(CallbackQueryHandler(cancelar_presenca, pattern="^cancelar\\|"))
-app.add_handler(CallbackQueryHandler(cancelar_presenca, pattern="^confirma_cancelar\\|"))  # NOVO - captura confirma_cancelar
+app.add_handler(CallbackQueryHandler(cancelar_presenca, pattern="^confirma_cancelar\\|"))
 app.add_handler(CallbackQueryHandler(fechar_mensagem, pattern="^fechar_mensagem$"))
 app.add_handler(CallbackQueryHandler(minhas_confirmacoes, pattern="^minhas_confirmacoes$"))
 

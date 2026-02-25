@@ -1,4 +1,5 @@
 # src/bot.py
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 from src.sheets import buscar_membro
@@ -52,23 +53,23 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nivel = get_nivel(telegram_id)
     data = query.data
 
-    # Handlers de navegação de eventos
+    # Handlers de navegação de eventos (com pipe |)
     if data == "ver_eventos":
         await mostrar_eventos(update, context)
-    elif data.startswith("data_"):
+    elif data.startswith("data|"):
         await mostrar_eventos_por_data(update, context)
-    elif data.startswith("grau_"):
+    elif data.startswith("grau|"):
         await mostrar_eventos_por_grau(update, context)
-    elif data.startswith("evento_"):
+    elif data.startswith("evento|"):
         await mostrar_detalhes_evento(update, context)
-    elif data.startswith("ver_confirmados_"):
+    elif data.startswith("ver_confirmados|"):
         await ver_confirmados(update, context)
+    elif data.startswith("cancelar|") or data.startswith("confirma_cancelar|"):
+        await cancelar_presenca(update, context)
     elif data == "fechar_mensagem":
         await fechar_mensagem(update, context)
     elif data == "minhas_confirmacoes":
         await minhas_confirmacoes(update, context)
-    elif data.startswith("cancelar_"):
-        await cancelar_presenca(update, context)
     elif data == "meu_cadastro":
         await mostrar_perfil(update, context)
     elif data == "area_secretario":
@@ -111,6 +112,10 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "admin_rebaixar":
         from src.admin_acoes import rebaixar_handler
         await rebaixar_handler(update, context)
+    elif data == "editar_perfil":
+        # Este callback será capturado pelo ConversationHandler em editar_perfil.py
+        # Não fazemos nada aqui para não interferir
+        return
     else:
         await query.edit_message_text("Função em desenvolvimento ou comando não reconhecido.")
 
