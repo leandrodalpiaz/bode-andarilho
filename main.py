@@ -30,7 +30,6 @@ async def mensagem_grupo_handler(update: Update, context):
             "ou envie /start no meu chat privado. No grupo, apenas publico eventos e lembretes. 🐐"
         )
         return
-    # Se for privado, a mensagem será ignorada aqui (outros handlers cuidam)
 
 async def bot_adicionado_grupo(update: Update, context):
     """Mensagem de boas-vindas quando o bot é adicionado a um grupo."""
@@ -52,15 +51,15 @@ app.add_handler(confirmacao_presenca_handler)
 app.add_handler(promover_handler)
 app.add_handler(rebaixar_handler)
 
-# Handlers de callback específicos (devem vir antes do genérico)
+# Handlers de callback com pipe (|) - NOVOS
 app.add_handler(CallbackQueryHandler(mostrar_eventos, pattern="^ver_eventos$"))
-app.add_handler(CallbackQueryHandler(mostrar_eventos_por_data, pattern="^data_"))
-app.add_handler(CallbackQueryHandler(mostrar_eventos_por_grau, pattern="^grau_"))
-app.add_handler(CallbackQueryHandler(mostrar_detalhes_evento, pattern="^evento_"))
-app.add_handler(CallbackQueryHandler(ver_confirmados, pattern="^ver_confirmados_"))
+app.add_handler(CallbackQueryHandler(mostrar_eventos_por_data, pattern="^data\\|"))
+app.add_handler(CallbackQueryHandler(mostrar_eventos_por_grau, pattern="^grau\\|"))
+app.add_handler(CallbackQueryHandler(mostrar_detalhes_evento, pattern="^evento\\|"))
+app.add_handler(CallbackQueryHandler(ver_confirmados, pattern="^ver_confirmados\\|"))
+app.add_handler(CallbackQueryHandler(cancelar_presenca, pattern="^cancelar\\|"))
 app.add_handler(CallbackQueryHandler(fechar_mensagem, pattern="^fechar_mensagem$"))
 app.add_handler(CallbackQueryHandler(minhas_confirmacoes, pattern="^minhas_confirmacoes$"))
-app.add_handler(CallbackQueryHandler(cancelar_presenca, pattern="^cancelar_"))
 
 # Handler genérico para outros callbacks (deve vir por último)
 app.add_handler(CallbackQueryHandler(botao_handler))
@@ -68,7 +67,7 @@ app.add_handler(CallbackQueryHandler(botao_handler))
 # Handler para quando o bot é adicionado a um grupo
 app.add_handler(ChatMemberHandler(bot_adicionado_grupo, ChatMemberHandler.MY_CHAT_MEMBER))
 
-# Handler para mensagens de texto em grupo (deve vir após todos os outros handlers de mensagem)
+# Handler para mensagens de texto em grupo
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mensagem_grupo_handler))
 
 print("Bot rodando...")

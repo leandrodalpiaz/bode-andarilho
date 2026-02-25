@@ -1,5 +1,5 @@
 # src/perfil.py
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from src.sheets import buscar_membro
 
@@ -21,6 +21,11 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Telefone: {membro.get('Telefone', 'N/A')}\n"
             f"Nível: {membro.get('Nivel', 'membro')}\n"
         )
-        await query.edit_message_text(texto_perfil, parse_mode="Markdown")
+        # Botão para editar
+        teclado = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✏️ Editar dados", callback_data="editar_perfil")],
+            [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")]
+        ])
+        await query.edit_message_text(texto_perfil, parse_mode="Markdown", reply_markup=teclado)
     else:
         await query.edit_message_text("Seu cadastro não foi encontrado. Envie /start para se cadastrar.")
