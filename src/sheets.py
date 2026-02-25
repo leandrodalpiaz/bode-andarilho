@@ -95,6 +95,46 @@ def listar_membros():
         print(f"Erro ao listar membros: {e}")
         return []
 
+def atualizar_membro(telegram_id: int, campo: str, novo_valor: str):
+    """
+    Atualiza um campo específico de um membro na planilha.
+    Retorna True se bem-sucedido, False caso contrário.
+    """
+    try:
+        ws = spreadsheet.worksheet("Membros")
+        # Encontra a linha do membro
+        cell = ws.find(str(telegram_id), in_column=1)  # coluna A = Telegram ID
+        if not cell:
+            print(f"Membro {telegram_id} não encontrado para atualização.")
+            return False
+
+        # Mapeia o nome do campo para o número da coluna
+        # Ajuste conforme a ordem das colunas na sua planilha
+        colunas = {
+            "Nome": 2,
+            "Loja": 3,
+            "Grau": 4,
+            "Oriente": 5,
+            "Potência": 6,
+            "Telefone": 7,
+            "Cargo": 8,
+            "Nivel": 9,
+        }
+
+        coluna = colunas.get(campo)
+        if not coluna:
+            print(f"Campo {campo} não mapeado para atualização.")
+            return False
+
+        # Atualiza a célula
+        ws.update_cell(cell.row, coluna, novo_valor)
+        print(f"Membro {telegram_id} atualizado: {campo} = {novo_valor}")
+        return True
+
+    except Exception as e:
+        print(f"Erro ao atualizar membro {telegram_id}: {e}")
+        return False
+
 # --- Funções para Eventos ---
 def listar_eventos():
     try:
@@ -185,7 +225,7 @@ def cancelar_confirmacao(id_evento: str, telegram_id: int):
     except Exception as e:
         print(f"Erro ao cancelar confirmação: {e}")
         return False
-    
+
 def listar_confirmacoes_por_evento(id_evento: str):
     """Retorna lista de confirmações para um evento específico."""
     try:
@@ -199,57 +239,3 @@ def listar_confirmacoes_por_evento(id_evento: str):
     except Exception as e:
         print(f"Erro ao listar confirmações: {e}")
         return []
-    
-def listar_confirmacoes_por_evento(id_evento: str):
-    """Retorna lista de confirmações para um evento específico."""
-    try:
-        ws = spreadsheet.worksheet("Confirmações")
-        data = ws.get_all_records()
-        confirmacoes = []
-        for row in data:
-            if row.get("ID Evento") == id_evento:
-                confirmacoes.append(row)
-        return confirmacoes
-    except Exception as e:
-        print(f"Erro ao listar confirmações: {e}")
-        return []
-    
-def atualizar_membro(telegram_id: int, campo: str, novo_valor: str):
-    """
-    Atualiza um campo específico de um membro na planilha.
-    Retorna True se bem-sucedido, False caso contrário.
-    """
-    try:
-        ws = spreadsheet.worksheet("Membros")
-        # Encontra a linha do membro
-        cell = ws.find(str(telegram_id), in_column=1)  # coluna A = Telegram ID
-        if not cell:
-            print(f"Membro {telegram_id} não encontrado para atualização.")
-            return False
-
-        # Mapeia o nome do campo para o número da coluna
-        # Ajuste conforme a ordem das colunas na sua planilha
-        colunas = {
-            "Nome": 2,
-            "Loja": 3,
-            "Grau": 4,
-            "Oriente": 5,
-            "Potência": 6,
-            "Telefone": 7,
-            "Cargo": 8,
-            "Nivel": 9,
-        }
-
-        coluna = colunas.get(campo)
-        if not coluna:
-            print(f"Campo {campo} não mapeado para atualização.")
-            return False
-
-        # Atualiza a célula
-        ws.update_cell(cell.row, coluna, novo_valor)
-        print(f"Membro {telegram_id} atualizado: {campo} = {novo_valor}")
-        return True
-
-    except Exception as e:
-        print(f"Erro ao atualizar membro {telegram_id}: {e}")
-        return False

@@ -405,17 +405,31 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     membro = buscar_membro(user_id)
 
     if not membro:
+        # Armazenar para depois do cadastro
         context.user_data["pos_cadastro"] = {
             "acao": "confirmar",
             "id_evento": id_evento,
             "tipo_agape": tipo_agape
         }
+        
+        # Criar botão para iniciar cadastro
+        botoes_cadastro = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📝 Iniciar cadastro", callback_data="iniciar_cadastro")],
+            [InlineKeyboardButton("🔙 Voltar", callback_data="voltar_grupo")]
+        ])
+        
         if update.effective_chat.type in ["group", "supergroup"]:
-            await query.edit_message_text("🔔 Você precisa se cadastrar primeiro! Verifique suas mensagens privadas.")
-        await context.bot.send_message(
-            chat_id=user_id,
-            text="Olá! Antes de confirmar sua presença, preciso fazer seu cadastro. Por favor, envie /start no privado."
-        )
+            await query.edit_message_text(
+                "🔔 Você precisa se cadastrar primeiro!\n\n"
+                "Clique no botão abaixo para iniciar seu cadastro no privado.",
+                reply_markup=botoes_cadastro
+            )
+        else:
+            await query.edit_message_text(
+                "Olá! Antes de confirmar sua presença, preciso fazer seu cadastro.\n\n"
+                "Clique no botão abaixo para começar:",
+                reply_markup=botoes_cadastro
+            )
         return ConversationHandler.END
 
     ja_confirmou = buscar_confirmacao(id_evento, user_id)
@@ -423,6 +437,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         await query.edit_message_text("Você já confirmou presença para este evento.")
         return ConversationHandler.END
 
+    # Registrar confirmação
     participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não selecionada"
     if tipo_agape == "gratuito":
         desc_agape = "Gratuito"
@@ -444,6 +459,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     }
     registrar_confirmacao(dados_confirmacao)
 
+    # Enviar mensagem de confirmação no privado
     data = evento.get("Data do evento", "")
     nome_loja = evento.get("Nome da loja", "")
     numero_loja = evento.get("Número da loja", "")
@@ -480,6 +496,89 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         await query.edit_message_text("✅ Presença confirmada! Verifique a mensagem acima.")
 
     return ConversationHandler.END
+
+async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE, dados):
+    """Continua a confirmação de presença após o cadastro ser concluído."""
+    id_evento = dados.get("id_evento")
+    tipo_agape = dados.get("tipo_agape", "sem")
+    
+    eventos = listar_eventos()
+    evento = None
+    for ev in eventos:
+        if (ev.get("Data do evento", "") + " — " + ev.get("Nome da loja", "")) == id_evento:
+            evento = ev
+            break
+    
+    if not evento:
+        await update.message.reply_text("Evento não encontrado. Tente confirmar novamente pelo grupo.")
+        return
+    
+    user_id = update.effective_user.id
+    membro = buscar_membro(user_id)
+    
+    if not membro:
+        await update.message.reply_text("Erro: cadastro não encontrado após conclusão.")
+        return
+    
+    ja_confirmou = buscar_confirmacao(id_evento, user_id)
+    if ja_confirmou:
+        await update.message.reply_text("Você já confirmou presença para este evento.")
+        return
+    
+    # Registrar confirmação
+    participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não selecionada"
+    if tipo_agape == "gratuito":
+        desc_agape = "Gratuito"
+    elif tipo_agape == "pago":
+        desc_agape = "Pago"
+    else:
+        desc_agape = "Não aplicável"
+    
+    dados_confirmacao = {
+        "id_evento": id_evento,
+        "telegram_id": str(user_id),
+        "nome": membro.get("Nome", ""),
+        "grau": membro.get("Grau", ""),
+        "cargo": membro.get("Cargo", ""),
+        "loja": membro.get("Loja", ""),
+        "oriente": membro.get("Oriente", ""),
+        "potencia": membro.get("Potência", ""),
+        "agape": f"{participacao_agape} ({desc_agape})" if participacao_agape == "Confirmada" else "Não",
+    }
+    registrar_confirmacao(dados_confirmacao)
+    
+    # Enviar mensagem de confirmação
+    data = evento.get("Data do evento", "")
+    nome_loja = evento.get("Nome da loja", "")
+    numero_loja = evento.get("Número da loja", "")
+    horario = evento.get("Hora", "")
+    potencia_evento = evento.get("Potência", "")
+    dia_semana_ingles = evento.get("Dia da semana", "")
+    dia_semana = traduzir_dia(dia_semana_ingles)
+    
+    resposta = f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
+    resposta += f"*Resumo da confirmação:*\n"
+    resposta += f"📅 {data} — {nome_loja} {numero_loja}\n"
+    resposta += f"⚜️ Potência: {potencia_evento}\n"
+    resposta += f"📆 Dia: {dia_semana}\n"
+    resposta += f"🕕 Horário: {horario}\n"
+    resposta += f"🍽 Participação no ágape: {participacao_agape} ({desc_agape})\n\n"
+    resposta += "Sua confirmação é muito importante! Ela nos ajuda a organizar tudo com carinho e evitar desperdícios.\n\n"
+    resposta += "Fraterno abraço! 🐐"
+    
+    botoes_privado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{id_evento}")],
+        [InlineKeyboardButton("👥 Ver eventos", callback_data="ver_eventos")]
+    ])
+    
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=resposta,
+        parse_mode="Markdown",
+        reply_markup=botoes_privado
+    )
+    
+    await update.message.reply_text("✅ Presença confirmada! Verifique a mensagem acima.")
 
 async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cancela presença de um usuário em um evento."""

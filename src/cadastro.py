@@ -1,12 +1,32 @@
 # src/cadastro.py
-from telegram import Update
-from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, CommandHandler, filters
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, CommandHandler, filters, CallbackQueryHandler
 from src.sheets import buscar_membro, cadastrar_membro
 
 # Estados da conversação para o cadastro de membro
 NOME, LOJA, GRAU, ORIENTE, POTENCIA, TELEFONE, FINALIZAR = range(7)
 
 async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Inicia o cadastro de membro. Se estiver em grupo, redireciona para privado."""
+    
+    # Se a interação veio de um grupo, redireciona para privado
+    if update.effective_chat.type in ["group", "supergroup"]:
+        # Se for callback_query (botão)
+        if update.callback_query:
+            await update.callback_query.answer()
+            await update.callback_query.edit_message_text(
+                "🔔 O cadastro deve ser feito no meu chat privado.\n\n"
+                "Por favor, clique no meu nome e envie /start no privado para começar."
+            )
+        # Se for mensagem de texto
+        else:
+            await update.message.reply_text(
+                "🔔 O cadastro deve ser feito no meu chat privado.\n\n"
+                "Por favor, clique no meu nome e envie /start no privado para começar."
+            )
+        return ConversationHandler.END
+
+    # Se já está em privado, prossegue com o cadastro
     telegram_id = update.effective_user.id
     membro = buscar_membro(telegram_id)
 
@@ -19,7 +39,7 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Oriente: {membro.get('Oriente', '')}\n"
             f"Potência: {membro.get('Potência', '')}\n"
             f"Telefone: {membro.get('Telefone', '')}\n\n"
-            "Para editar seu cadastro, entre em contato com um administrador. Use /start para o menu principal."
+            "Para editar seu cadastro, use a opção 'Meu cadastro' no menu."
         )
         return ConversationHandler.END
     else:
@@ -73,7 +93,20 @@ async def finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "cargo": "",
         }
         cadastrar_membro(dados_membro)
-        await update.message.reply_text("✅ Cadastro realizado com sucesso! Bem-vindo, irmão! Agora você pode usar o comando /start para acessar o menu principal.")
+        
+        # Verifica se há uma ação pendente após o cadastro (ex: confirmar presença)
+        if "pos_cadastro" in context.user_data:
+            acao = context.user_data["pos_cadastro"]
+            if acao.get("acao") == "confirmar":
+                from src.eventos import iniciar_confirmacao_presenca_pos_cadastro
+                await iniciar_confirmacao_presenca_pos_cadastro(update, context, acao)
+                context.user_data.pop("pos_cadastro", None)
+                return ConversationHandler.END
+        
+        await update.message.reply_text(
+            "✅ Cadastro realizado com sucesso! Bem-vindo, irmão!\n\n"
+            "Use /start para acessar o menu principal."
+        )
         return ConversationHandler.END
     else:
         await update.message.reply_text("Por favor, digite 'confirmar' para finalizar ou /cancelar para abortar.")
@@ -84,7 +117,10 @@ async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 cadastro_handler = ConversationHandler(
-    entry_points=[CommandHandler("start", cadastro_start)],
+    entry_points=[
+        CommandHandler("start", cadastro_start),
+        CallbackQueryHandler(cadastro_start, pattern="^iniciar_cadastro$")
+    ],
     states={
         NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome)],
         LOJA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_loja)],
