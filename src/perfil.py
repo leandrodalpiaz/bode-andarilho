@@ -4,9 +4,29 @@ from telegram.ext import ContextTypes
 from src.sheets import buscar_membro
 
 async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mostra o perfil do usuário. Se estiver em grupo, redireciona para privado."""
     query = update.callback_query
     await query.answer()
 
+    # Se a interação veio de um grupo, redireciona para privado
+    if update.effective_chat.type in ["group", "supergroup"]:
+        await query.edit_message_text(
+            "🔔 Seus dados pessoais só podem ser visualizados no meu chat privado.\n\n"
+            "Por favor, clique no meu nome e envie /start no privado para acessar seu cadastro."
+        )
+        
+        # Envia uma mensagem no privado para facilitar
+        user_id = update.effective_user.id
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="👤 Para ver e editar seu cadastro, use o menu abaixo:",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("👤 Meu cadastro", callback_data="meu_cadastro")
+            ]])
+        )
+        return
+
+    # Se já está em privado, mostra o perfil
     telegram_id = update.effective_user.id
     membro = buscar_membro(telegram_id)
 
