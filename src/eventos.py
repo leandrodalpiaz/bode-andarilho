@@ -137,8 +137,8 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
     for evento in eventos_filtrados:
         # Criar identificador único baseado em data e nome da loja
         data_clean = evento.get("Data do evento", "").replace('/', '_')
-        nome_clean = re.sub(r'[^a-zA-Z0-9]', '_', evento.get("Nome da loja", ""))
-        numero_clean = re.sub(r'[^a-zA-Z0-9]', '_', evento.get("Número da loja", ""))
+        nome_clean = re.sub(r'[^a-zA-Z0-9]', '_', str(evento.get("Nome da loja", "")))
+        numero_clean = re.sub(r'[^a-zA-Z0-9]', '_', str(evento.get("Número da loja", "")))  # CONVERTIDO PARA STRING
         evento_id = f"{data_clean}_{nome_clean}_{numero_clean}"
 
         nome = evento.get("Nome da loja", "Evento")
