@@ -85,32 +85,39 @@ async def main():
     telegram_app.add_handler(ChatMemberHandler(bot_adicionado_grupo, ChatMemberHandler.MY_CHAT_MEMBER))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mensagem_grupo_handler))
 
-    # --- Configuração do Webhook (VERSÃO ROBUSTA) ---
+    # --- Configuração do Webhook com endpoint ÚNICO ---
     if not RENDER_URL:
         logger.error("RENDER_EXTERNAL_URL não definida! O webhook não funcionará.")
         return
 
-    webhook_url = f"{RENDER_URL}/webhook"
+    # Use um caminho único para evitar conflitos
+    WEBHOOK_PATH = "/webhook_bode_2026"
+    webhook_url = f"{RENDER_URL}{WEBHOOK_PATH}"
 
-    # 🔥 LIMPEZA FORÇADA
+    # 🔥 LIMPEZA FORÇADA - múltiplas tentativas
     logger.info("🧹 Removendo webhook antigo e limpando fila de atualizações...")
-    await telegram_app.bot.delete_webhook(drop_pending_updates=True)
-    await asyncio.sleep(2)
+    for i in range(3):
+        await telegram_app.bot.delete_webhook(drop_pending_updates=True)
+        await asyncio.sleep(2)
+        logger.info(f"⏳ Tentativa {i+1}/3 de limpeza concluída")
 
     # Configura o novo webhook
     logger.info(f"🔗 Configurando novo webhook para: {webhook_url}")
     await telegram_app.bot.set_webhook(
         url=webhook_url,
         allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True
+        drop_pending_updates=True,
+        max_connections=1  # Garante apenas uma conexão
     )
 
     # Verifica se o webhook foi configurado
     webhook_info = await telegram_app.bot.get_webhook_info()
     logger.info(f"✅ Webhook configurado: {webhook_info.url}")
+    logger.info(f"📊 Pending updates: {webhook_info.pending_update_count}")
 
     # --- Servidor Starlette ---
     async def webhook(request: Request) -> Response:
+        """Endpoint que recebe as atualizações do Telegram."""
         try:
             data = await request.json()
             update = Update.de_json(data, telegram_app.bot)
@@ -121,11 +128,18 @@ async def main():
             return Response(status_code=500)
 
     async def health(request: Request) -> PlainTextResponse:
-        return PlainTextResponse(f"OK - Bot ativo - Webhook: {webhook_url}")
+        """Health check obrigatório para o Render."""
+        return PlainTextResponse("OK")
 
+    async def root(request: Request) -> PlainTextResponse:
+        """Rota raiz para o Render não ficar perdido."""
+        return PlainTextResponse("Bode Andarilho Bot - Online")
+
+    # Cria o app Starlette com todas as rotas necessárias
     starlette_app = Starlette(routes=[
-        Route("/webhook", webhook, methods=["POST"]),
-        Route("/health", health, methods=["GET"]),
+        Route("/", root, methods=["GET"]),                    # Rota raiz
+        Route("/health", health, methods=["GET"]),            # Health check
+        Route(WEBHOOK_PATH, webhook, methods=["POST"]),       # Webhook único
     ])
 
     # Inicia o servidor
@@ -140,6 +154,7 @@ async def main():
 
     try:
         logger.info(f"🚀 Servidor iniciado na porta {PORT}")
+        logger.info(f"🌐 Rotas disponíveis: /, /health, {WEBHOOK_PATH}")
         await server.serve()
     except KeyboardInterrupt:
         logger.info("🛑 Servidor interrompido manualmente")
@@ -148,7 +163,7 @@ async def main():
         raise
     finally:
         logger.info("🧹 Limpando webhook antes de desligar...")
-        await telegram_app.bot.delete_webhook()
+        await telegram_app.bot.delete_webhook(drop_pending_updates=True)
 
 if __name__ == "__main__":
     asyncio.run(main())
