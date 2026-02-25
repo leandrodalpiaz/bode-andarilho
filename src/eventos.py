@@ -138,7 +138,7 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
         # Criar identificador único baseado em data e nome da loja
         data_clean = evento.get("Data do evento", "").replace('/', '_')
         nome_clean = re.sub(r'[^a-zA-Z0-9]', '_', str(evento.get("Nome da loja", "")))
-        numero_clean = re.sub(r'[^a-zA-Z0-9]', '_', str(evento.get("Número da loja", "")))  # CONVERTIDO PARA STRING
+        numero_clean = re.sub(r'[^a-zA-Z0-9]', '_', str(evento.get("Número da loja", "")))
         evento_id = f"{data_clean}_{nome_clean}_{numero_clean}"
 
         nome = evento.get("Nome da loja", "Evento")
@@ -164,7 +164,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer()
 
-    _, evento_id = query.data.split("|", 1)  # formato "evento|25_12_2026_Natalina_2512"
+    _, evento_id = query.data.split("|", 1)
 
     # Reconstruir data e nome
     partes = evento_id.split("_")
@@ -271,7 +271,7 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    _, id_evento = query.data.split("|", 1)  # formato "ver_confirmados|25/12/2026 — Natalina"
+    _, id_evento = query.data.split("|", 1)
 
     eventos = listar_eventos()
     evento = None
@@ -383,7 +383,6 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     query = update.callback_query
     await query.answer()
 
-    # Formato esperado: confirmar|25/12/2026 — Natalina|gratuito
     partes = query.data.split("|")
     if len(partes) != 3:
         await query.edit_message_text("Erro: dados de confirmação inválidos.")
@@ -406,7 +405,6 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     membro = buscar_membro(user_id)
 
     if not membro:
-        # Armazenar para depois do cadastro
         context.user_data["pos_cadastro"] = {
             "acao": "confirmar",
             "id_evento": id_evento,
@@ -425,7 +423,6 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         await query.edit_message_text("Você já confirmou presença para este evento.")
         return ConversationHandler.END
 
-    # Registrar confirmação
     participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não selecionada"
     if tipo_agape == "gratuito":
         desc_agape = "Gratuito"
@@ -447,7 +444,6 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     }
     registrar_confirmacao(dados_confirmacao)
 
-    # Enviar mensagem de confirmação no privado
     data = evento.get("Data do evento", "")
     nome_loja = evento.get("Nome da loja", "")
     numero_loja = evento.get("Número da loja", "")
@@ -490,38 +486,56 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    # Formato: cancelar|25/12/2026 — Natalina
-    partes = query.data.split("|")
-    if len(partes) != 2:
-        await query.edit_message_text("Erro: dados de cancelamento inválidos.")
-        return
-    _, id_evento = partes
+    # Verifica se é confirma_cancelar ou cancelar
+    if query.data.startswith("confirma_cancelar|"):
+        # Formato: confirma_cancelar|id_evento
+        _, id_evento = query.data.split("|", 1)
+        user_id = update.effective_user.id
 
-    user_id = update.effective_user.id
-
-    # Se veio de um grupo e não é confirmação, pedir confirmação no privado
-    if update.effective_chat.type in ["group", "supergroup"] and not query.data.startswith("confirma_cancelar"):
-        botoes = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ Sim, cancelar", callback_data=f"confirma_cancelar|{id_evento}")],
-            [InlineKeyboardButton("🔙 Não, voltar", callback_data="voltar_grupo")]
-        ])
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=f"Confirmar cancelamento da sessão {id_evento}?",
-            reply_markup=botoes
-        )
-        await query.edit_message_text("Instruções enviadas no privado.")
+        cancelou = cancelar_confirmacao(id_evento, user_id)
+        if cancelou:
+            await query.edit_message_text(
+                f"❌ Presença cancelada.\n\n"
+                f"Evento: {id_evento}\n\n"
+                f"Se mudar de ideia, basta confirmar novamente. Fraterno abraço! 🐐"
+            )
+        else:
+            await query.edit_message_text("Não foi possível cancelar. Você não estava confirmado para este evento.")
         return
 
-    cancelou = cancelar_confirmacao(id_evento, user_id)
-    if cancelou:
-        await query.edit_message_text(
-            f"❌ Presença cancelada.\n\n"
-            f"Evento: {id_evento}\n\n"
-            f"Se mudar de ideia, basta confirmar novamente. Fraterno abraço! 🐐"
-        )
+    elif query.data.startswith("cancelar|"):
+        # Formato: cancelar|id_evento
+        _, id_evento = query.data.split("|", 1)
+        user_id = update.effective_user.id
+
+        # Se veio de um grupo, pedir confirmação no privado
+        if update.effective_chat.type in ["group", "supergroup"]:
+            botoes = InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ Sim, cancelar", callback_data=f"confirma_cancelar|{id_evento}")],
+                [InlineKeyboardButton("🔙 Não, voltar", callback_data="voltar_grupo")]
+            ])
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"Confirmar cancelamento da sessão {id_evento}?",
+                reply_markup=botoes
+            )
+            await query.edit_message_text("Instruções enviadas no privado.")
+            return
+        else:
+            # Se já está no privado, processa direto
+            cancelou = cancelar_confirmacao(id_evento, user_id)
+            if cancelou:
+                await query.edit_message_text(
+                    f"❌ Presença cancelada.\n\n"
+                    f"Evento: {id_evento}\n\n"
+                    f"Se mudar de ideia, basta confirmar novamente. Fraterno abraço! 🐐"
+                )
+            else:
+                await query.edit_message_text("Não foi possível cancelar. Você não estava confirmado para este evento.")
+        return
+
     else:
-        await query.edit_message_text("Não foi possível cancelar. Você não estava confirmado para este evento.")
+        await query.edit_message_text("Comando de cancelamento inválido.")
 
 # ConversationHandler para confirmação de presença
 confirmacao_presenca_handler = ConversationHandler(
