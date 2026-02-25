@@ -64,7 +64,7 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data_formatada = data
         botoes.append([InlineKeyboardButton(
             f"📅 {data_formatada} - {len(evs)} evento(s)",
-            callback_data=f"data_{data}"
+            callback_data=f"data|{data}"
         )])
 
     # Botão voltar
@@ -85,7 +85,7 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
     query = update.callback_query
     await query.answer()
 
-    data = query.data.split("_", 1)[1]
+    _, data = query.data.split("|", 1)
     eventos = listar_eventos()
     eventos_data = [e for e in eventos if e.get("Data do evento") == data]
 
@@ -105,7 +105,7 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
     for grau, evs in graus.items():
         botoes.append([InlineKeyboardButton(
             f"🔺 {grau} - {len(evs)} evento(s)",
-            callback_data=f"grau_{data}_{grau}"
+            callback_data=f"grau|{data}|{grau}"
         )])
 
     botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="ver_eventos")])
@@ -122,10 +122,7 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
     query = update.callback_query
     await query.answer()
 
-    partes = query.data.split("_", 2)
-    data = partes[1]
-    grau = partes[2]
-
+    _, data, grau = query.data.split("|", 2)
     eventos = listar_eventos()
     eventos_filtrados = [
         e for e in eventos
@@ -138,7 +135,7 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
 
     botoes = []
     for evento in eventos_filtrados:
-        # Encontrar índice global para callback (usamos data+nome como identificador)
+        # Criar identificador único baseado em data e nome da loja
         data_clean = evento.get("Data do evento", "").replace('/', '_')
         nome_clean = re.sub(r'[^a-zA-Z0-9]', '_', evento.get("Nome da loja", ""))
         numero_clean = re.sub(r'[^a-zA-Z0-9]', '_', evento.get("Número da loja", ""))
@@ -150,10 +147,10 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
         horario = evento.get("Hora", "")
         botoes.append([InlineKeyboardButton(
             f"🏛 {nome} {numero} - {potencia} - {horario}",
-            callback_data=f"evento_{evento_id}"
+            callback_data=f"evento|{evento_id}"
         )])
 
-    botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data=f"data_{data}")])
+    botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data=f"data|{data}")])
     teclado = InlineKeyboardMarkup(botoes)
 
     await query.edit_message_text(
@@ -167,7 +164,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer()
 
-    evento_id = query.data.split("_", 1)[1]  # formato "evento_25_12_2026_Natalina_2512"
+    _, evento_id = query.data.split("|", 1)  # formato "evento|25_12_2026_Natalina_2512"
 
     # Reconstruir data e nome
     partes = evento_id.split("_")
@@ -188,7 +185,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         await query.edit_message_text("Evento não encontrado.")
         return
 
-    context.user_data["evento_atual"] = evento  # armazenar para outros usos
+    context.user_data["evento_atual"] = evento
 
     data = evento.get("Data do evento", "")
     nome_loja = evento.get("Nome da loja", "")
@@ -235,18 +232,18 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     botoes = []
 
     if ja_confirmou:
-        botoes.append([InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar_{id_evento}")])
+        botoes.append([InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{id_evento}")])
     else:
         if tipo_agape == "gratuito":
-            botoes.append([InlineKeyboardButton("🍽 Participar com ágape (gratuito)", callback_data=f"confirmar_{id_evento}_gratuito")])
-            botoes.append([InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar_{id_evento}_sem")])
+            botoes.append([InlineKeyboardButton("🍽 Participar com ágape (gratuito)", callback_data=f"confirmar|{id_evento}|gratuito")])
+            botoes.append([InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento}|sem")])
         elif tipo_agape == "pago":
-            botoes.append([InlineKeyboardButton("🍽 Participar com ágape (pago)", callback_data=f"confirmar_{id_evento}_pago")])
-            botoes.append([InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar_{id_evento}_sem")])
+            botoes.append([InlineKeyboardButton("🍽 Participar com ágape (pago)", callback_data=f"confirmar|{id_evento}|pago")])
+            botoes.append([InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento}|sem")])
         else:
-            botoes.append([InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar_{id_evento}_sem")])
+            botoes.append([InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_evento}|sem")])
 
-    botoes.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados_{id_evento}")])
+    botoes.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{id_evento}")])
 
     if update.effective_chat.type == "private":
         botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="ver_eventos")])
@@ -274,8 +271,7 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    id_evento = query.data.split("_", 2)[2]  # formato "ver_confirmados_25/12/2026 — Natalina"
-    # id_evento é o mesmo usado na planilha: "data — nome_loja"
+    _, id_evento = query.data.split("|", 1)  # formato "ver_confirmados|25/12/2026 — Natalina"
 
     eventos = listar_eventos()
     evento = None
@@ -318,17 +314,17 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     botoes = []
     if user_confirmado:
-        botoes.append([InlineKeyboardButton("❌ Cancelar minha presença", callback_data=f"cancelar_{id_evento}")])
+        botoes.append([InlineKeyboardButton("❌ Cancelar minha presença", callback_data=f"cancelar|{id_evento}")])
     else:
         tipo_agape = extrair_tipo_agape(evento.get("Ágape", ""))
         if tipo_agape == "gratuito":
-            botoes.append([InlineKeyboardButton("🍽 Confirmar com ágape (gratuito)", callback_data=f"confirmar_{id_evento}_gratuito")])
-            botoes.append([InlineKeyboardButton("🚫 Confirmar sem ágape", callback_data=f"confirmar_{id_evento}_sem")])
+            botoes.append([InlineKeyboardButton("🍽 Confirmar com ágape (gratuito)", callback_data=f"confirmar|{id_evento}|gratuito")])
+            botoes.append([InlineKeyboardButton("🚫 Confirmar sem ágape", callback_data=f"confirmar|{id_evento}|sem")])
         elif tipo_agape == "pago":
-            botoes.append([InlineKeyboardButton("🍽 Confirmar com ágape (pago)", callback_data=f"confirmar_{id_evento}_pago")])
-            botoes.append([InlineKeyboardButton("🚫 Confirmar sem ágape", callback_data=f"confirmar_{id_evento}_sem")])
+            botoes.append([InlineKeyboardButton("🍽 Confirmar com ágape (pago)", callback_data=f"confirmar|{id_evento}|pago")])
+            botoes.append([InlineKeyboardButton("🚫 Confirmar sem ágape", callback_data=f"confirmar|{id_evento}|sem")])
         else:
-            botoes.append([InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar_{id_evento}_sem")])
+            botoes.append([InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_evento}|sem")])
 
     botoes.append([InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")])
     teclado = InlineKeyboardMarkup(botoes)
@@ -377,7 +373,7 @@ async def minhas_confirmacoes(update: Update, context: ContextTypes.DEFAULT_TYPE
         horario = evento.get("Hora", "")
         id_evento = f"{data} — {nome}"
         texto += f"{idx+1}. 📅 {data} - {nome} {numero} - {potencia} - {horario}\n"
-        botoes.append([InlineKeyboardButton(f"❌ Cancelar {idx+1}", callback_data=f"cancelar_{id_evento}")])
+        botoes.append([InlineKeyboardButton(f"❌ Cancelar {idx+1}", callback_data=f"cancelar|{id_evento}")])
 
     botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")])
     await query.edit_message_text(texto, reply_markup=InlineKeyboardMarkup(botoes))
@@ -387,14 +383,13 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     query = update.callback_query
     await query.answer()
 
-    # Formato esperado: confirmar_25/12/2026 — Natalina_gratuito
-    dados = query.data.split("_", 2)
-    if len(dados) < 3:
+    # Formato esperado: confirmar|25/12/2026 — Natalina|gratuito
+    partes = query.data.split("|")
+    if len(partes) != 3:
         await query.edit_message_text("Erro: dados de confirmação inválidos.")
         return ConversationHandler.END
 
-    id_evento = dados[1]  # "25/12/2026 — Natalina"
-    tipo_agape = dados[2]
+    _, id_evento, tipo_agape = partes
 
     eventos = listar_eventos()
     evento = None
@@ -472,7 +467,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     resposta += "Fraterno abraço! 🐐"
 
     botoes_privado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar_{id_evento}")],
+        [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{id_evento}")],
         [InlineKeyboardButton("👥 Ver eventos", callback_data="ver_eventos")]
     ])
 
@@ -495,19 +490,19 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    # Formato: cancelar_25/12/2026 — Natalina
-    dados = query.data.split("_", 1)
-    if len(dados) < 2:
+    # Formato: cancelar|25/12/2026 — Natalina
+    partes = query.data.split("|")
+    if len(partes) != 2:
         await query.edit_message_text("Erro: dados de cancelamento inválidos.")
         return
-    id_evento = dados[1]
+    _, id_evento = partes
 
     user_id = update.effective_user.id
 
     # Se veio de um grupo e não é confirmação, pedir confirmação no privado
     if update.effective_chat.type in ["group", "supergroup"] and not query.data.startswith("confirma_cancelar"):
         botoes = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ Sim, cancelar", callback_data=f"confirma_cancelar_{id_evento}")],
+            [InlineKeyboardButton("✅ Sim, cancelar", callback_data=f"confirma_cancelar|{id_evento}")],
             [InlineKeyboardButton("🔙 Não, voltar", callback_data="voltar_grupo")]
         ])
         await context.bot.send_message(
@@ -530,7 +525,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ConversationHandler para confirmação de presença
 confirmacao_presenca_handler = ConversationHandler(
-    entry_points=[CallbackQueryHandler(iniciar_confirmacao_presenca, pattern="^confirmar_")],
+    entry_points=[CallbackQueryHandler(iniciar_confirmacao_presenca, pattern="^confirmar\\|")],
     states={},
     fallbacks=[CommandHandler("cancelar", cancelar_presenca)],
 )

@@ -1,11 +1,11 @@
 # src/cadastro_evento.py
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, CommandHandler, filters, CallbackQueryHandler
-from src.sheets import cadastrar_evento, listar_eventos, buscar_membro
+from src.sheets import cadastrar_evento, listar_eventos
 from src.permissoes import get_nivel
 from datetime import datetime
 import os
-import time
+import re
 
 # Estados da conversação para o cadastro de evento
 DATA, HORARIO, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, AGAPE_TIPO, OBSERVACOES, ENDERECO = range(14)
@@ -219,20 +219,6 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
     # Salva o evento na planilha
     cadastrar_evento(dados_evento)
 
-    # Obtém a lista atualizada de eventos para encontrar o índice
-    eventos = listar_eventos()
-    indice_evento = None
-    for i, ev in enumerate(eventos):
-        if (ev.get("Data do evento") == dados_evento["data"] and
-            ev.get("Nome da loja") == dados_evento["nome_loja"] and
-            ev.get("Número da loja") == dados_evento["numero_loja"]):
-            indice_evento = i
-            break
-
-    if indice_evento is None:
-        # Fallback: usar timestamp como identificador (mas não ideal)
-        indice_evento = int(time.time())
-
     # Publicar o evento no grupo
     grupo_id = dados_evento.get("telegram_id_grupo", "").strip()
 
@@ -245,24 +231,27 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
         try:
             grupo_id_int = int(float(grupo_id.strip().replace(" ", "")))
 
+            # Identificador único do evento no formato usado na planilha: "data — nome_loja"
+            id_evento = f"{dados_evento['data']} — {dados_evento['nome_loja']}"
+
             # Determinar botões baseado no tipo de ágape
             agape_texto = dados_evento['agape'].lower()
             if "pago" in agape_texto or "dividido" in agape_texto:
                 botoes = [
-                    [InlineKeyboardButton("🍽 Participar com ágape (pago)", callback_data=f"confirmar_{indice_evento}_pago")],
-                    [InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar_{indice_evento}_sem")],
+                    [InlineKeyboardButton("🍽 Participar com ágape (pago)", callback_data=f"confirmar|{id_evento}|pago")],
+                    [InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento}|sem")],
                 ]
             elif "gratuito" in agape_texto:
                 botoes = [
-                    [InlineKeyboardButton("🍽 Participar com ágape (gratuito)", callback_data=f"confirmar_{indice_evento}_gratuito")],
-                    [InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar_{indice_evento}_sem")],
+                    [InlineKeyboardButton("🍽 Participar com ágape (gratuito)", callback_data=f"confirmar|{id_evento}|gratuito")],
+                    [InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento}|sem")],
                 ]
             else:  # sem ágape
                 botoes = [
-                    [InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar_{indice_evento}_sem")],
+                    [InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_evento}|sem")],
                 ]
             # Botão "Ver confirmados" sempre presente
-            botoes.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados_{indice_evento}")])
+            botoes.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{id_evento}")])
 
             # Traduzir dia da semana
             dias = {
@@ -296,7 +285,7 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup(botoes)
             )
-            print(f"✅ Evento publicado no grupo {grupo_id_int} com índice {indice_evento}")
+            print(f"✅ Evento publicado no grupo {grupo_id_int} com id {id_evento}")
             await update.message.reply_text("✅ Evento cadastrado e publicado no grupo com sucesso!")
 
         except Exception as e:
