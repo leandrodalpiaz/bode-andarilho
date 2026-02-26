@@ -1,12 +1,13 @@
 # ============================================
 # VERSAO FINAL - BODE ANDARILHO (RENDER)
 # ============================================
-print("🚀 INICIANDO BOT - VERSAO WEBHOOK 2026-02-26")  # <--- LINHA DE DEBUG
+print("🚀 INICIANDO BOT - VERSAO WEBHOOK 2026-02-26")
 
 import os
 import asyncio
 import logging
 import traceback
+import signal
 from starlette.applications import Starlette
 from starlette.routing import Route
 from starlette.requests import Request
@@ -15,7 +16,7 @@ from telegram import Update
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
     MessageHandler, filters, ConversationHandler, ChatMemberHandler,
-    ContextTypes  # <--- IMPORT ADICIONADO
+    ContextTypes
 )
 
 # Importações dos seus módulos
@@ -33,7 +34,7 @@ from src.editar_perfil import editar_perfil_handler
 # Configuração de logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.DEBUG  # Alterado para DEBUG para capturar todos os erros
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
@@ -65,19 +66,15 @@ async def bot_adicionado_grupo(update: Update, context: ContextTypes.DEFAULT_TYP
 
 # Handler de erro global
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Captura e loga qualquer exceção não tratada."""
     logger.error(f"❌ Exceção não tratada: {context.error}", exc_info=context.error)
-    print(f"💥 ERROR HANDLER: {context.error}")
     traceback.print_exc()
 
 # --- Função principal ---
 async def main():
     print("⚙️ Criando aplicação Telegram...")
-    # Cria a aplicação do Telegram SEM polling
     telegram_app = Application.builder().token(TOKEN).updater(None).build()
     print("✅ Aplicação criada com updater=None")
 
-    # Adiciona handler de erro global
     telegram_app.add_error_handler(error_handler)
     print("✅ Error handler global adicionado")
 
@@ -101,14 +98,11 @@ async def main():
     telegram_app.add_handler(CallbackQueryHandler(fechar_mensagem, pattern="^fechar_mensagem$"))
     telegram_app.add_handler(CallbackQueryHandler(minhas_confirmacoes, pattern="^minhas_confirmacoes$"))
 
-    # Handler genérico
     telegram_app.add_handler(CallbackQueryHandler(botao_handler))
-
-    # Handlers de grupo
     telegram_app.add_handler(ChatMemberHandler(bot_adicionado_grupo, ChatMemberHandler.MY_CHAT_MEMBER))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mensagem_grupo_handler))
 
-    # --- Configuração do Webhook com endpoint único ---
+    # --- Configuração do Webhook ---
     if not RENDER_URL:
         logger.error("RENDER_EXTERNAL_URL não definida! O webhook não funcionará.")
         return
@@ -117,15 +111,11 @@ async def main():
     webhook_url = f"{RENDER_URL}{WEBHOOK_PATH}"
     print(f"🔗 URL do webhook: {webhook_url}")
 
-    # 🔥 Limpeza agressiva do webhook
-    logger.info("🧹 Removendo webhook antigo...")
-    for i in range(3):
-        await telegram_app.bot.delete_webhook(drop_pending_updates=True)
-        await asyncio.sleep(2)
-        logger.info(f"⏳ Tentativa {i+1} concluída")
+    # Limpeza do webhook
+    await telegram_app.bot.delete_webhook(drop_pending_updates=True)
+    await asyncio.sleep(1)
 
-    # Configura novo webhook
-    logger.info(f"🔗 Configurando novo webhook para: {webhook_url}")
+    # Configura webhook
     await telegram_app.bot.set_webhook(
         url=webhook_url,
         allowed_updates=Update.ALL_TYPES,
@@ -133,33 +123,18 @@ async def main():
         max_connections=1
     )
 
-    # Verifica
     webhook_info = await telegram_app.bot.get_webhook_info()
     logger.info(f"✅ Webhook configurado: {webhook_info.url}")
     logger.info(f"📊 Pending updates: {webhook_info.pending_update_count}")
 
     # --- Servidor Starlette ---
     async def webhook(request: Request) -> Response:
-        """Endpoint que recebe as atualizações do Telegram com logs detalhados."""
         try:
-            # Log do corpo bruto da requisição (primeiros 200 caracteres)
-            body = await request.body()
-            print(f"📥 RAW: {body[:200]}")
-
             data = await request.json()
-            print(f"📦 JSON recebido: {data}")
-
             update = Update.de_json(data, telegram_app.bot)
-            print(f"🔄 Update ID: {update.update_id}")
-
             await telegram_app.process_update(update)
-            print("✅ Update processado com sucesso")
-
             return Response(status_code=200)
         except Exception as e:
-            # Log DETALHADO do erro
-            print(f"❌ ERRO CRÍTICO: {type(e).__name__}: {e}")
-            traceback.print_exc()
             logger.error(f"❌ Erro no webhook: {e}", exc_info=True)
             return Response(status_code=500)
 
@@ -175,28 +150,49 @@ async def main():
         Route(WEBHOOK_PATH, webhook, methods=["POST"]),
     ])
 
-    # Inicia o servidor
+    # Configuração do servidor com keep-alive
     import uvicorn
     config = uvicorn.Config(
         starlette_app,
         host="0.0.0.0",
         port=PORT,
-        log_level="info"
+        log_level="info",
+        timeout_keep_alive=120  # Mantém conexões vivas por mais tempo
     )
     server = uvicorn.Server(config)
+
+    # Configura tratamento de sinais para desligamento gracioso
+    shutdown_event = asyncio.Event()
+
+    def signal_handler(*_):
+        print("📥 Sinal de interrupção recebido. Desligando...")
+        shutdown_event.set()
+
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, signal_handler)
 
     try:
         logger.info(f"🚀 Servidor iniciado na porta {PORT}")
         print(f"✅ Servidor ouvindo em 0.0.0.0:{PORT}")
-        await server.serve()
-    except KeyboardInterrupt:
-        logger.info("🛑 Servidor interrompido manualmente")
+        
+        # Inicia o servidor em background
+        server_task = asyncio.create_task(server.serve())
+        
+        # Aguarda até que o sinal de desligamento seja recebido
+        await shutdown_event.wait()
+        
+        print("🛑 Desligando servidor graciosamente...")
+        server.should_exit = True
+        await server_task
+        
     except Exception as e:
         logger.error(f"💥 Erro fatal no servidor: {e}")
         raise
     finally:
-        logger.info("🧹 Limpando webhook antes de desligar...")
+        logger.info("🧹 Limpando webhook...")
         await telegram_app.bot.delete_webhook(drop_pending_updates=True)
+        print("👋 Bot finalizado.")
 
 if __name__ == "__main__":
     asyncio.run(main())
