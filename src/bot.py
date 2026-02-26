@@ -13,15 +13,16 @@ from src.perfil import mostrar_perfil
 from src.permissoes import get_nivel
 
 def menu_principal_teclado(nivel: str):
-    """Menu principal baseado no nível do usuário."""
+    """Menu principal baseado no nível do usuário - APENAS botões permitidos."""
     botoes = [
         [InlineKeyboardButton("📅 Ver eventos", callback_data="ver_eventos")],
         [InlineKeyboardButton("✅ Minhas confirmações", callback_data="minhas_confirmacoes")],
         [InlineKeyboardButton("👤 Meu cadastro", callback_data="meu_cadastro")],
     ]
 
+    # 🔥 CORREÇÃO: Apenas adiciona botões se o nível for adequado
     # Nível 2 = secretário, nível 3 = admin
-    if nivel in ["2", "3"]:
+    if nivel == "2" or nivel == "3":
         botoes.append([InlineKeyboardButton("📋 Área do Secretário", callback_data="area_secretario")])
 
     if nivel == "3":
@@ -52,6 +53,15 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telegram_id = update.effective_user.id
     nivel = get_nivel(telegram_id)
     data = query.data
+
+    # 🔥 CORREÇÃO: Verificação dupla de segurança (camada de ação)
+    # Se o usuário não tem permissão para a área, já responde na hora
+    if data == "area_secretario" and nivel not in ["2", "3"]:
+        await query.edit_message_text("⛔ Você não tem permissão para acessar a Área do Secretário.")
+        return
+    if data == "area_admin" and nivel != "3":
+        await query.edit_message_text("⛔ Você não tem permissão para acessar a Área do Administrador.")
+        return
 
     # Handlers de navegação de eventos (com pipe |)
     if data == "ver_eventos":
@@ -107,14 +117,12 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await excluir_evento(update, context)
     elif data == "admin_promover":
         from src.admin_acoes import promover_handler
-        # Promover tem ConversationHandler próprio
         await promover_handler(update, context)
     elif data == "admin_rebaixar":
         from src.admin_acoes import rebaixar_handler
         await rebaixar_handler(update, context)
     elif data == "editar_perfil":
         # Este callback será capturado pelo ConversationHandler em editar_perfil.py
-        # Não fazemos nada aqui para não interferir
         return
     else:
         await query.edit_message_text("Função em desenvolvimento ou comando não reconhecido.")
@@ -128,7 +136,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
     nivel = get_nivel(telegram_id)
 
     if nivel not in ["2", "3"]:
-        await query.edit_message_text("Você não tem permissão para acessar esta área.")
+        await query.edit_message_text("⛔ Você não tem permissão para acessar esta área.")
         return
 
     teclado = InlineKeyboardMarkup([
@@ -154,7 +162,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
     nivel = get_nivel(telegram_id)
 
     if nivel != "3":
-        await query.edit_message_text("Você não tem permissão para acessar esta área.")
+        await query.edit_message_text("⛔ Você não tem permissão para acessar esta área.")
         return
 
     teclado = InlineKeyboardMarkup([
