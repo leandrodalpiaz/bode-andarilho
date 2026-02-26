@@ -73,6 +73,13 @@ async def main():
     telegram_app = Application.builder().token(TOKEN).updater(None).build()
     print("✅ Aplicação criada com updater=None")
 
+    # 🔥 INICIALIZAÇÃO OBRIGATÓRIA
+    await telegram_app.initialize()
+    print("✅ Application.initialize() executado")
+    
+    await telegram_app.start()
+    print("✅ Application.start() executado")
+
     telegram_app.add_error_handler(error_handler)
 
     # --- Registro dos handlers ---
@@ -144,19 +151,8 @@ async def main():
         Route(WEBHOOK_PATH, webhook, methods=["POST"]),
     ])
 
-    # --- CONFIGURAÇÃO CRÍTICA: manter o servidor vivo ---
+    # Servidor
     import uvicorn
-
-    class CustomServer(uvicorn.Server):
-        """Servidor personalizado que não morre facilmente."""
-        def run(self, sockets=None):
-            self.config.setup_event_loop()
-            loop = asyncio.get_event_loop()
-            asyncio.ensure_future(self.serve(sockets=sockets))
-            try:
-                loop.run_forever()
-            except KeyboardInterrupt:
-                pass
 
     config = uvicorn.Config(
         starlette_app,
@@ -165,7 +161,7 @@ async def main():
         log_level="info",
         timeout_keep_alive=60
     )
-    server = CustomServer(config)
+    server = uvicorn.Server(config)
 
     # Tratamento de sinais
     loop = asyncio.get_running_loop()
@@ -179,8 +175,13 @@ async def shutdown(server, telegram_app):
     """Desligamento gracioso."""
     print("🛑 Desligando servidor...")
     server.should_exit = True
+    
+    # 🔥 Limpeza adequada
+    await telegram_app.stop()
+    await telegram_app.shutdown()
     await telegram_app.bot.delete_webhook(drop_pending_updates=True)
-    print("👋 Webhook removido. Até logo!")
+    
+    print("👋 Bot finalizado com sucesso.")
 
 if __name__ == "__main__":
     try:
