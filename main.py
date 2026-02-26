@@ -1,4 +1,8 @@
-# main.py
+# ============================================
+# VERSAO FINAL - BODE ANDARILHO (RENDER)
+# ============================================
+print("🚀 INICIANDO BOT - VERSAO WEBHOOK 2026-02-26")  # <--- LINHA DE DEBUG
+
 import os
 import asyncio
 import logging
@@ -36,6 +40,10 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 PORT = int(os.getenv("PORT", 10000))
 
+print(f"🔧 TOKEN carregado: {'SIM' if TOKEN else 'NÃO'}")
+print(f"🔧 RENDER_URL: {RENDER_URL}")
+print(f"🔧 PORT: {PORT}")
+
 # --- Handlers existentes ---
 async def mensagem_grupo_handler(update: Update, context):
     if update.effective_chat.type in ["group", "supergroup"]:
@@ -55,8 +63,10 @@ async def bot_adicionado_grupo(update: Update, context):
 
 # --- Função principal ---
 async def main():
+    print("⚙️ Criando aplicação Telegram...")
     # Cria a aplicação do Telegram SEM polling
     telegram_app = Application.builder().token(TOKEN).updater(None).build()
+    print("✅ Aplicação criada com updater=None")
 
     # --- Registro dos handlers ---
     telegram_app.add_handler(CommandHandler("start", start))
@@ -85,39 +95,38 @@ async def main():
     telegram_app.add_handler(ChatMemberHandler(bot_adicionado_grupo, ChatMemberHandler.MY_CHAT_MEMBER))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mensagem_grupo_handler))
 
-    # --- Configuração do Webhook com endpoint ÚNICO ---
+    # --- Configuração do Webhook com endpoint único ---
     if not RENDER_URL:
         logger.error("RENDER_EXTERNAL_URL não definida! O webhook não funcionará.")
         return
 
-    # Use um caminho único para evitar conflitos
     WEBHOOK_PATH = "/webhook_bode_2026"
     webhook_url = f"{RENDER_URL}{WEBHOOK_PATH}"
+    print(f"🔗 URL do webhook: {webhook_url}")
 
-    # 🔥 LIMPEZA FORÇADA - múltiplas tentativas
-    logger.info("🧹 Removendo webhook antigo e limpando fila de atualizações...")
+    # 🔥 Limpeza agressiva do webhook
+    logger.info("🧹 Removendo webhook antigo...")
     for i in range(3):
         await telegram_app.bot.delete_webhook(drop_pending_updates=True)
         await asyncio.sleep(2)
-        logger.info(f"⏳ Tentativa {i+1}/3 de limpeza concluída")
+        logger.info(f"⏳ Tentativa {i+1} concluída")
 
-    # Configura o novo webhook
+    # Configura novo webhook
     logger.info(f"🔗 Configurando novo webhook para: {webhook_url}")
     await telegram_app.bot.set_webhook(
         url=webhook_url,
         allowed_updates=Update.ALL_TYPES,
         drop_pending_updates=True,
-        max_connections=1  # Garante apenas uma conexão
+        max_connections=1
     )
 
-    # Verifica se o webhook foi configurado
+    # Verifica
     webhook_info = await telegram_app.bot.get_webhook_info()
     logger.info(f"✅ Webhook configurado: {webhook_info.url}")
     logger.info(f"📊 Pending updates: {webhook_info.pending_update_count}")
 
     # --- Servidor Starlette ---
     async def webhook(request: Request) -> Response:
-        """Endpoint que recebe as atualizações do Telegram."""
         try:
             data = await request.json()
             update = Update.de_json(data, telegram_app.bot)
@@ -128,18 +137,15 @@ async def main():
             return Response(status_code=500)
 
     async def health(request: Request) -> PlainTextResponse:
-        """Health check obrigatório para o Render."""
         return PlainTextResponse("OK")
 
     async def root(request: Request) -> PlainTextResponse:
-        """Rota raiz para o Render não ficar perdido."""
         return PlainTextResponse("Bode Andarilho Bot - Online")
 
-    # Cria o app Starlette com todas as rotas necessárias
     starlette_app = Starlette(routes=[
-        Route("/", root, methods=["GET"]),                    # Rota raiz
-        Route("/health", health, methods=["GET"]),            # Health check
-        Route(WEBHOOK_PATH, webhook, methods=["POST"]),       # Webhook único
+        Route("/", root, methods=["GET"]),
+        Route("/health", health, methods=["GET"]),
+        Route(WEBHOOK_PATH, webhook, methods=["POST"]),
     ])
 
     # Inicia o servidor
@@ -154,7 +160,7 @@ async def main():
 
     try:
         logger.info(f"🚀 Servidor iniciado na porta {PORT}")
-        logger.info(f"🌐 Rotas disponíveis: /, /health, {WEBHOOK_PATH}")
+        print(f"✅ Servidor ouvindo em 0.0.0.0:{PORT}")
         await server.serve()
     except KeyboardInterrupt:
         logger.info("🛑 Servidor interrompido manualmente")
