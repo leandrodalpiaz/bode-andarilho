@@ -6,6 +6,7 @@ print("🚀 INICIANDO BOT - VERSAO WEBHOOK 2026-02-26")  # <--- LINHA DE DEBUG
 import os
 import asyncio
 import logging
+import traceback
 from starlette.applications import Starlette
 from starlette.routing import Route
 from starlette.requests import Request
@@ -13,7 +14,8 @@ from starlette.responses import PlainTextResponse, Response
 from telegram import Update
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
-    MessageHandler, filters, ConversationHandler, ChatMemberHandler
+    MessageHandler, filters, ConversationHandler, ChatMemberHandler,
+    ContextTypes  # <--- IMPORT ADICIONADO
 )
 
 # Importações dos seus módulos
@@ -31,7 +33,7 @@ from src.editar_perfil import editar_perfil_handler
 # Configuração de logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
+    level=logging.DEBUG  # Alterado para DEBUG para capturar todos os erros
 )
 logger = logging.getLogger(__name__)
 
@@ -45,7 +47,7 @@ print(f"🔧 RENDER_URL: {RENDER_URL}")
 print(f"🔧 PORT: {PORT}")
 
 # --- Handlers existentes ---
-async def mensagem_grupo_handler(update: Update, context):
+async def mensagem_grupo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type in ["group", "supergroup"]:
         await update.message.reply_text(
             "Olá! Para interagir comigo, por favor use os botões nas mensagens de evento "
@@ -53,7 +55,7 @@ async def mensagem_grupo_handler(update: Update, context):
         )
         return
 
-async def bot_adicionado_grupo(update: Update, context):
+async def bot_adicionado_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.my_chat_member.new_chat_member.status == "member":
         await update.effective_chat.send_message(
             "Olá, irmãos! Sou o Bode Andarilho, o bot de agenda de visitas.\n\n"
@@ -61,12 +63,23 @@ async def bot_adicionado_grupo(update: Update, context):
             "No grupo, apenas publicarei eventos e lembretes. Confirmações e outras ações devem ser feitas em privado. 🐐"
         )
 
+# Handler de erro global
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Captura e loga qualquer exceção não tratada."""
+    logger.error(f"❌ Exceção não tratada: {context.error}", exc_info=context.error)
+    print(f"💥 ERROR HANDLER: {context.error}")
+    traceback.print_exc()
+
 # --- Função principal ---
 async def main():
     print("⚙️ Criando aplicação Telegram...")
     # Cria a aplicação do Telegram SEM polling
     telegram_app = Application.builder().token(TOKEN).updater(None).build()
     print("✅ Aplicação criada com updater=None")
+
+    # Adiciona handler de erro global
+    telegram_app.add_error_handler(error_handler)
+    print("✅ Error handler global adicionado")
 
     # --- Registro dos handlers ---
     telegram_app.add_handler(CommandHandler("start", start))
@@ -127,13 +140,27 @@ async def main():
 
     # --- Servidor Starlette ---
     async def webhook(request: Request) -> Response:
+        """Endpoint que recebe as atualizações do Telegram com logs detalhados."""
         try:
+            # Log do corpo bruto da requisição (primeiros 200 caracteres)
+            body = await request.body()
+            print(f"📥 RAW: {body[:200]}")
+
             data = await request.json()
+            print(f"📦 JSON recebido: {data}")
+
             update = Update.de_json(data, telegram_app.bot)
+            print(f"🔄 Update ID: {update.update_id}")
+
             await telegram_app.process_update(update)
+            print("✅ Update processado com sucesso")
+
             return Response(status_code=200)
         except Exception as e:
-            logger.error(f"❌ Erro no webhook: {e}")
+            # Log DETALHADO do erro
+            print(f"❌ ERRO CRÍTICO: {type(e).__name__}: {e}")
+            traceback.print_exc()
+            logger.error(f"❌ Erro no webhook: {e}", exc_info=True)
             return Response(status_code=500)
 
     async def health(request: Request) -> PlainTextResponse:
