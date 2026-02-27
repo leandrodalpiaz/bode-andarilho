@@ -135,19 +135,14 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
 
     botoes = []
     for evento in eventos_filtrados:
-        # Criar identificador único baseado em data e nome da loja
-        data_clean = evento.get("Data do evento", "").replace('/', '_')
-        nome_clean = re.sub(r'[^a-zA-Z0-9]', '_', str(evento.get("Nome da loja", "")))
-        numero_clean = re.sub(r'[^a-zA-Z0-9]', '_', str(evento.get("Número da loja", "")))
-        evento_id = f"{data_clean}_{nome_clean}_{numero_clean}"
-
         nome = evento.get("Nome da loja", "Evento")
         numero = evento.get("Número da loja", "")
         potencia = evento.get("Potência", "")
         horario = evento.get("Hora", "")
+        id_evento = f"{evento.get('Data do evento')} — {evento.get('Nome da loja')}"
         botoes.append([InlineKeyboardButton(
             f"🏛 {nome} {numero} - {potencia} - {horario}",
-            callback_data=f"evento|{evento_id}"
+            callback_data=f"evento|{id_evento}"
         )])
 
     botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data=f"data|{data}")])
@@ -160,24 +155,16 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
     )
 
 async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra detalhes de um evento específico."""
+    """Mostra detalhes de um evento específico sem apagar a mensagem original."""
     query = update.callback_query
     await query.answer()
 
-    _, evento_id = query.data.split("|", 1)
-
-    # Reconstruir data e nome
-    partes = evento_id.split("_")
-    if len(partes) < 3:
-        await query.edit_message_text("Erro: identificador do evento inválido.")
-        return
-    data_str = f"{partes[0]}/{partes[1]}/{partes[2]}"
-    nome_loja = partes[3].replace('_', ' ') if len(partes) > 3 else ""
+    _, id_evento = query.data.split("|", 1)
 
     eventos = listar_eventos()
     evento = None
     for ev in eventos:
-        if ev.get("Data do evento") == data_str and ev.get("Nome da loja") == nome_loja:
+        if (ev.get("Data do evento", "") + " — " + ev.get("Nome da loja", "")) == id_evento:
             evento = ev
             break
 
@@ -225,12 +212,12 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         texto += "\n📌 Obs: Sem observações"
 
     telegram_id = update.effective_user.id
-    id_evento = f"{data} — {nome_loja}"
     ja_confirmou = buscar_confirmacao(id_evento, telegram_id)
 
     tipo_agape = extrair_tipo_agape(agape)
     botoes = []
 
+    # 🔥 CORREÇÃO: Botão de confirmar/cancelar
     if ja_confirmou:
         botoes.append([InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{id_evento}")])
     else:
@@ -243,8 +230,10 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         else:
             botoes.append([InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_evento}|sem")])
 
+    # 🔥 Botão "Ver confirmados" sempre presente
     botoes.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{id_evento}")])
 
+    # Botão voltar
     if update.effective_chat.type == "private":
         botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="ver_eventos")])
     else:
@@ -252,17 +241,15 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
 
     teclado = InlineKeyboardMarkup(botoes)
 
+    # 🔥 CORREÇÃO: Não apaga a mensagem original, apenas envia uma nova se necessário
     if update.effective_chat.type in ["group", "supergroup"]:
+        # Envia como nova mensagem (não edita a original)
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text=texto,
             parse_mode="Markdown",
             reply_markup=teclado
         )
-        try:
-            await query.delete_message()
-        except:
-            pass
     else:
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=teclado)
 
@@ -383,6 +370,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     query = update.callback_query
     await query.answer()
 
+    # Formato esperado: confirmar|25/03/2026 — Renascença|gratuito
     partes = query.data.split("|")
     if len(partes) != 3:
         await query.edit_message_text("Erro: dados de confirmação inválidos.")
@@ -490,95 +478,13 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         reply_markup=botoes_privado
     )
 
+    # 🔥 Não apaga a mensagem original do evento
     if update.effective_chat.type in ["group", "supergroup"]:
         await query.edit_message_text("✅ Presença confirmada! Verifique seu privado para detalhes.")
     else:
         await query.edit_message_text("✅ Presença confirmada! Verifique a mensagem acima.")
 
     return ConversationHandler.END
-
-async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE, dados):
-    """Continua a confirmação de presença após o cadastro ser concluído."""
-    id_evento = dados.get("id_evento")
-    tipo_agape = dados.get("tipo_agape", "sem")
-    
-    eventos = listar_eventos()
-    evento = None
-    for ev in eventos:
-        if (ev.get("Data do evento", "") + " — " + ev.get("Nome da loja", "")) == id_evento:
-            evento = ev
-            break
-    
-    if not evento:
-        await update.message.reply_text("Evento não encontrado. Tente confirmar novamente pelo grupo.")
-        return
-    
-    user_id = update.effective_user.id
-    membro = buscar_membro(user_id)
-    
-    if not membro:
-        await update.message.reply_text("Erro: cadastro não encontrado após conclusão.")
-        return
-    
-    ja_confirmou = buscar_confirmacao(id_evento, user_id)
-    if ja_confirmou:
-        await update.message.reply_text("Você já confirmou presença para este evento.")
-        return
-    
-    # Registrar confirmação
-    participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não selecionada"
-    if tipo_agape == "gratuito":
-        desc_agape = "Gratuito"
-    elif tipo_agape == "pago":
-        desc_agape = "Pago"
-    else:
-        desc_agape = "Não aplicável"
-    
-    dados_confirmacao = {
-        "id_evento": id_evento,
-        "telegram_id": str(user_id),
-        "nome": membro.get("Nome", ""),
-        "grau": membro.get("Grau", ""),
-        "cargo": membro.get("Cargo", ""),
-        "loja": membro.get("Loja", ""),
-        "oriente": membro.get("Oriente", ""),
-        "potencia": membro.get("Potência", ""),
-        "agape": f"{participacao_agape} ({desc_agape})" if participacao_agape == "Confirmada" else "Não",
-    }
-    registrar_confirmacao(dados_confirmacao)
-    
-    # Enviar mensagem de confirmação
-    data = evento.get("Data do evento", "")
-    nome_loja = evento.get("Nome da loja", "")
-    numero_loja = evento.get("Número da loja", "")
-    horario = evento.get("Hora", "")
-    potencia_evento = evento.get("Potência", "")
-    dia_semana_ingles = evento.get("Dia da semana", "")
-    dia_semana = traduzir_dia(dia_semana_ingles)
-    
-    resposta = f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
-    resposta += f"*Resumo da confirmação:*\n"
-    resposta += f"📅 {data} — {nome_loja} {numero_loja}\n"
-    resposta += f"⚜️ Potência: {potencia_evento}\n"
-    resposta += f"📆 Dia: {dia_semana}\n"
-    resposta += f"🕕 Horário: {horario}\n"
-    resposta += f"🍽 Participação no ágape: {participacao_agape} ({desc_agape})\n\n"
-    resposta += "Sua confirmação é muito importante! Ela nos ajuda a organizar tudo com carinho e evitar desperdícios.\n\n"
-    resposta += "Fraterno abraço! 🐐"
-    
-    botoes_privado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{id_evento}")],
-        [InlineKeyboardButton("👥 Ver eventos", callback_data="ver_eventos")]
-    ])
-    
-    await context.bot.send_message(
-        chat_id=user_id,
-        text=resposta,
-        parse_mode="Markdown",
-        reply_markup=botoes_privado
-    )
-    
-    await update.message.reply_text("✅ Presença confirmada! Verifique a mensagem acima.")
 
 async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cancela presença de um usuário em um evento."""
