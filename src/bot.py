@@ -158,7 +158,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
     )
 
 async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu da área do administrador (com botões removidos)."""
+    """Menu da área do administrador (com botão Gerenciar eventos)."""
     query = update.callback_query
     await query.answer()
 
@@ -171,9 +171,9 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
+        [InlineKeyboardButton("📋 Gerenciar eventos", callback_data="meus_eventos")],  # 🔥 NOVO BOTÃO
         [InlineKeyboardButton("👥 Ver todos os membros", callback_data="admin_ver_membros")],
         [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
-        # Botões excluir_membro e excluir_evento removidos
         [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
         [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
         [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],

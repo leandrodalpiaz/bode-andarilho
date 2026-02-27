@@ -1,9 +1,10 @@
 # src/eventos_secretario.py
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, CallbackQueryHandler, MessageHandler, filters
-from src.sheets import listar_eventos, atualizar_evento
+from src.sheets import listar_eventos, atualizar_evento, cancelar_todas_confirmacoes
 from src.permissoes import get_nivel
 from datetime import datetime
+import urllib.parse
 
 # Estados da conversação
 SELECIONAR_EVENTO, CONFIRMAR_EXCLUSAO, EDITAR_CAMPO, NOVO_VALOR = range(4)
@@ -26,7 +27,7 @@ CAMPOS_EVENTO = {
 }
 
 async def meus_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Lista eventos criados pelo secretário atual."""
+    """Lista eventos criados pelo secretário atual (ou todos se admin)."""
     query = update.callback_query
     await query.answer()
 
@@ -44,27 +45,27 @@ async def meus_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             "Você não criou nenhum evento ainda." if nivel != "3" else "Não há eventos cadastrados.",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario")
+                InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")
             ]])
         )
         return
 
     texto = "Selecione um evento para gerenciar:\n\n"
     botoes = []
-    for i, evento in enumerate(eventos_usuario):
+    for evento in eventos_usuario:
         data = evento.get("Data do evento", "")
         nome = evento.get("Nome da loja", "")
         numero = evento.get("Número da loja", "")
         status = "✅" if evento.get("Status") == "Ativo" else "❌"
-        texto += f"{i+1}. {status} {data} - {nome} {numero}\n"
-        # Armazena o índice real na lista completa
-        indice_real = eventos.index(evento)
+        # Usar identificador baseado em data+nome (mais estável que índice)
+        id_evento = f"{data} — {nome}"
+        id_evento_codificado = urllib.parse.quote(id_evento, safe='')
         botoes.append([InlineKeyboardButton(
             f"{status} {data} - {nome} {numero}",
-            callback_data=f"gerenciar_evento|{indice_real}"
+            callback_data=f"gerenciar_evento|{id_evento_codificado}"
         )])
 
-    botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario")])
+    botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")])
     await query.edit_message_text(texto, reply_markup=InlineKeyboardMarkup(botoes))
 
 async def menu_gerenciar_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -72,10 +73,19 @@ async def menu_gerenciar_evento(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
 
-    _, indice_str = query.data.split("|")
-    indice = int(indice_str)
+    _, id_evento_codificado = query.data.split("|", 1)
+    id_evento = urllib.parse.unquote(id_evento_codificado)
+
     eventos = listar_eventos()
-    evento = eventos[indice]
+    evento = None
+    for ev in eventos:
+        if (ev.get("Data do evento", "") + " — " + ev.get("Nome da loja", "")) == id_evento:
+            evento = ev
+            break
+
+    if not evento:
+        await query.edit_message_text("Evento não encontrado. Pode ter sido excluído.")
+        return
 
     # Verifica permissão (autor ou admin)
     user_id = update.effective_user.id
@@ -87,7 +97,7 @@ async def menu_gerenciar_evento(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     context.user_data["evento_gerenciando"] = {
-        "indice": indice,
+        "id_evento": id_evento,
         "evento": evento
     }
 
@@ -103,8 +113,8 @@ async def menu_gerenciar_evento(update: Update, context: ContextTypes.DEFAULT_TY
     )
 
     botoes = [
-        [InlineKeyboardButton("✏️ Editar evento", callback_data=f"editar_evento|{indice}")],
-        [InlineKeyboardButton("❌ Cancelar evento", callback_data=f"confirmar_cancelamento|{indice}")],
+        [InlineKeyboardButton("✏️ Editar evento", callback_data=f"editar_evento|{id_evento_codificado}")],
+        [InlineKeyboardButton("❌ Cancelar evento", callback_data=f"confirmar_cancelamento|{id_evento_codificado}")],
         [InlineKeyboardButton("⬅️ Voltar", callback_data="meus_eventos")]
     ]
 
@@ -115,10 +125,19 @@ async def confirmar_cancelamento(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     await query.answer()
 
-    _, indice_str = query.data.split("|")
-    indice = int(indice_str)
+    _, id_evento_codificado = query.data.split("|", 1)
+    id_evento = urllib.parse.unquote(id_evento_codificado)
+
     eventos = listar_eventos()
-    evento = eventos[indice]
+    evento = None
+    for ev in eventos:
+        if (ev.get("Data do evento", "") + " — " + ev.get("Nome da loja", "")) == id_evento:
+            evento = ev
+            break
+
+    if not evento:
+        await query.edit_message_text("Evento não encontrado.")
+        return
 
     data = evento.get("Data do evento", "")
     nome = evento.get("Nome da loja", "")
@@ -135,8 +154,8 @@ async def confirmar_cancelamento(update: Update, context: ContextTypes.DEFAULT_T
     )
 
     botoes = [
-        [InlineKeyboardButton("✅ Sim, cancelar", callback_data=f"cancelar_evento|{indice}")],
-        [InlineKeyboardButton("🔙 Não, voltar", callback_data=f"gerenciar_evento|{indice}")]
+        [InlineKeyboardButton("✅ Sim, cancelar", callback_data=f"cancelar_evento|{id_evento_codificado}")],
+        [InlineKeyboardButton("🔙 Não, voltar", callback_data=f"gerenciar_evento|{id_evento_codificado}")]
     ]
 
     await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(botoes))
@@ -146,26 +165,36 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
 
-    _, indice_str = query.data.split("|")
-    indice = int(indice_str)
+    _, id_evento_codificado = query.data.split("|", 1)
+    id_evento = urllib.parse.unquote(id_evento_codificado)
+
     eventos = listar_eventos()
-    evento = eventos[indice]
+    evento = None
+    indice = None
+    for i, ev in enumerate(eventos):
+        if (ev.get("Data do evento", "") + " — " + ev.get("Nome da loja", "")) == id_evento:
+            evento = ev
+            indice = i
+            break
+
+    if not evento:
+        await query.edit_message_text("Evento não encontrado.")
+        return
 
     # Atualiza status na planilha
     evento["Status"] = "Cancelado"
-    atualizar_evento(indice, evento)  # Função a ser criada em sheets.py
+    atualizar_evento(indice, evento)  # Usa o índice real
 
     # Remove todas as confirmações deste evento
-    from src.sheets import cancelar_todas_confirmacoes
-    id_evento = f"{evento.get('Data do evento', '')} — {evento.get('Nome da loja', '')}"
     cancelar_todas_confirmacoes(id_evento)
 
     # Publica aviso no grupo
     grupo_id = evento.get("Telegram ID do grupo")
-    if grupo_id and grupo_id.strip() not in ["", "N/A", "n/a"]:
+    # 🔥 CORREÇÃO: converter para string antes de strip
+    if grupo_id and str(grupo_id).strip() not in ["", "N/A", "n/a"]:
         try:
-            grupo_id_int = int(float(grupo_id))
-            autor_nome = "Administrador"  # Idealmente buscar nome do autor
+            grupo_id_int = int(float(str(grupo_id).strip()))
+            autor_nome = "Administrador" if get_nivel(update.effective_user.id) == "3" else "Secretário"
             mensagem_grupo = (
                 f"❌ *EVENTO CANCELADO PELO AUTOR*\n"
                 f"━━━━━━━━━━━━━━━━\n"
@@ -197,13 +226,22 @@ async def iniciar_edicao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    _, indice_str = query.data.split("|")
-    indice = int(indice_str)
+    _, id_evento_codificado = query.data.split("|", 1)
+    id_evento = urllib.parse.unquote(id_evento_codificado)
+
     eventos = listar_eventos()
-    evento = eventos[indice]
+    evento = None
+    for ev in eventos:
+        if (ev.get("Data do evento", "") + " — " + ev.get("Nome da loja", "")) == id_evento:
+            evento = ev
+            break
+
+    if not evento:
+        await query.edit_message_text("Evento não encontrado.")
+        return ConversationHandler.END
 
     context.user_data["editando_evento"] = {
-        "indice": indice,
+        "id_evento": id_evento,
         "evento": evento
     }
 
@@ -212,11 +250,11 @@ async def iniciar_edicao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for campo_id, campo_info in CAMPOS_EVENTO.items():
         valor_atual = evento.get(campo_info["chave"], "Não informado")
         botoes.append([InlineKeyboardButton(
-            f"✏️ {campo_info['nome']}: {valor_atual[:30]}",
+            f"✏️ {campo_info['nome']}: {str(valor_atual)[:30]}",
             callback_data=f"editar_campo_evento|{campo_id}"
         )])
 
-    botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data=f"gerenciar_evento|{indice}")])
+    botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data=f"gerenciar_evento|{id_evento_codificado}")])
 
     await query.edit_message_text(
         "📝 *Editar Evento*\n\n"
@@ -262,21 +300,32 @@ async def receber_novo_valor_evento(update: Update, context: ContextTypes.DEFAUL
         await update.message.reply_text("Erro: dados não encontrados. Tente novamente.")
         return ConversationHandler.END
 
-    indice = dados["indice"]
+    id_evento = dados["id_evento"]
     evento = dados["evento"]
 
     # Atualiza o campo
     evento[campo_info["chave"]] = novo_valor
 
+    # Encontra o índice atualizado
+    eventos = listar_eventos()
+    indice = None
+    for i, ev in enumerate(eventos):
+        if (ev.get("Data do evento", "") + " — " + ev.get("Nome da loja", "")) == id_evento:
+            indice = i
+            break
+
+    if indice is None:
+        await update.message.reply_text("Erro: evento não encontrado na lista atual.")
+        return ConversationHandler.END
+
     # Salva na planilha
-    from src.sheets import atualizar_evento
     atualizar_evento(indice, evento)
 
     # Publica aviso de alteração no grupo
     grupo_id = evento.get("Telegram ID do grupo")
-    if grupo_id and grupo_id.strip() not in ["", "N/A", "n/a"]:
+    if grupo_id and str(grupo_id).strip() not in ["", "N/A", "n/a"]:
         try:
-            grupo_id_int = int(float(grupo_id))
+            grupo_id_int = int(float(str(grupo_id).strip()))
             mensagem_grupo = (
                 f"📝 *EVENTO ALTERADO PELO AUTOR*\n"
                 f"━━━━━━━━━━━━━━━━\n"
