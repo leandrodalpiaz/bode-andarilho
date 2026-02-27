@@ -29,6 +29,7 @@ from src.eventos import (
 from src.cadastro_evento import cadastro_evento_handler
 from src.admin_acoes import promover_handler, rebaixar_handler
 from src.editar_perfil import editar_perfil_handler
+from src.eventos_secretario import editar_evento_secretario_handler  # NOVO
 
 # Configuração de logging
 logging.basicConfig(
@@ -90,6 +91,7 @@ async def main():
     telegram_app.add_handler(promover_handler)
     telegram_app.add_handler(rebaixar_handler)
     telegram_app.add_handler(editar_perfil_handler)
+    telegram_app.add_handler(editar_evento_secretario_handler)  # NOVO
 
     # Handlers de callback
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos, pattern="^ver_eventos$"))

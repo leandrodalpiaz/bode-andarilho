@@ -11,6 +11,10 @@ from src.eventos import (
 )
 from src.perfil import mostrar_perfil
 from src.permissoes import get_nivel
+from src.eventos_secretario import (  # NOVOS IMPORTS
+    meus_eventos, menu_gerenciar_evento, confirmar_cancelamento,
+    executar_cancelamento
+)
 
 def menu_principal_teclado(nivel: str):
     """Menu principal baseado no nível do usuário - APENAS botões permitidos."""
@@ -20,7 +24,6 @@ def menu_principal_teclado(nivel: str):
         [InlineKeyboardButton("👤 Meu cadastro", callback_data="meu_cadastro")],
     ]
 
-    # 🔥 CORREÇÃO: Apenas adiciona botões se o nível for adequado
     # Nível 2 = secretário, nível 3 = admin
     if nivel == "2" or nivel == "3":
         botoes.append([InlineKeyboardButton("📋 Área do Secretário", callback_data="area_secretario")])
@@ -54,8 +57,7 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nivel = get_nivel(telegram_id)
     data = query.data
 
-    # 🔥 CORREÇÃO: Verificação dupla de segurança (camada de ação)
-    # Se o usuário não tem permissão para a área, já responde na hora
+    # Verificação de permissão para áreas restritas
     if data == "area_secretario" and nivel not in ["2", "3"]:
         await query.edit_message_text("⛔ Você não tem permissão para acessar a Área do Secretário.")
         return
@@ -100,6 +102,15 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "encerrar_evento":
         from src.admin_acoes import encerrar_evento
         await encerrar_evento(update, context)
+    # NOVOS HANDLERS PARA GERENCIAMENTO DE EVENTOS
+    elif data == "meus_eventos":
+        await meus_eventos(update, context)
+    elif data.startswith("gerenciar_evento|"):
+        await menu_gerenciar_evento(update, context)
+    elif data.startswith("confirmar_cancelamento|"):
+        await confirmar_cancelamento(update, context)
+    elif data.startswith("cancelar_evento|"):
+        await executar_cancelamento(update, context)
     elif data == "admin_ver_membros":
         from src.admin_acoes import ver_todos_membros
         await ver_todos_membros(update, context)
@@ -128,7 +139,7 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Função em desenvolvimento ou comando não reconhecido.")
 
 async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu da área do secretário."""
+    """Menu da área do secretário (ATUALIZADO com Meus Eventos)."""
     query = update.callback_query
     await query.answer()
 
@@ -141,8 +152,8 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
+        [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],  # NOVO
         [InlineKeyboardButton("📋 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
-        [InlineKeyboardButton("🔴 Encerrar evento", callback_data="encerrar_evento")],
         [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
     ])
 

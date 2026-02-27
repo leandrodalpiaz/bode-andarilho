@@ -239,3 +239,55 @@ def listar_confirmacoes_por_evento(id_evento: str):
     except Exception as e:
         print(f"Erro ao listar confirmações: {e}")
         return []
+    
+def atualizar_evento(indice: int, evento: dict):
+    """Atualiza um evento existente na planilha."""
+    try:
+        ws = spreadsheet.worksheet("Eventos")
+        # A lista de eventos é baseada em get_all_records, precisamos encontrar a linha
+        cell_list = ws.findall(evento.get("Data do evento", ""), in_column=1)
+        for cell in cell_list:
+            row_data = ws.row_values(cell.row)
+            if row_data[3] == evento.get("Nome da loja"):  # coluna D
+                # Atualiza cada campo
+                mapeamento = {
+                    "Data do evento": 1,
+                    "Dia da semana": 2,
+                    "Hora": 3,
+                    "Nome da loja": 4,
+                    "Número da loja": 5,
+                    "Oriente": 6,
+                    "Grau": 7,
+                    "Tipo de sessão": 8,
+                    "Rito": 9,
+                    "Potência": 10,
+                    "Traje obrigatório": 11,
+                    "Ágape": 12,
+                    "Observações": 13,
+                    "Telegram ID do grupo": 14,
+                    "Telegram ID do secretário": 15,
+                    "Status": 16,
+                    "Endereço da sessão": 17,
+                }
+                for chave, valor in evento.items():
+                    coluna = mapeamento.get(chave)
+                    if coluna:
+                        ws.update_cell(cell.row, coluna, valor)
+                return True
+        return False
+    except Exception as e:
+        print(f"Erro ao atualizar evento: {e}")
+        return False
+
+def cancelar_todas_confirmacoes(id_evento: str):
+    """Remove todas as confirmações de um evento."""
+    try:
+        ws = spreadsheet.worksheet("Confirmações")
+        cell_list = ws.findall(id_evento, in_column=1)
+        # Apaga de baixo para cima para não afetar índices
+        for cell in reversed(cell_list):
+            ws.delete_rows(cell.row)
+        return True
+    except Exception as e:
+        print(f"Erro ao cancelar confirmações: {e}")
+        return False
