@@ -18,6 +18,7 @@ from telegram.ext import (
     MessageHandler, filters, ConversationHandler, ChatMemberHandler,
     ContextTypes
 )
+from telegram.request import HTTPXRequest  # 🔥 Import necessário para customizar timeouts
 
 # Importações dos seus módulos
 from src.bot import start, botao_handler
@@ -90,8 +91,15 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 # --- Função principal ---
 async def main():
     print("⚙️ Criando aplicação Telegram...")
-    telegram_app = Application.builder().token(TOKEN).updater(None).build()
-    print("✅ Aplicação criada com updater=None")
+
+    # 🔥 Cria um objeto de requisição com timeouts aumentados
+    request = HTTPXRequest(
+        connect_timeout=30.0,
+        read_timeout=30.0,
+        write_timeout=30.0
+    )
+    telegram_app = Application.builder().token(TOKEN).request(request).updater(None).build()
+    print("✅ Aplicação criada com updater=None e timeouts=30s")
 
     # 🔥 INICIALIZAÇÃO OBRIGATÓRIA
     await telegram_app.initialize()
