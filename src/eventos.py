@@ -247,11 +247,8 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
 
     botoes.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{id_evento_codificado}")])
 
-    # 🔥 NÃO ADICIONA BOTÃO VOLTAR AQUI - será tratado separadamente
     teclado = InlineKeyboardMarkup(botoes)
 
-    # 🔥 CORREÇÃO: NUNCA APAGA A MENSAGEM ORIGINAL
-    # Sempre envia como uma NOVA mensagem, nunca edita a existente
     if update.effective_chat.type in ["group", "supergroup"]:
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -259,9 +256,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
             parse_mode="Markdown",
             reply_markup=teclado
         )
-        # ✅ NÃO edita a mensagem original (query.edit_message_text NÃO é chamado)
     else:
-        # No privado, podemos editar pois é uma conversa pessoal
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=teclado)
 
 async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -339,13 +334,14 @@ async def fechar_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Mensagem fechada.")
 
 async def minhas_confirmacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra lista de eventos que o usuário confirmou."""
+    """Mostra lista de eventos que o usuário confirmou (formato de lista clicável)."""
     query = update.callback_query
     await query.answer()
 
     user_id = update.effective_user.id
     eventos = listar_eventos()
 
+    # Filtra apenas eventos que o usuário confirmou
     confirmados = []
     for evento in eventos:
         id_evento = evento.get("Data do evento", "") + " — " + evento.get("Nome da loja", "")
@@ -361,21 +357,120 @@ async def minhas_confirmacoes(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
 
-    texto = "Você tem presença confirmada em:\n\n"
+    # 🔥 Lista com as informações solicitadas: Data, Grau, Loja, Potência, Horário
+    texto = "*📋 Suas confirmações:*\n\n"
     botoes = []
+    
     for idx, evento in enumerate(confirmados):
         data = evento.get("Data do evento", "")
+        grau = evento.get("Grau", "")
         nome = evento.get("Nome da loja", "")
         numero = evento.get("Número da loja", "")
         potencia = evento.get("Potência", "")
         horario = evento.get("Hora", "")
+        
+        # Formata a data (ex: 25/03/2026 → 25/03)
+        data_curta = data[0:5] if len(data) >= 5 else data
+        
+        # 🔥 Linha da lista com todos os campos solicitados
+        texto += f"{idx+1}. 📅 *{data_curta}* — {grau} — {nome} {numero} ({potencia}) às {horario}\n"
+        
+        # Cria UM botão por evento para ver detalhes
         id_evento = f"{data} — {nome}"
         id_evento_codificado = urllib.parse.quote(id_evento, safe='')
-        texto += f"{idx+1}. 📅 {data} - {nome} {numero} - {potencia} - {horario}\n"
-        botoes.append([InlineKeyboardButton(f"❌ Cancelar {idx+1}", callback_data=f"cancelar|{id_evento_codificado}")])
+        botoes.append([InlineKeyboardButton(
+            f"🔍 Ver detalhes {idx+1}", 
+            callback_data=f"ver_detalhes_confirmado|{id_evento_codificado}"
+        )])
 
+    # Adiciona botão voltar
     botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")])
-    await query.edit_message_text(texto, reply_markup=InlineKeyboardMarkup(botoes))
+    
+    await query.edit_message_text(
+        texto, 
+        parse_mode="Markdown", 
+        reply_markup=InlineKeyboardMarkup(botoes)
+    )
+
+async def ver_detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mostra detalhes de um evento confirmado com opções de ação."""
+    query = update.callback_query
+    await query.answer()
+
+    _, id_evento_codificado = query.data.split("|", 1)
+    id_evento = urllib.parse.unquote(id_evento_codificado)
+
+    eventos = listar_eventos()
+    evento = None
+    for ev in eventos:
+        if (ev.get("Data do evento", "") + " — " + ev.get("Nome da loja", "")) == id_evento:
+            evento = ev
+            break
+
+    if not evento:
+        await query.edit_message_text("Evento não encontrado.")
+        return
+
+    # Busca a confirmação específica para este evento
+    user_id = update.effective_user.id
+    confirmacao = buscar_confirmacao(id_evento, user_id)
+    
+    if not confirmacao:
+        await query.edit_message_text("Você não está mais confirmado neste evento.")
+        return
+
+    # Formata os dados do evento
+    data = evento.get("Data do evento", "")
+    nome_loja = evento.get("Nome da loja", "")
+    numero_loja = evento.get("Número da loja", "")
+    horario = evento.get("Hora", "")
+    endereco = evento.get("Endereço da sessão", "")
+    grau = evento.get("Grau", "")
+    tipo = evento.get("Tipo de sessão", "")
+    rito = evento.get("Rito", "")
+    potencia = evento.get("Potência", "")
+    traje = evento.get("Traje obrigatório", "")
+    agape = evento.get("Ágape", "")
+    obs = evento.get("Observações", "")
+    oriente = evento.get("Oriente", "")
+    dia_semana_ingles = evento.get("Dia da semana", "")
+    dia_semana = traduzir_dia(dia_semana_ingles)
+
+    # Extrai dados da confirmação
+    participacao_agape = confirmacao.get("Ágape", "Não informado")
+
+    texto = (
+        f"📅 *{data} — {nome_loja} {numero_loja}*\n"
+        f"━━━━━━━━━━━━━━━━\n\n"
+        f"📍 Oriente: {oriente}\n"
+        f"⚜️ Potência: {potencia}\n"
+        f"📆 Dia: {dia_semana}\n"
+        f"🕕 Horário: {horario}\n"
+        f"📍 Endereço: {endereco}\n"
+        f"🔷 Grau mínimo: {grau}\n"
+        f"📋 Tipo: {tipo}\n"
+        f"✡️ Rito: {rito}\n"
+        f"👔 Traje: {traje}\n"
+        f"🍽️ Ágape: {agape}\n\n"
+        f"*Sua confirmação:*\n"
+        f"🍽 Participação no ágape: {participacao_agape}\n"
+    )
+
+    if obs and obs.strip().lower() not in ["n/a", "n", "nao", "não"]:
+        texto += f"\n📌 Obs: {obs}"
+
+    # Botões de ação (apenas 2, sempre!)
+    botoes = [
+        [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{id_evento_codificado}")],
+        [InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{id_evento_codificado}")],
+        [InlineKeyboardButton("⬅️ Voltar", callback_data="minhas_confirmacoes")]
+    ]
+
+    await query.edit_message_text(
+        texto, 
+        parse_mode="Markdown", 
+        reply_markup=InlineKeyboardMarkup(botoes)
+    )
 
 async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Processa a confirmação de presença."""
@@ -489,9 +584,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         reply_markup=botoes_privado
     )
 
-    # 🔥 NÃO APAGA A MENSAGEM ORIGINAL
     if update.effective_chat.type in ["group", "supergroup"]:
-        # Envia uma mensagem de confirmação NO GRUPO (opcional)
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="✅ Presença confirmada! Verifique seu privado para detalhes."
