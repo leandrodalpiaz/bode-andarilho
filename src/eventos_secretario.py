@@ -1,7 +1,7 @@
 # src/eventos_secretario.py
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, CallbackQueryHandler, MessageHandler, filters
-from src.sheets import listar_eventos, atualizar_evento, excluir_evento
+from src.sheets import listar_eventos, atualizar_evento
 from src.permissoes import get_nivel
 from datetime import datetime
 
