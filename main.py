@@ -7,6 +7,7 @@ import os
 import asyncio
 import logging
 import signal
+import re
 from starlette.applications import Starlette
 from starlette.routing import Route
 from starlette.requests import Request
@@ -24,12 +25,13 @@ from src.cadastro import cadastro_handler
 from src.eventos import (
     mostrar_eventos, mostrar_detalhes_evento, cancelar_presenca,
     confirmacao_presenca_handler, ver_confirmados, fechar_mensagem,
-    minhas_confirmacoes, mostrar_eventos_por_data, mostrar_eventos_por_grau
+    minhas_confirmacoes, mostrar_eventos_por_data, mostrar_eventos_por_grau,
+    detalhes_confirmado
 )
 from src.cadastro_evento import cadastro_evento_handler
 from src.admin_acoes import promover_handler, rebaixar_handler
 from src.editar_perfil import editar_perfil_handler
-from src.eventos_secretario import editar_evento_secretario_handler  # NOVO
+from src.eventos_secretario import editar_evento_secretario_handler
 
 # Configuração de logging
 logging.basicConfig(
@@ -49,6 +51,7 @@ print(f"🔧 PORT: {PORT}")
 
 # --- Handlers existentes ---
 async def mensagem_grupo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Responde a mensagens de texto enviadas em grupos."""
     if update.effective_chat.type in ["group", "supergroup"]:
         await update.message.reply_text(
             "Olá! Para interagir comigo, por favor use os botões nas mensagens de evento "
@@ -57,12 +60,28 @@ async def mensagem_grupo_handler(update: Update, context: ContextTypes.DEFAULT_T
         return
 
 async def bot_adicionado_grupo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mensagem de boas-vindas quando o bot é adicionado a um grupo."""
     if update.my_chat_member.new_chat_member.status == "member":
         await update.effective_chat.send_message(
             "Olá, irmãos! Sou o Bode Andarilho, o bot de agenda de visitas.\n\n"
             "Para interagir comigo, usem os botões nas mensagens de evento ou enviem /start no meu chat privado. "
             "No grupo, apenas publicarei eventos e lembretes. Confirmações e outras ações devem ser feitas em privado. 🐐"
         )
+
+# 🔥 NOVO HANDLER: interjeição "bode"
+async def bode_interjection_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Responde quando o usuário envia apenas a palavra 'bode' (isolada)."""
+    # Ignora comandos e mensagens sem texto
+    if not update.message or not update.message.text:
+        return
+
+    message_text = update.message.text.strip()
+    # Remove pontuação do final (.,!? etc) e converte para minúsculas
+    cleaned = re.sub(r'[.!?]+$', '', message_text).lower()
+    if cleaned == "bode":
+        # Chama a função de start (reaproveitando o fluxo existente)
+        await start(update, context)
+    # Se não for, não faz nada (outros handlers podem processar)
 
 # Handler de erro global
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -84,16 +103,22 @@ async def main():
     telegram_app.add_error_handler(error_handler)
 
     # --- Registro dos handlers ---
+    # Comandos
     telegram_app.add_handler(CommandHandler("start", start))
+
+    # Handlers de conversação (devem vir antes dos handlers de callback simples)
     telegram_app.add_handler(cadastro_handler)
     telegram_app.add_handler(cadastro_evento_handler)
     telegram_app.add_handler(confirmacao_presenca_handler)
     telegram_app.add_handler(promover_handler)
     telegram_app.add_handler(rebaixar_handler)
     telegram_app.add_handler(editar_perfil_handler)
-    telegram_app.add_handler(editar_evento_secretario_handler)  # NOVO
+    telegram_app.add_handler(editar_evento_secretario_handler)
 
-    # Handlers de callback
+    # 🔥 NOVO HANDLER: interjeição "bode" (antes do genérico)
+    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bode_interjection_handler))
+
+    # Handlers de callback específicos
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos, pattern="^ver_eventos$"))
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos_por_data, pattern="^data\\|"))
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos_por_grau, pattern="^grau\\|"))
@@ -103,7 +128,10 @@ async def main():
     telegram_app.add_handler(CallbackQueryHandler(cancelar_presenca, pattern="^confirma_cancelar\\|"))
     telegram_app.add_handler(CallbackQueryHandler(fechar_mensagem, pattern="^fechar_mensagem$"))
     telegram_app.add_handler(CallbackQueryHandler(minhas_confirmacoes, pattern="^minhas_confirmacoes$"))
+    telegram_app.add_handler(CallbackQueryHandler(detalhes_confirmado, pattern="^detalhes_confirmado\\|"))
     telegram_app.add_handler(CallbackQueryHandler(botao_handler))
+
+    # Handlers de grupo
     telegram_app.add_handler(ChatMemberHandler(bot_adicionado_grupo, ChatMemberHandler.MY_CHAT_MEMBER))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mensagem_grupo_handler))
 
