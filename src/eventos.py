@@ -334,7 +334,7 @@ async def fechar_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Mensagem fechada.")
 
 async def minhas_confirmacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra lista de eventos que o usuário confirmou (formato de lista clicável)."""
+    """Mostra lista de eventos confirmados como BOTÕES (cada botão é uma sessão)."""
     query = update.callback_query
     await query.answer()
 
@@ -357,8 +357,7 @@ async def minhas_confirmacoes(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
 
-    # 🔥 Lista com as informações solicitadas: Data, Grau, Loja, Potência, Horário
-    texto = "*📋 Suas confirmações:*\n\n"
+    # 🔥 Lista de BOTÕES (cada botão é uma sessão confirmada)
     botoes = []
     
     for idx, evento in enumerate(confirmados):
@@ -372,28 +371,30 @@ async def minhas_confirmacoes(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Formata a data (ex: 25/03/2026 → 25/03)
         data_curta = data[0:5] if len(data) >= 5 else data
         
-        # 🔥 Linha da lista com todos os campos solicitados
-        texto += f"{idx+1}. 📅 *{data_curta}* — {grau} — {nome} {numero} ({potencia}) às {horario}\n"
+        # Texto do botão com as informações da sessão
+        texto_botao = f"{data_curta} — {grau} — {nome} {numero} ({potencia}) às {horario}"
         
-        # Cria UM botão por evento para ver detalhes
+        # ID do evento para callback
         id_evento = f"{data} — {nome}"
         id_evento_codificado = urllib.parse.quote(id_evento, safe='')
+        
+        # 🔥 UM BOTÃO por sessão confirmada
         botoes.append([InlineKeyboardButton(
-            f"🔍 Ver detalhes {idx+1}", 
-            callback_data=f"ver_detalhes_confirmado|{id_evento_codificado}"
+            texto_botao, 
+            callback_data=f"detalhes_confirmado|{id_evento_codificado}"
         )])
 
     # Adiciona botão voltar
     botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")])
     
     await query.edit_message_text(
-        texto, 
+        "*📋 Selecione uma sessão para ver detalhes:*",
         parse_mode="Markdown", 
         reply_markup=InlineKeyboardMarkup(botoes)
     )
 
-async def ver_detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra detalhes de um evento confirmado com opções de ação."""
+async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mostra detalhes de uma sessão confirmada com opções Cancelar e Ver Confirmados."""
     query = update.callback_query
     await query.answer()
 
@@ -459,7 +460,7 @@ async def ver_detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_
     if obs and obs.strip().lower() not in ["n/a", "n", "nao", "não"]:
         texto += f"\n📌 Obs: {obs}"
 
-    # Botões de ação (apenas 2, sempre!)
+    # 🔥 Botões: Cancelar e Ver Confirmados (apenas 2 botões)
     botoes = [
         [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{id_evento_codificado}")],
         [InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{id_evento_codificado}")],
