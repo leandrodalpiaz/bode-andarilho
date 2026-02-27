@@ -6,12 +6,13 @@ from src.permissoes import get_nivel
 from datetime import datetime
 import os
 import re
+import urllib.parse
 
 # ID DO GRUPO PRINCIPAL
 GRUPO_PRINCIPAL_ID = os.getenv("GRUPO_PRINCIPAL_ID", "-1003721338228")
 
 # Estados da conversação para o cadastro de evento
-DATA, HORARIO, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, AGAPE_TIPO, OBSERVACOES, ENDERECO, CONFIRMAR = range(15)
+DATA, HORARIO, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, AGAPE_TIPO, OBSERVACOES_TEM, OBSERVACOES_TEXTO, ENDERECO, CONFIRMAR = range(16)
 
 # Valores que indicam "não informado"
 VALORES_NAO_INFORMADO = ["", "N/A", "n/a", "nao", "não", "n", "N", "0", "A", "a"]
@@ -135,8 +136,17 @@ async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif resposta_agape == "nao":
         context.user_data["novo_evento_agape"] = "Não"
         context.user_data["novo_evento_agape_tipo"] = "N/A"
-        await query.edit_message_text("Certo. Alguma *Observação*? (Se não houver, digite 'N/A')", parse_mode="Markdown")
-        return OBSERVACOES
+        # 🔥 CORREÇÃO: Pergunta se tem observações com botões
+        teclado_obs = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Sim", callback_data="obs_sim")],
+            [InlineKeyboardButton("Não", callback_data="obs_nao")]
+        ])
+        await query.edit_message_text(
+            "Deseja adicionar alguma *Observação*?",
+            parse_mode="Markdown",
+            reply_markup=teclado_obs
+        )
+        return OBSERVACOES_TEM
     else:
         await query.edit_message_text("Opção inválida para Ágape. Por favor, selecione 'Sim' ou 'Não'.")
         return AGAPE
@@ -154,10 +164,37 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.edit_message_text("Opção inválida para tipo de Ágape. Por favor, selecione 'Gratuito' ou 'Pago'.")
         return AGAPE_TIPO
 
-    await query.edit_message_text("Certo. Alguma *Observação*? (Se não houver, digite 'N/A')", parse_mode="Markdown")
-    return OBSERVACOES
+    # 🔥 CORREÇÃO: Pergunta se tem observações com botões
+    teclado_obs = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Sim", callback_data="obs_sim")],
+        [InlineKeyboardButton("Não", callback_data="obs_nao")]
+    ])
+    await query.edit_message_text(
+        "Deseja adicionar alguma *Observação*?",
+        parse_mode="Markdown",
+        reply_markup=teclado_obs
+    )
+    return OBSERVACOES_TEM
 
-async def receber_observacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Processa a resposta sobre se há observações."""
+    query = update.callback_query
+    await query.answer()
+    
+    resposta = query.data
+    if resposta == "obs_sim":
+        await query.edit_message_text(
+            "Por favor, digite a *Observação* do evento:",
+            parse_mode="Markdown"
+        )
+        return OBSERVACOES_TEXTO
+    else:  # obs_nao
+        context.user_data["novo_evento_observacoes"] = "N/A"
+        await query.edit_message_text("Qual o *Endereço da sessão*?", parse_mode="Markdown")
+        return ENDERECO
+
+async def receber_observacoes_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Recebe o texto da observação."""
     context.user_data["novo_evento_observacoes"] = update.message.text
     await update.message.reply_text("Qual o *Endereço da sessão*?", parse_mode="Markdown")
     return ENDERECO
@@ -257,9 +294,7 @@ async def confirmar_publicacao(update: Update, context: ContextTypes.DEFAULT_TYP
     }
     dia_semana_pt = dias.get(dados_evento['dia_semana'], dados_evento['dia_semana'])
 
-    # 🔥 CORREÇÃO: callback_data sem caracteres especiais
-    # Usar ID do evento codificado para URL
-    import urllib.parse
+    # 🔥 CORREÇÃO: Callback_data sem caracteres especiais
     id_evento = f"{dados_evento['data']} — {dados_evento['nome_loja']}"
     id_evento_codificado = urllib.parse.quote(id_evento, safe='')
 
@@ -361,7 +396,8 @@ cadastro_evento_handler = ConversationHandler(
         TRAJE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_traje)],
         AGAPE: [CallbackQueryHandler(receber_agape, pattern="^agape_(sim|nao)$")],
         AGAPE_TIPO: [CallbackQueryHandler(receber_agape_tipo, pattern="^agape_(gratuito|pago)$")],
-        OBSERVACOES: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_observacoes)],
+        OBSERVACOES_TEM: [CallbackQueryHandler(receber_observacoes_tem, pattern="^(obs_sim|obs_nao)$")],
+        OBSERVACOES_TEXTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_observacoes_texto)],
         ENDERECO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_endereco)],
         CONFIRMAR: [
             CallbackQueryHandler(confirmar_publicacao, pattern="^confirmar_publicacao$"),
