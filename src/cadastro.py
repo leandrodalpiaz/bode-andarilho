@@ -7,33 +7,28 @@ from src.sheets import buscar_membro, cadastrar_membro
 NOME, LOJA, GRAU, ORIENTE, POTENCIA, TELEFONE, FINALIZAR = range(7)
 
 async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Inicia o cadastro de membro. Se estiver em grupo, redireciona para privado."""
+    """Inicia o cadastro de membro. Se estiver em grupo, redireciona para privado automaticamente."""
     
-    # Se a interação veio de um grupo, redireciona para privado
+    # Se a interação veio de um grupo, redireciona para privado sem precisar de botão
     if update.effective_chat.type in ["group", "supergroup"]:
-        # Se for callback_query (botão)
+        # Se for callback_query (botão) - mas aqui trataremos também mensagens
         if update.callback_query:
             await update.callback_query.answer()
             await update.callback_query.edit_message_text(
-                "🔔 O cadastro deve ser feito no meu chat privado.\n\n"
-                "Por favor, clique no botão abaixo para começar:"
-            )
-            # Envia uma mensagem no privado com botão para iniciar
-            await context.bot.send_message(
-                chat_id=update.effective_user.id,
-                text="👤 *Bem-vindo ao Bode Andarilho!*\n\n"
-                     "Para começar seu cadastro, clique no botão abaixo:",
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("📝 Iniciar cadastro", callback_data="iniciar_cadastro")
-                ]])
+                "🔔 O cadastro será feito no meu chat privado. Verifique suas mensagens."
             )
         else:
             await update.message.reply_text(
-                "🔔 O cadastro deve ser feito no meu chat privado.\n\n"
-                "Por favor, clique no meu nome e envie /start no privado para começar."
+                "🔔 O cadastro será feito no meu chat privado. Verifique suas mensagens."
             )
-        return ConversationHandler.END
+        # Inicia o cadastro no privado enviando a primeira pergunta
+        await context.bot.send_message(
+            chat_id=update.effective_user.id,
+            text="Olá, irmão! Para ter acesso completo às funcionalidades do bot, preciso de algumas informações.\n\n"
+                 "Qual o seu *Nome completo*?",
+            parse_mode="Markdown"
+        )
+        return NOME  # Estado iniciado no privado
 
     # Se já está em privado, prossegue com o cadastro
     telegram_id = update.effective_user.id
@@ -58,29 +53,6 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
         return NOME
-
-async def iniciar_cadastro_privado(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Inicia o cadastro a partir do botão no privado."""
-    query = update.callback_query
-    await query.answer()
-    
-    # Verifica se já está cadastrado
-    telegram_id = update.effective_user.id
-    membro = buscar_membro(telegram_id)
-    
-    if membro:
-        await query.edit_message_text(
-            f"Você já está cadastrado como {membro.get('Nome', '')}.\n\n"
-            "Use /start para acessar o menu principal."
-        )
-        return ConversationHandler.END
-    
-    await query.edit_message_text(
-        "Olá, irmão! Para ter acesso completo às funcionalidades do bot, preciso de algumas informações.\n\n"
-        "Qual o seu *Nome completo*?",
-        parse_mode="Markdown"
-    )
-    return NOME
 
 async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["cadastro_nome"] = update.message.text
@@ -129,7 +101,7 @@ async def finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "cargo": "",
         }
         cadastrar_membro(dados_membro)
-        
+
         # Verifica se há uma ação pendente após o cadastro (ex: confirmar presença)
         if "pos_cadastro" in context.user_data:
             acao = context.user_data["pos_cadastro"]
@@ -138,7 +110,7 @@ async def finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 await iniciar_confirmacao_presenca_pos_cadastro(update, context, acao)
                 context.user_data.pop("pos_cadastro", None)
                 return ConversationHandler.END
-        
+
         await update.message.reply_text(
             "✅ *Cadastro realizado com sucesso!* Bem-vindo, irmão!\n\n"
             "Use /start para acessar o menu principal.",
@@ -159,7 +131,7 @@ async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
 cadastro_handler = ConversationHandler(
     entry_points=[
         CommandHandler("start", cadastro_start),
-        CallbackQueryHandler(iniciar_cadastro_privado, pattern="^iniciar_cadastro$")
+        # Removido CallbackQueryHandler, pois não usamos mais botão
     ],
     states={
         NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome)],

@@ -78,7 +78,6 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await fechar_mensagem(update, context)
     elif data == "minhas_confirmacoes":
         await minhas_confirmacoes(update, context)
-    # 🔥 NOVO HANDLER para detalhes de confirmação
     elif data.startswith("detalhes_confirmado|"):
         await detalhes_confirmado(update, context)
     elif data == "meu_cadastro":
@@ -119,15 +118,7 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "admin_editar_membro":
         from src.admin_acoes import editar_membro
         await editar_membro(update, context)
-    elif data == "admin_excluir_membro":
-        from src.admin_acoes import excluir_membro
-        await excluir_membro(update, context)
-    elif data == "admin_editar_evento":
-        from src.admin_acoes import editar_evento
-        await editar_evento(update, context)
-    elif data == "admin_excluir_evento":
-        from src.admin_acoes import excluir_evento
-        await excluir_evento(update, context)
+    # Botões removidos: admin_excluir_membro e admin_excluir_evento
     elif data == "admin_promover":
         from src.admin_acoes import promover_handler
         await promover_handler(update, context)
@@ -167,7 +158,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
     )
 
 async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu da área do administrador."""
+    """Menu da área do administrador (com botões removidos)."""
     query = update.callback_query
     await query.answer()
 
@@ -182,9 +173,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
         [InlineKeyboardButton("👥 Ver todos os membros", callback_data="admin_ver_membros")],
         [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
-        [InlineKeyboardButton("🗑️ Excluir membro", callback_data="admin_excluir_membro")],
-        [InlineKeyboardButton("✏️ Editar evento", callback_data="admin_editar_evento")],
-        [InlineKeyboardButton("🗑️ Excluir evento", callback_data="admin_excluir_evento")],
+        # Botões excluir_membro e excluir_evento removidos
         [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
         [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
         [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
