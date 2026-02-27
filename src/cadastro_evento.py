@@ -7,11 +7,11 @@ from datetime import datetime
 import os
 import re
 
-# ID DO GRUPO PRINCIPAL (defina aqui ou em variável de ambiente)
-GRUPO_PRINCIPAL_ID = os.getenv("GRUPO_PRINCIPAL_ID", "-1003721338228")  # Use variável de ambiente
+# ID DO GRUPO PRINCIPAL
+GRUPO_PRINCIPAL_ID = os.getenv("GRUPO_PRINCIPAL_ID", "-1003721338228")
 
 # Estados da conversação para o cadastro de evento
-DATA, HORARIO, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, AGAPE_TIPO, OBSERVACOES, ENDERECO = range(14)
+DATA, HORARIO, NOME_LOJA, NUMERO_LOJA, ORIENTE, GRAU, TIPO_SESSAO, RITO, POTENCIA, TRAJE, AGAPE, AGAPE_TIPO, OBSERVACOES, ENDERECO, CONFIRMAR = range(15)
 
 # Valores que indicam "não informado"
 VALORES_NAO_INFORMADO = ["", "N/A", "n/a", "nao", "não", "n", "N", "0", "A", "a"]
@@ -31,21 +31,19 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Armazena o ID do usuário que está cadastrando
     context.user_data["novo_evento_telegram_id_secretario"] = str(user_id)
 
-    # 🔥 CORREÇÃO 1: Se veio do grupo, captura ID mas NÃO mostra
+    # Se veio do grupo, captura ID mas não mostra
     if update.effective_chat.type in ["group", "supergroup"]:
         context.user_data["novo_evento_telegram_id_grupo"] = str(update.effective_chat.id)
         await query.edit_message_text(
             "🔔 O cadastro de eventos deve ser feito no meu chat privado.\n\n"
             "Por favor, acesse meu privado clicando no meu nome e utilize o menu 'Área do Secretário' para cadastrar."
-            # ✅ REMOVIDA a linha que mostrava o ID do grupo
         )
         return ConversationHandler.END
 
-    # 🔥 CORREÇÃO 2: Se está em privado, NÃO pergunta o ID do grupo
-    # Já define o grupo principal automaticamente
+    # Se está em privado, define grupo principal automaticamente
     context.user_data["novo_evento_telegram_id_grupo"] = GRUPO_PRINCIPAL_ID
 
-    # Inicia o cadastro perguntando a data
+    # Inicia o cadastro
     await query.edit_message_text(
         "Certo, vamos cadastrar um novo evento.\n\nQual a *Data do evento*? (Ex: 25/03/2026)",
         parse_mode="Markdown"
@@ -161,14 +159,60 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def receber_observacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["novo_evento_observacoes"] = update.message.text
-    
-    # 🔥 CORREÇÃO 3: Removeu a pergunta sobre ID do grupo
-    # Vai direto para o endereço
     await update.message.reply_text("Qual o *Endereço da sessão*?", parse_mode="Markdown")
     return ENDERECO
 
-async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def receber_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Recebe o endereço e mostra resumo para confirmação."""
     context.user_data["novo_evento_endereco"] = update.message.text
+
+    # Monta o resumo do evento
+    agape_final = context.user_data["novo_evento_agape"]
+    if agape_final == "Sim":
+        agape_final += f" ({context.user_data.get('novo_evento_agape_tipo', 'N/A')})"
+
+    # Traduzir dia da semana para o resumo
+    try:
+        data_obj = datetime.strptime(context.user_data["novo_evento_data"], "%d/%m/%Y")
+        dia_semana_ingles = data_obj.strftime("%A")
+        dias = {
+            "Monday": "Segunda-feira", "Tuesday": "Terça-feira", "Wednesday": "Quarta-feira",
+            "Thursday": "Quinta-feira", "Friday": "Sexta-feira", "Saturday": "Sábado", "Sunday": "Domingo"
+        }
+        dia_semana_pt = dias.get(dia_semana_ingles, dia_semana_ingles)
+    except:
+        dia_semana_pt = "Inválido"
+
+    resumo = (
+        f"📋 *RESUMO DO EVENTO*\n\n"
+        f"📅 Data: {context.user_data['novo_evento_data']} ({dia_semana_pt})\n"
+        f"🕕 Horário: {context.user_data['novo_evento_horario']}\n"
+        f"🏛 Loja: {context.user_data['novo_evento_nome_loja']} {context.user_data['novo_evento_numero_loja']}\n"
+        f"📍 Oriente: {context.user_data['novo_evento_oriente']}\n"
+        f"⚜️ Potência: {context.user_data['novo_evento_potencia']}\n"
+        f"🔷 Grau mínimo: {context.user_data['novo_evento_grau']}\n"
+        f"📋 Tipo: {context.user_data['novo_evento_tipo_sessao']}\n"
+        f"✡️ Rito: {context.user_data['novo_evento_rito']}\n"
+        f"👔 Traje: {context.user_data['novo_evento_traje']}\n"
+        f"🍽 Ágape: {agape_final}\n"
+        f"📌 Obs: {context.user_data['novo_evento_observacoes']}\n"
+        f"📍 Endereço: {context.user_data['novo_evento_endereco']}\n\n"
+        f"*Tudo certo?*"
+    )
+
+    botoes = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Sim, publicar", callback_data="confirmar_publicacao")],
+        [InlineKeyboardButton("🔄 Refazer cadastro", callback_data="refazer_cadastro")],
+        [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_publicacao")]
+    ])
+
+    await update.message.reply_text(resumo, parse_mode="Markdown", reply_markup=botoes)
+    return CONFIRMAR
+
+async def confirmar_publicacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Confirma e publica o evento."""
+    query = update.callback_query
+    await query.answer()
 
     agape_final = context.user_data["novo_evento_agape"]
     if agape_final == "Sim":
@@ -203,7 +247,7 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
     # Salva o evento na planilha
     cadastrar_evento(dados_evento)
 
-    # 🔥 Publica no grupo (sempre no grupo principal)
+    # Publica no grupo principal
     grupo_id_int = int(GRUPO_PRINCIPAL_ID)
     
     # Traduzir dia da semana
@@ -213,23 +257,29 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
     }
     dia_semana_pt = dias.get(dados_evento['dia_semana'], dados_evento['dia_semana'])
 
+    # 🔥 CORREÇÃO: callback_data sem caracteres especiais
+    # Usar ID do evento codificado para URL
+    import urllib.parse
+    id_evento = f"{dados_evento['data']} — {dados_evento['nome_loja']}"
+    id_evento_codificado = urllib.parse.quote(id_evento, safe='')
+
     # Determinar botões baseado no tipo de ágape
     agape_texto = dados_evento['agape'].lower()
     if "pago" in agape_texto or "dividido" in agape_texto:
         botoes = [
-            [InlineKeyboardButton("🍽 Participar com ágape (pago)", callback_data=f"confirmar_{dados_evento['data']} — {dados_evento['nome_loja']}_pago")],
-            [InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar_{dados_evento['data']} — {dados_evento['nome_loja']}_sem")],
+            [InlineKeyboardButton("🍽 Participar com ágape (pago)", callback_data=f"confirmar|{id_evento_codificado}|pago")],
+            [InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento_codificado}|sem")],
         ]
     elif "gratuito" in agape_texto:
         botoes = [
-            [InlineKeyboardButton("🍽 Participar com ágape (gratuito)", callback_data=f"confirmar_{dados_evento['data']} — {dados_evento['nome_loja']}_gratuito")],
-            [InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar_{dados_evento['data']} — {dados_evento['nome_loja']}_sem")],
+            [InlineKeyboardButton("🍽 Participar com ágape (gratuito)", callback_data=f"confirmar|{id_evento_codificado}|gratuito")],
+            [InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento_codificado}|sem")],
         ]
     else:  # sem ágape
         botoes = [
-            [InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar_{dados_evento['data']} — {dados_evento['nome_loja']}_sem")],
+            [InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_evento_codificado}|sem")],
         ]
-    botoes.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados_{dados_evento['data']} — {dados_evento['nome_loja']}")])
+    botoes.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{id_evento_codificado}")])
 
     mensagem_grupo = (
         f"🐐 *Nova sessão disponível para visitas!*\n"
@@ -258,13 +308,42 @@ async def finalizar_cadastro_evento(update: Update, context: ContextTypes.DEFAUL
     )
 
     print(f"✅ Evento publicado no grupo {grupo_id_int}")
-    await update.message.reply_text("✅ Evento cadastrado e publicado no grupo com sucesso!")
+    await query.edit_message_text("✅ Evento cadastrado e publicado no grupo com sucesso!\n\nUse /start para voltar ao menu principal.")
 
-    await update.message.reply_text("Use /start para voltar ao menu principal.")
+    # Limpa dados da sessão
+    context.user_data.clear()
+    return ConversationHandler.END
+
+async def refazer_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reinicia o cadastro do zero."""
+    query = update.callback_query
+    await query.answer()
+    
+    # Limpa dados anteriores mas mantém o ID do grupo
+    grupo_id = context.user_data.get("novo_evento_telegram_id_grupo", GRUPO_PRINCIPAL_ID)
+    secretario_id = context.user_data.get("novo_evento_telegram_id_secretario", "")
+    
+    context.user_data.clear()
+    context.user_data["novo_evento_telegram_id_grupo"] = grupo_id
+    context.user_data["novo_evento_telegram_id_secretario"] = secretario_id
+    
+    await query.edit_message_text(
+        "Vamos recomeçar o cadastro.\n\nQual a *Data do evento*? (Ex: 25/03/2026)",
+        parse_mode="Markdown"
+    )
+    return DATA
+
+async def cancelar_publicacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancela todo o processo."""
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text("Cadastro cancelado. Use /start para voltar ao menu principal.")
+    context.user_data.clear()
     return ConversationHandler.END
 
 async def cancelar_cadastro_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Cadastro de evento cancelado. Use /start para voltar ao menu principal.")
+    context.user_data.clear()
     return ConversationHandler.END
 
 cadastro_evento_handler = ConversationHandler(
@@ -283,7 +362,12 @@ cadastro_evento_handler = ConversationHandler(
         AGAPE: [CallbackQueryHandler(receber_agape, pattern="^agape_(sim|nao)$")],
         AGAPE_TIPO: [CallbackQueryHandler(receber_agape_tipo, pattern="^agape_(gratuito|pago)$")],
         OBSERVACOES: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_observacoes)],
-        ENDERECO: [MessageHandler(filters.TEXT & ~filters.COMMAND, finalizar_cadastro_evento)],
+        ENDERECO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_endereco)],
+        CONFIRMAR: [
+            CallbackQueryHandler(confirmar_publicacao, pattern="^confirmar_publicacao$"),
+            CallbackQueryHandler(refazer_cadastro, pattern="^refazer_cadastro$"),
+            CallbackQueryHandler(cancelar_publicacao, pattern="^cancelar_publicacao$")
+        ],
     },
     fallbacks=[CommandHandler("cancelar", cancelar_cadastro_evento)],
 )
