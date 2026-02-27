@@ -7,7 +7,7 @@ from src.sheets import (
 )
 from datetime import datetime
 import re
-import urllib.parse  # 🔥 NOVA IMPORTAÇÃO
+import urllib.parse
 
 # Dicionário para traduzir dias da semana para português
 DIAS_SEMANA = {
@@ -25,6 +25,19 @@ AGAPE_CHOICE = range(1)
 def traduzir_dia(dia_ingles):
     """Traduz o dia da semana para português."""
     return DIAS_SEMANA.get(dia_ingles, dia_ingles)
+
+def traduzir_dia_abreviado(dia_ingles):
+    """Traduz o dia da semana para formato abreviado (ex: Segunda)."""
+    dias_abreviados = {
+        "Monday": "Segunda",
+        "Tuesday": "Terça",
+        "Wednesday": "Quarta",
+        "Thursday": "Quinta",
+        "Friday": "Sexta",
+        "Saturday": "Sábado",
+        "Sunday": "Domingo"
+    }
+    return dias_abreviados.get(dia_ingles, dia_ingles)
 
 def extrair_tipo_agape(texto_agape):
     """Extrai o tipo de ágape do texto da planilha."""
@@ -59,8 +72,8 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for data, evs in eventos_por_data.items():
         try:
             data_obj = datetime.strptime(data, "%d/%m/%Y")
-            dia_semana = traduzir_dia(data_obj.strftime("%A"))
-            data_formatada = f"{data_obj.strftime('%d/%m')} ({dia_semana[:3]})"
+            dia_semana = traduzir_dia_abreviado(data_obj.strftime("%A"))
+            data_formatada = f"{data_obj.strftime('%d/%m')} ({dia_semana})"
         except:
             data_formatada = data
         botoes.append([InlineKeyboardButton(
@@ -141,7 +154,6 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
         potencia = evento.get("Potência", "")
         horario = evento.get("Hora", "")
         id_evento = f"{evento.get('Data do evento')} — {evento.get('Nome da loja')}"
-        # 🔥 Codifica para URL
         id_evento_codificado = urllib.parse.quote(id_evento, safe='')
         botoes.append([InlineKeyboardButton(
             f"🏛 {nome} {numero} - {potencia} - {horario}",
@@ -158,12 +170,11 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
     )
 
 async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra detalhes de um evento específico sem apagar a mensagem original."""
+    """Mostra detalhes de um evento específico SEM APAGAR a mensagem original."""
     query = update.callback_query
     await query.answer()
 
     _, id_evento_codificado = query.data.split("|", 1)
-    # 🔥 Decodifica o ID
     id_evento = urllib.parse.unquote(id_evento_codificado)
 
     eventos = listar_eventos()
@@ -236,13 +247,11 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
 
     botoes.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{id_evento_codificado}")])
 
-    if update.effective_chat.type == "private":
-        botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="ver_eventos")])
-    else:
-        botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="voltar_grupo")])
-
+    # 🔥 NÃO ADICIONA BOTÃO VOLTAR AQUI - será tratado separadamente
     teclado = InlineKeyboardMarkup(botoes)
 
+    # 🔥 CORREÇÃO: NUNCA APAGA A MENSAGEM ORIGINAL
+    # Sempre envia como uma NOVA mensagem, nunca edita a existente
     if update.effective_chat.type in ["group", "supergroup"]:
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
@@ -250,7 +259,9 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
             parse_mode="Markdown",
             reply_markup=teclado
         )
+        # ✅ NÃO edita a mensagem original (query.edit_message_text NÃO é chamado)
     else:
+        # No privado, podemos editar pois é uma conversa pessoal
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=teclado)
 
 async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -259,7 +270,6 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     _, id_evento_codificado = query.data.split("|", 1)
-    # 🔥 Decodifica o ID
     id_evento = urllib.parse.unquote(id_evento_codificado)
 
     eventos = listar_eventos()
@@ -379,7 +389,6 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         return ConversationHandler.END
 
     _, id_evento_codificado, tipo_agape = partes
-    # 🔥 Decodifica o ID
     id_evento = urllib.parse.unquote(id_evento_codificado)
 
     eventos = listar_eventos()
@@ -480,8 +489,13 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         reply_markup=botoes_privado
     )
 
+    # 🔥 NÃO APAGA A MENSAGEM ORIGINAL
     if update.effective_chat.type in ["group", "supergroup"]:
-        await query.edit_message_text("✅ Presença confirmada! Verifique seu privado para detalhes.")
+        # Envia uma mensagem de confirmação NO GRUPO (opcional)
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="✅ Presença confirmada! Verifique seu privado para detalhes."
+        )
     else:
         await query.edit_message_text("✅ Presença confirmada! Verifique a mensagem acima.")
 
