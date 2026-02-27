@@ -7,14 +7,10 @@ from src.cadastro import cadastro_start
 from src.eventos import (
     mostrar_eventos, mostrar_detalhes_evento, cancelar_presenca,
     ver_confirmados, minhas_confirmacoes, mostrar_eventos_por_data,
-    mostrar_eventos_por_grau, fechar_mensagem
+    mostrar_eventos_por_grau, fechar_mensagem, detalhes_confirmado
 )
 from src.perfil import mostrar_perfil
 from src.permissoes import get_nivel
-from src.eventos_secretario import (  # NOVOS IMPORTS
-    meus_eventos, menu_gerenciar_evento, confirmar_cancelamento,
-    executar_cancelamento
-)
 
 def menu_principal_teclado(nivel: str):
     """Menu principal baseado no nível do usuário - APENAS botões permitidos."""
@@ -82,6 +78,9 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await fechar_mensagem(update, context)
     elif data == "minhas_confirmacoes":
         await minhas_confirmacoes(update, context)
+    # 🔥 NOVO HANDLER para detalhes de confirmação
+    elif data.startswith("detalhes_confirmado|"):
+        await detalhes_confirmado(update, context)
     elif data == "meu_cadastro":
         await mostrar_perfil(update, context)
     elif data == "area_secretario":
@@ -102,14 +101,17 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "encerrar_evento":
         from src.admin_acoes import encerrar_evento
         await encerrar_evento(update, context)
-    # NOVOS HANDLERS PARA GERENCIAMENTO DE EVENTOS
     elif data == "meus_eventos":
+        from src.eventos_secretario import meus_eventos
         await meus_eventos(update, context)
     elif data.startswith("gerenciar_evento|"):
+        from src.eventos_secretario import menu_gerenciar_evento
         await menu_gerenciar_evento(update, context)
     elif data.startswith("confirmar_cancelamento|"):
+        from src.eventos_secretario import confirmar_cancelamento
         await confirmar_cancelamento(update, context)
     elif data.startswith("cancelar_evento|"):
+        from src.eventos_secretario import executar_cancelamento
         await executar_cancelamento(update, context)
     elif data == "admin_ver_membros":
         from src.admin_acoes import ver_todos_membros
@@ -139,7 +141,7 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Função em desenvolvimento ou comando não reconhecido.")
 
 async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu da área do secretário (ATUALIZADO com Meus Eventos)."""
+    """Menu da área do secretário."""
     query = update.callback_query
     await query.answer()
 
@@ -152,7 +154,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
-        [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],  # NOVO
+        [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
         [InlineKeyboardButton("📋 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
         [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
     ])
