@@ -53,7 +53,7 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nivel = get_nivel(telegram_id)
     data = query.data
 
-    # Verificação de permissão para áreas restritas
+    # Verificação de permissão para áreas restritas (já com redirecionamento implícito)
     if data == "area_secretario" and nivel not in ["2", "3"]:
         await query.edit_message_text("⛔ Você não tem permissão para acessar a Área do Secretário.")
         return
@@ -118,7 +118,6 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "admin_editar_membro":
         from src.admin_acoes import editar_membro
         await editar_membro(update, context)
-    # Botões removidos: admin_excluir_membro e admin_excluir_evento
     elif data == "admin_promover":
         from src.admin_acoes import promover_handler
         await promover_handler(update, context)
@@ -132,10 +131,30 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Função em desenvolvimento ou comando não reconhecido.")
 
 async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu da área do secretário."""
+    """Menu da área do secretário. Se estiver em grupo, redireciona para privado."""
     query = update.callback_query
     await query.answer()
 
+    # Se estiver em grupo, redireciona para privado
+    if update.effective_chat.type in ["group", "supergroup"]:
+        await query.edit_message_text(
+            "🔔 A Área do Secretário será aberta no meu chat privado. "
+            "Verifique suas mensagens."
+        )
+        await context.bot.send_message(
+            chat_id=update.effective_user.id,
+            text="📋 *Área do Secretário*\n\nO que deseja fazer?",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
+                [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
+                [InlineKeyboardButton("📋 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
+                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")]
+            ])
+        )
+        return
+
+    # Se já está em privado, mostra o menu normalmente
     telegram_id = update.effective_user.id
     nivel = get_nivel(telegram_id)
 
@@ -158,10 +177,33 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
     )
 
 async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu da área do administrador (com botão Gerenciar eventos)."""
+    """Menu da área do administrador. Se estiver em grupo, redireciona para privado."""
     query = update.callback_query
     await query.answer()
 
+    # Se estiver em grupo, redireciona para privado
+    if update.effective_chat.type in ["group", "supergroup"]:
+        await query.edit_message_text(
+            "🔔 A Área do Administrador será aberta no meu chat privado. "
+            "Verifique suas mensagens."
+        )
+        await context.bot.send_message(
+            chat_id=update.effective_user.id,
+            text="⚙️ *Área do Administrador*\n\nO que deseja fazer?",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
+                [InlineKeyboardButton("📋 Gerenciar eventos", callback_data="meus_eventos")],
+                [InlineKeyboardButton("👥 Ver todos os membros", callback_data="admin_ver_membros")],
+                [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
+                [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
+                [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
+                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")]
+            ])
+        )
+        return
+
+    # Se já está em privado, mostra o menu normalmente
     telegram_id = update.effective_user.id
     nivel = get_nivel(telegram_id)
 
@@ -171,7 +213,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
-        [InlineKeyboardButton("📋 Gerenciar eventos", callback_data="meus_eventos")],  # 🔥 NOVO BOTÃO
+        [InlineKeyboardButton("📋 Gerenciar eventos", callback_data="meus_eventos")],
         [InlineKeyboardButton("👥 Ver todos os membros", callback_data="admin_ver_membros")],
         [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
         [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],

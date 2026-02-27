@@ -5,6 +5,7 @@ from src.sheets import listar_eventos, atualizar_evento, cancelar_todas_confirma
 from src.permissoes import get_nivel
 from datetime import datetime
 import urllib.parse
+import re
 
 # Estados da conversação
 SELECIONAR_EVENTO, CONFIRMAR_EXCLUSAO, EDITAR_CAMPO, NOVO_VALOR = range(4)
@@ -25,6 +26,13 @@ CAMPOS_EVENTO = {
     "observacoes": {"nome": "Observações", "chave": "Observações"},
     "endereco": {"nome": "Endereço", "chave": "Endereço da sessão"},
 }
+
+def sanitizar_callback(texto: str) -> str:
+    """Remove caracteres especiais e substitui espaços por underline para callback_data seguro."""
+    if not isinstance(texto, str):
+        texto = str(texto)
+    # Substitui caracteres não alfanuméricos (exceto underline) por underline
+    return re.sub(r'[^a-zA-Z0-9_]', '_', texto)
 
 async def meus_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Lista eventos criados pelo secretário atual (ou todos se admin)."""
@@ -59,10 +67,11 @@ async def meus_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         status = "✅" if evento.get("Status") == "Ativo" else "❌"
         # Usar identificador baseado em data+nome (mais estável que índice)
         id_evento = f"{data} — {nome}"
-        id_evento_codificado = urllib.parse.quote(id_evento, safe='')
+        # 🔥 Sanitiza o id_evento para remover caracteres especiais
+        id_evento_sanitizado = sanitizar_callback(id_evento)
         botoes.append([InlineKeyboardButton(
             f"{status} {data} - {nome} {numero}",
-            callback_data=f"gerenciar_evento|{id_evento_codificado}"
+            callback_data=f"gerenciar_evento|{id_evento_sanitizado}"
         )])
 
     botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")])
@@ -73,14 +82,17 @@ async def menu_gerenciar_evento(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
 
-    _, id_evento_codificado = query.data.split("|", 1)
-    id_evento = urllib.parse.unquote(id_evento_codificado)
-
+    _, id_evento_sanitizado = query.data.split("|", 1)
+    # Como sanitizamos, precisamos reconstruir o id original? Não, vamos armazenar no user_data
+    # Mas precisamos encontrar o evento correspondente na lista.
     eventos = listar_eventos()
     evento = None
+    id_evento_real = None
     for ev in eventos:
-        if (ev.get("Data do evento", "") + " — " + ev.get("Nome da loja", "")) == id_evento:
+        id_teste = f"{ev.get('Data do evento', '')} — {ev.get('Nome da loja', '')}"
+        if sanitizar_callback(id_teste) == id_evento_sanitizado:
             evento = ev
+            id_evento_real = id_teste
             break
 
     if not evento:
@@ -97,8 +109,9 @@ async def menu_gerenciar_evento(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     context.user_data["evento_gerenciando"] = {
-        "id_evento": id_evento,
-        "evento": evento
+        "id_evento": id_evento_real,
+        "evento": evento,
+        "id_sanitizado": id_evento_sanitizado
     }
 
     data = evento.get("Data do evento", "")
@@ -113,8 +126,8 @@ async def menu_gerenciar_evento(update: Update, context: ContextTypes.DEFAULT_TY
     )
 
     botoes = [
-        [InlineKeyboardButton("✏️ Editar evento", callback_data=f"editar_evento|{id_evento_codificado}")],
-        [InlineKeyboardButton("❌ Cancelar evento", callback_data=f"confirmar_cancelamento|{id_evento_codificado}")],
+        [InlineKeyboardButton("✏️ Editar evento", callback_data=f"editar_evento|{id_evento_sanitizado}")],
+        [InlineKeyboardButton("❌ Cancelar evento", callback_data=f"confirmar_cancelamento|{id_evento_sanitizado}")],
         [InlineKeyboardButton("⬅️ Voltar", callback_data="meus_eventos")]
     ]
 
@@ -125,13 +138,12 @@ async def confirmar_cancelamento(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     await query.answer()
 
-    _, id_evento_codificado = query.data.split("|", 1)
-    id_evento = urllib.parse.unquote(id_evento_codificado)
-
+    _, id_evento_sanitizado = query.data.split("|", 1)
     eventos = listar_eventos()
     evento = None
     for ev in eventos:
-        if (ev.get("Data do evento", "") + " — " + ev.get("Nome da loja", "")) == id_evento:
+        id_teste = f"{ev.get('Data do evento', '')} — {ev.get('Nome da loja', '')}"
+        if sanitizar_callback(id_teste) == id_evento_sanitizado:
             evento = ev
             break
 
@@ -154,8 +166,8 @@ async def confirmar_cancelamento(update: Update, context: ContextTypes.DEFAULT_T
     )
 
     botoes = [
-        [InlineKeyboardButton("✅ Sim, cancelar", callback_data=f"cancelar_evento|{id_evento_codificado}")],
-        [InlineKeyboardButton("🔙 Não, voltar", callback_data=f"gerenciar_evento|{id_evento_codificado}")]
+        [InlineKeyboardButton("✅ Sim, cancelar", callback_data=f"cancelar_evento|{id_evento_sanitizado}")],
+        [InlineKeyboardButton("🔙 Não, voltar", callback_data=f"gerenciar_evento|{id_evento_sanitizado}")]
     ]
 
     await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(botoes))
@@ -165,16 +177,17 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
 
-    _, id_evento_codificado = query.data.split("|", 1)
-    id_evento = urllib.parse.unquote(id_evento_codificado)
-
+    _, id_evento_sanitizado = query.data.split("|", 1)
     eventos = listar_eventos()
     evento = None
     indice = None
+    id_evento_real = None
     for i, ev in enumerate(eventos):
-        if (ev.get("Data do evento", "") + " — " + ev.get("Nome da loja", "")) == id_evento:
+        id_teste = f"{ev.get('Data do evento', '')} — {ev.get('Nome da loja', '')}"
+        if sanitizar_callback(id_teste) == id_evento_sanitizado:
             evento = ev
             indice = i
+            id_evento_real = id_teste
             break
 
     if not evento:
@@ -186,11 +199,10 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
     atualizar_evento(indice, evento)  # Usa o índice real
 
     # Remove todas as confirmações deste evento
-    cancelar_todas_confirmacoes(id_evento)
+    cancelar_todas_confirmacoes(id_evento_real)
 
     # Publica aviso no grupo
     grupo_id = evento.get("Telegram ID do grupo")
-    # 🔥 CORREÇÃO: converter para string antes de strip
     if grupo_id and str(grupo_id).strip() not in ["", "N/A", "n/a"]:
         try:
             grupo_id_int = int(float(str(grupo_id).strip()))
@@ -226,14 +238,15 @@ async def iniciar_edicao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    _, id_evento_codificado = query.data.split("|", 1)
-    id_evento = urllib.parse.unquote(id_evento_codificado)
-
+    _, id_evento_sanitizado = query.data.split("|", 1)
     eventos = listar_eventos()
     evento = None
+    id_evento_real = None
     for ev in eventos:
-        if (ev.get("Data do evento", "") + " — " + ev.get("Nome da loja", "")) == id_evento:
+        id_teste = f"{ev.get('Data do evento', '')} — {ev.get('Nome da loja', '')}"
+        if sanitizar_callback(id_teste) == id_evento_sanitizado:
             evento = ev
+            id_evento_real = id_teste
             break
 
     if not evento:
@@ -241,8 +254,9 @@ async def iniciar_edicao(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     context.user_data["editando_evento"] = {
-        "id_evento": id_evento,
-        "evento": evento
+        "id_evento": id_evento_real,
+        "evento": evento,
+        "id_sanitizado": id_evento_sanitizado
     }
 
     # Cria botões para cada campo editável
@@ -254,7 +268,7 @@ async def iniciar_edicao(update: Update, context: ContextTypes.DEFAULT_TYPE):
             callback_data=f"editar_campo_evento|{campo_id}"
         )])
 
-    botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data=f"gerenciar_evento|{id_evento_codificado}")])
+    botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data=f"gerenciar_evento|{id_evento_sanitizado}")])
 
     await query.edit_message_text(
         "📝 *Editar Evento*\n\n"
@@ -300,8 +314,9 @@ async def receber_novo_valor_evento(update: Update, context: ContextTypes.DEFAUL
         await update.message.reply_text("Erro: dados não encontrados. Tente novamente.")
         return ConversationHandler.END
 
-    id_evento = dados["id_evento"]
+    id_evento_real = dados["id_evento"]
     evento = dados["evento"]
+    id_evento_sanitizado = dados["id_sanitizado"]
 
     # Atualiza o campo
     evento[campo_info["chave"]] = novo_valor
@@ -310,7 +325,7 @@ async def receber_novo_valor_evento(update: Update, context: ContextTypes.DEFAUL
     eventos = listar_eventos()
     indice = None
     for i, ev in enumerate(eventos):
-        if (ev.get("Data do evento", "") + " — " + ev.get("Nome da loja", "")) == id_evento:
+        if (ev.get("Data do evento", "") + " — " + ev.get("Nome da loja", "")) == id_evento_real:
             indice = i
             break
 
