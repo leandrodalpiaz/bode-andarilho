@@ -16,9 +16,18 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.callback_query.answer()
             await update.callback_query.edit_message_text(
                 "🔔 O cadastro deve ser feito no meu chat privado.\n\n"
-                "Por favor, clique no meu nome e envie /start no privado para começar."
+                "Por favor, clique no botão abaixo para começar:"
             )
-        # Se for mensagem de texto
+            # Envia uma mensagem no privado com botão para iniciar
+            await context.bot.send_message(
+                chat_id=update.effective_user.id,
+                text="👤 *Bem-vindo ao Bode Andarilho!*\n\n"
+                     "Para começar seu cadastro, clique no botão abaixo:",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("📝 Iniciar cadastro", callback_data="iniciar_cadastro")
+                ]])
+            )
         else:
             await update.message.reply_text(
                 "🔔 O cadastro deve ser feito no meu chat privado.\n\n"
@@ -50,6 +59,29 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return NOME
 
+async def iniciar_cadastro_privado(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Inicia o cadastro a partir do botão no privado."""
+    query = update.callback_query
+    await query.answer()
+    
+    # Verifica se já está cadastrado
+    telegram_id = update.effective_user.id
+    membro = buscar_membro(telegram_id)
+    
+    if membro:
+        await query.edit_message_text(
+            f"Você já está cadastrado como {membro.get('Nome', '')}.\n\n"
+            "Use /start para acessar o menu principal."
+        )
+        return ConversationHandler.END
+    
+    await query.edit_message_text(
+        "Olá, irmão! Para ter acesso completo às funcionalidades do bot, preciso de algumas informações.\n\n"
+        "Qual o seu *Nome completo*?",
+        parse_mode="Markdown"
+    )
+    return NOME
+
 async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["cadastro_nome"] = update.message.text
     await update.message.reply_text("Qual o nome da sua *Loja*?", parse_mode="Markdown")
@@ -77,7 +109,11 @@ async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receber_telefone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["cadastro_telefone"] = update.message.text
-    await update.message.reply_text("Obrigado! Confirmando seus dados. Digite 'confirmar' para finalizar o cadastro.", parse_mode="Markdown")
+    await update.message.reply_text(
+        "Obrigado! Agora preciso confirmar seus dados.\n\n"
+        "Digite *'confirmar'* para finalizar o cadastro.",
+        parse_mode="Markdown"
+    )
     return FINALIZAR
 
 async def finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -104,12 +140,16 @@ async def finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 return ConversationHandler.END
         
         await update.message.reply_text(
-            "✅ Cadastro realizado com sucesso! Bem-vindo, irmão!\n\n"
-            "Use /start para acessar o menu principal."
+            "✅ *Cadastro realizado com sucesso!* Bem-vindo, irmão!\n\n"
+            "Use /start para acessar o menu principal.",
+            parse_mode="Markdown"
         )
         return ConversationHandler.END
     else:
-        await update.message.reply_text("Por favor, digite 'confirmar' para finalizar ou /cancelar para abortar.")
+        await update.message.reply_text(
+            "Por favor, digite *'confirmar'* para finalizar ou /cancelar para abortar.",
+            parse_mode="Markdown"
+        )
         return FINALIZAR
 
 async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -119,7 +159,7 @@ async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
 cadastro_handler = ConversationHandler(
     entry_points=[
         CommandHandler("start", cadastro_start),
-        CallbackQueryHandler(cadastro_start, pattern="^iniciar_cadastro$")
+        CallbackQueryHandler(iniciar_cadastro_privado, pattern="^iniciar_cadastro$")
     ],
     states={
         NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome)],
