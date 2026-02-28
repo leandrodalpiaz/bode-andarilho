@@ -2,12 +2,17 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, CommandHandler, filters, CallbackQueryHandler
 from src.sheets import buscar_membro, cadastrar_membro
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Estados da conversação para o cadastro de membro
 NOME, DATA_NASC, GRAU, LOJA, NUMERO_LOJA, ORIENTE, POTENCIA, CONFIRMAR = range(8)
 
 async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia o cadastro de membro. Se estiver em grupo, redireciona para privado."""
+    logger.info(f"cadastro_start chamado - chat_type: {update.effective_chat.type}, user_id: {update.effective_user.id}")
+    
     if update.effective_chat.type in ["group", "supergroup"]:
         if update.callback_query:
             await update.callback_query.answer()
@@ -28,6 +33,7 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")
             ]])
         )
+        logger.info(f"Primeira pergunta enviada para o privado do usuário {update.effective_user.id}")
         return NOME
 
     # Já está em privado
@@ -54,6 +60,7 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")
             ]])
         )
+        logger.info(f"Iniciando cadastro no privado para usuário {telegram_id}")
         return NOME
 
 async def navegacao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -61,6 +68,7 @@ async def navegacao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     await query.answer()
     data = query.data
+    logger.info(f"navegacao_callback: data={data}, user={update.effective_user.id}")
 
     if data == "cancelar":
         await cancelar_cadastro(update, context)
@@ -73,6 +81,7 @@ async def navegacao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def enviar_pergunta_estado(update: Update, context: ContextTypes.DEFAULT_TYPE, estado: int):
     """Envia a pergunta correspondente ao estado, com botões de navegação."""
+    logger.info(f"enviar_pergunta_estado: estado={estado}, user={update.effective_user.id}")
     texto = ""
     botoes = []
 
@@ -118,42 +127,49 @@ async def enviar_pergunta_estado(update: Update, context: ContextTypes.DEFAULT_T
         )
 
 async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"receber_nome chamado: user={update.effective_user.id}, text={update.message.text}")
     context.user_data["cadastro_nome"] = update.message.text
     await enviar_pergunta_estado(update, context, DATA_NASC)
     return DATA_NASC
 
 async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"receber_data_nasc chamado: user={update.effective_user.id}, text={update.message.text}")
     context.user_data["cadastro_data_nasc"] = update.message.text
     await enviar_pergunta_estado(update, context, GRAU)
     return GRAU
 
 async def receber_grau(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"receber_grau chamado: user={update.effective_user.id}, text={update.message.text}")
     context.user_data["cadastro_grau"] = update.message.text
     await enviar_pergunta_estado(update, context, LOJA)
     return LOJA
 
 async def receber_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"receber_loja chamado: user={update.effective_user.id}, text={update.message.text}")
     context.user_data["cadastro_loja"] = update.message.text
     await enviar_pergunta_estado(update, context, NUMERO_LOJA)
     return NUMERO_LOJA
 
 async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"receber_numero_loja chamado: user={update.effective_user.id}, text={update.message.text}")
     context.user_data["cadastro_numero_loja"] = update.message.text
     await enviar_pergunta_estado(update, context, ORIENTE)
     return ORIENTE
 
 async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"receber_oriente chamado: user={update.effective_user.id}, text={update.message.text}")
     context.user_data["cadastro_oriente"] = update.message.text
     await enviar_pergunta_estado(update, context, POTENCIA)
     return POTENCIA
 
 async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"receber_potencia chamado: user={update.effective_user.id}, text={update.message.text}")
     context.user_data["cadastro_potencia"] = update.message.text
-    # Exibe resumo
     await mostrar_resumo(update, context)
     return CONFIRMAR
 
 async def mostrar_resumo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"mostrar_resumo chamado: user={update.effective_user.id}")
     nome = context.user_data.get("cadastro_nome", "")
     data_nasc = context.user_data.get("cadastro_data_nasc", "")
     grau = context.user_data.get("cadastro_grau", "")
@@ -196,6 +212,7 @@ async def confirmar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Salva os dados na planilha e finaliza."""
     query = update.callback_query
     await query.answer()
+    logger.info(f"confirmar_cadastro chamado: user={update.effective_user.id}")
 
     dados_membro = {
         "nome": context.user_data["cadastro_nome"],
@@ -228,6 +245,7 @@ async def confirmar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cancela o cadastro e limpa os dados."""
+    logger.info(f"cancelar_cadastro chamado: user={update.effective_user.id}")
     if update.callback_query:
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(
