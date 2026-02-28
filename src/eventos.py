@@ -260,7 +260,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=teclado)
 
 async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra lista de confirmados em mensagem temporária (com novo formato)."""
+    """Mostra lista de confirmados em uma NOVA mensagem (não edita a original)."""
     query = update.callback_query
     await query.answer()
 
@@ -323,10 +323,16 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     botoes.append([InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")])
     teclado = InlineKeyboardMarkup(botoes)
 
-    await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=teclado)
+    # 🔥 Envia uma NOVA mensagem em vez de editar a original
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=texto,
+        parse_mode="Markdown",
+        reply_markup=teclado
+    )
 
 async def fechar_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Fecha (apaga) uma mensagem temporária."""
+    """Fecha (apaga) uma mensagem temporária (a lista de confirmados)."""
     query = update.callback_query
     await query.answer()
     try:
@@ -509,7 +515,6 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
 
     ja_confirmou = buscar_confirmacao(id_evento, user_id)
     if ja_confirmou:
-        # 🔥 Se já confirmou, pergunta se quer cancelar
         botoes_confirmado = InlineKeyboardMarkup([
             [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{id_evento_codificado}")],
             [InlineKeyboardButton("🔙 Manter confirmação", callback_data=f"evento|{id_evento_codificado}")]
@@ -544,9 +549,6 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     }
     registrar_confirmacao(dados_confirmacao)
 
-    # 🔥 IMPORTANTE: NÃO APAGA A MENSAGEM ORIGINAL DO GRUPO
-    # Apenas envia confirmação no privado
-    
     # Enviar mensagem de confirmação no privado
     data = evento.get("Data do evento", "")
     nome_loja = evento.get("Nome da loja", "")
@@ -578,11 +580,10 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         reply_markup=botoes_privado
     )
 
-    # 🔥 Responde no grupo sem apagar a mensagem original
+    # 🔥 Não apaga a mensagem original do grupo
     if update.effective_chat.type in ["group", "supergroup"]:
-        # Apenas responde ao callback com OK, sem postar nada no grupo
+        # Apenas responde ao callback sem editar a mensagem
         await query.answer("Presença confirmada! Verifique seu privado.")
-        # Não edita nem apaga a mensagem original
     else:
         await query.edit_message_text("✅ Presença confirmada! Verifique a mensagem acima.")
 
