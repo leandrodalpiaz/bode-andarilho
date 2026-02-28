@@ -212,11 +212,19 @@ async def main():
     await server.serve()
 
 async def shutdown(server, telegram_app):
-    """Desligamento gracioso simplificado."""
+    """Desligamento gracioso com timeout para evitar conflitos."""
     print("🛑 Desligando servidor...")
     server.should_exit = True
-    await telegram_app.stop()
-    await telegram_app.shutdown()
+    
+    # Aguarda um pouco para garantir que o servidor pare
+    await asyncio.sleep(2)
+    
+    try:
+        await telegram_app.stop()
+        await telegram_app.shutdown()
+    except Exception as e:
+        logger.error(f"Erro ao parar aplicação: {e}")
+    
     print("👋 Bot finalizado com sucesso.")
 
 if __name__ == "__main__":
