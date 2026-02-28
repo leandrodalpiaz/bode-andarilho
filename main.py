@@ -70,12 +70,20 @@ async def bot_adicionado_grupo(update: Update, context: ContextTypes.DEFAULT_TYP
             "No grupo, apenas publicarei eventos e lembretes. Confirmações e outras ações devem ser feitas em privado. 🐐"
         )
 
-# 🔥 NOVO HANDLER: interjeição "bode"
+# 🔥 NOVO HANDLER: interjeição "bode" (agora verifica se usuário está em conversa)
 async def bode_interjection_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Responde quando o usuário envia apenas a palavra 'bode' (isolada)."""
+    """Responde quando o usuário envia apenas a palavra 'bode' (isolada), 
+    mas ignora se o usuário já está em uma conversa ativa."""
     logger.info(f"bode_interjection_handler: user={update.effective_user.id}, text='{update.message.text}'")
+    
     # Ignora comandos e mensagens sem texto
     if not update.message or not update.message.text:
+        return
+
+    # 🔥 Verifica se o usuário já tem uma conversa ativa (user_data não vazio)
+    # Isso indica que ele está no meio de um fluxo (cadastro, edição, etc.)
+    if context.user_data:
+        logger.info(f"bode_interjection_handler: usuário {update.effective_user.id} está em conversa ativa. Ignorando.")
         return
 
     message_text = update.message.text.strip()
