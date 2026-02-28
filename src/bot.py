@@ -20,7 +20,6 @@ def menu_principal_teclado(nivel: str):
         [InlineKeyboardButton("👤 Meu cadastro", callback_data="meu_cadastro")],
     ]
 
-    # Nível 2 = secretário, nível 3 = admin
     if nivel == "2" or nivel == "3":
         botoes.append([InlineKeyboardButton("📋 Área do Secretário", callback_data="area_secretario")])
 
@@ -30,7 +29,43 @@ def menu_principal_teclado(nivel: str):
     return InlineKeyboardMarkup(botoes)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler para comando /start."""
+    """Handler para comando /start ou palavra 'bode'. Redireciona para privado se estiver em grupo."""
+    # Se estiver em grupo, redireciona para privado
+    if update.effective_chat.type in ["group", "supergroup"]:
+        # Se for comando /start via texto
+        if update.message:
+            await update.message.reply_text(
+                "🔔 Vamos continuar a conversa no meu chat privado. "
+                "Por favor, clique no meu nome e envie /start (ou 'bode') no privado."
+            )
+        # Se for callback_query (não deve acontecer para start, mas por segurança)
+        elif update.callback_query:
+            await update.callback_query.answer()
+            await update.callback_query.edit_message_text(
+                "🔔 Vamos continuar a conversa no meu chat privado. "
+                "Verifique suas mensagens."
+            )
+        # Inicia a conversa no privado
+        await context.bot.send_message(
+            chat_id=update.effective_user.id,
+            text="Olá! Bem-vindo ao Bode Andarilho. Como posso ajudar?",
+            reply_markup=menu_principal_teclado("1")  # Menu padrão, mas será ajustado após verificar cadastro
+        )
+        # Agora, precisamos verificar se o usuário já é cadastrado e enviar o menu correto
+        telegram_id = update.effective_user.id
+        membro = buscar_membro(telegram_id)
+        if membro:
+            nivel = get_nivel(telegram_id)
+            await context.bot.send_message(
+                chat_id=telegram_id,
+                text=f"Bem-vindo de volta, irmão {membro.get('Nome', '')}!",
+                reply_markup=menu_principal_teclado(nivel)
+            )
+        else:
+            await cadastro_start(update, context)  # Inicia cadastro no privado
+        return  # Não processa mais no grupo
+
+    # Se já está em privado, prossegue normalmente
     telegram_id = update.effective_user.id
     membro = buscar_membro(telegram_id)
 
@@ -53,7 +88,7 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nivel = get_nivel(telegram_id)
     data = query.data
 
-    # Verificação de permissão para áreas restritas (já com redirecionamento implícito)
+    # Verificação de permissão para áreas restritas
     if data == "area_secretario" and nivel not in ["2", "3"]:
         await query.edit_message_text("⛔ Você não tem permissão para acessar a Área do Secretário.")
         return
@@ -135,7 +170,6 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     await query.answer()
 
-    # Se estiver em grupo, redireciona para privado
     if update.effective_chat.type in ["group", "supergroup"]:
         await query.edit_message_text(
             "🔔 A Área do Secretário será aberta no meu chat privado. "
@@ -154,7 +188,6 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
         )
         return
 
-    # Se já está em privado, mostra o menu normalmente
     telegram_id = update.effective_user.id
     nivel = get_nivel(telegram_id)
 
@@ -181,7 +214,6 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     await query.answer()
 
-    # Se estiver em grupo, redireciona para privado
     if update.effective_chat.type in ["group", "supergroup"]:
         await query.edit_message_text(
             "🔔 A Área do Administrador será aberta no meu chat privado. "
@@ -203,7 +235,6 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
 
-    # Se já está em privado, mostra o menu normalmente
     telegram_id = update.effective_user.id
     nivel = get_nivel(telegram_id)
 
