@@ -4,17 +4,73 @@ from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, Comm
 from src.sheets import buscar_membro, cadastrar_membro
 import logging
 import traceback
+import os
 
 logger = logging.getLogger(__name__)
 
 # Estados da conversação para o cadastro de membro
 NOME, DATA_NASC, GRAU, LOJA, NUMERO_LOJA, ORIENTE, POTENCIA, CONFIRMAR = range(8)
 
+# ID do grupo principal (configurado como variável de ambiente)
+GRUPO_PRINCIPAL_ID = os.getenv("GRUPO_PRINCIPAL_ID", "-1003721338228")
+
+async def verificar_membro_no_grupo(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """
+    Verifica se o usuário é membro do grupo principal.
+    Retorna True se for membro, False caso contrário.
+    O bot precisa ser administrador do grupo para esta função funcionar.
+    """
+    try:
+        # Tenta obter informações do membro no grupo
+        chat_member = await context.bot.get_chat_member(
+            chat_id=int(GRUPO_PRINCIPAL_ID),
+            user_id=user_id
+        )
+        
+        # Verifica se o status indica que o usuário é membro ativo
+        # Status possíveis: 'creator', 'administrator', 'member', 'restricted', 'left', 'kicked'
+        if chat_member.status in ['creator', 'administrator', 'member', 'restricted']:
+            logger.info(f"Usuário {user_id} é membro do grupo. Status: {chat_member.status}")
+            return True
+        else:
+            logger.info(f"Usuário {user_id} NÃO é membro do grupo. Status: {chat_member.status}")
+            return False
+            
+    except Exception as e:
+        # Se der erro (ex: bot não é admin, usuário não encontrado), consideramos como não membro
+        logger.error(f"Erro ao verificar membro {user_id} no grupo: {e}")
+        return False
+
 async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia o cadastro de membro. Se estiver em grupo, redireciona para privado."""
     logger.info(f"cadastro_start chamado - chat_type: {update.effective_chat.type}, user_id: {update.effective_user.id}")
     
     try:
+        # 🔒 Verifica se o usuário é membro do grupo (apenas quando iniciar)
+        user_id = update.effective_user.id
+        is_member = await verificar_membro_no_grupo(user_id, context)
+        
+        if not is_member:
+            # Usuário não é membro do grupo - bloqueia cadastro
+            mensagem_bloqueio = (
+                "⛔ *Cadastro não permitido*\n\n"
+                "Para utilizar o Bode Andarilho, você precisa ser membro do grupo oficial.\n\n"
+                "Por favor, entre em contato com o **secretário da sua loja** para ser adicionado ao grupo. "
+                "Somente membros do grupo podem se cadastrar no bot."
+            )
+            
+            if update.effective_chat.type in ["group", "supergroup"]:
+                if update.callback_query:
+                    await update.callback_query.answer()
+                    await update.callback_query.edit_message_text(mensagem_bloqueio, parse_mode="Markdown")
+                else:
+                    await update.message.reply_text(mensagem_bloqueio, parse_mode="Markdown")
+            else:
+                await update.message.reply_text(mensagem_bloqueio, parse_mode="Markdown")
+            
+            return ConversationHandler.END
+
+        # Se chegou aqui, o usuário é membro do grupo - prossegue com cadastro
         if update.effective_chat.type in ["group", "supergroup"]:
             if update.callback_query:
                 await update.callback_query.answer()
@@ -25,17 +81,19 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(
                     "🔔 O cadastro será feito no meu chat privado. Verifique suas mensagens."
                 )
+            
             # Inicia o cadastro no privado
             await context.bot.send_message(
-                chat_id=update.effective_user.id,
-                text="Olá, irmão! Para ter acesso completo às funcionalidades do bot, preciso de algumas informações.\n\n"
+                chat_id=user_id,
+                text="✅ *Verificação de membro confirmada!*\n\n"
+                     "Olá, irmão! Para ter acesso completo às funcionalidades do bot, preciso de algumas informações.\n\n"
                      "Qual o seu *Nome completo*?",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([[
                     InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")
                 ]])
             )
-            logger.info(f"Primeira pergunta enviada para o privado do usuário {update.effective_user.id}")
+            logger.info(f"Primeira pergunta enviada para o privado do usuário {user_id}")
             return NOME
 
         # Já está em privado
@@ -64,8 +122,10 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             logger.info(f"Iniciando cadastro no privado para usuário {telegram_id}")
             return NOME
+            
     except Exception as e:
         logger.error(f"Erro em cadastro_start: {e}\n{traceback.format_exc()}")
+        # Em caso de erro, não bloqueia o cadastro, mas registra
         return ConversationHandler.END
 
 async def navegacao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
