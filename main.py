@@ -18,7 +18,7 @@ from telegram.ext import (
     MessageHandler, filters, ConversationHandler, ChatMemberHandler,
     ContextTypes
 )
-from telegram.request import HTTPXRequest  # 🔥 Import necessário para customizar timeouts
+from telegram.request import HTTPXRequest
 
 # Importações dos seus módulos
 from src.bot import start, botao_handler
@@ -53,6 +53,7 @@ print(f"🔧 PORT: {PORT}")
 # --- Handlers existentes ---
 async def mensagem_grupo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Responde a mensagens de texto enviadas em grupos."""
+    logger.info(f"mensagem_grupo_handler: chat_type={update.effective_chat.type}, user={update.effective_user.id}, text='{update.message.text}'")
     if update.effective_chat.type in ["group", "supergroup"]:
         await update.message.reply_text(
             "Olá! Para interagir comigo, por favor use os botões nas mensagens de evento "
@@ -72,17 +73,17 @@ async def bot_adicionado_grupo(update: Update, context: ContextTypes.DEFAULT_TYP
 # 🔥 NOVO HANDLER: interjeição "bode"
 async def bode_interjection_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Responde quando o usuário envia apenas a palavra 'bode' (isolada)."""
+    logger.info(f"bode_interjection_handler: user={update.effective_user.id}, text='{update.message.text}'")
     # Ignora comandos e mensagens sem texto
     if not update.message or not update.message.text:
         return
 
     message_text = update.message.text.strip()
-    # Remove pontuação do final (.,!? etc) e converte para minúsculas
     cleaned = re.sub(r'[.!?]+$', '', message_text).lower()
     if cleaned == "bode":
-        # Chama a função de start (reaproveitando o fluxo existente)
+        # Chama a função de start
         await start(update, context)
-    # Se não for, não faz nada (outros handlers podem processar)
+    # Se não for, não faz nada
 
 # Handler de erro global
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -92,7 +93,6 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def main():
     print("⚙️ Criando aplicação Telegram...")
 
-    # 🔥 Cria um objeto de requisição com timeouts aumentados
     request = HTTPXRequest(
         connect_timeout=30.0,
         read_timeout=30.0,
@@ -101,7 +101,6 @@ async def main():
     telegram_app = Application.builder().token(TOKEN).request(request).updater(None).build()
     print("✅ Aplicação criada com updater=None e timeouts=30s")
 
-    # 🔥 INICIALIZAÇÃO OBRIGATÓRIA
     await telegram_app.initialize()
     print("✅ Application.initialize() executado")
     
@@ -123,7 +122,7 @@ async def main():
     telegram_app.add_handler(editar_perfil_handler)
     telegram_app.add_handler(editar_evento_secretario_handler)
 
-    # 🔥 NOVO HANDLER: interjeição "bode" (antes do genérico)
+    # Handler de interjeição "bode" (antes do genérico)
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bode_interjection_handler))
 
     # Handlers de callback específicos
@@ -152,7 +151,6 @@ async def main():
     webhook_url = f"{RENDER_URL}{WEBHOOK_PATH}"
     print(f"🔗 URL do webhook: {webhook_url}")
 
-    # Limpeza e configuração
     await telegram_app.bot.delete_webhook(drop_pending_updates=True)
     await asyncio.sleep(1)
     await telegram_app.bot.set_webhook(
@@ -189,7 +187,6 @@ async def main():
         Route(WEBHOOK_PATH, webhook, methods=["POST"]),
     ])
 
-    # Servidor
     import uvicorn
 
     config = uvicorn.Config(
@@ -201,7 +198,6 @@ async def main():
     )
     server = uvicorn.Server(config)
 
-    # Tratamento de sinais
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown(server, telegram_app)))
@@ -213,12 +209,9 @@ async def shutdown(server, telegram_app):
     """Desligamento gracioso."""
     print("🛑 Desligando servidor...")
     server.should_exit = True
-    
-    # 🔥 Limpeza adequada
     await telegram_app.stop()
     await telegram_app.shutdown()
     await telegram_app.bot.delete_webhook(drop_pending_updates=True)
-    
     print("👋 Bot finalizado com sucesso.")
 
 if __name__ == "__main__":
