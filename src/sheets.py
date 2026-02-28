@@ -19,7 +19,7 @@ spreadsheet = gc.open("Bode Andarilho")
 
 # --- Funções para Membros ---
 def buscar_membro(telegram_id: int):
-    """Retorna o dicionário com dados do membro, incluindo a coluna 'Nivel' como string "1","2","3"."""
+    """Retorna o dicionário com dados do membro, incluindo as novas colunas."""
     try:
         ws = spreadsheet.worksheet("Membros")
         data = ws.get_all_records()
@@ -40,20 +40,24 @@ def buscar_membro(telegram_id: int):
         return None
 
 def cadastrar_membro(dados: dict):
-    """Insere novo membro com nível padrão '1'."""
+    """Insere novo membro com nível padrão '1', incluindo data de nascimento e número da loja."""
     try:
         ws = spreadsheet.worksheet("Membros")
-        # Ordem das colunas: Telegram ID, Nome, Loja, Grau, Oriente, Potência, Data de cadastro, Cargo, Nivel
+        # Ordem das colunas:
+        # A: Telegram ID, B: Nome, C: Loja, D: Grau, E: Oriente, F: Potência,
+        # G: Data de cadastro, H: Cargo, I: Nivel, J: Data de nascimento, K: Número da loja
         row = [
             dados.get("telegram_id", ""),
             dados.get("nome", ""),
-            dados.get("loja", ""),
+            dados.get("loja", ""),          # Nome da loja
             dados.get("grau", ""),
             dados.get("oriente", ""),
             dados.get("potencia", ""),
             datetime.now().strftime("%d/%m/%Y %H:%M"),
             dados.get("cargo", ""),
-            "1"  # nível padrão
+            "1",                              # nível padrão
+            dados.get("data_nasc", ""),       # coluna J
+            dados.get("numero_loja", ""),     # coluna K
         ]
         ws.append_row(row)
         return True
@@ -65,11 +69,9 @@ def atualizar_nivel(telegram_id: int, novo_nivel: str):
     """Atualiza o nível de um membro. Retorna True se bem-sucedido."""
     try:
         ws = spreadsheet.worksheet("Membros")
-        # Procura o telegram_id na coluna A (índice 1)
-        cell = ws.find(str(telegram_id), in_column=1)
+        cell = ws.find(str(telegram_id), in_column=1)  # coluna A
         if cell:
-            # A coluna Nivel é a 9ª coluna (índice 9)
-            ws.update_cell(cell.row, 9, novo_nivel)
+            ws.update_cell(cell.row, 9, novo_nivel)  # coluna I
             return True
         return False
     except Exception as e:
@@ -102,31 +104,30 @@ def atualizar_membro(telegram_id: int, campo: str, novo_valor: str):
     """
     try:
         ws = spreadsheet.worksheet("Membros")
-        # Encontra a linha do membro
-        cell = ws.find(str(telegram_id), in_column=1)  # coluna A = Telegram ID
+        cell = ws.find(str(telegram_id), in_column=1)  # coluna A
         if not cell:
             print(f"Membro {telegram_id} não encontrado para atualização.")
             return False
 
-        # Mapeia o nome do campo para o número da coluna
-        # Ajuste conforme a ordem das colunas na sua planilha
+        # Mapeamento atualizado com as novas colunas
         colunas = {
             "Nome": 2,
             "Loja": 3,
             "Grau": 4,
             "Oriente": 5,
             "Potência": 6,
-            "Telefone": 7,
+            "Data de nascimento": 10,   # coluna J
+            "Número da loja": 11,        # coluna K
             "Cargo": 8,
             "Nivel": 9,
         }
+        # (Telefone foi removido)
 
         coluna = colunas.get(campo)
         if not coluna:
             print(f"Campo {campo} não mapeado para atualização.")
             return False
 
-        # Atualiza a célula
         ws.update_cell(cell.row, coluna, novo_valor)
         print(f"Membro {telegram_id} atualizado: {campo} = {novo_valor}")
         return True
@@ -135,7 +136,7 @@ def atualizar_membro(telegram_id: int, campo: str, novo_valor: str):
         print(f"Erro ao atualizar membro {telegram_id}: {e}")
         return False
 
-# --- Funções para Eventos ---
+# --- Funções para Eventos (inalteradas) ---
 def listar_eventos():
     try:
         ws = spreadsheet.worksheet("Eventos")
@@ -149,7 +150,6 @@ def listar_eventos():
 def cadastrar_evento(dados: dict):
     try:
         ws = spreadsheet.worksheet("Eventos")
-        # A ordem aqui DEVE corresponder EXATAMENTE à ordem das colunas na sua planilha
         row = [
             dados.get("data", ""),
             dados.get("dia_semana", ""),
@@ -175,13 +175,17 @@ def cadastrar_evento(dados: dict):
         print(f"Erro ao cadastrar evento: {e}")
         return False
 
-# --- Funções para Confirmações ---
+# --- Funções para Confirmações (ATUALIZADAS com coluna Número da loja) ---
 def registrar_confirmacao(dados: dict):
+    """Registra uma confirmação de presença, incluindo número da loja."""
     try:
         ws = spreadsheet.worksheet("Confirmações")
         if buscar_confirmacao(dados["id_evento"], dados["telegram_id"]):
             return False
 
+        # Ordem das colunas na aba Confirmações:
+        # A: ID Evento, B: Telegram ID, C: Nome, D: Grau, E: Cargo, F: Loja,
+        # G: Oriente, H: Potência, I: Ágape, J: Data e hora, K: Número da loja
         row = [
             dados.get("id_evento", ""),
             dados.get("telegram_id", ""),
@@ -192,7 +196,8 @@ def registrar_confirmacao(dados: dict):
             dados.get("oriente", ""),
             dados.get("potencia", ""),
             dados.get("agape", ""),
-            datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+            dados.get("numero_loja", ""),  # NOVA coluna K
         ]
         ws.append_row(row)
         return True
@@ -227,7 +232,7 @@ def cancelar_confirmacao(id_evento: str, telegram_id: int):
         return False
 
 def listar_confirmacoes_por_evento(id_evento: str):
-    """Retorna lista de confirmações para um evento específico."""
+    """Retorna lista de confirmações para um evento específico, incluindo número da loja."""
     try:
         ws = spreadsheet.worksheet("Confirmações")
         data = ws.get_all_records()
@@ -239,17 +244,27 @@ def listar_confirmacoes_por_evento(id_evento: str):
     except Exception as e:
         print(f"Erro ao listar confirmações: {e}")
         return []
-    
+
+def cancelar_todas_confirmacoes(id_evento: str):
+    """Remove todas as confirmações de um evento."""
+    try:
+        ws = spreadsheet.worksheet("Confirmações")
+        cell_list = ws.findall(id_evento, in_column=1)
+        for cell in reversed(cell_list):
+            ws.delete_rows(cell.row)
+        return True
+    except Exception as e:
+        print(f"Erro ao cancelar confirmações: {e}")
+        return False
+
+# --- Funções para Eventos (continuação) ---
 def atualizar_evento(indice: int, evento: dict):
-    """Atualiza um evento existente na planilha."""
     try:
         ws = spreadsheet.worksheet("Eventos")
-        # A lista de eventos é baseada em get_all_records, precisamos encontrar a linha
         cell_list = ws.findall(evento.get("Data do evento", ""), in_column=1)
         for cell in cell_list:
             row_data = ws.row_values(cell.row)
-            if row_data[3] == evento.get("Nome da loja"):  # coluna D
-                # Atualiza cada campo
+            if row_data[3] == evento.get("Nome da loja"):
                 mapeamento = {
                     "Data do evento": 1,
                     "Dia da semana": 2,
@@ -277,17 +292,4 @@ def atualizar_evento(indice: int, evento: dict):
         return False
     except Exception as e:
         print(f"Erro ao atualizar evento: {e}")
-        return False
-
-def cancelar_todas_confirmacoes(id_evento: str):
-    """Remove todas as confirmações de um evento."""
-    try:
-        ws = spreadsheet.worksheet("Confirmações")
-        cell_list = ws.findall(id_evento, in_column=1)
-        # Apaga de baixo para cima para não afetar índices
-        for cell in reversed(cell_list):
-            ws.delete_rows(cell.row)
-        return True
-    except Exception as e:
-        print(f"Erro ao cancelar confirmações: {e}")
         return False
