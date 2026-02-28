@@ -18,7 +18,6 @@ from telegram.ext import (
     MessageHandler, filters, ConversationHandler, ChatMemberHandler,
     ContextTypes
 )
-from telegram.request import HTTPXRequest
 
 # Importações dos seus módulos
 from src.bot import start, botao_handler
@@ -53,7 +52,6 @@ print(f"🔧 PORT: {PORT}")
 # --- Handlers existentes ---
 async def mensagem_grupo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Responde a mensagens de texto enviadas em grupos."""
-    logger.info(f"mensagem_grupo_handler: chat_type={update.effective_chat.type}, user={update.effective_user.id}, text='{update.message.text}'")
     if update.effective_chat.type in ["group", "supergroup"]:
         await update.message.reply_text(
             "Olá! Para interagir comigo, por favor use os botões nas mensagens de evento "
@@ -70,18 +68,13 @@ async def bot_adicionado_grupo(update: Update, context: ContextTypes.DEFAULT_TYP
             "No grupo, apenas publicarei eventos e lembretes. Confirmações e outras ações devem ser feitas em privado. 🐐"
         )
 
-# 🔥 NOVO HANDLER: interjeição "bode" (agora verifica se usuário está em conversa)
+# 🔥 Handler de interjeição "bode" – agora com verificação de conversa ativa
 async def bode_interjection_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Responde quando o usuário envia apenas a palavra 'bode' (isolada), 
-    mas ignora se o usuário já está em uma conversa ativa."""
-    logger.info(f"bode_interjection_handler: user={update.effective_user.id}, text='{update.message.text}'")
-    
-    # Ignora comandos e mensagens sem texto
+    """Responde quando o usuário envia apenas a palavra 'bode' (isolada)."""
     if not update.message or not update.message.text:
         return
 
-    # 🔥 Verifica se o usuário já tem uma conversa ativa (user_data não vazio)
-    # Isso indica que ele está no meio de um fluxo (cadastro, edição, etc.)
+    # Se o usuário já tem dados de conversa, provavelmente está em um fluxo, então ignoramos
     if context.user_data:
         logger.info(f"bode_interjection_handler: usuário {update.effective_user.id} está em conversa ativa. Ignorando.")
         return
@@ -89,9 +82,7 @@ async def bode_interjection_handler(update: Update, context: ContextTypes.DEFAUL
     message_text = update.message.text.strip()
     cleaned = re.sub(r'[.!?]+$', '', message_text).lower()
     if cleaned == "bode":
-        # Chama a função de start
         await start(update, context)
-    # Se não for, não faz nada
 
 # Handler de erro global
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -101,13 +92,9 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def main():
     print("⚙️ Criando aplicação Telegram...")
 
-    request = HTTPXRequest(
-        connect_timeout=30.0,
-        read_timeout=30.0,
-        write_timeout=30.0
-    )
-    telegram_app = Application.builder().token(TOKEN).request(request).updater(None).build()
-    print("✅ Aplicação criada com updater=None e timeouts=30s")
+    # Usar o client HTTP padrão (sem customizações para evitar problemas de inicialização)
+    telegram_app = Application.builder().token(TOKEN).updater(None).build()
+    print("✅ Aplicação criada com updater=None")
 
     await telegram_app.initialize()
     print("✅ Application.initialize() executado")
@@ -130,7 +117,7 @@ async def main():
     telegram_app.add_handler(editar_perfil_handler)
     telegram_app.add_handler(editar_evento_secretario_handler)
 
-    # Handler de interjeição "bode" (antes do genérico)
+    # Handler de interjeição "bode"
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bode_interjection_handler))
 
     # Handlers de callback específicos
@@ -214,12 +201,13 @@ async def main():
     await server.serve()
 
 async def shutdown(server, telegram_app):
-    """Desligamento gracioso."""
+    """Desligamento gracioso simplificado."""
     print("🛑 Desligando servidor...")
     server.should_exit = True
+    # Não tentamos mais deletar o webhook aqui, pois o novo processo o fará
+    # Apenas paramos a aplicação do Telegram
     await telegram_app.stop()
     await telegram_app.shutdown()
-    await telegram_app.bot.delete_webhook(drop_pending_updates=True)
     print("👋 Bot finalizado com sucesso.")
 
 if __name__ == "__main__":
