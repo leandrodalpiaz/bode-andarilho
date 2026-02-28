@@ -51,7 +51,7 @@ print(f"🔧 PORT: {PORT}")
 
 # --- Handlers existentes ---
 async def mensagem_grupo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Responde a mensagens de texto enviadas em grupos."""
+    """Responde a mensagens de texto enviadas em grupos (exceto 'bode')."""
     if update.effective_chat.type in ["group", "supergroup"]:
         await update.message.reply_text(
             "Olá! Para interagir comigo, por favor use os botões nas mensagens de evento "
@@ -76,14 +76,16 @@ def is_bode_message(message_text: str) -> bool:
     cleaned = re.sub(r'[.!?]+$', '', message_text.strip()).lower()
     return cleaned == "bode"
 
-# 🔥 Handler de interjeição "bode" – usa o filtro acima
-async def bode_interjection_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Responde quando o usuário envia apenas a palavra 'bode' (isolada)."""
-    logger.info(f"bode_interjection_handler: user={update.effective_user.id}, text='{update.message.text}'")
-    # Se o usuário já tem dados de conversa, provavelmente está em um fluxo, então ignoramos
-    if context.user_data:
-        logger.info(f"bode_interjection_handler: usuário {update.effective_user.id} está em conversa ativa. Ignorando.")
+# 🔥 Handler exclusivo para a palavra "bode" em GRUPOS
+async def bode_grupo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Responde quando o usuário envia 'bode' em um grupo."""
+    logger.info(f"bode_grupo_handler: user={update.effective_user.id}, text='{update.message.text}'")
+    
+    # Se não estiver em grupo, ignora (segurança extra)
+    if update.effective_chat.type not in ["group", "supergroup"]:
         return
+    
+    # Chama diretamente o start que, por estar em grupo, redirecionará para cadastro
     await start(update, context)
 
 # Handler de erro global
@@ -118,15 +120,16 @@ async def main():
     telegram_app.add_handler(editar_perfil_handler)
     telegram_app.add_handler(editar_evento_secretario_handler)
 
-    # 🔥 Handler de interjeição "bode" com filtro personalizado
-    # Usamos um MessageHandler com filtro de texto, e dentro da função verificamos se é "bode"
-    # Dessa forma, o handler será chamado para todas as mensagens de texto, mas ignorará rapidamente as que não são "bode"
-    # No entanto, para evitar sobrecarga, podemos usar um filtro que chama a função de filtro
-    class BodeFilter(filters.MessageFilter):
+    # 🔥 Handler exclusivo para "bode" em grupos, usando filtro personalizado
+    class BodeGrupoFilter(filters.MessageFilter):
         def filter(self, message):
+            # Verifica se é grupo E se é mensagem "bode"
+            chat_type = message.chat.type
+            if chat_type not in ["group", "supergroup"]:
+                return False
             return is_bode_message(message.text)
 
-    telegram_app.add_handler(MessageHandler(filters.TEXT & BodeFilter(), bode_interjection_handler))
+    telegram_app.add_handler(MessageHandler(filters.TEXT & BodeGrupoFilter(), bode_grupo_handler))
 
     # Handlers de callback específicos
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos, pattern="^ver_eventos$"))
@@ -141,7 +144,7 @@ async def main():
     telegram_app.add_handler(CallbackQueryHandler(detalhes_confirmado, pattern="^detalhes_confirmado\\|"))
     telegram_app.add_handler(CallbackQueryHandler(botao_handler))
 
-    # Handlers de grupo
+    # Handlers de grupo (genérico)
     telegram_app.add_handler(ChatMemberHandler(bot_adicionado_grupo, ChatMemberHandler.MY_CHAT_MEMBER))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mensagem_grupo_handler))
 

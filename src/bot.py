@@ -29,7 +29,7 @@ def menu_principal_teclado(nivel: str):
     return InlineKeyboardMarkup(botoes)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler para comando /start. Se estiver em grupo, redireciona para privado."""
+    """Handler para comando /start ou palavra 'bode' (quando chamado do grupo)."""
     # Se estiver em grupo, chama cadastro_start que cuidará do redirecionamento
     if update.effective_chat.type in ["group", "supergroup"]:
         await cadastro_start(update, context)
