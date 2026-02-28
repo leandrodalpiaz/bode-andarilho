@@ -68,21 +68,23 @@ async def bot_adicionado_grupo(update: Update, context: ContextTypes.DEFAULT_TYP
             "No grupo, apenas publicarei eventos e lembretes. Confirmações e outras ações devem ser feitas em privado. 🐐"
         )
 
-# 🔥 Handler de interjeição "bode" – agora com verificação de conversa ativa
+# 🔥 Função de filtro personalizada para detectar a palavra "bode" (isolada)
+def is_bode_message(message_text: str) -> bool:
+    """Retorna True se a mensagem for essencialmente a palavra 'bode'."""
+    if not message_text:
+        return False
+    cleaned = re.sub(r'[.!?]+$', '', message_text.strip()).lower()
+    return cleaned == "bode"
+
+# 🔥 Handler de interjeição "bode" – usa o filtro acima
 async def bode_interjection_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Responde quando o usuário envia apenas a palavra 'bode' (isolada)."""
-    if not update.message or not update.message.text:
-        return
-
+    logger.info(f"bode_interjection_handler: user={update.effective_user.id}, text='{update.message.text}'")
     # Se o usuário já tem dados de conversa, provavelmente está em um fluxo, então ignoramos
     if context.user_data:
         logger.info(f"bode_interjection_handler: usuário {update.effective_user.id} está em conversa ativa. Ignorando.")
         return
-
-    message_text = update.message.text.strip()
-    cleaned = re.sub(r'[.!?]+$', '', message_text).lower()
-    if cleaned == "bode":
-        await start(update, context)
+    await start(update, context)
 
 # Handler de erro global
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -92,7 +94,6 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def main():
     print("⚙️ Criando aplicação Telegram...")
 
-    # Usar o client HTTP padrão (sem customizações para evitar problemas de inicialização)
     telegram_app = Application.builder().token(TOKEN).updater(None).build()
     print("✅ Aplicação criada com updater=None")
 
@@ -117,8 +118,15 @@ async def main():
     telegram_app.add_handler(editar_perfil_handler)
     telegram_app.add_handler(editar_evento_secretario_handler)
 
-    # Handler de interjeição "bode"
-    telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, bode_interjection_handler))
+    # 🔥 Handler de interjeição "bode" com filtro personalizado
+    # Usamos um MessageHandler com filtro de texto, e dentro da função verificamos se é "bode"
+    # Dessa forma, o handler será chamado para todas as mensagens de texto, mas ignorará rapidamente as que não são "bode"
+    # No entanto, para evitar sobrecarga, podemos usar um filtro que chama a função de filtro
+    class BodeFilter(filters.MessageFilter):
+        def filter(self, message):
+            return is_bode_message(message.text)
+
+    telegram_app.add_handler(MessageHandler(filters.TEXT & BodeFilter(), bode_interjection_handler))
 
     # Handlers de callback específicos
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos, pattern="^ver_eventos$"))
@@ -204,8 +212,6 @@ async def shutdown(server, telegram_app):
     """Desligamento gracioso simplificado."""
     print("🛑 Desligando servidor...")
     server.should_exit = True
-    # Não tentamos mais deletar o webhook aqui, pois o novo processo o fará
-    # Apenas paramos a aplicação do Telegram
     await telegram_app.stop()
     await telegram_app.shutdown()
     print("👋 Bot finalizado com sucesso.")
