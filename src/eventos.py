@@ -544,6 +544,9 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     }
     registrar_confirmacao(dados_confirmacao)
 
+    # 🔥 IMPORTANTE: NÃO APAGA A MENSAGEM ORIGINAL DO GRUPO
+    # Apenas envia confirmação no privado
+    
     # Enviar mensagem de confirmação no privado
     data = evento.get("Data do evento", "")
     nome_loja = evento.get("Nome da loja", "")
@@ -575,15 +578,11 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         reply_markup=botoes_privado
     )
 
-    # 🔥 Responde no grupo sem apagar a mensagem
+    # 🔥 Responde no grupo sem apagar a mensagem original
     if update.effective_chat.type in ["group", "supergroup"]:
-        # Envia uma mensagem de confirmação rápida que some após alguns segundos
-        msg = await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=f"✅ {membro.get('Nome', '')} confirmou presença!"
-        )
-        # Agenda para apagar após 5 segundos (opcional)
-        # context.job_queue.run_once(lambda ctx: msg.delete(), 5)
+        # Apenas responde ao callback com OK, sem postar nada no grupo
+        await query.answer("Presença confirmada! Verifique seu privado.")
+        # Não edita nem apaga a mensagem original
     else:
         await query.edit_message_text("✅ Presença confirmada! Verifique a mensagem acima.")
 
