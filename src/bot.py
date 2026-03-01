@@ -113,6 +113,7 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from src.admin_acoes import rebaixar_handler
         await rebaixar_handler(update, context)
     elif data == "editar_perfil":
+        # Este callback será capturado pelo ConversationHandler em editar_perfil.py
         return
     else:
         await query.edit_message_text("Função em desenvolvimento ou comando não reconhecido.")
@@ -135,7 +136,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
                 [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
                 [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
                 [InlineKeyboardButton("📋 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
-                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")]
+                [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")]  # 🔥 Sair
             ])
         )
         return
@@ -151,7 +152,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
         [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
         [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
         [InlineKeyboardButton("📋 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
-        [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
+        [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")],  # 🔥 Sair
     ])
 
     await query.edit_message_text(
@@ -182,7 +183,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
                 [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
                 [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
-                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")]
+                [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")]  # 🔥 Sair
             ])
         )
         return
@@ -201,7 +202,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
         [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
         [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
-        [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
+        [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")],  # 🔥 Sair
     ])
 
     await query.edit_message_text(
