@@ -1,11 +1,14 @@
 # src/eventos_secretario.py
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, CallbackQueryHandler, MessageHandler, filters
-from src.sheets import listar_eventos, atualizar_evento, cancelar_todas_confirmacoes
+from src.sheets import listar_eventos, atualizar_evento, cancelar_todas_confirmacoes, buscar_membro
 from src.permissoes import get_nivel
 from datetime import datetime
 import urllib.parse
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Estados da conversação
 SELECIONAR_EVENTO, CONFIRMAR_EXCLUSAO, EDITAR_CAMPO, NOVO_VALOR = range(4)
@@ -31,7 +34,6 @@ def sanitizar_callback(texto: str) -> str:
     """Remove caracteres especiais e substitui espaços por underline para callback_data seguro."""
     if not isinstance(texto, str):
         texto = str(texto)
-    # Substitui caracteres não alfanuméricos (exceto underline) por underline
     return re.sub(r'[^a-zA-Z0-9_]', '_', texto)
 
 async def meus_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -43,7 +45,6 @@ async def meus_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nivel = get_nivel(user_id)
     eventos = listar_eventos()
 
-    # Filtra eventos do usuário (criados por ele) OU se for admin (todos)
     if nivel == "3":
         eventos_usuario = eventos  # admin vê todos
     else:
@@ -65,9 +66,7 @@ async def meus_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         nome = evento.get("Nome da loja", "")
         numero = evento.get("Número da loja", "")
         status = "✅" if evento.get("Status") == "Ativo" else "❌"
-        # Usar identificador baseado em data+nome (mais estável que índice)
         id_evento = f"{data} — {nome}"
-        # 🔥 Sanitiza o id_evento para remover caracteres especiais
         id_evento_sanitizado = sanitizar_callback(id_evento)
         botoes.append([InlineKeyboardButton(
             f"{status} {data} - {nome} {numero}",
@@ -83,8 +82,6 @@ async def menu_gerenciar_evento(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
 
     _, id_evento_sanitizado = query.data.split("|", 1)
-    # Como sanitizamos, precisamos reconstruir o id original? Não, vamos armazenar no user_data
-    # Mas precisamos encontrar o evento correspondente na lista.
     eventos = listar_eventos()
     evento = None
     id_evento_real = None
@@ -99,7 +96,6 @@ async def menu_gerenciar_evento(update: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text("Evento não encontrado. Pode ter sido excluído.")
         return
 
-    # Verifica permissão (autor ou admin)
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
     autor_id = str(evento.get("Telegram ID do secretário", ""))
@@ -196,25 +192,32 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
 
     # Atualiza status na planilha
     evento["Status"] = "Cancelado"
-    atualizar_evento(indice, evento)  # Usa o índice real
+    if not atualizar_evento(indice, evento):
+        await query.edit_message_text("Erro ao cancelar evento. Tente novamente.")
+        return
 
     # Remove todas as confirmações deste evento
     cancelar_todas_confirmacoes(id_evento_real)
+
+    # Determina quem está cancelando
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    autor_nome = "Administrador" if nivel == "3" else "Secretário"
+    autor_info = f"pelo {autor_nome}"
 
     # Publica aviso no grupo
     grupo_id = evento.get("Telegram ID do grupo")
     if grupo_id and str(grupo_id).strip() not in ["", "N/A", "n/a"]:
         try:
             grupo_id_int = int(float(str(grupo_id).strip()))
-            autor_nome = "Administrador" if get_nivel(update.effective_user.id) == "3" else "Secretário"
             mensagem_grupo = (
-                f"❌ *EVENTO CANCELADO PELO AUTOR*\n"
+                f"❌ *EVENTO CANCELADO {autor_info.upper()}*\n"
                 f"━━━━━━━━━━━━━━━━\n"
                 f"🏛 *LOJA {evento['Nome da loja']} {evento['Número da loja']}*\n"
                 f"━━━━━━━━━━━━━━━━\n\n"
                 f"📍 Data: {evento['Data do evento']}\n"
                 f"🕕 Horário: {evento['Hora']}\n\n"
-                f"Este evento foi cancelado por seu autor.\n"
+                f"Este evento foi cancelado {autor_info}.\n"
                 f"Todas as confirmações foram removidas."
             )
             await context.bot.send_message(
@@ -223,11 +226,13 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
                 parse_mode="Markdown"
             )
         except Exception as e:
-            print(f"Erro ao publicar cancelamento: {e}")
+            logger.error(f"Erro ao publicar cancelamento: {e}")
 
+    # Notifica todos os membros que haviam confirmado (opcional, pode ser implementado depois)
+    # Por enquanto, apenas avisa no privado do autor
     await query.edit_message_text(
-        "✅ Evento cancelado com sucesso!\n"
-        "O aviso foi publicado no grupo e todas as confirmações foram removidas.",
+        f"✅ Evento cancelado com sucesso!\n"
+        f"O aviso foi publicado no grupo e todas as confirmações foram removidas.",
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton("⬅️ Voltar", callback_data="meus_eventos")
         ]])
@@ -259,7 +264,6 @@ async def iniciar_edicao(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "id_sanitizado": id_evento_sanitizado
     }
 
-    # Cria botões para cada campo editável
     botoes = []
     for campo_id, campo_info in CAMPOS_EVENTO.items():
         valor_atual = evento.get(campo_info["chave"], "Não informado")
@@ -334,7 +338,18 @@ async def receber_novo_valor_evento(update: Update, context: ContextTypes.DEFAUL
         return ConversationHandler.END
 
     # Salva na planilha
-    atualizar_evento(indice, evento)
+    if not atualizar_evento(indice, evento):
+        await update.message.reply_text("Erro ao atualizar evento. Tente novamente.")
+        return ConversationHandler.END
+
+    # Remove todas as confirmações (pois o evento foi alterado)
+    cancelar_todas_confirmacoes(id_evento_real)
+
+    # Determina quem está editando
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    autor_nome = "Administrador" if nivel == "3" else "Secretário"
+    autor_info = f"pelo {autor_nome}"
 
     # Publica aviso de alteração no grupo
     grupo_id = evento.get("Telegram ID do grupo")
@@ -342,7 +357,7 @@ async def receber_novo_valor_evento(update: Update, context: ContextTypes.DEFAUL
         try:
             grupo_id_int = int(float(str(grupo_id).strip()))
             mensagem_grupo = (
-                f"📝 *EVENTO ALTERADO PELO AUTOR*\n"
+                f"📝 *EVENTO ALTERADO {autor_info.upper()}*\n"
                 f"━━━━━━━━━━━━━━━━\n"
                 f"🏛 *LOJA {evento['Nome da loja']} {evento['Número da loja']}*\n"
                 f"━━━━━━━━━━━━━━━━\n\n"
@@ -351,7 +366,7 @@ async def receber_novo_valor_evento(update: Update, context: ContextTypes.DEFAUL
                 f"📍 Oriente: {evento['Oriente']}\n\n"
                 f"*Campo alterado:* {campo_info['nome']}\n"
                 f"*Novo valor:* {novo_valor}\n\n"
-                f"Por favor, reconfirme sua presença se necessário."
+                f"Todas as confirmações foram removidas. Por favor, reconfirme sua presença se necessário."
             )
             await context.bot.send_message(
                 chat_id=grupo_id_int,
@@ -359,14 +374,14 @@ async def receber_novo_valor_evento(update: Update, context: ContextTypes.DEFAUL
                 parse_mode="Markdown"
             )
         except Exception as e:
-            print(f"Erro ao publicar alteração: {e}")
+            logger.error(f"Erro ao publicar alteração: {e}")
 
     await update.message.reply_text(
-        f"✅ {campo_info['nome']} atualizado com sucesso!\n\n"
+        f"✅ {campo_info['nome']} atualizado com sucesso!\n"
+        f"Todas as confirmações foram removidas e um aviso foi publicado no grupo.\n\n"
         f"Use /start para voltar ao menu principal."
     )
 
-    # Limpa dados da sessão
     context.user_data.pop("editando_evento", None)
     context.user_data.pop("campo_editando_evento", None)
 
@@ -376,7 +391,6 @@ async def cancelar_edicao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Edição cancelada.")
     return ConversationHandler.END
 
-# ConversationHandler para edição de eventos
 editar_evento_secretario_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(iniciar_edicao, pattern="^editar_evento\\|")],
     states={
