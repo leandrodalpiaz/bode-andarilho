@@ -401,7 +401,7 @@ cadastro_handler = ConversationHandler(
             CallbackQueryHandler(navegacao_callback, pattern="^(voltar|cancelar)")
         ],
         CONFIRMAR: [
-            CallbackQueryHandler(confirmar_cadastro, pattern=git"^confirmar_cadastro$"),
+            CallbackQueryHandler(confirmar_cadastro, pattern="^confirmar_cadastro$"),
             CallbackQueryHandler(navegacao_callback, pattern="^(voltar|cancelar)")
         ],
     },
