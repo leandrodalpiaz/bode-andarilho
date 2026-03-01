@@ -51,11 +51,11 @@ print(f"🔧 PORT: {PORT}")
 
 # --- Handlers existentes ---
 async def mensagem_grupo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Responde a mensagens de texto enviadas em grupos (exceto 'bode')."""
+    """Responde a mensagens de texto genéricas em grupos."""
     if update.effective_chat.type in ["group", "supergroup"]:
         await update.message.reply_text(
             "Olá! Para interagir comigo, por favor use os botões nas mensagens de evento "
-            "ou envie /start no meu chat privado. No grupo, apenas publico eventos e lembretes. 🐐"
+            "ou envie 'Bode' no grupo para começar. 🐐"
         )
         return
 
@@ -64,28 +64,14 @@ async def bot_adicionado_grupo(update: Update, context: ContextTypes.DEFAULT_TYP
     if update.my_chat_member.new_chat_member.status == "member":
         await update.effective_chat.send_message(
             "Olá, irmãos! Sou o Bode Andarilho, o bot de agenda de visitas.\n\n"
-            "Para interagir comigo, usem os botões nas mensagens de evento ou enviem /start no meu chat privado. "
-            "No grupo, apenas publicarei eventos e lembretes. Confirmações e outras ações devem ser feitas em privado. 🐐"
+            "Para interagir comigo, enviem 'Bode' no grupo para começar. 🐐"
         )
 
-# 🔥 Função de filtro personalizada para detectar a palavra "bode" (isolada)
-def is_bode_message(message_text: str) -> bool:
-    """Retorna True se a mensagem for essencialmente a palavra 'bode'."""
-    if not message_text:
-        return False
-    cleaned = re.sub(r'[.!?]+$', '', message_text.strip()).lower()
-    return cleaned == "bode"
-
-# 🔥 Handler exclusivo para a palavra "bode" em GRUPOS
+# 🔥 Handler simplificado para "bode"
 async def bode_grupo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Responde quando o usuário envia 'bode' em um grupo."""
+    """Responde quando o usuário envia 'bode' em qualquer lugar."""
     logger.info(f"bode_grupo_handler: user={update.effective_user.id}, text='{update.message.text}'")
-    
-    # Se não estiver em grupo, ignora (segurança extra)
-    if update.effective_chat.type not in ["group", "supergroup"]:
-        return
-    
-    # Chama diretamente o start que, por estar em grupo, redirecionará para cadastro
+    # Chama o start que agora tem a lógica completa de decisão
     await start(update, context)
 
 # Handler de erro global
@@ -111,7 +97,7 @@ async def main():
     # Comandos
     telegram_app.add_handler(CommandHandler("start", start))
 
-    # Handlers de conversação (devem vir antes dos handlers de callback simples)
+    # Handlers de conversação
     telegram_app.add_handler(cadastro_handler)
     telegram_app.add_handler(cadastro_evento_handler)
     telegram_app.add_handler(confirmacao_presenca_handler)
@@ -120,18 +106,10 @@ async def main():
     telegram_app.add_handler(editar_perfil_handler)
     telegram_app.add_handler(editar_evento_secretario_handler)
 
-    # 🔥 Handler exclusivo para "bode" em grupos, usando filtro personalizado
-    class BodeGrupoFilter(filters.MessageFilter):
-        def filter(self, message):
-            # Verifica se é grupo E se é mensagem "bode"
-            chat_type = message.chat.type
-            if chat_type not in ["group", "supergroup"]:
-                return False
-            return is_bode_message(message.text)
+    # 🔥 Handler para "bode" (simples, sem filtro complexo)
+    telegram_app.add_handler(MessageHandler(filters.Regex(r'^(?i:bode)[.!?]*$'), bode_grupo_handler))
 
-    telegram_app.add_handler(MessageHandler(filters.TEXT & BodeGrupoFilter(), bode_grupo_handler))
-
-    # Handlers de callback específicos
+    # Handlers de callback
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos, pattern="^ver_eventos$"))
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos_por_data, pattern="^data\\|"))
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos_por_grau, pattern="^grau\\|"))
@@ -144,7 +122,7 @@ async def main():
     telegram_app.add_handler(CallbackQueryHandler(detalhes_confirmado, pattern="^detalhes_confirmado\\|"))
     telegram_app.add_handler(CallbackQueryHandler(botao_handler))
 
-    # Handlers de grupo (genérico)
+    # Handlers de grupo
     telegram_app.add_handler(ChatMemberHandler(bot_adicionado_grupo, ChatMemberHandler.MY_CHAT_MEMBER))
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mensagem_grupo_handler))
 
@@ -212,19 +190,15 @@ async def main():
     await server.serve()
 
 async def shutdown(server, telegram_app):
-    """Desligamento gracioso com timeout para evitar conflitos."""
+    """Desligamento gracioso."""
     print("🛑 Desligando servidor...")
     server.should_exit = True
-    
-    # Aguarda um pouco para garantir que o servidor pare
     await asyncio.sleep(2)
-    
     try:
         await telegram_app.stop()
         await telegram_app.shutdown()
     except Exception as e:
         logger.error(f"Erro ao parar aplicação: {e}")
-    
     print("👋 Bot finalizado com sucesso.")
 
 if __name__ == "__main__":

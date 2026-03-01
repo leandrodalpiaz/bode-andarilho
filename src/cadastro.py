@@ -18,114 +18,124 @@ async def verificar_membro_no_grupo(user_id: int, context: ContextTypes.DEFAULT_
     """
     Verifica se o usuário é membro do grupo principal.
     Retorna True se for membro, False caso contrário.
-    O bot precisa ser administrador do grupo para esta função funcionar.
     """
     try:
-        # Tenta obter informações do membro no grupo
         chat_member = await context.bot.get_chat_member(
             chat_id=int(GRUPO_PRINCIPAL_ID),
             user_id=user_id
         )
-
-        # Verifica se o status indica que o usuário é membro ativo
-        # Status possíveis: 'creator', 'administrator', 'member', 'restricted', 'left', 'kicked'
         if chat_member.status in ['creator', 'administrator', 'member', 'restricted']:
             logger.info(f"Usuário {user_id} é membro do grupo. Status: {chat_member.status}")
             return True
         else:
             logger.info(f"Usuário {user_id} NÃO é membro do grupo. Status: {chat_member.status}")
             return False
-
     except Exception as e:
-        # Se der erro (ex: bot não é admin, usuário não encontrado), consideramos como não membro
         logger.error(f"Erro ao verificar membro {user_id} no grupo: {e}")
         return False
 
 async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Inicia o cadastro de membro. Se estiver em grupo, redireciona para privado."""
+    """
+    Inicia o fluxo de cadastro ou redirecionamento.
+    PRIMEIRO consulta a planilha, DEPOIS decide o que fazer.
+    """
     logger.info(f"cadastro_start chamado - chat_type: {update.effective_chat.type}, user_id: {update.effective_user.id}")
-
+    
     try:
-        # 🔒 Verifica se o usuário é membro do grupo (apenas quando iniciar)
         user_id = update.effective_user.id
-        is_member = await verificar_membro_no_grupo(user_id, context)
-
-        if not is_member:
-            # Usuário não é membro do grupo - bloqueia cadastro
-            mensagem_bloqueio = (
-                "⛔ *Cadastro não permitido*\n\n"
-                "Para utilizar o Bode Andarilho, você precisa ser membro do grupo oficial.\n\n"
-                "Por favor, entre em contato com o **secretário da sua loja** para ser adicionado ao grupo. "
-                "Somente membros do grupo podem se cadastrar no bot."
+        chat_type = update.effective_chat.type
+        
+        # 🔥 PASSO 1: Verificar se usuário JÁ ESTÁ CADASTRADO na planilha
+        membro_existente = buscar_membro(user_id)
+        
+        # 🔥 PASSO 2: Se já cadastrado e está em GRUPO
+        if membro_existente and chat_type in ["group", "supergroup"]:
+            # ✅ Usuário antigo no grupo: apenas redirecionar para privado SEM mensagem no grupo
+            logger.info(f"Usuário {user_id} já cadastrado. Redirecionando para privado.")
+            
+            # Envia mensagem apenas no privado com o menu principal
+            nivel = membro_existente.get("Nivel", "1")
+            from src.bot import menu_principal_teclado
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"Bem-vindo de volta, irmão {membro_existente.get('Nome', '')}!",
+                reply_markup=menu_principal_teclado(nivel)
             )
-
-            if update.effective_chat.type in ["group", "supergroup"]:
+            # NÃO envia mensagem no grupo
+            return ConversationHandler.END
+        
+        # 🔥 PASSO 3: Se já cadastrado e está em PRIVADO
+        if membro_existente and chat_type == "private":
+            # ✅ Usuário antigo no privado: mostrar menu
+            nivel = membro_existente.get("Nivel", "1")
+            from src.bot import menu_principal_teclado
+            await update.message.reply_text(
+                f"Bem-vindo de volta, irmão {membro_existente.get('Nome', '')}!",
+                reply_markup=menu_principal_teclado(nivel)
+            )
+            return ConversationHandler.END
+        
+        # 🔥 PASSO 4: Se NÃO está cadastrado (novo usuário)
+        if not membro_existente:
+            # Verificar se é membro do grupo (apenas para novos)
+            is_member = await verificar_membro_no_grupo(user_id, context)
+            
+            if not is_member and chat_type in ["group", "supergroup"]:
+                # Bloquear se não for membro do grupo
+                mensagem_bloqueio = (
+                    "⛔ *Cadastro não permitido*\n\n"
+                    "Para utilizar o Bode Andarilho, você precisa ser membro do grupo oficial.\n\n"
+                    "Por favor, entre em contato com o **secretário da sua loja** para ser adicionado ao grupo."
+                )
                 if update.callback_query:
                     await update.callback_query.answer()
                     await update.callback_query.edit_message_text(mensagem_bloqueio, parse_mode="Markdown")
                 else:
                     await update.message.reply_text(mensagem_bloqueio, parse_mode="Markdown")
-            else:
-                await update.message.reply_text(mensagem_bloqueio, parse_mode="Markdown")
-
-            return ConversationHandler.END
-
-        # Se chegou aqui, o usuário é membro do grupo - prossegue com cadastro
-        if update.effective_chat.type in ["group", "supergroup"]:
-            if update.callback_query:
-                await update.callback_query.answer()
-                await update.callback_query.edit_message_text(
-                    "🔔 O cadastro será feito no meu chat privado. Verifique suas mensagens."
+                return ConversationHandler.END
+            
+            # 🔥 NOVO USUÁRIO VÁLIDO: redirecionar para cadastro
+            if chat_type in ["group", "supergroup"]:
+                # Mensagem ÚNICA no grupo
+                if update.callback_query:
+                    await update.callback_query.answer()
+                    await update.callback_query.edit_message_text(
+                        "🔔 Você será redirecionado para meu chat privado para completar seu cadastro."
+                    )
+                else:
+                    await update.message.reply_text(
+                        "🔔 Você será redirecionado para meu chat privado para completar seu cadastro."
+                    )
+                
+                # Iniciar cadastro no privado
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text="Olá, irmão! Para começar, preciso de algumas informações.\n\n"
+                         "Qual o seu *Nome completo*?",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")
+                    ]])
                 )
-            else:
+                logger.info(f"Iniciando cadastro para novo usuário {user_id}")
+                return NOME
+            
+            # Se já está em privado e não cadastrado, inicia cadastro
+            if chat_type == "private":
                 await update.message.reply_text(
-                    "🔔 O cadastro será feito no meu chat privado. Verifique suas mensagens."
+                    "Olá, irmão! Para começar, preciso de algumas informações.\n\n"
+                    "Qual o seu *Nome completo*?",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")
+                    ]])
                 )
-
-            # Redireciona para o privado pedindo o /start
-            await context.bot.send_message(
-                chat_id=user_id,
-                text="✅ *Verificação de membro confirmada!*\n\n"
-                     "Olá, irmão! Para iniciar o seu cadastro e ter acesso completo às funcionalidades, "
-                     "por favor, clique ou digite /start aqui neste chat.",
-                parse_mode="Markdown"
-            )
-            logger.info(f"Mensagem de redirecionamento enviada para o privado do usuário {user_id}")
-
-            # Encerra a conversa no contexto do grupo. 
-            # O fluxo real começará quando ele der /start no privado.
-            return ConversationHandler.END
-
-        # Já está em privado
-        telegram_id = update.effective_user.id
-        membro = buscar_membro(telegram_id)
-
-        if membro:
-            await update.message.reply_text(
-                f"Você já está cadastrado como {membro.get('Nome', '')}. "
-                "Seus dados são:\n"
-                f"Loja: {membro.get('Loja', '')}\n"
-                f"Grau: {membro.get('Grau', '')}\n"
-                f"Oriente: {membro.get('Oriente', '')}\n"
-                f"Potência: {membro.get('Potência', '')}\n\n"
-                "Para editar seu cadastro, use a opção 'Meu cadastro' no menu."
-            )
-            return ConversationHandler.END
-        else:
-            await update.message.reply_text(
-                "Olá, irmão! Para ter acesso completo às funcionalidades do bot, preciso de algumas informações.\n\n"
-                "Qual o seu *Nome completo*?",
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")
-                ]])
-            )
-            logger.info(f"Iniciando cadastro no privado para usuário {telegram_id}")
-            return NOME
-
+                return NOME
+        
+        return ConversationHandler.END
+            
     except Exception as e:
         logger.error(f"Erro em cadastro_start: {e}\n{traceback.format_exc()}")
-        # Em caso de erro, não bloqueia o cadastro, mas registra
         return ConversationHandler.END
 
 async def navegacao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -155,10 +165,8 @@ async def enviar_pergunta_estado(update: Update, context: ContextTypes.DEFAULT_T
         texto = ""
         botoes = []
 
-        # Botão cancelar sempre presente
         botoes.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")])
 
-        # Adiciona botão voltar se não for o primeiro estado
         if estado > NOME:
             botoes.insert(0, [InlineKeyboardButton("⬅️ Voltar", callback_data=f"voltar|{estado-1}")])
 
@@ -177,7 +185,6 @@ async def enviar_pergunta_estado(update: Update, context: ContextTypes.DEFAULT_T
         elif estado == POTENCIA:
             texto = "Qual a sua *Potência*?"
         elif estado == CONFIRMAR:
-            # Resumo será tratado separadamente
             return
 
         reply_markup = InlineKeyboardMarkup(botoes) if botoes else None
@@ -292,7 +299,7 @@ async def mostrar_resumo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         botoes = [
             [InlineKeyboardButton("✅ Confirmar", callback_data="confirmar_cadastro")],
-            [InlineKeyboardButton("🔄 Refazer", callback_data="voltar|0")],  # Volta para o início
+            [InlineKeyboardButton("🔄 Refazer", callback_data="voltar|0")],
             [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")]
         ]
 
@@ -331,7 +338,6 @@ async def confirmar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
         }
         cadastrar_membro(dados_membro)
 
-        # Verifica ação pendente
         if "pos_cadastro" in context.user_data:
             acao = context.user_data["pos_cadastro"]
             if acao.get("acao") == "confirmar":

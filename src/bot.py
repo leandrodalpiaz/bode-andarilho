@@ -29,25 +29,8 @@ def menu_principal_teclado(nivel: str):
     return InlineKeyboardMarkup(botoes)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler para comando /start ou palavra 'bode' (quando chamado do grupo)."""
-    # Se estiver em grupo, chama cadastro_start que cuidará do redirecionamento
-    if update.effective_chat.type in ["group", "supergroup"]:
-        await cadastro_start(update, context)
-        return
-
-    # Se já está em privado, prossegue normalmente
-    telegram_id = update.effective_user.id
-    membro = buscar_membro(telegram_id)
-
-    if membro:
-        nivel = get_nivel(telegram_id)
-        await update.message.reply_text(
-            f"Bem-vindo de volta, irmão {membro.get('Nome', '')}!\n\n"
-            "O que deseja fazer?",
-            reply_markup=menu_principal_teclado(nivel)
-        )
-    else:
-        await cadastro_start(update, context)
+    """Handler para comando /start. Redireciona para cadastro_start que fará a lógica completa."""
+    await cadastro_start(update, context)
 
 async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler genérico para botões (deve ser o último)."""
@@ -130,7 +113,6 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from src.admin_acoes import rebaixar_handler
         await rebaixar_handler(update, context)
     elif data == "editar_perfil":
-        # Este callback será capturado pelo ConversationHandler em editar_perfil.py
         return
     else:
         await query.edit_message_text("Função em desenvolvimento ou comando não reconhecido.")
