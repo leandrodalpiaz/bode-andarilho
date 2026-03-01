@@ -136,7 +136,6 @@ async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif resposta_agape == "nao":
         context.user_data["novo_evento_agape"] = "Não"
         context.user_data["novo_evento_agape_tipo"] = "N/A"
-        # 🔥 CORREÇÃO: Pergunta se tem observações com botões
         teclado_obs = InlineKeyboardMarkup([
             [InlineKeyboardButton("Sim", callback_data="obs_sim")],
             [InlineKeyboardButton("Não", callback_data="obs_nao")]
@@ -164,7 +163,6 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.edit_message_text("Opção inválida para tipo de Ágape. Por favor, selecione 'Gratuito' ou 'Pago'.")
         return AGAPE_TIPO
 
-    # 🔥 CORREÇÃO: Pergunta se tem observações com botões
     teclado_obs = InlineKeyboardMarkup([
         [InlineKeyboardButton("Sim", callback_data="obs_sim")],
         [InlineKeyboardButton("Não", callback_data="obs_nao")]
@@ -294,26 +292,25 @@ async def confirmar_publicacao(update: Update, context: ContextTypes.DEFAULT_TYP
     }
     dia_semana_pt = dias.get(dados_evento['dia_semana'], dados_evento['dia_semana'])
 
-    # 🔥 CORREÇÃO: Callback_data sem caracteres especiais
+    # ID do evento para callbacks
     id_evento = f"{dados_evento['data']} — {dados_evento['nome_loja']}"
     id_evento_codificado = urllib.parse.quote(id_evento, safe='')
 
     # Determinar botões baseado no tipo de ágape
     agape_texto = dados_evento['agape'].lower()
+    botoes = []
+    
+    # Botões de confirmação (sempre presentes para não-confirmados)
     if "pago" in agape_texto or "dividido" in agape_texto:
-        botoes = [
-            [InlineKeyboardButton("🍽 Participar com ágape (pago)", callback_data=f"confirmar|{id_evento_codificado}|pago")],
-            [InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento_codificado}|sem")],
-        ]
+        botoes.append([InlineKeyboardButton("🍽 Participar com ágape (pago)", callback_data=f"confirmar|{id_evento_codificado}|pago")])
+        botoes.append([InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento_codificado}|sem")])
     elif "gratuito" in agape_texto:
-        botoes = [
-            [InlineKeyboardButton("🍽 Participar com ágape (gratuito)", callback_data=f"confirmar|{id_evento_codificado}|gratuito")],
-            [InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento_codificado}|sem")],
-        ]
-    else:  # sem ágape
-        botoes = [
-            [InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_evento_codificado}|sem")],
-        ]
+        botoes.append([InlineKeyboardButton("🍽 Participar com ágape (gratuito)", callback_data=f"confirmar|{id_evento_codificado}|gratuito")])
+        botoes.append([InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento_codificado}|sem")])
+    else:
+        botoes.append([InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_evento_codificado}|sem")])
+
+    # Botão "Ver confirmados" sempre presente
     botoes.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{id_evento_codificado}")])
 
     mensagem_grupo = (
@@ -345,7 +342,6 @@ async def confirmar_publicacao(update: Update, context: ContextTypes.DEFAULT_TYP
     print(f"✅ Evento publicado no grupo {grupo_id_int}")
     await query.edit_message_text("✅ Evento cadastrado e publicado no grupo com sucesso!\n\nUse /start para voltar ao menu principal.")
 
-    # Limpa dados da sessão
     context.user_data.clear()
     return ConversationHandler.END
 
@@ -354,7 +350,6 @@ async def refazer_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    # Limpa dados anteriores mas mantém o ID do grupo
     grupo_id = context.user_data.get("novo_evento_telegram_id_grupo", GRUPO_PRINCIPAL_ID)
     secretario_id = context.user_data.get("novo_evento_telegram_id_secretario", "")
     
