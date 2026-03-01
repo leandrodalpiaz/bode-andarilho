@@ -808,7 +808,7 @@ cadastro_handler = ConversationHandler(
             CallbackQueryHandler(navegacao_callback, pattern="^(voltar|cancelar)")
         ],
         CONFIRMAR: [
-            CallbackQueryHandler(confirmar_cadastro, pattern="^confirmar_cadastroINNERCHAT_CB_9jeltkjlzquot;),
+            CallbackQueryHandler(confirmar_cadastro, pattern="^confirmar_cadastroINNERCHAT_CB_2f8d69rpyquot;),
             CallbackQueryHandler(navegacao_callback, pattern="^(voltar|cancelar)")
         ],
     },
