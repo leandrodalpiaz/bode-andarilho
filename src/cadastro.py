@@ -4,94 +4,141 @@ import os
 import logging
 import traceback
 from datetime import datetime, timedelta
-from typing import Optional, Set
+from typing import Optional, Set, Any
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    CallbackQueryHandler,
-    CommandHandler,
     ContextTypes,
     ConversationHandler,
     MessageHandler,
+    CommandHandler,
+    CallbackQueryHandler,
     filters,
 )
 
 from src.sheets import buscar_membro, cadastrar_membro
 
-
 logger = logging.getLogger(__name__)
 
-# -----------------------------
-# Config / Estados
-# -----------------------------
-
+# Estados
 NOME, DATA_NASC, GRAU, LOJA, NUMERO_LOJA, ORIENTE, POTENCIA, CONFIRMAR = range(8)
 
-TEMPO_MAXIMO_CADASTRO = timedelta(
-    minutes=int(os.getenv("TEMPO_MAXIMO_CADASTRO_MIN", "30"))
-)
+# Env
+GRUPO_PRINCIPAL_ID = os.getenv("GRUPO_PRINCIPAL_ID")  # ex "-1003721338228"
+BOT_USERNAME = os.getenv("BOT_USERNAME")  # ex "MeuBot" (sem @)
 
-GRUPO_PRINCIPAL_ID = os.getenv("GRUPO_PRINCIPAL_ID")  # ex: "-1001234567890"
-
-
-def _parse_admin_ids(env_value: Optional[str]) -> Set[int]:
-    """
-    ADMIN_TELEGRAM_ID pode ser:
-      - "123"
-      - "123,456"
-      - "123 456"
-    """
-    if not env_value:
+# Admin fixo (pode ser "123" ou "123,456")
+def _parse_admin_ids(value: Optional[str]) -> Set[int]:
+    if not value:
         return set()
-    parts = env_value.replace(",", " ").split()
-    out: Set[int] = set()
+    parts = value.replace(",", " ").split()
+    ids: Set[int] = set()
     for p in parts:
         try:
-            out.add(int(p.strip()))
+            ids.add(int(p.strip()))
         except ValueError:
             pass
-    return out
+    return ids
 
 
 ADMIN_IDS = _parse_admin_ids(os.getenv("ADMIN_TELEGRAM_ID"))
+
+# Expiração do cadastro interrompido
+TEMPO_MAXIMO_CADASTRO = timedelta(hours=int(os.getenv("TEMPO_MAXIMO_CADASTRO_HORAS", "24")))
 
 
 def _is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
 
-def _now() -> datetime:
+def _agora() -> datetime:
     return datetime.now()
+
+
+def _cadastro_expirou(user_data: dict) -> bool:
+    inicio = user_data.get("cadastro_inicio")
+    if not inicio:
+        return False
+    try:
+        dt = datetime.fromisoformat(inicio)
+    except Exception:
+        return False
+    return (_agora() - dt) > TEMPO_MAXIMO_CADASTRO
+
+
+def _preservar_e_limpar_user_data(context: ContextTypes.DEFAULT_TYPE, preservar: Optional[Set[str]] = None):
+    preservar = preservar or set()
+    backup = {k: context.user_data.get(k) for k in preservar if k in context.user_data}
+    context.user_data.clear()
+    context.user_data.update(backup)
 
 
 async def verificar_membro_no_grupo(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     """
-    Confere se o usuário é membro do grupo principal.
-    Se GRUPO_PRINCIPAL_ID não estiver configurado, não bloqueia (retorna True).
+    Retorna True se for membro do grupo principal.
+    Se GRUPO_PRINCIPAL_ID não estiver configurado, não bloqueia (True).
     """
     if not GRUPO_PRINCIPAL_ID:
         return True
 
     try:
-        chat_id = int(GRUPO_PRINCIPAL_ID)
-        cm = await context.bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+        cm = await context.bot.get_chat_member(chat_id=int(GRUPO_PRINCIPAL_ID), user_id=user_id)
         return cm.status not in ("left", "kicked")
     except Exception as e:
-        # Falha de API não deve travar o bot inteiro.
-        logger.warning(f"Falha ao verificar membro no grupo: user_id={user_id} erro={e}")
+        # Se falhar API, não bloqueia (pra não matar o bot)
+        logger.warning(f"Falha ao verificar membro no grupo: user={user_id} erro={e}")
         return True
 
 
-async def _enviar_menu_principal(
-    user_id: int,
-    context: ContextTypes.DEFAULT_TYPE,
-    texto: str,
-    nivel: str,
-):
-    """
-    Import local para evitar import circular src.bot <-> src.cadastro.
-    """
-    from src.bot import menu_principal_teclado
+def _teclado_inicio(mostrar_continuar: bool) -> InlineKeyboardMarkup:
+    linhas = [[InlineKeyboardButton("📝 INICIAR CADASTRO", callback_data="iniciar_cadastro")]]
+    if mostrar_continuar:
+        linhas.append([InlineKeyboardButton("⏩ CONTINUAR CADASTRO", callback_data="continuar_cadastro")])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")])
+    return InlineKeyboardMarkup(linhas)
+
+
+def _teclado_nav(estado_atual: int) -> InlineKeyboardMarkup:
+    voltar_map = {
+        NOME: NOME,
+        DATA_NASC: NOME,
+        GRAU: DATA_NASC,
+        LOJA: GRAU,
+        NUMERO_LOJA: LOJA,
+        ORIENTE: NUMERO_LOJA,
+        POTENCIA: ORIENTE,
+        CONFIRMAR: POTENCIA,
+    }
+    alvo = voltar_map.get(estado_atual, NOME)
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("⬅️ Voltar", callback_data=f"voltar|{alvo}"),
+                InlineKeyboardButton("❌ Cancelar", callback_data="cancelar"),
+            ]
+        ]
+    )
+
+
+def _teclado_confirmar() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("✅ Confirmar", callback_data="confirmar_cadastro")],
+            [InlineKeyboardButton("🔄 Refazer", callback_data=f"voltar|{NOME}")],
+            [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")],
+        ]
+    )
+
+
+def _deep_link_private() -> Optional[str]:
+    if not BOT_USERNAME:
+        return None
+    # deep link simples (sem parâmetros)
+    return f"https://t.me/{BOT_USERNAME}?start=1"
+
+
+async def _enviar_menu_principal(user_id: int, context: ContextTypes.DEFAULT_TYPE, nivel: str, texto: str):
+    from src.bot import menu_principal_teclado  # import local para evitar circular
 
     await context.bot.send_message(
         chat_id=user_id,
@@ -101,204 +148,99 @@ async def _enviar_menu_principal(
     )
 
 
-def _teclado_inicio_cadastro() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("📝 INICIAR CADASTRO", callback_data="iniciar_cadastro")],
-            [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")],
-        ]
-    )
-
-
-def _teclado_continuar_cadastro() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("▶️ Continuar cadastro", callback_data="continuar_cadastro")],
-            [InlineKeyboardButton("🔄 Recomeçar", callback_data="iniciar_cadastro")],
-            [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")],
-        ]
-    )
-
-
-def _teclado_navegacao(estado: int) -> InlineKeyboardMarkup:
-    botoes = []
-    if estado > NOME:
-        botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data=f"voltar|{estado - 1}")])
-    botoes.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")])
-    return InlineKeyboardMarkup(botoes)
-
-
-def _cadastro_expirou(context: ContextTypes.DEFAULT_TYPE) -> bool:
-    inicio = context.user_data.get("cadastro_inicio")
-    if not isinstance(inicio, datetime):
-        return True
-    return (_now() - inicio) > TEMPO_MAXIMO_CADASTRO
-
-
-def _preservar_e_limpar_user_data(context: ContextTypes.DEFAULT_TYPE, preservar_chaves: Optional[Set[str]] = None):
-    """
-    Limpa user_data preservando algumas chaves (ex.: pos_cadastro).
-    """
-    if preservar_chaves is None:
-        preservar_chaves = set()
-
-    snapshot = {k: context.user_data.get(k) for k in preservar_chaves if k in context.user_data}
-    context.user_data.clear()
-    context.user_data.update(snapshot)
-
-
-# -----------------------------
-# Entry point / Ponte grupo->privado
-# -----------------------------
-
 async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Fluxo:
-    - Grupo: NÃO conversa no grupo; tenta falar no privado:
-        - Se admin: manda menu admin no privado
-        - Se cadastrado: manda menu no privado
-        - Se não cadastrado: manda botão "Iniciar cadastro" no privado
-      (Sem mensagem no grupo para membros)
-    - Privado:
-        - Se admin/cadastrado: menu
-        - Se não cadastrado: botão iniciar (ou continuar se houver andamento)
+    Entry point do /start (e também pode ser chamado do grupo via "bode").
+    - No grupo: tenta DM; se não conseguir, manda botão "Abrir privado".
+    - No privado: se cadastrado -> menu; senão -> oferece iniciar/continuar cadastro.
     """
+    user_id = update.effective_user.id
+    chat_type = update.effective_chat.type
+    admin = _is_admin(user_id)
+
+    logger.info(f"cadastro_start: chat_type={chat_type} user_id={user_id} admin={admin}")
+
     try:
-        user_id = update.effective_user.id
-        chat_type = update.effective_chat.type if update.effective_chat else None
-
-        logger.info(f"cadastro_start: chat_type={chat_type} user_id={user_id}")
-
-        admin = _is_admin(user_id)
-
-        # 1) GRUPO/SUPERGRUPO: ponte
+        # 1) Se for grupo: ponte pro privado
         if chat_type in ("group", "supergroup"):
-            is_member = await verificar_membro_no_grupo(user_id, context)
-            if not is_member and not admin:
-                # Aqui pode responder no grupo, pois é caso de bloqueio.
-                msg = (
-                    "⛔ *Acesso não permitido*\n\n"
-                    "Você precisa ser membro do grupo para usar este bot."
-                )
-                if update.callback_query:
-                    await update.callback_query.answer()
-                    await update.callback_query.edit_message_text(msg, parse_mode="Markdown")
-                elif update.message:
-                    await update.message.reply_text(msg, parse_mode="Markdown")
+            membro_ok = await verificar_membro_no_grupo(user_id, context)
+            if not membro_ok and not admin:
+                # aqui é o único caso que eu respondo no grupo, pra deixar claro o bloqueio
+                if update.message:
+                    await update.message.reply_text(
+                        "⛔ Acesso não permitido. Você precisa ser membro do grupo principal para usar este bot."
+                    )
                 return ConversationHandler.END
 
-            membro = buscar_membro(user_id)
-
-            # Sem mensagem no grupo para membros: só DM
+            # tenta DM
             try:
+                membro = buscar_membro(user_id)
                 if admin:
-                    await context.bot.send_message(
-                        chat_id=user_id,
-                        text="👑 *Administrador*\n\nUse o menu abaixo para navegar.",
-                        parse_mode="Markdown",
-                    )
-                    await _enviar_menu_principal(user_id, context, "👑 *Administrador*", "3")
-                    return ConversationHandler.END
-
-                if membro:
+                    await _enviar_menu_principal(user_id, context, "3", "👑 *Administrador*")
+                elif membro:
                     nivel = str(membro.get("Nivel", "1"))
                     nome = membro.get("Nome", "irmão")
                     await _enviar_menu_principal(
-                        user_id,
-                        context,
-                        f"Bem-vindo de volta, irmão {nome}!\n\nO que deseja fazer?",
-                        nivel,
+                        user_id, context, nivel, f"Bem-vindo de volta, irmão *{nome}*!"
                     )
-                    return ConversationHandler.END
-
-                await context.bot.send_message(
-                    chat_id=user_id,
-                    text=(
-                        "👋 Olá, irmão! Para começar a usar o Bode Andarilho, "
-                        "preciso fazer seu cadastro.\n\n"
-                        "Clique no botão abaixo quando estiver pronto:"
-                    ),
-                    reply_markup=_teclado_inicio_cadastro(),
-                )
+                else:
+                    # oferece iniciar/continuar no privado
+                    mostrar_continuar = bool(context.user_data.get("cadastro_em_andamento")) and not _cadastro_expirou(context.user_data)
+                    await context.bot.send_message(
+                        chat_id=user_id,
+                        text="👋 *Bem-vindo ao Bode Andarilho!*\n\nPara continuar, toque em um botão abaixo:",
+                        parse_mode="Markdown",
+                        reply_markup=_teclado_inicio(mostrar_continuar),
+                    )
             except Exception as e:
-                logger.warning(f"Não consegui enviar DM para user_id={user_id}: {e}")
+                # Não conseguiu mandar DM -> manda botão no grupo
+                link = _deep_link_private()
+                if link and update.message:
+                    await update.message.reply_text(
+                        "🔔 Para continuar, abra meu chat privado:",
+                        reply_markup=InlineKeyboardMarkup(
+                            [[InlineKeyboardButton("📩 Abrir privado", url=link)]]
+                        ),
+                    )
+                elif update.message:
+                    await update.message.reply_text("🔔 Para continuar, abra meu privado e envie /start.")
+                logger.warning(f"Não consegui DM user={user_id}: {e}")
 
             return ConversationHandler.END
 
-        # 2) PRIVADO: conversa
-        if chat_type == "private":
-            membro = buscar_membro(user_id)
+        # 2) Privado: decide menu vs cadastro
+        membro = buscar_membro(user_id)
 
-            # Admin sempre tem acesso ao menu, mesmo sem cadastro
-            if admin:
-                if membro:
-                    nivel = str(membro.get("Nivel", "3"))
-                    nome = membro.get("Nome", "Administrador")
-                    await _enviar_menu_principal(
-                        user_id,
-                        context,
-                        f"Bem-vindo de volta, irmão {nome}!\n\nO que deseja fazer?",
-                        nivel,
-                    )
-                else:
-                    await _enviar_menu_principal(
-                        user_id,
-                        context,
-                        "👑 *Bem-vindo, Administrador!*\n\nVocê tem acesso total ao sistema.",
-                        "3",
-                    )
-                return ConversationHandler.END
-
-            # Usuário cadastrado: menu e fim
-            if membro:
-                nivel = str(membro.get("Nivel", "1"))
-                nome = membro.get("Nome", "irmão")
-                await _enviar_menu_principal(
-                    user_id,
-                    context,
-                    f"Bem-vindo de volta, irmão {nome}!\n\nO que deseja fazer?",
-                    nivel,
-                )
-                return ConversationHandler.END
-
-            # Não cadastrado: oferecer continuar/recomeçar se há andamento e não expirou
-            if context.user_data.get("cadastro_em_andamento"):
-                if _cadastro_expirou(context):
-                    logger.info(f"Cadastro expirado: limpando user_data user_id={user_id}")
-                    _preservar_e_limpar_user_data(context, preservar_chaves={"pos_cadastro"})
-                else:
-                    if update.message:
-                        await update.message.reply_text(
-                            "Você já tem um cadastro em andamento. Deseja continuar de onde parou ou recomeçar?",
-                            reply_markup=_teclado_continuar_cadastro(),
-                        )
-                    else:
-                        # fallback (caso raro)
-                        await context.bot.send_message(
-                            chat_id=user_id,
-                            text="Você já tem um cadastro em andamento. Deseja continuar ou recomeçar?",
-                            reply_markup=_teclado_continuar_cadastro(),
-                        )
-                    return ConversationHandler.END
-
-            # Primeiro contato no privado: botão iniciar
-            if update.message:
-                await update.message.reply_text(
-                    "👋 Olá, irmão! Para começar a usar o Bode Andarilho, preciso fazer seu cadastro.\n\n"
-                    "Clique no botão abaixo quando estiver pronto:",
-                    reply_markup=_teclado_inicio_cadastro(),
-                )
-            else:
-                await context.bot.send_message(
-                    chat_id=user_id,
-                    text="👋 Olá, irmão! Para começar a usar o Bode Andarilho, preciso fazer seu cadastro.\n\n"
-                         "Clique no botão abaixo quando estiver pronto:",
-                    reply_markup=_teclado_inicio_cadastro(),
-                )
-
+        if admin:
+            await _enviar_menu_principal(user_id, context, "3", "👑 *Administrador*")
             return ConversationHandler.END
 
-        # 3) Outros tipos (canal etc.)
+        if membro:
+            nivel = str(membro.get("Nivel", "1"))
+            nome = membro.get("Nome", "irmão")
+            await _enviar_menu_principal(
+                user_id, context, nivel, f"Bem-vindo de volta, irmão *{nome}*!"
+            )
+            return ConversationHandler.END
+
+        # não cadastrado -> oferece iniciar/continuar
+        if _cadastro_expirou(context.user_data):
+            # se expirou, reseta o andamento mas preserva pos_cadastro
+            _preservar_e_limpar_user_data(context, preservar={"pos_cadastro"})
+
+        mostrar_continuar = bool(context.user_data.get("cadastro_em_andamento"))
+        if update.message:
+            await update.message.reply_text(
+                "📝 Você ainda não possui cadastro.\n\nToque em um botão abaixo:",
+                reply_markup=_teclado_inicio(mostrar_continuar),
+            )
+        else:
+            # raríssimo: /start vindo de callback, mas ok
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="📝 Você ainda não possui cadastro.\n\nToque em um botão abaixo:",
+                reply_markup=_teclado_inicio(mostrar_continuar),
+            )
         return ConversationHandler.END
 
     except Exception as e:
@@ -306,201 +248,168 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
 
-# -----------------------------
-# Callbacks de início/continuidade
-# -----------------------------
-
 async def iniciar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Começa efetivamente o cadastro no privado."""
     query = update.callback_query
     await query.answer()
 
-    user_id = update.effective_user.id
-    logger.info(f"iniciar_cadastro_callback: user_id={user_id}")
+    # preserva ação pendente pós-cadastro
+    pos = context.user_data.get("pos_cadastro")
+    _preservar_e_limpar_user_data(context, preservar={"pos_cadastro"})
 
-    # Preserva ações pendentes (ex.: confirmação pós-cadastro)
-    _preservar_e_limpar_user_data(context, preservar_chaves={"pos_cadastro"})
+    if pos:
+        context.user_data["pos_cadastro"] = pos
 
     context.user_data["cadastro_em_andamento"] = True
-    context.user_data["cadastro_inicio"] = _now()
-    context.user_data["ultimo_estado"] = NOME
+    context.user_data["cadastro_inicio"] = _agora().isoformat()
+    context.user_data["estado_atual"] = NOME
 
     await query.edit_message_text(
-        "📝 *Vamos começar!*\n\nQual o seu *Nome completo*?",
+        "Envie seu *nome completo*:",
         parse_mode="Markdown",
-        reply_markup=_teclado_navegacao(NOME),
+        reply_markup=_teclado_nav(NOME),
     )
     return NOME
 
 
 async def continuar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Continua do último estado salvo, se não estiver expirado."""
     query = update.callback_query
     await query.answer()
 
-    user_id = update.effective_user.id
-    logger.info(f"continuar_cadastro_callback: user_id={user_id}")
-
-    if not context.user_data.get("cadastro_em_andamento") or _cadastro_expirou(context):
-        await query.edit_message_text(
-            "Seu cadastro anterior não está mais disponível. Vamos iniciar um novo.",
-            reply_markup=_teclado_inicio_cadastro(),
-        )
+    if _cadastro_expirou(context.user_data):
+        _preservar_e_limpar_user_data(context, preservar={"pos_cadastro"})
+        await query.edit_message_text("Seu cadastro expirou. Envie /start e inicie novamente.")
         return ConversationHandler.END
 
-    ultimo_estado = context.user_data.get("ultimo_estado", NOME)
-    await enviar_pergunta_estado(update, context, ultimo_estado, edit=True)
-    return ultimo_estado
+    estado = context.user_data.get("estado_atual", NOME)
+    textos = {
+        NOME: "Envie seu *nome completo*:",
+        DATA_NASC: "Envie sua *data de nascimento* (DD/MM/AAAA):",
+        GRAU: "Qual o seu *grau*?",
+        LOJA: "Informe o *nome da sua loja*:",
+        NUMERO_LOJA: "Informe o *número da loja* (somente números, ou 0):",
+        ORIENTE: "Informe seu *Oriente*:",
+        POTENCIA: "Informe sua *Potência*:",
+    }
+
+    await query.edit_message_text(
+        textos.get(estado, "Envie a informação:"),
+        parse_mode="Markdown",
+        reply_markup=_teclado_nav(estado),
+    )
+    return estado
 
 
 async def navegacao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Botões de navegação durante cadastro: voltar|N e cancelar."""
     query = update.callback_query
     await query.answer()
-    data = query.data
 
-    logger.info(f"navegacao_callback: data={data} user_id={update.effective_user.id}")
+    data = query.data or ""
 
-    try:
-        if data == "cancelar":
-            return await cancelar_cadastro(update, context)
+    if data == "cancelar":
+        return await cancelar_cadastro(update, context)
 
-        if data.startswith("voltar|"):
-            try:
-                estado_destino = int(data.split("|", 1)[1])
-            except ValueError:
-                estado_destino = NOME
-
-            await enviar_pergunta_estado(update, context, estado_destino, edit=True)
-            return estado_destino
-
-        return ConversationHandler.END
-
-    except Exception as e:
-        logger.error(f"Erro em navegacao_callback: {e}\n{traceback.format_exc()}")
-        return ConversationHandler.END
-
-
-# -----------------------------
-# Perguntas por estado
-# -----------------------------
-
-async def enviar_pergunta_estado(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-    estado: int,
-    edit: bool = False,
-):
-    """Envia a pergunta correspondente ao estado, com botões de navegação."""
-    user_id = update.effective_user.id
-    logger.info(f"enviar_pergunta_estado: estado={estado} user_id={user_id}")
-
-    context.user_data["ultimo_estado"] = estado
-
-    try:
-        if estado == CONFIRMAR:
-            await mostrar_resumo(update, context)
-            return
-
-        if estado == NOME:
-            texto = "Qual o seu *Nome completo*?"
-        elif estado == DATA_NASC:
-            texto = "Qual a sua *Data de nascimento*? (ex: 25/12/1980)"
-        elif estado == GRAU:
-            texto = "Qual o seu *Grau*?"
-        elif estado == LOJA:
-            texto = "Qual o *nome da sua Loja*? (apenas o nome, sem número)"
-        elif estado == NUMERO_LOJA:
-            texto = "Qual o *número da sua Loja*?"
-        elif estado == ORIENTE:
-            texto = "Qual o *Oriente da sua Loja*?"
-        elif estado == POTENCIA:
-            texto = "Qual a sua *Potência*?"
-        else:
-            texto = "Vamos voltar ao início. Qual o seu *Nome completo*?"
+    if data.startswith("voltar|"):
+        try:
+            estado = int(data.split("|", 1)[1])
+        except Exception:
             estado = NOME
-            context.user_data["ultimo_estado"] = NOME
 
-        markup = _teclado_navegacao(estado)
+        context.user_data["estado_atual"] = estado
 
-        if edit and update.callback_query:
-            await update.callback_query.edit_message_text(
-                texto,
-                parse_mode="Markdown",
-                reply_markup=markup,
-            )
-        else:
-            await context.bot.send_message(
-                chat_id=user_id,
-                text=texto,
-                parse_mode="Markdown",
-                reply_markup=markup,
-            )
+        textos = {
+            NOME: "Envie seu *nome completo*:",
+            DATA_NASC: "Envie sua *data de nascimento* (DD/MM/AAAA):",
+            GRAU: "Qual o seu *grau*?",
+            LOJA: "Informe o *nome da sua loja*:",
+            NUMERO_LOJA: "Informe o *número da loja* (somente números, ou 0):",
+            ORIENTE: "Informe seu *Oriente*:",
+            POTENCIA: "Informe sua *Potência*:",
+        }
 
-    except Exception as e:
-        logger.error(f"Erro em enviar_pergunta_estado: {e}\n{traceback.format_exc()}")
+        await query.edit_message_text(
+            textos.get(estado, "Envie a informação:"),
+            parse_mode="Markdown",
+            reply_markup=_teclado_nav(estado),
+        )
+        return estado
 
+    return ConversationHandler.END
 
-# -----------------------------
-# Recebimento de dados
-# -----------------------------
 
 async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info(f"receber_nome: user_id={update.effective_user.id} text={update.message.text}")
     context.user_data["cadastro_nome"] = update.message.text.strip()
-    await enviar_pergunta_estado(update, context, DATA_NASC)
+    context.user_data["estado_atual"] = DATA_NASC
+    await update.message.reply_text(
+        "Envie sua *data de nascimento* (DD/MM/AAAA):",
+        parse_mode="Markdown",
+        reply_markup=_teclado_nav(DATA_NASC),
+    )
     return DATA_NASC
 
 
 async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info(f"receber_data_nasc: user_id={update.effective_user.id} text={update.message.text}")
     context.user_data["cadastro_data_nasc"] = update.message.text.strip()
-    await enviar_pergunta_estado(update, context, GRAU)
+    context.user_data["estado_atual"] = GRAU
+    await update.message.reply_text(
+        "Qual o seu *grau*?",
+        parse_mode="Markdown",
+        reply_markup=_teclado_nav(GRAU),
+    )
     return GRAU
 
 
 async def receber_grau(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info(f"receber_grau: user_id={update.effective_user.id} text={update.message.text}")
     context.user_data["cadastro_grau"] = update.message.text.strip()
-    await enviar_pergunta_estado(update, context, LOJA)
+    context.user_data["estado_atual"] = LOJA
+    await update.message.reply_text(
+        "Informe o *nome da sua loja*:",
+        parse_mode="Markdown",
+        reply_markup=_teclado_nav(LOJA),
+    )
     return LOJA
 
 
 async def receber_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info(f"receber_loja: user_id={update.effective_user.id} text={update.message.text}")
     context.user_data["cadastro_loja"] = update.message.text.strip()
-    await enviar_pergunta_estado(update, context, NUMERO_LOJA)
+    context.user_data["estado_atual"] = NUMERO_LOJA
+    await update.message.reply_text(
+        "Informe o *número da loja* (somente números, ou 0):",
+        parse_mode="Markdown",
+        reply_markup=_teclado_nav(NUMERO_LOJA),
+    )
     return NUMERO_LOJA
 
 
 async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info(f"receber_numero_loja: user_id={update.effective_user.id} text={update.message.text}")
     context.user_data["cadastro_numero_loja"] = update.message.text.strip()
-    await enviar_pergunta_estado(update, context, ORIENTE)
+    context.user_data["estado_atual"] = ORIENTE
+    await update.message.reply_text(
+        "Informe seu *Oriente*:",
+        parse_mode="Markdown",
+        reply_markup=_teclado_nav(ORIENTE),
+    )
     return ORIENTE
 
 
 async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info(f"receber_oriente: user_id={update.effective_user.id} text={update.message.text}")
     context.user_data["cadastro_oriente"] = update.message.text.strip()
-    await enviar_pergunta_estado(update, context, POTENCIA)
+    context.user_data["estado_atual"] = POTENCIA
+    await update.message.reply_text(
+        "Informe sua *Potência*:",
+        parse_mode="Markdown",
+        reply_markup=_teclado_nav(POTENCIA),
+    )
     return POTENCIA
 
 
 async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info(f"receber_potencia: user_id={update.effective_user.id} text={update.message.text}")
     context.user_data["cadastro_potencia"] = update.message.text.strip()
+    context.user_data["estado_atual"] = CONFIRMAR
     await mostrar_resumo(update, context)
     return CONFIRMAR
 
 
-# -----------------------------
-# Resumo / Confirmação
-# -----------------------------
-
 async def mostrar_resumo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info(f"mostrar_resumo: user_id={update.effective_user.id}")
-
     nome = context.user_data.get("cadastro_nome", "")
     data_nasc = context.user_data.get("cadastro_data_nasc", "")
     grau = context.user_data.get("cadastro_grau", "")
@@ -520,30 +429,15 @@ async def mostrar_resumo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "*Tudo correto?*"
     )
 
-    botoes = InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("✅ Confirmar", callback_data="confirmar_cadastro")],
-            [InlineKeyboardButton("🔄 Refazer", callback_data=f"voltar|{NOME}")],
-            [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")],
-        ]
-    )
-
-    if update.callback_query:
-        await update.callback_query.edit_message_text(resumo, parse_mode="Markdown", reply_markup=botoes)
-    else:
-        await update.message.reply_text(resumo, parse_mode="Markdown", reply_markup=botoes)
+    await update.message.reply_text(resumo, parse_mode="Markdown", reply_markup=_teclado_confirmar())
 
 
 async def confirmar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Salva os dados na planilha e finaliza."""
     query = update.callback_query
     await query.answer()
 
-    user_id = update.effective_user.id
-    logger.info(f"confirmar_cadastro: user_id={user_id}")
-
     try:
-        dados_membro = {
+        dados_membro: dict[str, Any] = {
             "nome": context.user_data.get("cadastro_nome", ""),
             "data_nasc": context.user_data.get("cadastro_data_nasc", ""),
             "grau": context.user_data.get("cadastro_grau", ""),
@@ -551,21 +445,19 @@ async def confirmar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "numero_loja": context.user_data.get("cadastro_numero_loja", ""),
             "oriente": context.user_data.get("cadastro_oriente", ""),
             "potencia": context.user_data.get("cadastro_potencia", ""),
-            "telegram_id": user_id,
+            "telegram_id": update.effective_user.id,
             "cargo": "",
         }
 
-        # Tenta salvar (tolerante a assinaturas diferentes)
+        # tenta salvar tolerando assinaturas diferentes
         try:
             cadastrar_membro(dados_membro)
         except TypeError:
-            # fallback se a função espera (telegram_id, dict)
             try:
-                cadastrar_membro(user_id, dados_membro)
+                cadastrar_membro(update.effective_user.id, dados_membro)
             except TypeError:
-                # fallback se espera parâmetros soltos
                 cadastrar_membro(
-                    user_id,
+                    update.effective_user.id,
                     dados_membro["nome"],
                     dados_membro["data_nasc"],
                     dados_membro["grau"],
@@ -575,21 +467,20 @@ async def confirmar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     dados_membro["potencia"],
                 )
 
-        # Remove flags do andamento, mas preserva pos_cadastro se existir
-        pos_cadastro = context.user_data.get("pos_cadastro")
-        _preservar_e_limpar_user_data(context, preservar_chaves={"pos_cadastro"})
+        # preserva pos_cadastro
+        pos = context.user_data.get("pos_cadastro")
+        _preservar_e_limpar_user_data(context, preservar={"pos_cadastro"})
+        if pos:
+            context.user_data["pos_cadastro"] = pos
 
-        # Se havia ação pendente pós-cadastro, executa
-        if pos_cadastro:
+        # executa ação pós-cadastro se existir
+        if pos and isinstance(pos, dict) and pos.get("acao") == "confirmar":
             try:
-                acao = pos_cadastro
-                if isinstance(acao, dict) and acao.get("acao") == "confirmar":
-                    from src.eventos import iniciar_confirmacao_presenca_pos_cadastro
-                    await iniciar_confirmacao_presenca_pos_cadastro(update, context, acao)
-                    context.user_data.pop("pos_cadastro", None)
-                    return ConversationHandler.END
+                from src.eventos import iniciar_confirmacao_presenca_pos_cadastro
+                await iniciar_confirmacao_presenca_pos_cadastro(update, context, pos)
+                context.user_data.pop("pos_cadastro", None)
             except Exception as e:
-                logger.error(f"Erro em pos_cadastro: {e}\n{traceback.format_exc()}")
+                logger.error(f"Erro no pos_cadastro: {e}\n{traceback.format_exc()}")
 
         await query.edit_message_text(
             "✅ *Cadastro realizado com sucesso!* Bem-vindo, irmão!\n\nUse /start para acessar o menu principal.",
@@ -599,16 +490,11 @@ async def confirmar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     except Exception as e:
         logger.error(f"Erro em confirmar_cadastro: {e}\n{traceback.format_exc()}")
-        await query.edit_message_text(
-            "❌ Ocorreu um erro ao salvar seus dados. Tente novamente mais tarde."
-        )
+        await query.edit_message_text("❌ Ocorreu um erro ao salvar seus dados. Tente novamente mais tarde.")
         return ConversationHandler.END
 
 
 async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Cancela o cadastro e limpa os dados."""
-    logger.info(f"cancelar_cadastro: user_id={update.effective_user.id}")
-
     try:
         if update.callback_query:
             await update.callback_query.answer()
@@ -616,63 +502,57 @@ async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Cadastro cancelado. Você pode iniciar novamente com /start."
             )
         elif update.message:
-            await update.message.reply_text(
-                "Cadastro cancelado. Você pode iniciar novamente com /start."
-            )
-        _preservar_e_limpar_user_data(context, preservar_chaves={"pos_cadastro"})
+            await update.message.reply_text("Cadastro cancelado. Você pode iniciar novamente com /start.")
     except Exception as e:
         logger.error(f"Erro em cancelar_cadastro: {e}\n{traceback.format_exc()}")
 
+    _preservar_e_limpar_user_data(context, preservar={"pos_cadastro"})
     return ConversationHandler.END
 
-
-# -----------------------------
-# ConversationHandler
-# -----------------------------
 
 cadastro_handler = ConversationHandler(
     entry_points=[
         CommandHandler("start", cadastro_start),
-        CallbackQueryHandler(iniciar_cadastro_callback, pattern="^iniciar_cadastroINNERCHAT_CB_1cyz8kshlquot;),
-        CallbackQueryHandler(continuar_cadastro_callback, pattern="^continuar_cadastroINNERCHAT_CB_1cyz8kshlquot;),
+        CallbackQueryHandler(iniciar_cadastro_callback, pattern="^iniciar_cadastroINNERCHAT_CB_swt7znwdcquot;),
+        CallbackQueryHandler(continuar_cadastro_callback, pattern="^continuar_cadastroINNERCHAT_CB_swt7znwdcquot;),
     ],
     states={
         NOME: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_nome),
-            CallbackQueryHandler(navegacao_callback, pattern=r"^(cancelar|voltar\|\d+)INNERCHAT_CB_1cyz8kshlquot;),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
         ],
         DATA_NASC: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_data_nasc),
-            CallbackQueryHandler(navegacao_callback, pattern=r"^(cancelar|voltar\|\d+)INNERCHAT_CB_1cyz8kshlquot;),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
         ],
         GRAU: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_grau),
-            CallbackQueryHandler(navegacao_callback, pattern=r"^(cancelar|voltar\|\d+)INNERCHAT_CB_1cyz8kshlquot;),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
         ],
         LOJA: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_loja),
-            CallbackQueryHandler(navegacao_callback, pattern=r"^(cancelar|voltar\|\d+)INNERCHAT_CB_1cyz8kshlquot;),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
         ],
         NUMERO_LOJA: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_numero_loja),
-            CallbackQueryHandler(navegacao_callback, pattern=r"^(cancelar|voltar\|\d+)INNERCHAT_CB_1cyz8kshlquot;),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
         ],
         ORIENTE: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_oriente),
-            CallbackQueryHandler(navegacao_callback, pattern=r"^(cancelar|voltar\|\d+)INNERCHAT_CB_1cyz8kshlquot;),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
         ],
         POTENCIA: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_potencia),
-            CallbackQueryHandler(navegacao_callback, pattern=r"^(cancelar|voltar\|\d+)INNERCHAT_CB_1cyz8kshlquot;),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
         ],
         CONFIRMAR: [
-            CallbackQueryHandler(confirmar_cadastro, pattern="^confirmar_cadastroINNERCHAT_CB_1cyz8kshlquot;),
-            CallbackQueryHandler(navegacao_callback, pattern=r"^(cancelar|voltar\|\d+)INNERCHAT_CB_1cyz8kshlquot;),
+            CallbackQueryHandler(confirmar_cadastro, pattern="^confirmar_cadastroINNERCHAT_CB_swt7znwdcquot;),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
         ],
     },
     fallbacks=[
         CommandHandler("cancelar", cancelar_cadastro),
-        CallbackQueryHandler(navegacao_callback, pattern=r"^(cancelar|voltar\|\d+)INNERCHAT_CB_1cyz8kshlquot;),
+        CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
     ],
     allow_reentry=True,
     name="cadastro_handler",
