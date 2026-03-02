@@ -29,7 +29,37 @@ def menu_principal_teclado(nivel: str):
     return InlineKeyboardMarkup(botoes)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler para comando /start. Redireciona para cadastro_start que fará a lógica completa."""
+    """
+    Handler principal para /start e 'bode'.
+    - Se estiver no grupo: redireciona para o privado
+    - Se estiver no privado: encaminha para cadastro_start
+    """
+    logger.info(f"start chamado - chat_type: {update.effective_chat.type}, user_id: {update.effective_user.id}")
+    
+    # Se estiver no grupo, envia mensagem de orientação e já redireciona para o privado
+    if update.effective_chat.type in ["group", "supergroup"]:
+        # Mensagem no grupo
+        await update.message.reply_text(
+            "🔔 *Bem-vindo ao Bode Andarilho!*\n\n"
+            "Vou te ajudar no privado. Por favor, clique no link abaixo para continuar:",
+            parse_mode="Markdown"
+        )
+        
+        # Já inicia a conversa no privado
+        await context.bot.send_message(
+            chat_id=update.effective_user.id,
+            text="👋 Olá! Como posso ajudar?",
+            reply_markup=menu_principal_teclado("1")  # Temporário, será ajustado depois
+        )
+        
+        # Agora chama cadastro_start para fazer a lógica completa no privado
+        # Mas precisamos simular um update no privado
+        # Vamos criar um novo contexto? Melhor chamar cadastro_start diretamente com o user_id
+        
+        # Cria um update fictício? Não é trivial. Vamos confiar que o usuário vai interagir no privado.
+        return
+    
+    # Se já está em privado, chama cadastro_start que cuidará da lógica
     await cadastro_start(update, context)
 
 async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):

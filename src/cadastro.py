@@ -42,7 +42,7 @@ async def verificar_membro_no_grupo(user_id: int, context: ContextTypes.DEFAULT_
 async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Ponto de entrada principal.
-    - Se estiver em GRUPO: apenas orienta a ir para o privado
+    - Se estiver em GRUPO: apenas orienta a ir para o privado (mensagem única)
     - Se estiver em PRIVADO: verifica cadastro e mostra menu principal para admin/membros existentes
     """
     logger.info(f"cadastro_start chamado - chat_type: {update.effective_chat.type}, user_id: {update.effective_user.id}")
@@ -77,10 +77,7 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # ✅ Mensagem ÚNICA no grupo: orientação clara
             mensagem_grupo = (
                 "🔔 *Bem-vindo ao Bode Andarilho!*\n\n"
-                "Para interagir comigo, por favor:\n"
-                "1️⃣ Clique no meu nome aqui no grupo\n"
-                "2️⃣ Envie **/start** ou **'Bode'** no meu chat privado\n\n"
-                "Lá eu vou te guiar. 🐐"
+                "Vou te ajudar no privado. Por favor, clique no meu nome e envie uma mensagem no privado para começar. 🐐"
             )
             
             if update.callback_query:
