@@ -1,7 +1,10 @@
 # src/bot.py
 
+import logging
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
+
 from src.sheets import buscar_membro
 from src.cadastro import cadastro_start
 from src.eventos import (
@@ -12,6 +15,9 @@ from src.eventos import (
 from src.perfil import mostrar_perfil
 from src.permissoes import get_nivel
 
+logger = logging.getLogger(__name__)
+
+
 def menu_principal_teclado(nivel: str):
     """Menu principal baseado no nível do usuário - APENAS botões permitidos."""
     botoes = [
@@ -20,7 +26,7 @@ def menu_principal_teclado(nivel: str):
         [InlineKeyboardButton("👤 Meu cadastro", callback_data="meu_cadastro")],
     ]
 
-    if nivel == "2" or nivel == "3":
+    if nivel in ("2", "3"):
         botoes.append([InlineKeyboardButton("📋 Área do Secretário", callback_data="area_secretario")])
 
     if nivel == "3":
@@ -28,48 +34,64 @@ def menu_principal_teclado(nivel: str):
 
     return InlineKeyboardMarkup(botoes)
 
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Handler principal para /start e 'bode'.
-    - Se estiver no grupo: redireciona para o privado
-    - Se estiver no privado: encaminha para cadastro_start
-    """
-    logger.info(f"start chamado - chat_type: {update.effective_chat.type}, user_id: {update.effective_user.id}")
-    
-    # Se estiver no grupo, envia mensagem de orientação e já redireciona para o privado
-    if update.effective_chat.type in ["group", "supergroup"]:
-        # Mensagem no grupo
-        await update.message.reply_text(
-            "🔔 *Bem-vindo ao Bode Andarilho!*\n\n"
-            "Vou te ajudar no privado. Por favor, clique no link abaixo para continuar:",
-            parse_mode="Markdown"
-        )
-        
-        # Já inicia a conversa no privado
-        await context.bot.send_message(
-            chat_id=update.effective_user.id,
-            text="👋 Olá! Como posso ajudar?",
-            reply_markup=menu_principal_teclado("1")  # Temporário, será ajustado depois
-        )
-        
-        # Agora chama cadastro_start para fazer a lógica completa no privado
-        # Mas precisamos simular um update no privado
-        # Vamos criar um novo contexto? Melhor chamar cadastro_start diretamente com o user_id
-        
-        # Cria um update fictício? Não é trivial. Vamos confiar que o usuário vai interagir no privado.
+    """Handler para comando /start ou palavra 'bode' (quando chamado do grupo)."""
+    logger.info(
+        "start chamado - chat_type=%s user_id=%s",
+        getattr(update.effective_chat, "type", None),
+        getattr(update.effective_user, "id", None),
+    )
+
+    # Se estiver em grupo, chama cadastro_start que cuidará do redirecionamento
+    if update.effective_chat and update.effective_chat.type in ["group", "supergroup"]:
+        await cadastro_start(update, context)
         return
-    
-    # Se já está em privado, chama cadastro_start que cuidará da lógica
-    await cadastro_start(update, context)
+
+    # Se já está em privado, prossegue normalmente
+    telegram_id = update.effective_user.id
+    membro = buscar_membro(telegram_id)
+
+    if membro:
+        nivel = get_nivel(telegram_id)
+        # /start normalmente vem como mensagem; mas protege caso venha diferente
+        if update.message:
+            await update.message.reply_text(
+                f"Bem-vindo de volta, irmão {membro.get('Nome', '')}!\n\n"
+                "O que deseja fazer?",
+                reply_markup=menu_principal_teclado(nivel)
+            )
+        else:
+            await context.bot.send_message(
+                chat_id=telegram_id,
+                text=(
+                    f"Bem-vindo de volta, irmão {membro.get('Nome', '')}!\n\n"
+                    "O que deseja fazer?"
+                ),
+                reply_markup=menu_principal_teclado(nivel)
+            )
+    else:
+        await cadastro_start(update, context)
+
 
 async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler genérico para botões (deve ser o último)."""
     query = update.callback_query
+    if not query:
+        return
+
+    data = query.data or ""
     await query.answer()
+
+    # ⚠️ Importante:
+    # Estes callbacks devem ser capturados por ConversationHandlers específicos
+    # (que você já registra no main.py ANTES do botao_handler).
+    # Se este handler mexer neles, pode quebrar o fluxo.
+    if data in {"admin_promover", "admin_rebaixar", "editar_perfil"}:
+        return
 
     telegram_id = update.effective_user.id
     nivel = get_nivel(telegram_id)
-    data = query.data
 
     # Verificação de permissão para áreas restritas
     if data == "area_secretario" and nivel not in ["2", "3"]:
@@ -136,21 +158,15 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "admin_editar_membro":
         from src.admin_acoes import editar_membro
         await editar_membro(update, context)
-    elif data == "admin_promover":
-        from src.admin_acoes import promover_handler
-        await promover_handler(update, context)
-    elif data == "admin_rebaixar":
-        from src.admin_acoes import rebaixar_handler
-        await rebaixar_handler(update, context)
-    elif data == "editar_perfil":
-        # Este callback será capturado pelo ConversationHandler em editar_perfil.py
-        return
     else:
         await query.edit_message_text("Função em desenvolvimento ou comando não reconhecido.")
+
 
 async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu da área do secretário. Se estiver em grupo, redireciona para privado."""
     query = update.callback_query
+    if not query:
+        return
     await query.answer()
 
     if update.effective_chat.type in ["group", "supergroup"]:
@@ -166,7 +182,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
                 [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
                 [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
                 [InlineKeyboardButton("📋 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
-                [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")]
+                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")]
             ])
         )
         return
@@ -182,7 +198,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
         [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
         [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
         [InlineKeyboardButton("📋 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
-        [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")],
+        [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
     ])
 
     await query.edit_message_text(
@@ -192,9 +208,12 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
         reply_markup=teclado
     )
 
+
 async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu da área do administrador. Se estiver em grupo, redireciona para privado."""
     query = update.callback_query
+    if not query:
+        return
     await query.answer()
 
     if update.effective_chat.type in ["group", "supergroup"]:
@@ -213,7 +232,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
                 [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
                 [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
-                [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")]
+                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")]
             ])
         )
         return
@@ -232,7 +251,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
         [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
         [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
-        [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")],
+        [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
     ])
 
     await query.edit_message_text(
