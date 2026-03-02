@@ -14,6 +14,7 @@ NOME, DATA_NASC, GRAU, LOJA, NUMERO_LOJA, ORIENTE, POTENCIA, CONFIRMAR = range(8
 
 # ID do grupo principal (configurado como variável de ambiente)
 GRUPO_PRINCIPAL_ID = os.getenv("GRUPO_PRINCIPAL_ID", "-1003721338228")
+ADMIN_ID = os.getenv("ADMIN_TELEGRAM_ID")  # ID do admin principal
 
 # Tempo máximo para cadastro incompleto (24 horas)
 TEMPO_MAXIMO_CADASTRO = timedelta(hours=24)
@@ -41,7 +42,7 @@ async def verificar_membro_no_grupo(user_id: int, context: ContextTypes.DEFAULT_
 async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Ponto de entrada principal.
-    - Se estiver em GRUPO: apenas orienta a ir para o privado.
+    - Se estiver em GRUPO: apenas orienta a ir para o privado (exceto ADMIN, que tem tratamento especial)
     - Se estiver em PRIVADO: verifica cadastro e oferece início.
     """
     logger.info(f"cadastro_start chamado - chat_type: {update.effective_chat.type}, user_id: {update.effective_user.id}")
@@ -50,12 +51,21 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         chat_type = update.effective_chat.type
         
-        # 🔥 PASSO 1: Se estiver em GRUPO, apenas orientar (NUNCA iniciar cadastro)
+        # 🔥 Verifica se é o ADMIN (sempre tem acesso especial)
+        is_admin = (ADMIN_ID and str(user_id) == ADMIN_ID)
+        
+        # 🔥 PASSO 1: Se estiver em GRUPO
         if chat_type in ["group", "supergroup"]:
+            # Se for ADMIN, podemos dar um tratamento diferenciado (ou só pular a verificação)
+            if is_admin:
+                logger.info(f"Admin {user_id} detectado no grupo. Enviando orientação normal.")
+                # Admin também vê a mensagem de orientação, mas pode pular filas se quiser
+                # (não precisa, mas vamos manter igual para não causar confusão)
+            
             # Verifica se é membro do grupo (já que está no grupo, provavelmente é, mas vamos confirmar)
             is_member = await verificar_membro_no_grupo(user_id, context)
             
-            if not is_member:
+            if not is_member and not is_admin:
                 # Caso raro: alguém conseguiu enviar mensagem no grupo sem ser membro?
                 mensagem_bloqueio = (
                     "⛔ *Acesso não permitido*\n\n"
@@ -87,17 +97,25 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 🔥 IMPORTANTE: Não inicia conversa, não envia para privado, não retorna estado
             return ConversationHandler.END
         
-        # 🔥 PASSO 2: Se está em PRIVADO, vamos verificar o que fazer
+        # 🔥 PASSO 2: Se está em PRIVADO
         if chat_type == "private":
             # Verifica se já está cadastrado
             membro_existente = buscar_membro(user_id)
             
-            if membro_existente:
-                # ✅ Já cadastrado: mostra menu principal
+            if membro_existente or is_admin:
+                # ✅ Já cadastrado ou é admin: mostra menu principal
                 from src.bot import menu_principal_teclado
-                nivel = membro_existente.get("Nivel", "1")
+                
+                if is_admin and not membro_existente:
+                    # Admin não cadastrado na planilha? (raro, mas possível)
+                    nivel = "3"  # Admin sempre tem nível 3
+                    nome = "Administrador"
+                else:
+                    nivel = membro_existente.get("Nivel", "1")
+                    nome = membro_existente.get("Nome", "irmão")
+                
                 await update.message.reply_text(
-                    f"Bem-vindo de volta, irmão {membro_existente.get('Nome', '')}!",
+                    f"Bem-vindo de volta, irmão {nome}!",
                     reply_markup=menu_principal_teclado(nivel)
                 )
                 return ConversationHandler.END
@@ -136,7 +154,7 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             
             # Não retorna estado ainda – aguarda o callback
-            return ConversationHandler.END  # Por enquanto, encerra. O callback vai reiniciar
+            return ConversationHandler.END
     
     except Exception as e:
         logger.error(f"Erro em cadastro_start: {e}\n{traceback.format_exc()}")
@@ -178,7 +196,6 @@ async def continuar_cadastro_callback(update: Update, context: ContextTypes.DEFA
     await query.answer()
     
     # Descobre qual era o último estado
-    # Por simplicidade, vamos usar um campo "ultimo_estado" no user_data
     ultimo_estado = context.user_data.get("ultimo_estado", NOME)
     
     logger.info(f"continuar_cadastro_callback: usuário {update.effective_user.id} continuando do estado {ultimo_estado}")

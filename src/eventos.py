@@ -8,6 +8,9 @@ from src.sheets import (
 from datetime import datetime
 import re
 import urllib.parse
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Dicionário para traduzir dias da semana para português
 DIAS_SEMANA = {
@@ -23,11 +26,9 @@ DIAS_SEMANA = {
 AGAPE_CHOICE = range(1)
 
 def traduzir_dia(dia_ingles):
-    """Traduz o dia da semana para português."""
     return DIAS_SEMANA.get(dia_ingles, dia_ingles)
 
 def traduzir_dia_abreviado(dia_ingles):
-    """Traduz o dia da semana para formato abreviado (ex: Segunda)."""
     dias_abreviados = {
         "Monday": "Segunda",
         "Tuesday": "Terça",
@@ -40,7 +41,6 @@ def traduzir_dia_abreviado(dia_ingles):
     return dias_abreviados.get(dia_ingles, dia_ingles)
 
 def extrair_tipo_agape(texto_agape):
-    """Extrai o tipo de ágape do texto da planilha."""
     texto = texto_agape.lower()
     if "pago" in texto or "dividido" in texto:
         return "pago"
@@ -50,7 +50,6 @@ def extrair_tipo_agape(texto_agape):
         return "sem"
 
 async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Lista eventos disponíveis para seleção, agrupados por data."""
     query = update.callback_query
     await query.answer()
 
@@ -59,7 +58,6 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Não há eventos ativos no momento. Volte em breve, irmão.")
         return
 
-    # Agrupar por data
     eventos_por_data = {}
     for i, evento in enumerate(eventos):
         data = evento.get("Data do evento", "")
@@ -67,7 +65,6 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             eventos_por_data[data] = []
         eventos_por_data[data].append((i, evento))
 
-    # Criar botões por data
     botoes = []
     for data, evs in eventos_por_data.items():
         try:
@@ -81,7 +78,6 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             callback_data=f"data|{data}"
         )])
 
-    # Botão voltar
     from src.permissoes import get_nivel
     nivel = get_nivel(update.effective_user.id)
 
@@ -95,7 +91,6 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text("Selecione uma data para ver os eventos:", reply_markup=teclado)
 
 async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra eventos de uma data específica, agrupados por grau."""
     query = update.callback_query
     await query.answer()
 
@@ -107,7 +102,6 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text("Nenhum evento encontrado para esta data.")
         return
 
-    # Agrupar por grau
     graus = {}
     for evento in eventos_data:
         grau = evento.get("Grau", "Indefinido")
@@ -125,14 +119,17 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
     botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="ver_eventos")])
     teclado = InlineKeyboardMarkup(botoes)
 
-    await query.edit_message_text(
-        f"📅 *{data}*\n\nSelecione o grau:",
-        parse_mode="Markdown",
-        reply_markup=teclado
-    )
+    try:
+        await query.edit_message_text(
+            f"📅 *{data}*\n\nSelecione o grau:",
+            parse_mode="Markdown",
+            reply_markup=teclado
+        )
+    except Exception as e:
+        if "Message is not modified" not in str(e):
+            logger.error(f"Erro ao editar mensagem: {e}")
 
 async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Lista eventos de uma data e grau específicos."""
     query = update.callback_query
     await query.answer()
 
@@ -163,14 +160,17 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
     botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data=f"data|{data}")])
     teclado = InlineKeyboardMarkup(botoes)
 
-    await query.edit_message_text(
-        f"📅 *{data} - {grau}*\n\nSelecione o evento:",
-        parse_mode="Markdown",
-        reply_markup=teclado
-    )
+    try:
+        await query.edit_message_text(
+            f"📅 *{data} - {grau}*\n\nSelecione o evento:",
+            parse_mode="Markdown",
+            reply_markup=teclado
+        )
+    except Exception as e:
+        if "Message is not modified" not in str(e):
+            logger.error(f"Erro ao editar mensagem: {e}")
 
 async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra detalhes de um evento específico SEM APAGAR a mensagem original."""
     query = update.callback_query
     await query.answer()
 
@@ -257,10 +257,13 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
             reply_markup=teclado
         )
     else:
-        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=teclado)
+        try:
+            await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=teclado)
+        except Exception as e:
+            if "Message is not modified" not in str(e):
+                logger.error(f"Erro ao editar mensagem: {e}")
 
 async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra lista de confirmados em uma NOVA mensagem (não edita a original)."""
     query = update.callback_query
     await query.answer()
 
@@ -295,7 +298,6 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
             oriente = conf.get("Oriente", "")
             potencia = conf.get("Potência", "")
             agape = conf.get("Ágape", "")
-            # Formato: Nome, Grau, Loja Número, Oriente, Potência
             linha = f"• {nome}, {grau}, {loja} {numero}, {oriente}, {potencia}"
             if "Confirmada" in str(agape) or "Sim" in str(agape):
                 linha += " - 🍽 Com ágape"
@@ -323,7 +325,6 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     botoes.append([InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")])
     teclado = InlineKeyboardMarkup(botoes)
 
-    # 🔥 Envia uma NOVA mensagem em vez de editar a original
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=texto,
@@ -332,7 +333,6 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def fechar_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Fecha (apaga) uma mensagem temporária (a lista de confirmados)."""
     query = update.callback_query
     await query.answer()
     try:
@@ -341,14 +341,12 @@ async def fechar_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Mensagem fechada.")
 
 async def minhas_confirmacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra lista de eventos confirmados como BOTÕES (cada botão é uma sessão)."""
     query = update.callback_query
     await query.answer()
 
     user_id = update.effective_user.id
     eventos = listar_eventos()
 
-    # Filtra apenas eventos que o usuário confirmou
     confirmados = []
     for evento in eventos:
         id_evento = evento.get("Data do evento", "") + " — " + evento.get("Nome da loja", "")
@@ -389,7 +387,6 @@ async def minhas_confirmacoes(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra detalhes de uma sessão confirmada com opções Cancelar e Ver Confirmados."""
     query = update.callback_query
     await query.answer()
 
@@ -456,14 +453,17 @@ async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE
         [InlineKeyboardButton("⬅️ Voltar", callback_data="minhas_confirmacoes")]
     ]
 
-    await query.edit_message_text(
-        texto, 
-        parse_mode="Markdown", 
-        reply_markup=InlineKeyboardMarkup(botoes)
-    )
+    try:
+        await query.edit_message_text(
+            texto, 
+            parse_mode="Markdown", 
+            reply_markup=InlineKeyboardMarkup(botoes)
+        )
+    except Exception as e:
+        if "Message is not modified" not in str(e):
+            logger.error(f"Erro ao editar mensagem: {e}")
 
 async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Processa a confirmação de presença."""
     query = update.callback_query
     await query.answer()
 
@@ -580,9 +580,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         reply_markup=botoes_privado
     )
 
-    # 🔥 Não apaga a mensagem original do grupo
     if update.effective_chat.type in ["group", "supergroup"]:
-        # Apenas responde ao callback sem editar a mensagem
         await query.answer("Presença confirmada! Verifique seu privado.")
     else:
         await query.edit_message_text("✅ Presença confirmada! Verifique a mensagem acima.")
@@ -590,7 +588,6 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     return ConversationHandler.END
 
 async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Cancela presença de um usuário em um evento."""
     query = update.callback_query
     await query.answer()
 
@@ -642,7 +639,6 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.edit_message_text("Comando de cancelamento inválido.")
 
-# ConversationHandler para confirmação de presença
 confirmacao_presenca_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(iniciar_confirmacao_presenca, pattern="^confirmar\\|")],
     states={},
