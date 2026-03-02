@@ -42,8 +42,8 @@ async def verificar_membro_no_grupo(user_id: int, context: ContextTypes.DEFAULT_
 async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Ponto de entrada principal.
-    - Se estiver em GRUPO: apenas orienta a ir para o privado (exceto ADMIN, que tem tratamento especial)
-    - Se estiver em PRIVADO: verifica cadastro e oferece início.
+    - Se estiver em GRUPO: apenas orienta a ir para o privado
+    - Se estiver em PRIVADO: verifica cadastro e mostra menu principal para admin/membros existentes
     """
     logger.info(f"cadastro_start chamado - chat_type: {update.effective_chat.type}, user_id: {update.effective_user.id}")
     
@@ -56,13 +56,8 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 🔥 PASSO 1: Se estiver em GRUPO
         if chat_type in ["group", "supergroup"]:
-            # Se for ADMIN, podemos dar um tratamento diferenciado (ou só pular a verificação)
-            if is_admin:
-                logger.info(f"Admin {user_id} detectado no grupo. Enviando orientação normal.")
-                # Admin também vê a mensagem de orientação, mas pode pular filas se quiser
-                # (não precisa, mas vamos manter igual para não causar confusão)
-            
-            # Verifica se é membro do grupo (já que está no grupo, provavelmente é, mas vamos confirmar)
+            # Admin também vê a mensagem de orientação (não queremos tratamento especial no grupo)
+            # Verifica se é membro do grupo
             is_member = await verificar_membro_no_grupo(user_id, context)
             
             if not is_member and not is_admin:
@@ -82,10 +77,10 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # ✅ Mensagem ÚNICA no grupo: orientação clara
             mensagem_grupo = (
                 "🔔 *Bem-vindo ao Bode Andarilho!*\n\n"
-                "Para se cadastrar e começar a usar, por favor:\n"
+                "Para interagir comigo, por favor:\n"
                 "1️⃣ Clique no meu nome aqui no grupo\n"
                 "2️⃣ Envie **/start** ou **'Bode'** no meu chat privado\n\n"
-                "Lá eu vou te guiar no cadastro. 🐐"
+                "Lá eu vou te guiar. 🐐"
             )
             
             if update.callback_query:
@@ -102,18 +97,35 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Verifica se já está cadastrado
             membro_existente = buscar_membro(user_id)
             
-            if membro_existente or is_admin:
-                # ✅ Já cadastrado ou é admin: mostra menu principal
+            # 🔥 ADMIN: sempre tem acesso, mesmo sem cadastro
+            if is_admin:
                 from src.bot import menu_principal_teclado
                 
-                if is_admin and not membro_existente:
-                    # Admin não cadastrado na planilha? (raro, mas possível)
-                    nivel = "3"  # Admin sempre tem nível 3
-                    nome = "Administrador"
+                # Se admin não estiver na planilha, usamos dados padrão
+                if not membro_existente:
+                    logger.info(f"Admin {user_id} não cadastrado na planilha. Usando dados padrão.")
+                    await update.message.reply_text(
+                        "👑 *Bem-vindo, Administrador!*\n\n"
+                        "Você tem acesso total ao sistema. Use o menu abaixo para navegar.",
+                        parse_mode="Markdown",
+                        reply_markup=menu_principal_teclado("3")
+                    )
                 else:
-                    nivel = membro_existente.get("Nivel", "1")
-                    nome = membro_existente.get("Nome", "irmão")
-                
+                    # Admin cadastrado normalmente
+                    nivel = membro_existente.get("Nivel", "3")
+                    nome = membro_existente.get("Nome", "Administrador")
+                    await update.message.reply_text(
+                        f"Bem-vindo de volta, irmão {nome}!",
+                        reply_markup=menu_principal_teclado(nivel)
+                    )
+                return ConversationHandler.END
+            
+            # Para usuários comuns (não admin)
+            if membro_existente:
+                # ✅ Já cadastrado: mostra menu principal
+                from src.bot import menu_principal_teclado
+                nivel = membro_existente.get("Nivel", "1")
+                nome = membro_existente.get("Nome", "irmão")
                 await update.message.reply_text(
                     f"Bem-vindo de volta, irmão {nome}!",
                     reply_markup=menu_principal_teclado(nivel)
