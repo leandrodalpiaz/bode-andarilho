@@ -136,7 +136,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
                 [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
                 [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
                 [InlineKeyboardButton("📋 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
-                [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")]  # 🔥 Sair
+                [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")]
             ])
         )
         return
@@ -152,7 +152,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
         [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
         [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
         [InlineKeyboardButton("📋 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
-        [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")],  # 🔥 Sair
+        [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")],
     ])
 
     await query.edit_message_text(
@@ -183,7 +183,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
                 [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
                 [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
-                [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")]  # 🔥 Sair
+                [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")]
             ])
         )
         return
@@ -202,7 +202,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
         [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
         [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
-        [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")],  # 🔥 Sair
+        [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")],
     ])
 
     await query.edit_message_text(

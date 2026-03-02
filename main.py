@@ -1,7 +1,7 @@
 # ============================================
 # VERSAO FINAL - BODE ANDARILHO (RENDER) - CORRIGIDA
 # ============================================
-print("🚀 INICIANDO BOT - VERSAO FINAL 2026-02-26")
+print("🚀 INICIANDO BOT - VERSAO FINAL 2026-03-01")
 
 import os
 import asyncio
@@ -51,7 +51,7 @@ print(f"🔧 PORT: {PORT}")
 
 # --- Handlers existentes ---
 async def mensagem_grupo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Responde a mensagens de texto genéricas em grupos."""
+    """Responde a mensagens de texto enviadas em grupos (exceto 'bode')."""
     if update.effective_chat.type in ["group", "supergroup"]:
         await update.message.reply_text(
             "Olá! Para interagir comigo, por favor use os botões nas mensagens de evento "
@@ -97,7 +97,7 @@ async def main():
     # Comandos
     telegram_app.add_handler(CommandHandler("start", start))
 
-    # Handlers de conversação
+    # Handlers de conversação (devem vir antes dos handlers de callback simples)
     telegram_app.add_handler(cadastro_handler)
     telegram_app.add_handler(cadastro_evento_handler)
     telegram_app.add_handler(confirmacao_presenca_handler)
