@@ -8,7 +8,7 @@ import asyncio
 import logging
 import signal
 import re
-
+from src.eventos import iniciar_confirmacao_presenca
 from starlette.applications import Starlette
 from starlette.routing import Route
 from starlette.requests import Request
@@ -134,6 +134,7 @@ async def main():
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos_por_grau, pattern=r"^grau\|"))
     telegram_app.add_handler(CallbackQueryHandler(mostrar_detalhes_evento, pattern=r"^evento\|"))
     telegram_app.add_handler(CallbackQueryHandler(ver_confirmados, pattern=r"^ver_confirmados\|"))
+    telegram_app.add_handler(CallbackQueryHandler(iniciar_confirmacao_presenca, pattern=r"^confirmar\|"))
     telegram_app.add_handler(CallbackQueryHandler(cancelar_presenca, pattern=r"^(cancelar\|confirma_cancelar\|)"))
     telegram_app.add_handler(CallbackQueryHandler(fechar_mensagem, pattern="^fechar_mensagem$"))
     telegram_app.add_handler(CallbackQueryHandler(minhas_confirmacoes, pattern="^minhas_confirmacoes$"))
