@@ -510,49 +510,50 @@ async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
+# Correção dos padrões dos callbacks - removendo os códigos estranhos
 cadastro_handler = ConversationHandler(
     entry_points=[
         CommandHandler("start", cadastro_start),
-        CallbackQueryHandler(iniciar_cadastro_callback, pattern="^iniciar_cadastroINNERCHAT_CB_swt7znwdcquot;),
-        CallbackQueryHandler(continuar_cadastro_callback, pattern="^continuar_cadastroINNERCHAT_CB_swt7znwdcquot;),
+        CallbackQueryHandler(iniciar_cadastro_callback, pattern="^iniciar_cadastro$"),
+        CallbackQueryHandler(continuar_cadastro_callback, pattern="^continuar_cadastro$"),
     ],
     states={
         NOME: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_nome),
-            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
         ],
         DATA_NASC: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_data_nasc),
-            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
         ],
         GRAU: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_grau),
-            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
         ],
         LOJA: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_loja),
-            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
         ],
         NUMERO_LOJA: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_numero_loja),
-            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
         ],
         ORIENTE: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_oriente),
-            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
         ],
         POTENCIA: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_potencia),
-            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
         ],
         CONFIRMAR: [
-            CallbackQueryHandler(confirmar_cadastro, pattern="^confirmar_cadastroINNERCHAT_CB_swt7znwdcquot;),
-            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
+            CallbackQueryHandler(confirmar_cadastro, pattern="^confirmar_cadastro$"),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
         ],
     },
     fallbacks=[
         CommandHandler("cancelar", cancelar_cadastro),
-        CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)INNERCHAT_CB_swt7znwdcquot;),
+        CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
     ],
     allow_reentry=True,
     name="cadastro_handler",

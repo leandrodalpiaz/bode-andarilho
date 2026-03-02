@@ -81,7 +81,7 @@ async def bot_adicionado_grupo(update: Update, context: ContextTypes.DEFAULT_TYP
 def is_bode_message(message_text: str) -> bool:
     if not message_text:
         return False
-    cleaned = re.sub(r"[.!?]+INNERCHAT_CB_l5w79k8lbquot;, "", message_text.strip()).lower()
+    cleaned = re.sub(r"[.!?]+", "", message_text.strip()).lower()
     return cleaned == "bode"
 
 
@@ -129,19 +129,19 @@ async def main():
     telegram_app.add_handler(MessageHandler(filters.TEXT & BodeGrupoFilter(), bode_grupo_handler))
 
     # ✅ Callbacks específicos
-    telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos, pattern="^ver_eventosINNERCHAT_CB_l5w79k8lbquot;))
+    telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos, pattern="^ver_eventos$"))
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos_por_data, pattern=r"^data\|"))
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos_por_grau, pattern=r"^grau\|"))
     telegram_app.add_handler(CallbackQueryHandler(mostrar_detalhes_evento, pattern=r"^evento\|"))
     telegram_app.add_handler(CallbackQueryHandler(ver_confirmados, pattern=r"^ver_confirmados\|"))
-    telegram_app.add_handler(CallbackQueryHandler(cancelar_presenca, pattern=r"^(cancelar\||confirma_cancelar\|)"))
-    telegram_app.add_handler(CallbackQueryHandler(fechar_mensagem, pattern="^fechar_mensagemINNERCHAT_CB_l5w79k8lbquot;))
-    telegram_app.add_handler(CallbackQueryHandler(minhas_confirmacoes, pattern="^minhas_confirmacoesINNERCHAT_CB_l5w79k8lbquot;))
+    telegram_app.add_handler(CallbackQueryHandler(cancelar_presenca, pattern=r"^(cancelar\|confirma_cancelar\|)"))
+    telegram_app.add_handler(CallbackQueryHandler(fechar_mensagem, pattern="^fechar_mensagem$"))
+    telegram_app.add_handler(CallbackQueryHandler(minhas_confirmacoes, pattern="^minhas_confirmacoes$"))
     telegram_app.add_handler(CallbackQueryHandler(detalhes_confirmado, pattern=r"^detalhes_confirmado\|"))
 
     # ✅ Botões “de menu” (sem competir com outros handlers)
     telegram_app.add_handler(
-        CallbackQueryHandler(botao_handler, pattern=r"^(menu_principal|meu_cadastro|area_secretario|area_admin)INNERCHAT_CB_l5w79k8lbquot;)
+        CallbackQueryHandler(botao_handler, pattern=r"^(menu_principal|meu_cadastro|area_secretario|area_admin)$")
     )
 
     # Grupo
