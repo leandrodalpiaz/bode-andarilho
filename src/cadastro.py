@@ -42,8 +42,8 @@ async def verificar_membro_no_grupo(user_id: int, context: ContextTypes.DEFAULT_
 async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Ponto de entrada principal.
-    - Se estiver em GRUPO: apenas orienta a ir para o privado (mensagem única)
-    - Se estiver em PRIVADO: verifica cadastro e mostra menu principal para admin/membros existentes
+    - Se estiver em GRUPO: redireciona para o privado SEM POLUIR o grupo (nenhuma mensagem)
+    - Se estiver em PRIVADO: verifica cadastro e age conforme o caso
     """
     logger.info(f"cadastro_start chamado - chat_type: {update.effective_chat.type}, user_id: {update.effective_user.id}")
     
@@ -56,37 +56,71 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 🔥 PASSO 1: Se estiver em GRUPO
         if chat_type in ["group", "supergroup"]:
-            # Admin também vê a mensagem de orientação (não queremos tratamento especial no grupo)
-            # Verifica se é membro do grupo
+            # Verifica se é membro do grupo (apenas por segurança, mas se está no grupo, deve ser)
             is_member = await verificar_membro_no_grupo(user_id, context)
             
             if not is_member and not is_admin:
-                # Caso raro: alguém conseguiu enviar mensagem no grupo sem ser membro?
-                mensagem_bloqueio = (
-                    "⛔ *Acesso não permitido*\n\n"
-                    "Para utilizar o Bode Andarilho, você precisa ser membro do grupo oficial.\n\n"
-                    "Por favor, entre em contato com o **secretário da sua loja**."
-                )
+                # Bloqueia se não for membro
                 if update.callback_query:
                     await update.callback_query.answer()
-                    await update.callback_query.edit_message_text(mensagem_bloqueio, parse_mode="Markdown")
+                    await update.callback_query.edit_message_text(
+                        "⛔ *Acesso não permitido*\n\n"
+                        "Você precisa ser membro do grupo para usar este bot.",
+                        parse_mode="Markdown"
+                    )
                 else:
-                    await update.message.reply_text(mensagem_bloqueio, parse_mode="Markdown")
+                    await update.message.reply_text(
+                        "⛔ *Acesso não permitido*\n\n"
+                        "Você precisa ser membro do grupo para usar este bot.",
+                        parse_mode="Markdown"
+                    )
                 return ConversationHandler.END
             
-            # ✅ Mensagem ÚNICA no grupo: orientação clara
-            mensagem_grupo = (
-                "🔔 *Bem-vindo ao Bode Andarilho!*\n\n"
-                "Vou te ajudar no privado. Por favor, clique no meu nome e envie uma mensagem no privado para começar. 🐐"
+            # ✅ MEMBRO DO GRUPO: NENHUMA MENSAGEM NO GRUPO
+            # Apenas envia mensagem no privado
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="👋 *Bem-vindo ao Bode Andarilho!*\n\n"
+                     "Estou aqui para ajudar. Use os menus abaixo para navegar.",
+                parse_mode="Markdown"
             )
             
-            if update.callback_query:
-                await update.callback_query.answer()
-                await update.callback_query.edit_message_text(mensagem_grupo, parse_mode="Markdown")
-            else:
-                await update.message.reply_text(mensagem_grupo, parse_mode="Markdown")
+            # Verifica se já está cadastrado
+            membro_existente = buscar_membro(user_id)
             
-            # 🔥 IMPORTANTE: Não inicia conversa, não envia para privado, não retorna estado
+            if is_admin:
+                # Admin sempre vê menu principal
+                from src.bot import menu_principal_teclado
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text="👑 *Administrador*",
+                    parse_mode="Markdown",
+                    reply_markup=menu_principal_teclado("3")
+                )
+            elif membro_existente:
+                # Já cadastrado: mostra menu principal
+                from src.bot import menu_principal_teclado
+                nivel = membro_existente.get("Nivel", "1")
+                nome = membro_existente.get("Nome", "irmão")
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text=f"Bem-vindo de volta, irmão {nome}!",
+                    reply_markup=menu_principal_teclado(nivel)
+                )
+            else:
+                # Não cadastrado: inicia cadastro no privado
+                botoes_inicio = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📝 INICIAR CADASTRO", callback_data="iniciar_cadastro")],
+                    [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")]
+                ])
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text="👋 Olá, irmão! Para começar a usar o Bode Andarilho, preciso fazer seu cadastro.\n\n"
+                         "Clique no botão abaixo quando estiver pronto:",
+                    reply_markup=botoes_inicio
+                )
+            
+            # 🔥 IMPORTANTE: Não retorna estado porque ainda não começou a conversa
             return ConversationHandler.END
         
         # 🔥 PASSO 2: Se está em PRIVADO
@@ -98,7 +132,6 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if is_admin:
                 from src.bot import menu_principal_teclado
                 
-                # Se admin não estiver na planilha, usamos dados padrão
                 if not membro_existente:
                     logger.info(f"Admin {user_id} não cadastrado na planilha. Usando dados padrão.")
                     await update.message.reply_text(
@@ -108,7 +141,6 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         reply_markup=menu_principal_teclado("3")
                     )
                 else:
-                    # Admin cadastrado normalmente
                     nivel = membro_existente.get("Nivel", "3")
                     nome = membro_existente.get("Nome", "Administrador")
                     await update.message.reply_text(
@@ -148,7 +180,7 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         reply_markup=botoes_continuar
                     )
                     # Não retorna estado ainda, aguarda a escolha
-                    return CONFIRMAR  # Estado temporário para aguardar decisão
+                    return CONFIRMAR
             
             # 🔥 PASSO 4: Primeiro contato no privado – oferece botão para iniciar
             botoes_inicio = InlineKeyboardMarkup([
