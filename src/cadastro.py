@@ -7,12 +7,12 @@ import traceback
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
-    ContextTypes,
-    ConversationHandler,
     CallbackQueryHandler,
     CommandHandler,
+    ContextTypes,
+    ConversationHandler,
     MessageHandler,
     filters,
 )
@@ -142,13 +142,11 @@ async def _prompt(update: Update, context: ContextTypes.DEFAULT_TYPE, estado: in
 
     context.user_data["estado_atual"] = estado
 
-    # Define teclado por estado
     if estado == GRAU:
         reply_markup = _teclado_grau()
     elif estado == VM:
         reply_markup = _teclado_vm()
     else:
-        # voltar leva para o estado anterior (aproximação)
         voltar_para = max(NOME, estado - 1)
         reply_markup = _teclado_nav(voltar_para)
 
@@ -158,6 +156,40 @@ async def _prompt(update: Update, context: ContextTypes.DEFAULT_TYPE, estado: in
         await update.callback_query.edit_message_text(text, parse_mode="Markdown", reply_markup=reply_markup)
     elif update.message:
         await update.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
+
+
+def _resumo_cadastro(context: ContextTypes.DEFAULT_TYPE) -> str:
+    nome = (context.user_data.get("cadastro_nome") or "").strip()
+    data_nasc = (context.user_data.get("cadastro_data_nasc") or "").strip()
+    grau = (context.user_data.get("cadastro_grau") or "").strip()
+    vm = (context.user_data.get("cadastro_vm") or "").strip()
+    loja = (context.user_data.get("cadastro_loja") or "").strip()
+    numero_loja = (context.user_data.get("cadastro_numero_loja") or "").strip()
+    oriente = (context.user_data.get("cadastro_oriente") or "").strip()
+    potencia = (context.user_data.get("cadastro_potencia") or "").strip()
+
+    # Markdown V1: melhor evitar caracteres problemáticos; aqui só usamos texto simples.
+    return (
+        "*Confira seus dados:*\n\n"
+        f"👤 *Nome:* {nome}\n"
+        f"🎂 *Nascimento:* {data_nasc}\n"
+        f"🔺 *Grau:* {grau}\n"
+        f"🔨 *Venerável Mestre:* {vm}\n"
+        f"🏛 *Loja:* {loja}\n"
+        f"#️⃣ *Número:* {numero_loja}\n"
+        f"📍 *Oriente:* {oriente}\n"
+        f"⚜️ *Potência:* {potencia}\n"
+    )
+
+
+async def _mostrar_confirmacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["estado_atual"] = CONFIRMAR
+    texto = _resumo_cadastro(context)
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(texto, parse_mode="Markdown", reply_markup=_teclado_confirmar())
+    elif update.message:
+        await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=_teclado_confirmar())
 
 
 # -------------------------
@@ -170,64 +202,92 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Se não: oferece iniciar.
     """
     try:
-        if update.effective_chat and update.effective_chat.type != "private":
-            return
+        if update.effective_chat and update.effective_chat.type in ("group", "supergroup"):
+            await update.message.reply_text("🔒 Para seu cadastro, fale comigo no privado.")
+            return ConversationHandler.END
 
-        tid = update.effective_user.id
-        membro = buscar_membro(tid)
+        telegram_id = update.effective_user.id
+        membro = buscar_membro(telegram_id)
         cadastrado = bool(membro)
 
-        msg = (
-            "🧾 *Cadastro*\n\n"
-            + ("Você já possui cadastro. Selecione uma opção:" if cadastrado else "Você ainda não possui cadastro. Selecione uma opção:")
+        texto = (
+            "👤 *Cadastro*\n\n"
+            "Aqui você pode iniciar ou editar seu cadastro.\n"
+            "Se estiver tudo certo, volte ao menu principal."
         )
-        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=_teclado_inicio(cadastrado))
+
+        await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=_teclado_inicio(cadastrado))
+        return ConversationHandler.END
     except Exception as e:
         logger.error(f"Erro em cadastro_start: {e}\n{traceback.format_exc()}")
+        if update.message:
+            await update.message.reply_text("❌ Ocorreu um erro. Tente novamente em instantes.")
+        return ConversationHandler.END
 
 
+# -------------------------
+# Iniciar / Continuar / Editar
+# -------------------------
 async def iniciar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    if not query:
-        return ConversationHandler.END
     await query.answer()
 
-    # preserva pos_cadastro se existir
+    # preserva pos_cadastro (fluxo de confirmação de presença pós-cadastro)
     pos = context.user_data.get("pos_cadastro")
     _preservar_e_limpar_user_data(context, preservar={"pos_cadastro"})
     if pos:
         context.user_data["pos_cadastro"] = pos
 
-    await query.edit_message_text(
-        "Vamos começar seu cadastro.\n\nEnvie seu *nome completo*:",
-        parse_mode="Markdown",
-        reply_markup=_teclado_nav(NOME),
-    )
-    context.user_data["estado_atual"] = NOME
+    await _prompt(update, context, NOME)
+    return NOME
+
+
+async def continuar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    estado_atual = context.user_data.get("estado_atual")
+    if isinstance(estado_atual, int) and NOME <= estado_atual <= CONFIRMAR:
+        await _prompt(update, context, estado_atual)
+        return estado_atual
+
+    # Se não há estado, recomeça
+    await _prompt(update, context, NOME)
     return NOME
 
 
 async def editar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    if not query:
-        return ConversationHandler.END
     await query.answer()
 
-    tid = update.effective_user.id
-    membro = buscar_membro(tid) or {}
+    telegram_id = update.effective_user.id
+    membro = buscar_membro(telegram_id)
 
-    # carrega dados atuais como baseline
-    context.user_data["cadastro_nome"] = str(membro.get("Nome") or "").strip()
-    context.user_data["cadastro_data_nasc"] = str(membro.get("Data nasc.") or membro.get("Data nasc", "") or membro.get("Data Nasc.", "") or "").strip()
-    context.user_data["cadastro_grau"] = str(membro.get("Grau") or "").strip()
-    context.user_data["cadastro_vm"] = str(membro.get("Venerável Mestre") or membro.get("Veneravel Mestre") or "").strip()
-    context.user_data["cadastro_loja"] = str(membro.get("Loja") or "").strip()
-    context.user_data["cadastro_numero_loja"] = str(membro.get("Número da loja") or "").strip()
-    context.user_data["cadastro_oriente"] = str(membro.get("Oriente") or "").strip()
-    context.user_data["cadastro_potencia"] = str(membro.get("Potência") or "").strip()
+    # preserva pos_cadastro
+    pos = context.user_data.get("pos_cadastro")
+    _preservar_e_limpar_user_data(context, preservar={"pos_cadastro"})
+    if pos:
+        context.user_data["pos_cadastro"] = pos
+
+    if not membro:
+        await query.edit_message_text(
+            "Você ainda não tem cadastro. Vamos iniciar agora.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🧾 Iniciar cadastro", callback_data="iniciar_cadastro")]]),
+        )
+        return ConversationHandler.END
+
+    # Pré-preenche com dados existentes (aceita várias chaves, pois a planilha pode variar)
+    context.user_data["cadastro_nome"] = (membro.get("nome") or membro.get("Nome") or "").strip()
+    context.user_data["cadastro_data_nasc"] = (membro.get("data_nasc") or membro.get("Data de nascimento") or membro.get("Data Nasc") or "").strip()
+    context.user_data["cadastro_grau"] = (membro.get("grau") or membro.get("Grau") or "").strip()
+    context.user_data["cadastro_vm"] = (membro.get("veneravel_mestre") or membro.get("Venerável Mestre") or membro.get("VM") or "").strip()
+    context.user_data["cadastro_loja"] = (membro.get("loja") or membro.get("Loja") or "").strip()
+    context.user_data["cadastro_numero_loja"] = (membro.get("numero_loja") or membro.get("Número da loja") or membro.get("Numero da loja") or "").strip()
+    context.user_data["cadastro_oriente"] = (membro.get("oriente") or membro.get("Oriente") or "").strip()
+    context.user_data["cadastro_potencia"] = (membro.get("potencia") or membro.get("Potência") or membro.get("Potencia") or "").strip()
 
     await query.edit_message_text(
-        "✏️ *Editar cadastro*\n\nEnvie seu *nome completo*:",
+        "✏️ *Editar cadastro*\n\nVamos passar pelos campos novamente.\nComece enviando seu *nome completo*:",
         parse_mode="Markdown",
         reply_markup=_teclado_nav(NOME),
     )
@@ -235,28 +295,121 @@ async def editar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT
     return NOME
 
 
-async def continuar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Mantido por compatibilidade com seu handler antigo.
-    Retoma do estado salvo.
-    """
-    query = update.callback_query
-    if not query:
-        return ConversationHandler.END
-    await query.answer()
+# -------------------------
+# Recebimentos (texto)
+# -------------------------
+async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    nome = (update.message.text or "").strip()
+    if len(nome) < 3:
+        await update.message.reply_text("❌ Nome muito curto. Envie seu *nome completo*:", parse_mode="Markdown")
+        return NOME
 
-    estado = context.user_data.get("estado_atual", NOME)
-    await _prompt(update, context, int(estado))
-    return int(estado)
+    context.user_data["cadastro_nome"] = nome
+    await _prompt(update, context, DATA_NASC)
+    return DATA_NASC
+
+
+async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    texto = (update.message.text or "").strip()
+    if not _validar_data_nasc(texto):
+        await update.message.reply_text("❌ Data inválida. Envie no formato *DD/MM/AAAA*:", parse_mode="Markdown")
+        return DATA_NASC
+
+    context.user_data["cadastro_data_nasc"] = texto
+    await _prompt(update, context, GRAU)
+    return GRAU
+
+
+async def receber_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    loja = (update.message.text or "").strip()
+    if len(loja) < 2:
+        await update.message.reply_text("❌ Informe o *nome da sua loja*:", parse_mode="Markdown")
+        return LOJA
+
+    context.user_data["cadastro_loja"] = loja
+    await _prompt(update, context, NUMERO_LOJA)
+    return NUMERO_LOJA
+
+
+async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    numero = (update.message.text or "").strip()
+    if not _validar_numero_loja(numero):
+        await update.message.reply_text("❌ Número inválido. Envie somente números (ex: 0, 12, 345):")
+        return NUMERO_LOJA
+
+    context.user_data["cadastro_numero_loja"] = numero
+    await _prompt(update, context, ORIENTE)
+    return ORIENTE
+
+
+async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    oriente = (update.message.text or "").strip()
+    if len(oriente) < 2:
+        await update.message.reply_text("❌ Informe seu *Oriente*:", parse_mode="Markdown")
+        return ORIENTE
+
+    context.user_data["cadastro_oriente"] = oriente
+    await _prompt(update, context, POTENCIA)
+    return POTENCIA
+
+
+async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    potencia = (update.message.text or "").strip()
+    if len(potencia) < 2:
+        await update.message.reply_text("❌ Informe sua *Potência*:", parse_mode="Markdown")
+        return POTENCIA
+
+    context.user_data["cadastro_potencia"] = potencia
+    await _mostrar_confirmacao(update, context)
+    return CONFIRMAR
 
 
 # -------------------------
-# Navegação (voltar/cancelar)
+# Setters (botões)
+# -------------------------
+async def set_grau_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        _, grau = query.data.split("|", 1)
+    except Exception:
+        await query.edit_message_text("❌ Opção inválida. Selecione seu grau novamente:", reply_markup=_teclado_grau())
+        return GRAU
+
+    if grau not in GRAUS_OPCOES:
+        await query.edit_message_text("❌ Opção inválida. Selecione seu grau:", reply_markup=_teclado_grau())
+        return GRAU
+
+    context.user_data["cadastro_grau"] = grau
+    await _prompt(update, context, VM)
+    return VM
+
+
+async def set_vm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        _, vm = query.data.split("|", 1)
+    except Exception:
+        await query.edit_message_text("❌ Opção inválida. Você é Venerável Mestre?", reply_markup=_teclado_vm())
+        return VM
+
+    if vm not in (VM_SIM, VM_NAO):
+        await query.edit_message_text("❌ Opção inválida. Você é Venerável Mestre?", reply_markup=_teclado_vm())
+        return VM
+
+    context.user_data["cadastro_vm"] = vm
+    await _prompt(update, context, LOJA)
+    return LOJA
+
+
+# -------------------------
+# Navegação (Voltar / Cancelar)
 # -------------------------
 async def navegacao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    if not query:
-        return ConversationHandler.END
     await query.answer()
 
     data = query.data or ""
@@ -266,178 +419,26 @@ async def navegacao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if data.startswith("voltar|"):
         try:
-            estado = int(data.split("|", 1)[1])
+            _, estado_str = data.split("|", 1)
+            estado = int(estado_str)
         except Exception:
             estado = NOME
 
+        # Ajuste “inteligente” para voltar para o estado correto
+        estado = max(NOME, min(CONFIRMAR, estado))
         await _prompt(update, context, estado)
         return estado
 
-    return ConversationHandler.END
+    # fallback
+    await _prompt(update, context, NOME)
+    return NOME
 
 
 # -------------------------
-# Recebedores de texto (estados textuais)
+# Confirmar cadastro
 # -------------------------
-async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["cadastro_nome"] = (update.message.text or "").strip()
-    await _prompt(update, context, DATA_NASC)
-    return DATA_NASC
-
-
-async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    texto = (update.message.text or "").strip()
-    if not _validar_data_nasc(texto):
-        await update.message.reply_text(
-            "Data inválida. Envie no formato *DD/MM/AAAA*.",
-            parse_mode="Markdown",
-            reply_markup=_teclado_nav(DATA_NASC),
-        )
-        context.user_data["estado_atual"] = DATA_NASC
-        return DATA_NASC
-
-    context.user_data["cadastro_data_nasc"] = texto
-    await _prompt(update, context, GRAU)
-    return GRAU
-
-
-async def receber_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["cadastro_loja"] = (update.message.text or "").strip()
-    await _prompt(update, context, NUMERO_LOJA)
-    return NUMERO_LOJA
-
-
-async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    texto = (update.message.text or "").strip()
-    if not _validar_numero_loja(texto):
-        await update.message.reply_text(
-            "Número inválido. Envie apenas *números* (ex.: 270) ou *0*.",
-            parse_mode="Markdown",
-            reply_markup=_teclado_nav(NUMERO_LOJA),
-        )
-        context.user_data["estado_atual"] = NUMERO_LOJA
-        return NUMERO_LOJA
-
-    context.user_data["cadastro_numero_loja"] = texto
-    await _prompt(update, context, ORIENTE)
-    return ORIENTE
-
-
-async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["cadastro_oriente"] = (update.message.text or "").strip()
-    await _prompt(update, context, POTENCIA)
-    return POTENCIA
-
-
-async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["cadastro_potencia"] = (update.message.text or "").strip()
-    context.user_data["estado_atual"] = CONFIRMAR
-    await mostrar_resumo(update, context)
-    return CONFIRMAR
-
-
-# -------------------------
-# Recebedores por botões (GRAU e VM)
-# -------------------------
-async def set_grau_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    if not query:
-        return ConversationHandler.END
-    await query.answer()
-
-    # data: set_grau|Aprendiz
-    try:
-        _, grau = (query.data or "").split("|", 1)
-    except Exception:
-        grau = ""
-
-    grau = grau.strip()
-    if grau not in GRAUS_OPCOES:
-        await query.edit_message_text(
-            "Seleção inválida. Selecione seu *grau*:",
-            parse_mode="Markdown",
-            reply_markup=_teclado_grau(),
-        )
-        context.user_data["estado_atual"] = GRAU
-        return GRAU
-
-    context.user_data["cadastro_grau"] = grau
-    await query.edit_message_text(
-        "Você é *Venerável Mestre*?",
-        parse_mode="Markdown",
-        reply_markup=_teclado_vm(),
-    )
-    context.user_data["estado_atual"] = VM
-    return VM
-
-
-async def set_vm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    if not query:
-        return ConversationHandler.END
-    await query.answer()
-
-    # data: set_vm|Sim
-    try:
-        _, vm = (query.data or "").split("|", 1)
-    except Exception:
-        vm = ""
-
-    vm = vm.strip()
-    if vm not in (VM_SIM, VM_NAO):
-        await query.edit_message_text(
-            "Seleção inválida. Você é *Venerável Mestre*?",
-            parse_mode="Markdown",
-            reply_markup=_teclado_vm(),
-        )
-        context.user_data["estado_atual"] = VM
-        return VM
-
-    context.user_data["cadastro_vm"] = vm
-    await query.edit_message_text(
-        "Informe o *nome da sua loja*:",
-        parse_mode="Markdown",
-        reply_markup=_teclado_nav(LOJA),
-    )
-    context.user_data["estado_atual"] = LOJA
-    return LOJA
-
-
-# -------------------------
-# Resumo e confirmação
-# -------------------------
-async def mostrar_resumo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    nome = context.user_data.get("cadastro_nome", "")
-    data_nasc = context.user_data.get("cadastro_data_nasc", "")
-    grau = context.user_data.get("cadastro_grau", "")
-    vm = context.user_data.get("cadastro_vm", "")
-    loja = context.user_data.get("cadastro_loja", "")
-    numero = context.user_data.get("cadastro_numero_loja", "")
-    oriente = context.user_data.get("cadastro_oriente", "")
-    potencia = context.user_data.get("cadastro_potencia", "")
-
-    resumo = (
-        "📋 *Resumo do cadastro*\n\n"
-        f"Nome: {nome}\n"
-        f"Data nasc.: {data_nasc}\n"
-        f"Grau: {grau}\n"
-        f"Venerável Mestre: {vm}\n"
-        f"Loja: {loja} {numero}\n"
-        f"Oriente: {oriente}\n"
-        f"Potência: {potencia}\n\n"
-        "*Tudo correto?*"
-    )
-
-    if update.callback_query:
-        await update.callback_query.edit_message_text(resumo, parse_mode="Markdown", reply_markup=_teclado_confirmar())
-    else:
-        await update.message.reply_text(resumo, parse_mode="Markdown", reply_markup=_teclado_confirmar())
-
-
 async def confirmar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    if not query:
-        return ConversationHandler.END
     await query.answer()
 
     try:
@@ -454,7 +455,6 @@ async def confirmar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "veneravel_mestre": context.user_data.get("cadastro_vm", ""),
         }
 
-        # Salva (cadastrar_membro já faz update se existir, sem mexer em Nivel)
         cadastrar_membro(dados_membro)
 
         # preserva pos_cadastro
@@ -489,9 +489,7 @@ async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if update.callback_query:
             await update.callback_query.answer()
-            await update.callback_query.edit_message_text(
-                "Cadastro cancelado. Você pode iniciar novamente com /start."
-            )
+            await update.callback_query.edit_message_text("Cadastro cancelado. Você pode iniciar novamente com /start.")
         elif update.message:
             await update.message.reply_text("Cadastro cancelado. Você pode iniciar novamente com /start.")
     except Exception as e:
@@ -533,7 +531,7 @@ cadastro_handler = ConversationHandler(
             CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
         ],
         NUMERO_LOJA: [
-            MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMAND, receber_numero_loja),
+            MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_numero_loja),
             CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
         ],
         ORIENTE: [
