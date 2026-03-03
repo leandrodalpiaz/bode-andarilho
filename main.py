@@ -8,7 +8,6 @@ import asyncio
 import logging
 import signal
 import re
-from src.eventos import iniciar_confirmacao_presenca
 from starlette.applications import Starlette
 from starlette.routing import Route
 from starlette.requests import Request
@@ -37,12 +36,23 @@ from src.eventos import (
     mostrar_eventos_por_grau,
     detalhes_confirmado,
     confirmacao_presenca_handler,
+    iniciar_confirmacao_presenca,
 )
 from src.cadastro_evento import cadastro_evento_handler
-from src.admin_acoes import promover_handler, rebaixar_handler
+from src.admin_acoes import (
+    promover_handler,
+    rebaixar_handler,
+    ver_todos_membros,
+    editar_membro,
+)
 from src.editar_perfil import editar_perfil_handler
-from src.eventos_secretario import editar_evento_secretario_handler
-
+from src.eventos_secretario import (
+    editar_evento_secretario_handler,
+    meus_eventos,
+    menu_gerenciar_evento,
+    confirmar_cancelamento,
+    executar_cancelamento,
+)
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -110,7 +120,7 @@ async def main():
 
     telegram_app.add_error_handler(error_handler)
 
-    # ✅ ConversationHandlers primeiro
+    # ✅ ConversationHandlers primeiro (NUNCA mexer na ordem)
     telegram_app.add_handler(cadastro_handler)
     telegram_app.add_handler(cadastro_evento_handler)
     telegram_app.add_handler(confirmacao_presenca_handler)
@@ -128,7 +138,7 @@ async def main():
 
     telegram_app.add_handler(MessageHandler(filters.TEXT & BodeGrupoFilter(), bode_grupo_handler))
 
-    # ✅ Callbacks específicos
+    # ✅ Callbacks específicos (ordem importante - específicos primeiro)
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos, pattern="^ver_eventos$"))
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos_por_data, pattern=r"^data\|"))
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos_por_grau, pattern=r"^grau\|"))
@@ -140,8 +150,16 @@ async def main():
     telegram_app.add_handler(CallbackQueryHandler(fechar_mensagem, pattern="^fechar_mensagem$"))
     telegram_app.add_handler(CallbackQueryHandler(minhas_confirmacoes, pattern="^minhas_confirmacoes$"))
     telegram_app.add_handler(CallbackQueryHandler(detalhes_confirmado, pattern=r"^detalhes_confirmado\|"))
+    
+    # 🔥 NOVOS HANDLERS PARA ADMIN/SECRETÁRIO
+    telegram_app.add_handler(CallbackQueryHandler(meus_eventos, pattern=r"^meus_eventos$"))
+    telegram_app.add_handler(CallbackQueryHandler(editar_membro, pattern=r"^admin_editar_membro$"))
+    telegram_app.add_handler(CallbackQueryHandler(ver_todos_membros, pattern=r"^admin_ver_membros$"))
+    telegram_app.add_handler(CallbackQueryHandler(menu_gerenciar_evento, pattern=r"^gerenciar_evento\|"))
+    telegram_app.add_handler(CallbackQueryHandler(confirmar_cancelamento, pattern=r"^confirmar_cancelamento\|"))
+    telegram_app.add_handler(CallbackQueryHandler(executar_cancelamento, pattern=r"^cancelar_evento\|"))
 
-    # ✅ Botões “de menu” (sem competir com outros handlers)
+    # ✅ Botões “de menu” (genérico - deve vir por último)
     telegram_app.add_handler(
         CallbackQueryHandler(botao_handler, pattern=r"^(menu_principal|meu_cadastro|area_secretario|area_admin)$")
     )
