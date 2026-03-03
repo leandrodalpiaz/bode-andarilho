@@ -1,13 +1,14 @@
 # ============================================
 # VERSAO FINAL - BODE ANDARILHO (RENDER) - CORRIGIDA
 # ============================================
-print("🚀 INICIANDO BOT - VERSAO FINAL 2026-03-02")
+print("INICIANDO BOT - VERSAO FINAL 2026-03-02")
 
 import os
 import asyncio
 import logging
 import signal
 import re
+
 from starlette.applications import Starlette
 from starlette.routing import Route
 from starlette.requests import Request
@@ -36,13 +37,12 @@ from src.eventos import (
     mostrar_eventos_por_grau,
     detalhes_confirmado,
     confirmacao_presenca_handler,
-    iniciar_confirmacao_presenca,
 )
 from src.cadastro_evento import cadastro_evento_handler
 from src.admin_acoes import (
     promover_handler,
     rebaixar_handler,
-    editar_membro_handler,  # ✅ NOVO HANDLER
+    editar_membro_handler,
 )
 from src.editar_perfil import editar_perfil_handler
 from src.eventos_secretario import (
@@ -63,17 +63,17 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 PORT = int(os.getenv("PORT", 10000))
 
-print(f"🔧 TOKEN carregado: {'SIM' if TOKEN else 'NÃO'}")
-print(f"🔧 RENDER_URL: {RENDER_URL}")
-print(f"🔧 PORT: {PORT}")
+print(f"TOKEN carregado: {'SIM' if TOKEN else 'NAO'}")
+print(f"RENDER_URL: {RENDER_URL}")
+print(f"PORT: {PORT}")
 
 
 async def mensagem_grupo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Responde a mensagens em grupo (exceto 'bode')."""
-    if update.effective_chat.type in ("group", "supergroup"):
+    if update.effective_chat.type in ("group", "supergroup") and update.message:
         await update.message.reply_text(
             "Olá! Para interagir comigo, por favor use os botões nas mensagens de evento "
-            "ou envie /start no meu chat privado. No grupo, apenas publico eventos e lembretes. 🐐"
+            "ou envie /start no meu chat privado. No grupo, apenas publico eventos e lembretes."
         )
 
 
@@ -83,7 +83,7 @@ async def bot_adicionado_grupo(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.effective_chat.send_message(
             "Olá, irmãos! Sou o Bode Andarilho, o bot de agenda de visitas.\n\n"
             "Para interagir comigo, usem os botões nas mensagens de evento ou enviem /start no meu chat privado. "
-            "No grupo, apenas publicarei eventos e lembretes. 🐐"
+            "No grupo, apenas publicarei eventos e lembretes."
         )
 
 
@@ -107,11 +107,31 @@ async def bode_grupo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.error("❌ Exceção não tratada: %s", context.error, exc_info=context.error)
+    logger.error("Exceção não tratada: %s", context.error, exc_info=context.error)
+
+
+async def shutdown(server, telegram_app):
+    print("Desligando servidor...")
+    server.should_exit = True
+    await asyncio.sleep(2)
+    try:
+        await telegram_app.stop()
+        await telegram_app.shutdown()
+    except Exception as e:
+        logger.error("Erro ao parar aplicação: %s", e)
+    print("Bot finalizado com sucesso.")
 
 
 async def main():
-    print("⚙️ Criando aplicação Telegram...")
+    print("Criando aplicação Telegram...")
+
+    if not TOKEN:
+        logger.error("TELEGRAM_TOKEN não definido!")
+        return
+
+    if not RENDER_URL:
+        logger.error("RENDER_EXTERNAL_URL não definida!")
+        return
 
     telegram_app = Application.builder().token(TOKEN).updater(None).build()
     await telegram_app.initialize()
@@ -127,7 +147,7 @@ async def main():
     telegram_app.add_handler(rebaixar_handler)
     telegram_app.add_handler(editar_perfil_handler)
     telegram_app.add_handler(editar_evento_secretario_handler)
-    telegram_app.add_handler(editar_membro_handler)  # ✅ NOVO HANDLER
+    telegram_app.add_handler(editar_membro_handler)
 
     # ✅ "bode" no grupo (ponte)
     class BodeGrupoFilter(filters.MessageFilter):
@@ -139,18 +159,20 @@ async def main():
     telegram_app.add_handler(MessageHandler(filters.TEXT & BodeGrupoFilter(), bode_grupo_handler))
 
     # ✅ Callbacks específicos (ordem importante - específicos primeiro)
-    telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos, pattern="^ver_eventos$"))
+    telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos, pattern=r"^ver_eventos$"))
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos_por_data, pattern=r"^data\|"))
     telegram_app.add_handler(CallbackQueryHandler(mostrar_eventos_por_grau, pattern=r"^grau\|"))
     telegram_app.add_handler(CallbackQueryHandler(mostrar_detalhes_evento, pattern=r"^evento\|"))
     telegram_app.add_handler(CallbackQueryHandler(ver_confirmados, pattern=r"^ver_confirmados\|"))
-    telegram_app.add_handler(CallbackQueryHandler(iniciar_confirmacao_presenca, pattern=r"^confirmar\|"))
+    # ⚠️ REMOVIDO: CallbackQueryHandler(iniciar_confirmacao_presenca, pattern=r"^confirmar\|")
+    # Já é capturado pelo confirmacao_presenca_handler.
+
     telegram_app.add_handler(CallbackQueryHandler(cancelar_presenca, pattern=r"^cancelar\|"))
     telegram_app.add_handler(CallbackQueryHandler(cancelar_presenca, pattern=r"^confirma_cancelar\|"))
-    telegram_app.add_handler(CallbackQueryHandler(fechar_mensagem, pattern="^fechar_mensagem$"))
-    telegram_app.add_handler(CallbackQueryHandler(minhas_confirmacoes, pattern="^minhas_confirmacoes$"))
+    telegram_app.add_handler(CallbackQueryHandler(fechar_mensagem, pattern=r"^fechar_mensagem$"))
+    telegram_app.add_handler(CallbackQueryHandler(minhas_confirmacoes, pattern=r"^minhas_confirmacoes$"))
     telegram_app.add_handler(CallbackQueryHandler(detalhes_confirmado, pattern=r"^detalhes_confirmado\|"))
-    
+
     # 🔥 HANDLERS PARA ADMIN/SECRETÁRIO
     telegram_app.add_handler(CallbackQueryHandler(meus_eventos, pattern=r"^meus_eventos$"))
     telegram_app.add_handler(CallbackQueryHandler(menu_gerenciar_evento, pattern=r"^gerenciar_evento\|"))
@@ -167,13 +189,9 @@ async def main():
     telegram_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mensagem_grupo_handler))
 
     # Webhook
-    if not RENDER_URL:
-        logger.error("RENDER_EXTERNAL_URL não definida!")
-        return
-
     WEBHOOK_PATH = "/webhook_bode_2026"
     webhook_url = f"{RENDER_URL}{WEBHOOK_PATH}"
-    print(f"🔗 URL do webhook: {webhook_url}")
+    print(f"URL do webhook: {webhook_url}")
 
     await telegram_app.bot.delete_webhook(drop_pending_updates=True)
     await asyncio.sleep(1)
@@ -185,8 +203,8 @@ async def main():
     )
 
     webhook_info = await telegram_app.bot.get_webhook_info()
-    logger.info("✅ Webhook configurado: %s", webhook_info.url)
-    logger.info("📊 Pending updates: %s", webhook_info.pending_update_count)
+    logger.info("Webhook configurado: %s", webhook_info.url)
+    logger.info("Pending updates: %s", webhook_info.pending_update_count)
 
     async def webhook(request: Request) -> Response:
         try:
@@ -195,7 +213,7 @@ async def main():
             await telegram_app.process_update(update)
             return Response(status_code=200)
         except Exception as e:
-            logger.error("❌ Erro no webhook: %s", e, exc_info=True)
+            logger.error("Erro no webhook: %s", e, exc_info=True)
             return Response(status_code=500)
 
     async def health(request: Request) -> PlainTextResponse:
@@ -227,20 +245,8 @@ async def main():
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown(server, telegram_app)))
 
-    print(f"✅ Servidor ouvindo em 0.0.0.0:{PORT}")
+    print(f"Servidor ouvindo em 0.0.0.0:{PORT}")
     await server.serve()
-
-
-async def shutdown(server, telegram_app):
-    print("🛑 Desligando servidor...")
-    server.should_exit = True
-    await asyncio.sleep(2)
-    try:
-        await telegram_app.stop()
-        await telegram_app.shutdown()
-    except Exception as e:
-        logger.error("Erro ao parar aplicação: %s", e)
-    print("👋 Bot finalizado com sucesso.")
 
 
 if __name__ == "__main__":

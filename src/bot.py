@@ -1,5 +1,4 @@
 # src/bot.py
-
 import logging
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -8,9 +7,15 @@ from telegram.ext import ContextTypes
 from src.sheets import buscar_membro
 from src.cadastro import cadastro_start
 from src.eventos import (
-    mostrar_eventos, mostrar_detalhes_evento, cancelar_presenca,
-    ver_confirmados, minhas_confirmacoes, mostrar_eventos_por_data,
-    mostrar_eventos_por_grau, fechar_mensagem, detalhes_confirmado
+    mostrar_eventos,
+    mostrar_detalhes_evento,
+    cancelar_presenca,
+    ver_confirmados,
+    minhas_confirmacoes,
+    mostrar_eventos_por_data,
+    mostrar_eventos_por_grau,
+    fechar_mensagem,
+    detalhes_confirmado,
 )
 from src.perfil import mostrar_perfil
 from src.permissoes import get_nivel
@@ -35,6 +40,15 @@ def menu_principal_teclado(nivel: str):
     return InlineKeyboardMarkup(botoes)
 
 
+async def _safe_edit(query, text: str, **kwargs):
+    """Evita log de erro quando o Telegram diz que a mensagem não mudou."""
+    try:
+        await query.edit_message_text(text, **kwargs)
+    except Exception as e:
+        if "Message is not modified" not in str(e):
+            raise
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler para comando /start ou palavra 'bode' (quando chamado do grupo)."""
     logger.info(
@@ -54,21 +68,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if membro:
         nivel = get_nivel(telegram_id)
+
+        texto = (
+            f"Bem-vindo de volta, irmão {membro.get('Nome', '')}!\n\n"
+            "O que deseja fazer?"
+        )
+
         # /start normalmente vem como mensagem; mas protege caso venha diferente
         if update.message:
             await update.message.reply_text(
-                f"Bem-vindo de volta, irmão {membro.get('Nome', '')}!\n\n"
-                "O que deseja fazer?",
-                reply_markup=menu_principal_teclado(nivel)
+                texto,
+                reply_markup=menu_principal_teclado(nivel),
             )
         else:
             await context.bot.send_message(
                 chat_id=telegram_id,
-                text=(
-                    f"Bem-vindo de volta, irmão {membro.get('Nome', '')}!\n\n"
-                    "O que deseja fazer?"
-                ),
-                reply_markup=menu_principal_teclado(nivel)
+                text=texto,
+                reply_markup=menu_principal_teclado(nivel),
             )
     else:
         await cadastro_start(update, context)
@@ -83,11 +99,23 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data or ""
     await query.answer()
 
-    # ⚠️ Importante:
-    # Estes callbacks devem ser capturados por ConversationHandlers específicos
-    # (que você já registra no main.py ANTES do botao_handler).
-    # Se este handler mexer neles, pode quebrar o fluxo.
+    # ============================================================
+    # Guardrails: callbacks que DEVEM ser tratados por outros handlers
+    # (ConversationHandlers / handlers específicos registrados antes)
+    # ============================================================
+
+    # Admin (flows de ConversationHandler em outros módulos)
     if data in {"admin_promover", "admin_rebaixar", "editar_perfil"}:
+        return
+
+    # Confirmação de presença (ConversationHandler do eventos.py)
+    # Se por algum motivo a ordem de handlers estiver errada,
+    # este return evita o botao_handler "engolir" o callback.
+    if data.startswith("confirmar|"):
+        return
+
+    # Cadastro (normalmente ConversationHandler)
+    if data in {"iniciar_cadastro"}:
         return
 
     telegram_id = update.effective_user.id
@@ -95,10 +123,10 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Verificação de permissão para áreas restritas
     if data == "area_secretario" and nivel not in ["2", "3"]:
-        await query.edit_message_text("⛔ Você não tem permissão para acessar a Área do Secretário.")
+        await _safe_edit(query, "⛔ Você não tem permissão para acessar a Área do Secretário.")
         return
     if data == "area_admin" and nivel != "3":
-        await query.edit_message_text("⛔ Você não tem permissão para acessar a Área do Administrador.")
+        await _safe_edit(query, "⛔ Você não tem permissão para acessar a Área do Administrador.")
         return
 
     # Handlers de navegação de eventos (com pipe |)
@@ -122,15 +150,20 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await detalhes_confirmado(update, context)
     elif data == "meu_cadastro":
         await mostrar_perfil(update, context)
+
     elif data == "area_secretario":
         await mostrar_area_secretario(update, context)
     elif data == "area_admin":
         await mostrar_area_admin(update, context)
+
     elif data == "menu_principal":
-        await query.edit_message_text(
+        await _safe_edit(
+            query,
             "O que deseja fazer?",
-            reply_markup=menu_principal_teclado(nivel)
+            reply_markup=menu_principal_teclado(nivel),
         )
+
+    # Secretário/Admin - imports tardios (mantidos)
     elif data == "cadastrar_evento":
         from src.cadastro_evento import novo_evento_start
         await novo_evento_start(update, context)
@@ -158,8 +191,9 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "admin_editar_membro":
         from src.admin_acoes import editar_membro
         await editar_membro(update, context)
+
     else:
-        await query.edit_message_text("Função em desenvolvimento ou comando não reconhecido.")
+        await _safe_edit(query, "Função em desenvolvimento ou comando não reconhecido.")
 
 
 async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -170,9 +204,10 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
     await query.answer()
 
     if update.effective_chat.type in ["group", "supergroup"]:
-        await query.edit_message_text(
+        await _safe_edit(
+            query,
             "🔔 A Área do Secretário será aberta no meu chat privado. "
-            "Verifique suas mensagens."
+            "Verifique suas mensagens.",
         )
         await context.bot.send_message(
             chat_id=update.effective_user.id,
@@ -182,8 +217,8 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
                 [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
                 [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
                 [InlineKeyboardButton("📋 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
-                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")]
-            ])
+                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
+            ]),
         )
         return
 
@@ -191,7 +226,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
     nivel = get_nivel(telegram_id)
 
     if nivel not in ["2", "3"]:
-        await query.edit_message_text("⛔ Você não tem permissão para acessar esta área.")
+        await _safe_edit(query, "⛔ Você não tem permissão para acessar esta área.")
         return
 
     teclado = InlineKeyboardMarkup([
@@ -201,11 +236,11 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
         [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
     ])
 
-    await query.edit_message_text(
-        "📋 *Área do Secretário*\n\n"
-        "O que deseja fazer?",
+    await _safe_edit(
+        query,
+        "📋 *Área do Secretário*\n\nO que deseja fazer?",
         parse_mode="Markdown",
-        reply_markup=teclado
+        reply_markup=teclado,
     )
 
 
@@ -217,9 +252,10 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.answer()
 
     if update.effective_chat.type in ["group", "supergroup"]:
-        await query.edit_message_text(
+        await _safe_edit(
+            query,
             "🔔 A Área do Administrador será aberta no meu chat privado. "
-            "Verifique suas mensagens."
+            "Verifique suas mensagens.",
         )
         await context.bot.send_message(
             chat_id=update.effective_user.id,
@@ -232,8 +268,8 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
                 [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
                 [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
-                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")]
-            ])
+                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
+            ]),
         )
         return
 
@@ -241,7 +277,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
     nivel = get_nivel(telegram_id)
 
     if nivel != "3":
-        await query.edit_message_text("⛔ Você não tem permissão para acessar esta área.")
+        await _safe_edit(query, "⛔ Você não tem permissão para acessar esta área.")
         return
 
     teclado = InlineKeyboardMarkup([
@@ -254,9 +290,9 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
     ])
 
-    await query.edit_message_text(
-        "⚙️ *Área do Administrador*\n\n"
-        "O que deseja fazer?",
+    await _safe_edit(
+        query,
+        "⚙️ *Área do Administrador*\n\nO que deseja fazer?",
         parse_mode="Markdown",
-        reply_markup=teclado
+        reply_markup=teclado,
     )
