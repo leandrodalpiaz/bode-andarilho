@@ -5,7 +5,7 @@ import logging
 import urllib.parse
 from dataclasses import dataclass
 from datetime import datetime, date, timedelta
-from typing import Optional, Tuple, List, Dict
+from typing import Optional, Tuple, List, Dict, Any
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -83,31 +83,62 @@ def extrair_tipo_agape(texto_agape: str) -> str:
     return "sem"
 
 
-def parse_data_evento(texto: str) -> Optional[datetime]:
+def normalizar_grau_nome(valor: str) -> str:
+    v = (valor or "").strip().lower()
+
+    # compatibilidade com planilhas antigas / abreviações
+    if v in ("todos", "todo", "t", "am", "apr", "aprendiz"):
+        return GRAU_APRENDIZ
+    if v in ("comp", "companheiro", "c"):
+        return GRAU_COMPANHEIRO
+    if v in ("mest", "mestre", "m"):
+        return GRAU_MESTRE
+    if v in ("mi", "mestre instalado", "instalado", "mestreinstalado"):
+        return "Mestre Instalado"
+
+    # Se já vier "bonito", preserva
+    return (valor or "").strip()
+
+
+def parse_data_evento(valor: Any) -> Optional[datetime]:
     """
-    Aceita formatos observados:
-      - dd/mm/aaaa
-      - yyyy-mm-dd HH:MM:SS
+    Aceita:
+      - dd/mm/aaaa (str)
+      - yyyy-mm-dd HH:MM:SS (str)
+      - date/datetime
     """
+    if valor is None:
+        return None
+
+    if isinstance(valor, datetime):
+        return valor
+    if isinstance(valor, date):
+        return datetime(valor.year, valor.month, valor.day)
+
+    texto = str(valor).strip()
     if not texto:
         return None
-    texto = str(texto).strip()
+
     for fmt in ("%d/%m/%Y", "%Y-%m-%d %H:%M:%S"):
         try:
             return datetime.strptime(texto, fmt)
         except Exception:
             pass
+
     return None
 
 
-def _parse_hora(texto: str) -> Tuple[int, int]:
+def _parse_hora(texto: Any) -> Tuple[int, int]:
     """
-    Converte 'HH:MM' / 'HH:MM:SS' em (HH, MM). Se inválido, retorna (99, 99).
+    Converte 'HH:MM' / 'HH:MM:SS' em (HH, MM).
+    Se inválido, retorna (99, 99).
     """
-    if not texto:
+    if texto is None:
         return (99, 99)
     try:
         s = str(texto).strip()
+        if not s:
+            return (99, 99)
         partes = s.split(":")
         hh = int(partes[0])
         mm = int(partes[1]) if len(partes) > 1 else 0
@@ -136,7 +167,7 @@ def normalizar_id_evento(ev: dict) -> str:
     return f"{ev.get('Data do evento', '')} — {ev.get('Nome da loja', '')}"
 
 
-def _tid_to_int(value) -> Optional[int]:
+def _tid_to_int(value: Any) -> Optional[int]:
     """
     Converte Telegram ID vindo de planilha (int/float/str/"123.0") para int.
     """
@@ -151,20 +182,43 @@ def _tid_to_int(value) -> Optional[int]:
         return None
 
 
+def _eh_vm(dados: dict) -> bool:
+    """
+    Lê a coluna 'Venerável Mestre' (ou variações) e interpreta como boolean.
+    """
+    for k in ("Venerável Mestre", "Veneravel Mestre", "veneravel_mestre", "vm"):
+        if k in dados:
+            raw = str(dados.get(k) or "").strip().lower()
+            return raw in ("sim", "s", "yes", "y", "1", "true")
+    return False
+
+
 def montar_linha_confirmado(dados_membro_ou_snapshot: dict) -> str:
     """
-    Formato oficial:
-      {GrauNome} - {Nome} - {NomeDaLoja} {NumeroDaLoja} - {Oriente} - {Potencia}
+    Formato final (UX):
+      {Nome com tratamento opcional} - {GrauNome} - {Loja} {Numero} - {Oriente} - {Potência}
+
+    - Se Venerável Mestre = Sim -> prefixa "VM " no nome
+    - Grau é normalizado (am/mest/todos etc.)
     """
-    grau = (dados_membro_ou_snapshot.get("Grau") or "").strip()
-    nome = (dados_membro_ou_snapshot.get("Nome") or "").strip()
-    loja = (dados_membro_ou_snapshot.get("Loja") or "").strip()
-    numero = (dados_membro_ou_snapshot.get("Número da loja") or "").strip()
-    oriente = (dados_membro_ou_snapshot.get("Oriente") or "").strip()
-    potencia = (dados_membro_ou_snapshot.get("Potência") or "").strip()
+    nome = (dados_membro_ou_snapshot.get("Nome") or dados_membro_ou_snapshot.get("nome") or "").strip()
+    if _eh_vm(dados_membro_ou_snapshot) and nome:
+        nome = f"VM {nome}"
+
+    grau_raw = (dados_membro_ou_snapshot.get("Grau") or dados_membro_ou_snapshot.get("grau") or "").strip()
+    grau = normalizar_grau_nome(grau_raw)
+
+    loja = (dados_membro_ou_snapshot.get("Loja") or dados_membro_ou_snapshot.get("loja") or "").strip()
+    numero = (
+        (dados_membro_ou_snapshot.get("Número da loja") or dados_membro_ou_snapshot.get("numero_loja") or "")
+    )
+    numero = str(numero).strip()
+
+    oriente = (dados_membro_ou_snapshot.get("Oriente") or dados_membro_ou_snapshot.get("oriente") or "").strip()
+    potencia = (dados_membro_ou_snapshot.get("Potência") or dados_membro_ou_snapshot.get("potencia") or "").strip()
 
     loja_composta = f"{loja} {numero}".strip()
-    return f"{grau} - {nome} - {loja_composta} - {oriente} - {potencia}"
+    return f"{nome} - {grau} - {loja_composta} - {oriente} - {potencia}"
 
 
 def _data_range_semana(ref: date) -> Tuple[date, date]:
@@ -232,9 +286,8 @@ def _filtrar_por_periodo(eventos: List[dict], token: str) -> Tuple[str, List[dic
         ini_mes_atual = date(hoje.year, hoje.month, 1)
         limite_inicio = _add_months(ini_mes_atual, MESES_PROXIMOS_QTD)
         fim = _ultimo_dia_mes(limite_inicio.year, limite_inicio.month)
-        titulo = f"Eventos — Próximos meses"
+        titulo = "Eventos — Próximos meses"
     else:
-        # fallback: nada
         return "Eventos", []
 
     filtrados: List[dict] = []
@@ -250,12 +303,12 @@ def _filtrar_por_periodo(eventos: List[dict], token: str) -> Tuple[str, List[dic
 
 
 def _filtrar_por_grau(eventos: List[dict], grau_nome: str) -> Tuple[str, List[dict]]:
-    alvo = (grau_nome or "").strip().lower()
-    titulo = f"Eventos — Grau — {grau_nome}".strip()
+    alvo = normalizar_grau_nome(grau_nome)
+    titulo = f"Eventos — Grau — {alvo}".strip()
 
     filtrados: List[dict] = []
     for ev in eventos:
-        g = (ev.get("Grau") or "").strip().lower()
+        g = normalizar_grau_nome(str(ev.get("Grau") or "").strip())
         if g == alvo:
             filtrados.append(ev)
 
@@ -263,9 +316,9 @@ def _filtrar_por_grau(eventos: List[dict], grau_nome: str) -> Tuple[str, List[di
 
 
 def _formatar_data_curta(ev: dict) -> str:
-    data_txt = str(ev.get("Data do evento", "") or "").strip()
-    dt = parse_data_evento(data_txt)
+    dt = parse_data_evento(ev.get("Data do evento", ""))
     if not dt:
+        data_txt = str(ev.get("Data do evento", "") or "").strip()
         return data_txt or "Sem data"
     dia_semana = traduzir_dia_abreviado(dt.strftime("%A"))
     return f"{dt.strftime('%d/%m')} ({dia_semana})"
@@ -277,7 +330,7 @@ def _linha_botao_evento(ev: dict) -> str:
     hora = str(ev.get("Hora", "") or "").strip()
 
     numero_fmt = f" {numero}" if numero else ""
-    hora_fmt = f"{hora}" if hora else "—"
+    hora_fmt = hora if hora else "—"
 
     data_curta = _formatar_data_curta(ev)
     return f"📅 {data_curta} • 🕕 {hora_fmt} • 🏛 {nome}{numero_fmt}"
@@ -315,10 +368,10 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # -------------------------
-# 2) Handler existente: data|...
-#    Agora serve para:
-#      - listar período (sem funil)
-#      - abrir submenu "Por grau"
+# 2) Handler: data|...
+#    - listar período
+#    - abrir submenu "Por grau"
+#    - compatibilidade com data dd/mm/aaaa (fluxo antigo)
 # -------------------------
 async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -333,9 +386,9 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
     if token_or_data == TOKEN_POR_GRAU_MENU:
         teclado = InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton(f"Grau 1 — {GRAU_APRENDIZ}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_APRENDIZ}")],
-                [InlineKeyboardButton(f"Grau 2 — {GRAU_COMPANHEIRO}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_COMPANHEIRO}")],
-                [InlineKeyboardButton(f"Grau 3 — {GRAU_MESTRE}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_MESTRE}")],
+                [InlineKeyboardButton(f"Botão 5.1 — Grau 1 — {GRAU_APRENDIZ}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_APRENDIZ}")],
+                [InlineKeyboardButton(f"Botão 5.2 — Grau 2 — {GRAU_COMPANHEIRO}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_COMPANHEIRO}")],
+                [InlineKeyboardButton(f"Botão 5.3 — Grau 3 — {GRAU_MESTRE}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_MESTRE}")],
                 [InlineKeyboardButton("⬅️ Voltar", callback_data="ver_eventos")],
                 [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
             ]
@@ -343,8 +396,9 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         await _safe_edit(query, "🔺 *Filtrar por grau*\n\nEscolha o grau:", parse_mode="Markdown", reply_markup=teclado)
         return
 
-    # Tokens de período (novo padrão)
     eventos = listar_eventos() or []
+
+    # Tokens de período (novo padrão)
     if token_or_data in (TOKEN_SEMANA_ATUAL, TOKEN_PROXIMA_SEMANA, TOKEN_MES_ATUAL, TOKEN_PROXIMOS_MESES):
         titulo, filtrados = _filtrar_por_periodo(eventos, token_or_data)
 
@@ -357,12 +411,12 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
             )
             await _safe_edit(
                 query,
-                f"{titulo}\n\nNão existem sessões disponíveis para este filtro no momento.",
+                f"*{titulo}*\n\nNão existem sessões disponíveis para este filtro no momento.",
+                parse_mode="Markdown",
                 reply_markup=teclado,
             )
             return
 
-        # Monta lista (limitada)
         filtrados = filtrados[:MAX_EVENTOS_LISTA]
         botoes = []
         for ev in filtrados:
@@ -372,7 +426,12 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="ver_eventos")])
         botoes.append([InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")])
 
-        await _safe_edit(query, f"*{titulo}*\n\nSelecione um evento:", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(botoes))
+        await _safe_edit(
+            query,
+            f"*{titulo}*\n\nSelecione um evento:",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(botoes),
+        )
         return
 
     # Compatibilidade: token_or_data pode ser uma data real dd/mm/aaaa (fluxo antigo)
@@ -388,10 +447,10 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         await _safe_edit(query, "Não existem sessões disponíveis para esta data no momento.", reply_markup=teclado)
         return
 
-    # Fluxo antigo: agrupar por grau (mantido)
+    # Fluxo antigo: agrupar por grau (mantido, mas normalizando)
     graus: Dict[str, List[dict]] = {}
     for evento in eventos_data:
-        grau = evento.get("Grau", "Indefinido")
+        grau = normalizar_grau_nome(str(evento.get("Grau", "Indefinido")))
         graus.setdefault(grau, []).append(evento)
 
     botoes = []
@@ -410,10 +469,9 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
 
 
 # -------------------------
-# 3) Handler existente: grau|...|...
-#    Agora serve para:
-#      - listar eventos por grau (novo padrão vindo do submenu)
-#      - manter fluxo antigo: data + grau
+# 3) Handler: grau|{data_ou_menu}|{grau}
+#    - novo: data_ou_menu = por_grau -> lista por grau direto
+#    - antigo: data_ou_menu = dd/mm/aaaa -> lista por data+grau
 # -------------------------
 async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -421,13 +479,17 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
         return
     await query.answer()
 
-    _, data_or_menu, grau = query.data.split("|", 2)
-    data_or_menu = (data_or_menu or "").strip()
-    grau = (grau or "").strip()
+    partes = query.data.split("|", 2)
+    if len(partes) < 3:
+        await _safe_edit(query, "Filtro inválido.")
+        return
+
+    _, data_or_menu, grau_raw = partes
+    grau = normalizar_grau_nome(grau_raw)
 
     eventos = listar_eventos() or []
 
-    # Novo padrão: data_or_menu == "por_grau" -> lista direto
+    # Novo fluxo: Por grau (sem data)
     if data_or_menu == TOKEN_POR_GRAU_MENU:
         titulo, filtrados = _filtrar_por_grau(eventos, grau)
 
@@ -440,7 +502,7 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
             )
             await _safe_edit(
                 query,
-                f"*{titulo}*\n\nNão existem sessões disponíveis para este filtro no momento.",
+                f"*{titulo}*\n\nNão existem sessões disponíveis para este grau no momento.",
                 parse_mode="Markdown",
                 reply_markup=teclado,
             )
@@ -455,14 +517,21 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
         botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data=f"data|{TOKEN_POR_GRAU_MENU}")])
         botoes.append([InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")])
 
-        await _safe_edit(query, f"*{titulo}*\n\nSelecione um evento:", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(botoes))
+        await _safe_edit(
+            query,
+            f"*{titulo}*\n\nSelecione um evento:",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(botoes),
+        )
         return
 
-    # Fluxo antigo: filtra por data + grau
+    # Fluxo antigo: data + grau
     eventos_filtrados = [
         e for e in eventos
-        if str(e.get("Data do evento", "")).strip() == data_or_menu and str(e.get("Grau", "")).strip() == grau
+        if str(e.get("Data do evento", "")).strip() == str(data_or_menu).strip()
+        and normalizar_grau_nome(str(e.get("Grau", "")).strip()) == grau
     ]
+    eventos_filtrados = _eventos_ordenados(eventos_filtrados)
 
     if not eventos_filtrados:
         teclado = InlineKeyboardMarkup(
@@ -474,21 +543,24 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
         await _safe_edit(query, "Não existem sessões disponíveis para este filtro no momento.", reply_markup=teclado)
         return
 
-    eventos_filtrados = _eventos_ordenados(eventos_filtrados)[:MAX_EVENTOS_LISTA]
-
     botoes = []
-    for ev in eventos_filtrados:
+    for ev in eventos_filtrados[:MAX_EVENTOS_LISTA]:
         id_evento = normalizar_id_evento(ev)
         botoes.append([InlineKeyboardButton(_linha_botao_evento(ev), callback_data=f"evento|{_encode_cb(id_evento)}")])
 
     botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data=f"data|{data_or_menu}")])
     botoes.append([InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")])
 
-    await _safe_edit(query, "Selecione o evento:", reply_markup=InlineKeyboardMarkup(botoes))
+    await _safe_edit(
+        query,
+        f"🔺 *{grau}*\n\nSelecione um evento:",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(botoes),
+    )
 
 
 # -------------------------
-# 4) Detalhes do evento + ações
+# 4) Detalhes do evento (card)
 # -------------------------
 async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -512,11 +584,11 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
 
     oriente = str(evento.get("Oriente", "") or "").strip()
     potencia = str(evento.get("Potência", "") or "").strip()
-    data = str(evento.get("Data do evento", "") or "").strip()
+    data = evento.get("Data do evento", "")
     hora = str(evento.get("Hora", "") or "").strip()
     tipo_sessao = str(evento.get("Tipo de sessão", "") or "").strip()
     rito = str(evento.get("Rito", "") or "").strip()
-    grau = str(evento.get("Grau", "") or "").strip()
+    grau = normalizar_grau_nome(str(evento.get("Grau", "") or "").strip())
     traje = str(evento.get("Traje obrigatório", "") or "").strip()
     agape = str(evento.get("Ágape", "") or "").strip()
     obs = str(evento.get("Observações", "") or "").strip()
@@ -526,10 +598,10 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         dia_semana = traduzir_dia(data_obj.strftime("%A"))
         data_formatada = f"{data_obj.strftime('%d/%m/%Y')} ({dia_semana})"
     else:
-        data_formatada = data
+        data_formatada = str(data or "").strip()
 
     texto = (
-        "🐐 *Sessão disponível para visitas!*\n\n"
+        "🐐 *Nova sessão disponível para visitas!*\n\n"
         f"🏛 *LOJA {nome}{numero_fmt}*\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"📍 Oriente: {oriente}\n"
@@ -597,8 +669,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         botoes_cadastro = InlineKeyboardMarkup([[InlineKeyboardButton("📝 Fazer cadastro", callback_data="meu_cadastro")]])
         await _safe_edit(
             query,
-            "Olá! Antes de confirmar sua presença, preciso fazer seu cadastro.\n\n"
-            "Clique no botão abaixo para começar:",
+            "Olá! Antes de confirmar sua presença, preciso fazer seu cadastro.\n\nClique no botão abaixo para começar:",
             reply_markup=botoes_cadastro,
         )
         return ConversationHandler.END
@@ -626,7 +697,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         "id_evento": id_evento,
         "telegram_id": str(user_id),
         "nome": membro.get("Nome", ""),
-        "grau": membro.get("Grau", ""),
+        "grau": normalizar_grau_nome(membro.get("Grau", "")),
         "cargo": membro.get("Cargo", ""),
         "loja": membro.get("Loja", ""),
         "numero_loja": membro.get("Número da loja", ""),
@@ -636,14 +707,13 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     }
     registrar_confirmacao(dados_confirmacao)
 
-    # Feedback claro (privado)
     data = str(evento.get("Data do evento", "") or "").strip()
     nome_loja = str(evento.get("Nome da loja", "") or "").strip()
     numero_loja = str(evento.get("Número da loja", "") or "").strip()
     horario = str(evento.get("Hora", "") or "").strip()
     potencia_evento = str(evento.get("Potência", "") or "").strip()
 
-    data_obj = parse_data_evento(data)
+    data_obj = parse_data_evento(evento.get("Data do evento", ""))
     if data_obj:
         dia_semana = traduzir_dia(data_obj.strftime("%A"))
     else:
@@ -762,8 +832,6 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
 
     if not evento:
-        # Ainda permite ver confirmados mesmo se evento não estiver mais ativo,
-        # mas sem os metadados do evento fica pobre.
         titulo = "CONFIRMADOS"
         data_evento = ""
         nome_loja = ""
@@ -776,13 +844,12 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     linhas: List[str] = []
     for c in confirmacoes:
-        tid = _tid_to_int(c.get("Telegram ID"))
+        tid = _tid_to_int(c.get("Telegram ID") or c.get("telegram_id"))
         membro = buscar_membro(tid) if tid is not None else None
 
         if membro:
             linhas.append(montar_linha_confirmado(membro))
         else:
-            # fallback: usa snapshot salvo na confirmação (com mapeamento)
             snapshot = {
                 "Grau": c.get("Grau", c.get("grau", "")),
                 "Nome": c.get("Nome", c.get("nome", "")),
@@ -790,17 +857,13 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Número da loja": c.get("Número da loja", c.get("numero_loja", "")),
                 "Oriente": c.get("Oriente", c.get("oriente", "")),
                 "Potência": c.get("Potência", c.get("potencia", "")),
+                "Venerável Mestre": c.get("Venerável Mestre", c.get("veneravel_mestre", "")),
             }
             linhas.append(montar_linha_confirmado(snapshot))
 
-    if not linhas:
-        corpo = "Nenhuma presença confirmada até o momento."
-    else:
-        corpo = "\n".join(linhas)
-
+    corpo = "Nenhuma presença confirmada até o momento." if not linhas else "\n".join(linhas)
     texto = f"*{titulo}*\n{data_evento}\n\n{corpo}"
 
-    # Botões: confirmar/cancelar (para o usuário), fechar
     user_id = update.effective_user.id
     ja_confirmou = buscar_confirmacao(id_evento, user_id)
 
@@ -811,14 +874,12 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
         botoes.append([InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{_encode_cb(id_evento)}|sem")])
 
     botoes.append([InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")])
-    teclado = InlineKeyboardMarkup(botoes)
 
-    # "Cortina": envia nova mensagem (não edita a original do evento)
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=texto,
         parse_mode="Markdown",
-        reply_markup=teclado,
+        reply_markup=InlineKeyboardMarkup(botoes),
     )
 
 
@@ -887,7 +948,7 @@ async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE
     nome = str(evento.get("Nome da loja", "") or "").strip()
     numero = str(evento.get("Número da loja", "") or "").strip()
     numero_fmt = f" {numero}" if numero else ""
-    data = str(evento.get("Data do evento", "") or "").strip()
+    data_txt = str(evento.get("Data do evento", "") or "").strip()
     hora = str(evento.get("Hora", "") or "").strip()
     oriente = str(evento.get("Oriente", "") or "").strip()
     potencia = str(evento.get("Potência", "") or "").strip()
@@ -895,7 +956,7 @@ async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE
     texto = (
         "*Confirmação registrada*\n\n"
         f"🏛 {nome}{numero_fmt}\n"
-        f"📅 {data}\n"
+        f"📅 {data_txt}\n"
         f"🕕 {hora}\n"
         f"📍 {oriente}\n"
         f"⚜️ {potencia}\n"
@@ -923,7 +984,6 @@ async def fechar_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await query.delete_message()
     except Exception:
-        # se não puder deletar (permissões), tenta ao menos "sumir" com texto
         try:
             await _safe_edit(query, "Fechado.")
         except Exception:
