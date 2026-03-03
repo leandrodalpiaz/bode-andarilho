@@ -42,7 +42,7 @@ from src.cadastro_evento import cadastro_evento_handler
 from src.admin_acoes import (
     promover_handler,
     rebaixar_handler,
-    ver_todos_membros,
+    # ver_todos_membros REMOVIDO - função não existe
     editar_membro,
 )
 from src.editar_perfil import editar_perfil_handler
@@ -154,7 +154,6 @@ async def main():
     # 🔥 NOVOS HANDLERS PARA ADMIN/SECRETÁRIO
     telegram_app.add_handler(CallbackQueryHandler(meus_eventos, pattern=r"^meus_eventos$"))
     telegram_app.add_handler(CallbackQueryHandler(editar_membro, pattern=r"^admin_editar_membro$"))
-    telegram_app.add_handler(CallbackQueryHandler(ver_todos_membros, pattern=r"^admin_ver_membros$"))
     telegram_app.add_handler(CallbackQueryHandler(menu_gerenciar_evento, pattern=r"^gerenciar_evento\|"))
     telegram_app.add_handler(CallbackQueryHandler(confirmar_cancelamento, pattern=r"^confirmar_cancelamento\|"))
     telegram_app.add_handler(CallbackQueryHandler(executar_cancelamento, pattern=r"^cancelar_evento\|"))
