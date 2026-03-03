@@ -42,8 +42,7 @@ from src.cadastro_evento import cadastro_evento_handler
 from src.admin_acoes import (
     promover_handler,
     rebaixar_handler,
-    # ver_todos_membros REMOVIDO - função não existe
-    editar_membro,
+    editar_membro_handler,  # ✅ NOVO HANDLER
 )
 from src.editar_perfil import editar_perfil_handler
 from src.eventos_secretario import (
@@ -128,6 +127,7 @@ async def main():
     telegram_app.add_handler(rebaixar_handler)
     telegram_app.add_handler(editar_perfil_handler)
     telegram_app.add_handler(editar_evento_secretario_handler)
+    telegram_app.add_handler(editar_membro_handler)  # ✅ NOVO HANDLER
 
     # ✅ "bode" no grupo (ponte)
     class BodeGrupoFilter(filters.MessageFilter):
@@ -151,9 +151,8 @@ async def main():
     telegram_app.add_handler(CallbackQueryHandler(minhas_confirmacoes, pattern="^minhas_confirmacoes$"))
     telegram_app.add_handler(CallbackQueryHandler(detalhes_confirmado, pattern=r"^detalhes_confirmado\|"))
     
-    # 🔥 NOVOS HANDLERS PARA ADMIN/SECRETÁRIO
+    # 🔥 HANDLERS PARA ADMIN/SECRETÁRIO
     telegram_app.add_handler(CallbackQueryHandler(meus_eventos, pattern=r"^meus_eventos$"))
-    telegram_app.add_handler(CallbackQueryHandler(editar_membro, pattern=r"^admin_editar_membro$"))
     telegram_app.add_handler(CallbackQueryHandler(menu_gerenciar_evento, pattern=r"^gerenciar_evento\|"))
     telegram_app.add_handler(CallbackQueryHandler(confirmar_cancelamento, pattern=r"^confirmar_cancelamento\|"))
     telegram_app.add_handler(CallbackQueryHandler(executar_cancelamento, pattern=r"^cancelar_evento\|"))
