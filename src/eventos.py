@@ -908,7 +908,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # -------------------------
-# 7) Ver confirmados (CORRIGIDO)
+# 7) Ver confirmados (CORRIGIDO - VERSÃO ORIGINAL)
 # -------------------------
 async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -966,22 +966,13 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     botoes.append([InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")])
 
-    # COMPORTAMENTO CORRIGIDO:
-    # - No grupo: envia NOVA mensagem (cortina)
-    # - No privado: edita a mensagem atual
-    if update.effective_chat.type in ["group", "supergroup"]:
-        # No grupo: envia nova mensagem (não edita a original)
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=texto,
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(botoes),
-        )
-        # Dá um feedback rápido de que a lista foi aberta
-        await query.answer("📋 Lista de confirmados exibida acima!")
-    else:
-        # No privado: edita a mensagem atual (comportamento original)
-        await _safe_edit(query, texto, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(botoes))
+    # COMPORTAMENTO ORIGINAL: SEMPRE envia nova mensagem
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=texto,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(botoes),
+    )
 
 
 # -------------------------
