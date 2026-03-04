@@ -23,53 +23,6 @@ from src.sheets import (
     buscar_confirmacao,
     listar_confirmacoes_por_evento,
 )
-async def notificar_secretario(context: ContextTypes.DEFAULT_TYPE, evento: dict, membro: dict, tipo_agape: str, desc_agape: str):
-    """Envia notificação para o secretário sobre nova confirmação (se ele tiver ativo)."""
-    secretario_id = evento.get("Telegram ID do secretário", "")
-    if not secretario_id:
-        return
-
-    try:
-        secretario_id = int(float(secretario_id))
-    except:
-        return
-
-    # Verifica se o secretário tem notificações ativas na planilha
-    from src.sheets import get_notificacao_status
-    if not get_notificacao_status(secretario_id):
-        return  # Secretário optou por não receber notificações
-
-    nome_loja = evento.get("Nome da loja", "")
-    numero = evento.get("Número da loja", "")
-    numero_fmt = f" {numero}" if numero else ""
-    data = evento.get("Data do evento", "")
-    nome_membro = membro.get("Nome", "")
-
-    texto = (
-        f"📢 *NOVA CONFIRMAÇÃO*\n\n"
-        f"👤 *Irmão:* {nome_membro}\n"
-        f"📅 *Evento:* {data} - {nome_loja}{numero_fmt}\n"
-        f"🍽 *Ágape:* {tipo_agape} ({desc_agape})\n"
-    )
-
-    # Criar botões para ações rápidas
-    id_evento = normalizar_id_evento(evento)
-    teclado = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("📊 Ver resumo", callback_data=f"resumo_evento|{_encode_cb(id_evento)}"),
-            InlineKeyboardButton("👥 Ver lista", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")
-        ],
-    ])
-
-    try:
-        await context.bot.send_message(
-            chat_id=secretario_id,
-            text=texto,
-            parse_mode="Markdown",
-            reply_markup=teclado,
-        )
-    except Exception as e:
-        logger.error(f"Erro ao notificar secretário {secretario_id}: {e}")
 
 logger = logging.getLogger(__name__)
 
@@ -614,7 +567,7 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
 
 
 # -------------------------
-# 4) Detalhes do evento (card)
+# 4) Detalhes do evento (card) com botão de mapa
 # -------------------------
 async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -646,6 +599,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     traje = str(evento.get("Traje obrigatório", "") or "").strip()
     agape = str(evento.get("Ágape", "") or "").strip()
     obs = str(evento.get("Observações", "") or "").strip()
+    endereco_raw = str(evento.get("Endereço da sessão", "") or "").strip()
 
     data_obj = parse_data_evento(data)
     if data_obj:
@@ -667,8 +621,23 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         f"🔺 Grau mínimo: {grau}\n"
         f"🎩 Traje: {traje}\n"
         f"🍽 Ágape: {agape}\n\n"
-        f"📌 Observações: {obs}\n"
     )
+
+    # Adiciona endereço e, se for link, prepara botão
+    botoes_extras = []
+    if endereco_raw:
+        if endereco_raw.startswith(("http://", "https://")):
+            # É um link - mostra como texto e adiciona botão
+            texto += f"📍 *Link do local:* [Clique aqui]({endereco_raw})\n"
+            botoes_extras.append([InlineKeyboardButton("📍 Abrir no mapa", url=endereco_raw)])
+        else:
+            # É texto normal
+            texto += f"📍 *Endereço:* {endereco_raw}\n"
+    else:
+        texto += "📍 *Endereço:* Não informado\n"
+
+    if obs:
+        texto += f"\n📌 *Observações:* {obs}\n"
 
     user_id = update.effective_user.id
     ja_confirmou = buscar_confirmacao(id_evento, user_id)
@@ -689,6 +658,11 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
             botoes.append([InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{_encode_cb(id_evento)}|sem")])
 
     botoes.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")])
+    
+    # Adiciona botões de mapa se houver
+    if botoes_extras:
+        botoes.extend(botoes_extras)
+    
     botoes.append([InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")])
 
     await _safe_edit(query, texto, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(botoes))
@@ -767,6 +741,10 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         "veneravel_mestre": membro.get("Venerável Mestre", ""),
     }
     registrar_confirmacao(dados_confirmacao)
+
+    # Notifica o secretário (se ele tiver ativo)
+    from src.admin_acoes import notificar_secretario
+    await notificar_secretario(context, evento, membro, participacao_agape, desc_agape)
 
     data = str(evento.get("Data do evento", "") or "").strip()
     nome_loja = str(evento.get("Nome da loja", "") or "").strip()
@@ -868,10 +846,10 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
         "agape": f"{participacao_agape} ({desc_agape})" if participacao_agape == "Confirmada" else "Não",
         "veneravel_mestre": membro.get("Venerável Mestre", ""),
     }
-        # Após registrar_confirmacao(dados_confirmacao)
     registrar_confirmacao(dados_confirmacao)
-    
-    # Notifica o secretário (se ele tiver ativo)
+
+    # Notifica o secretário
+    from src.admin_acoes import notificar_secretario
     await notificar_secretario(context, evento, membro, participacao_agape, desc_agape)
 
     data = str(evento.get("Data do evento", "") or "").strip()
@@ -1178,57 +1156,6 @@ async def minhas_confirmacoes_historico(update: Update, context: ContextTypes.DE
     )
 
 
-async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra detalhes de uma confirmação futura (com botão cancelar)."""
-    query = update.callback_query
-    if not query:
-        return
-    await query.answer()
-
-    _, id_evento_cod = query.data.split("|", 1)
-    id_evento = _decode_cb(id_evento_cod)
-
-    eventos = listar_eventos() or []
-    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
-
-    if not evento:
-        teclado = InlineKeyboardMarkup(
-            [
-                [InlineKeyboardButton("⬅️ Voltar", callback_data="minhas_confirmacoes_futuro")],
-                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
-            ]
-        )
-        await _safe_edit(query, "Evento não encontrado ou não está mais ativo.", reply_markup=teclado)
-        return
-
-    nome = str(evento.get("Nome da loja", "") or "").strip()
-    numero = str(evento.get("Número da loja", "") or "").strip()
-    numero_fmt = f" {numero}" if numero else ""
-    data_txt = str(evento.get("Data do evento", "") or "").strip()
-    hora = str(evento.get("Hora", "") or "").strip()
-    oriente = str(evento.get("Oriente", "") or "").strip()
-    potencia = str(evento.get("Potência", "") or "").strip()
-
-    texto = (
-        "*Confirmação registrada*\n\n"
-        f"🏛 {nome}{numero_fmt}\n"
-        f"📅 {data_txt}\n"
-        f"🕕 {hora}\n"
-        f"📍 {oriente}\n"
-        f"⚜️ {potencia}\n"
-    )
-
-    teclado = InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")],
-            [InlineKeyboardButton("⬅️ Voltar", callback_data="minhas_confirmacoes_futuro")],
-            [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
-        ]
-    )
-
-    await _safe_edit(query, texto, parse_mode="Markdown", reply_markup=teclado)
-
-
 # -------------------------
 # 9) Detalhes do histórico (sem opção de cancelar)
 # -------------------------
@@ -1318,7 +1245,7 @@ confirmacao_presenca_handler = ConversationHandler(
     fallbacks=[CommandHandler("cancelar", cancelar_presenca)],
 )
 
-# Handlers para minhas confirmações (substitui o antigo)
+# Handlers para minhas confirmações
 minhas_confirmacoes_handler = CallbackQueryHandler(minhas_confirmacoes, pattern=r"^minhas_confirmacoes$")
 minhas_confirmacoes_futuro_handler = CallbackQueryHandler(minhas_confirmacoes_futuro, pattern=r"^minhas_confirmacoes_futuro$")
 minhas_confirmacoes_historico_handler = CallbackQueryHandler(minhas_confirmacoes_historico, pattern=r"^minhas_confirmacoes_historico$")
