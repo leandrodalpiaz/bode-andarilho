@@ -102,10 +102,14 @@ def normalizar_grau_nome(valor: str) -> str:
 
 def parse_data_evento(valor: Any) -> Optional[datetime]:
     """
-    Aceita:
-      - dd/mm/aaaa (str)
-      - yyyy-mm-dd HH:MM:SS (str)
-      - date/datetime
+    Converte diferentes formatos de data para datetime.
+    Formatos aceitos:
+      - dd/mm/aaaa
+      - dd/mm/aaaa HH:MM:SS
+      - aaaa-mm-dd
+      - aaaa-mm-dd HH:MM:SS
+      - dd-mm-aaaa
+      - datetime/date
     """
     if valor is None:
         return None
@@ -119,12 +123,20 @@ def parse_data_evento(valor: Any) -> Optional[datetime]:
     if not texto:
         return None
 
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d %H:%M:%S"):
+    # Lista de formatos tentativos (do mais específico para o mais genérico)
+    formatos = [
+        "%d/%m/%Y %H:%M:%S",
+        "%d/%m/%Y",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d",
+        "%d-%m-%Y %H:%M:%S",
+        "%d-%m-%Y",
+    ]
+    for fmt in formatos:
         try:
             return datetime.strptime(texto, fmt)
-        except Exception:
-            pass
-
+        except ValueError:
+            continue
     return None
 
 
