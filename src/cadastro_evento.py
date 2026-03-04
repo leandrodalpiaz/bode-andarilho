@@ -434,7 +434,6 @@ def _teclado_pos_publicacao(id_evento: str) -> InlineKeyboardMarkup:
         [
             [InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_evento}|sem")],
             [InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{id_evento}")],
-            [InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")],
         ]
     )
 
