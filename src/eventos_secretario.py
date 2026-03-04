@@ -32,6 +32,7 @@ from src.eventos import (
     _eventos_ordenados,
     parse_data_evento,
     traduzir_dia,
+    _eh_vm,
 )
 from src.permissoes import get_nivel
 
@@ -93,7 +94,7 @@ async def meus_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         meus = [ev for ev in eventos if str(ev.get("Telegram ID do secretário", "")).strip() == str(user_id)]
         titulo = "📋 *Meus eventos*"
 
-    # Filtra apenas eventos ativos e futuros (opcional, mas recomendado)
+    # Filtra apenas eventos ativos e futuros
     from datetime import datetime
     hoje = datetime.now().date()
     meus_filtrados = []
@@ -179,6 +180,7 @@ async def menu_gerenciar_evento(update: Update, context: ContextTypes.DEFAULT_TY
         [InlineKeyboardButton("📊 Resumo da sessão", callback_data=f"resumo_evento|{_encode_cb(id_evento)}")],
         [InlineKeyboardButton("✏️ Editar evento", callback_data="editar_evento_secretario")],
         [InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")],
+        [InlineKeyboardButton("📋 Copiar lista", callback_data=f"copiar_lista|{_encode_cb(id_evento)}")],
         [InlineKeyboardButton("❌ Cancelar evento", callback_data=f"confirmar_cancelamento|{_encode_cb(id_evento)}")],
         [InlineKeyboardButton("⬅️ Voltar", callback_data="meus_eventos")],
     ])
@@ -289,7 +291,7 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 # =========================
-# 4. NOVA FUNÇÃO: Resumo da sessão
+# 4. Resumo da sessão
 # =========================
 async def resumo_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gera um resumo rápido da sessão para o secretário."""
@@ -343,18 +345,22 @@ async def resumo_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 if membro:
                     nome = membro.get("Nome", "Desconhecido")
                     grau = membro.get("Grau", "")
+                    vm = "VM " if _eh_vm(membro) else ""
                 else:
                     nome = c.get("Nome", "Desconhecido")
                     grau = c.get("Grau", "")
+                    vm = ""
             except:
                 nome = c.get("Nome", "Desconhecido")
                 grau = c.get("Grau", "")
+                vm = ""
         else:
             nome = c.get("Nome", "Desconhecido")
             grau = c.get("Grau", "")
+            vm = ""
 
         tipo_agape = "Com ágape" if com_agape else "Sem ágape"
-        lista_detalhada.append(f"• {nome} - {grau} ({tipo_agape})")
+        lista_detalhada.append(f"• {vm}{nome} - {grau} ({tipo_agape})")
 
     # Monta o texto do resumo
     nome_loja = evento.get("Nome da loja", "")
@@ -389,7 +395,124 @@ async def resumo_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 # =========================
-# 5. Editar evento (ConversationHandler)
+# 5. Copiar lista de confirmados (NOVA FUNÇÃO)
+# =========================
+async def copiar_lista_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gera um texto formatado da lista de confirmados para copiar."""
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer("📋 Gerando lista para cópia...")
+
+    data = query.data
+    if not data.startswith("copiar_lista|"):
+        return
+
+    _, id_evento_cod = data.split("|", 1)
+    id_evento = _decode_cb(id_evento_cod)
+
+    eventos = listar_eventos() or []
+    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    if not evento:
+        await _safe_edit(query, "Evento não encontrado.")
+        return
+
+    # Verifica permissão
+    user_id = update.effective_user.id
+    criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
+    nivel = get_nivel(user_id)
+    if str(user_id) != criador_id and nivel != "3":
+        await _safe_edit(query, "⛔ Permissão negada.")
+        return
+
+    # Busca confirmações
+    confirmacoes = listar_confirmacoes_por_evento(id_evento) or []
+    
+    # Dados do evento
+    nome_loja = evento.get("Nome da loja", "")
+    numero = evento.get("Número da loja", "")
+    numero_fmt = f" {numero}" if numero else ""
+    data_txt = evento.get("Data do evento", "")
+    hora = evento.get("Hora", "")
+
+    # Processa as confirmações
+    com_agape = []
+    sem_agape = []
+    
+    for c in confirmacoes:
+        # Busca dados do membro
+        tid = c.get("Telegram ID") or c.get("telegram_id")
+        if tid:
+            try:
+                membro = buscar_membro(int(float(tid)))
+                if membro:
+                    nome = membro.get("Nome", "Desconhecido")
+                    grau = membro.get("Grau", "")
+                    vm = "VM " if _eh_vm(membro) else ""
+                else:
+                    nome = c.get("Nome", "Desconhecido")
+                    grau = c.get("Grau", "")
+                    vm = ""
+            except:
+                nome = c.get("Nome", "Desconhecido")
+                grau = c.get("Grau", "")
+                vm = ""
+        else:
+            nome = c.get("Nome", "Desconhecido")
+            grau = c.get("Grau", "")
+            vm = ""
+
+        # Verifica tipo de ágape
+        agape_texto = str(c.get("Ágape", "") or "").lower()
+        if "com ágape" in agape_texto or "confirmada" in agape_texto:
+            com_agape.append(f"• {vm}{nome} - {grau}")
+        else:
+            sem_agape.append(f"• {vm}{nome} - {grau}")
+
+    # Monta o texto para cópia
+    total = len(confirmacoes)
+    total_com = len(com_agape)
+    total_sem = len(sem_agape)
+
+    linhas = []
+    linhas.append(f"📋 LISTA DE CONFIRMADOS - {nome_loja}{numero_fmt}")
+    linhas.append(f"📅 {data_txt} - {hora}")
+    linhas.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    linhas.append("")
+    linhas.append(f"📊 TOTAL: {total} irmãos")
+    linhas.append(f"🍽 COM ÁGAPE: {total_com}")
+    linhas.append(f"🚫 SEM ÁGAPE: {total_sem}")
+    linhas.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    linhas.append("")
+    
+    if com_agape:
+        linhas.append("COM ÁGAPE:")
+        linhas.extend(com_agape)
+        linhas.append("")
+    
+    if sem_agape:
+        linhas.append("SEM ÁGAPE:")
+        linhas.extend(sem_agape)
+        linhas.append("")
+    
+    linhas.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    linhas.append("📎 Clique no texto acima, selecione 'Copiar' e cole onde desejar.")
+
+    texto_final = "\n".join(linhas)
+
+    # Envia como mensagem de texto simples (sem markdown para facilitar cópia)
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=texto_final,
+        parse_mode=None,  # Sem formatação para cópia limpa
+    )
+
+    # Feedback visual
+    await query.answer("✅ Lista gerada! Verifique a mensagem acima.")
+
+
+# =========================
+# 6. Editar evento (ConversationHandler)
 # =========================
 async def editar_evento_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia o processo de edição de um evento (chamado pelo menu gerenciar)."""
@@ -508,7 +631,9 @@ async def cancelar_edicao_evento(update: Update, context: ContextTypes.DEFAULT_T
     return ConversationHandler.END
 
 
+# =========================
 # ConversationHandler para editar evento
+# =========================
 editar_evento_secretario_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(editar_evento_inicio, pattern="^editar_evento_secretario$")],
     states={
