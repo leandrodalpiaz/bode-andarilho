@@ -23,9 +23,9 @@ from telegram.ext import (
     CommandHandler,
     filters,
 )
-from src.sheets import buscar_membro
+
 from src.cadastro import cadastro_handler, cadastro_start
-from src.bot import botao_handler
+from src.bot import botao_handler, menu_principal_teclado
 from src.eventos import (
     mostrar_eventos,
     mostrar_detalhes_evento,
@@ -53,6 +53,8 @@ from src.eventos_secretario import (
     confirmar_cancelamento,
     executar_cancelamento,
 )
+from src.sheets import buscar_membro
+from src.permissoes import get_nivel
 
 print("INICIANDO BOT - VERSAO FINAL 2026-03-03 (MAIN CORRIGIDO)")
 
@@ -118,23 +120,27 @@ async def bode_grupo_handler(update: Update, context):
     """Captura a palavra 'bode' em grupos e redireciona para o privado."""
     if update.effective_chat.type not in ("group", "supergroup"):
         return
-    
+
     user_id = update.effective_user.id
     membro = buscar_membro(user_id)
-    
+
     if membro:
-        # Já cadastrado: envia mensagem no privado (sem responder no grupo)
+        # Já cadastrado: envia o menu principal diretamente no privado
         try:
+            nivel = get_nivel(user_id)
+            texto = f"🐐 *Bode Andarilho*\n\nBem-vindo de volta, irmão {membro.get('Nome', '')}!\n\nO que deseja fazer?"
+            
             await context.bot.send_message(
                 chat_id=user_id,
-                text="🐐 *Bode Andarilho*\n\nA conversa seguirá por aqui. Use /start para acessar o menu.",
-                parse_mode="Markdown"
+                text=texto,
+                parse_mode="Markdown",
+                reply_markup=menu_principal_teclado(nivel)
             )
-            # Não responde no grupo - apenas um answerCallbackQuery silencioso se vier de callback
+            
             if update.callback_query:
                 await update.callback_query.answer()
         except Exception as e:
-            logger.error(f"Erro ao enviar mensagem privada para {user_id}: {e}")
+            logger.error(f"Erro ao enviar menu privado para {user_id}: {e}")
     else:
         # Não cadastrado: chama cadastro_start para responder no grupo
         await cadastro_start(update, context)
