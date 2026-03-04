@@ -128,7 +128,7 @@ async def selecionar_membro_promover(update: Update, context: ContextTypes.DEFAU
 
 
 async def confirmar_promover(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Confirma promoção."""
+    """Confirma promoção e atualiza o cargo para 'Secretário'."""
     query = update.callback_query
     await query.answer()
 
@@ -141,7 +141,10 @@ async def confirmar_promover(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.edit_message_text("Erro: dados não encontrados.")
         return ConversationHandler.END
 
+    # Atualiza nível para secretário (2)
     if atualizar_nivel_membro(telegram_id, "2"):
+        # Atualiza o cargo para "Secretário"
+        atualizar_membro(telegram_id, {"Cargo": "Secretário"}, preservar_nivel=True)
         await query.edit_message_text("✅ Membro promovido a secretário com sucesso!")
     else:
         await query.edit_message_text("❌ Erro ao promover membro.")
@@ -232,7 +235,7 @@ async def selecionar_membro_rebaixar(update: Update, context: ContextTypes.DEFAU
 
 
 async def confirmar_rebaixar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Confirma rebaixamento."""
+    """Confirma rebaixamento e limpa o cargo."""
     query = update.callback_query
     await query.answer()
 
@@ -245,7 +248,10 @@ async def confirmar_rebaixar(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.edit_message_text("Erro: dados não encontrados.")
         return ConversationHandler.END
 
+    # Rebaixa para comum (nível 1)
     if atualizar_nivel_membro(telegram_id, "1"):
+        # Limpa o cargo (volta a ser vazio)
+        atualizar_membro(telegram_id, {"Cargo": ""}, preservar_nivel=True)
         await query.edit_message_text("✅ Secretário rebaixado a comum com sucesso!")
     else:
         await query.edit_message_text("❌ Erro ao rebaixar membro.")
@@ -281,9 +287,16 @@ async def ver_todos_membros(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for membro in membros[:50]:  # limite de 50 membros por vez
         nome = membro.get("Nome", "Sem nome")
         nivel = membro.get("Nivel", "1")
+        cargo = membro.get("Cargo", "")
         loja = membro.get("Loja", "")
         nivel_texto = {"1": "👤", "2": "🔰", "3": "⚜️"}.get(str(nivel), "👤")
-        linhas.append(f"{nivel_texto} *{nome}* - {loja} (Nível {nivel})")
+        
+        if cargo:
+            linha = f"{nivel_texto} *{nome}* - {cargo} - {loja} (Nível {nivel})"
+        else:
+            linha = f"{nivel_texto} *{nome}* - {loja} (Nível {nivel})"
+        
+        linhas.append(linha)
 
     if not linhas:
         await _safe_edit(query, "Nenhum membro listado.")
@@ -327,6 +340,7 @@ async def editar_membro_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
         membro_id = membro.get("Telegram ID")
         membro_nivel = str(membro.get("Nivel", "1")).strip()
         nome = membro.get("Nome", "Sem nome")
+        cargo = membro.get("Cargo", "")
 
         # Converte ID para inteiro
         try:
@@ -342,8 +356,12 @@ async def editar_membro_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
         if nivel == "2" and membro_nivel in ["2", "3"]:
             continue
 
+        texto_botao = f"{nome} (Nível {membro_nivel})"
+        if cargo:
+            texto_botao = f"{nome} - {cargo} (Nível {membro_nivel})"
+
         botoes.append([InlineKeyboardButton(
-            f"{nome} (Nível {membro_nivel})",
+            texto_botao,
             callback_data=f"editar_membro_selecionar|{tid}"
         )])
 
