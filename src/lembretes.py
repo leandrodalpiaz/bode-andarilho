@@ -2,7 +2,6 @@
 from datetime import datetime, timedelta
 from telegram import Bot
 from src.sheets import listar_eventos, listar_confirmacoes_por_evento
-from src.messages import LEMBRETE_TITULO, LEMBRETE_CORPO
 
 async def enviar_lembretes_24h(bot: Bot):
     """
@@ -63,7 +62,7 @@ async def enviar_lembretes_24h(bot: Bot):
 
 async def enviar_lembretes_meio_dia(bot: Bot):
     """
-    Envia lembretes ao meio-dia do dia do evento
+    Envia lembretes ao meio-dia do dia do evento com a frase "MEIO DIA EM PONTO!"
     """
     hoje = datetime.now()
     hoje_str = hoje.strftime("%d/%m")
