@@ -33,9 +33,12 @@ from src.eventos import (
     ver_confirmados,
     fechar_mensagem,
     minhas_confirmacoes,
+    minhas_confirmacoes_futuro,
+    minhas_confirmacoes_historico,
+    detalhes_confirmado,
+    detalhes_historico,
     mostrar_eventos_por_data,
     mostrar_eventos_por_grau,
-    detalhes_confirmado,
     confirmacao_presenca_handler,
 )
 from src.cadastro_evento import cadastro_evento_handler
@@ -202,8 +205,12 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(mostrar_eventos_por_grau, pattern=r"^grau\|"))
     app.add_handler(CallbackQueryHandler(mostrar_detalhes_evento, pattern=r"^evento\|"))
 
+    # Substituir o handler antigo pelos novos handlers de minhas_confirmacoes
     app.add_handler(CallbackQueryHandler(minhas_confirmacoes, pattern=r"^minhas_confirmacoes$"))
+    app.add_handler(CallbackQueryHandler(minhas_confirmacoes_futuro, pattern=r"^minhas_confirmacoes_futuro$"))
+    app.add_handler(CallbackQueryHandler(minhas_confirmacoes_historico, pattern=r"^minhas_confirmacoes_historico$"))
     app.add_handler(CallbackQueryHandler(detalhes_confirmado, pattern=r"^detalhes_confirmado\|"))
+    app.add_handler(CallbackQueryHandler(detalhes_historico, pattern=r"^detalhes_historico\|"))
 
     app.add_handler(CallbackQueryHandler(ver_confirmados, pattern=r"^ver_confirmados\|"))
     app.add_handler(CallbackQueryHandler(cancelar_presenca, pattern=r"^cancelar\|"))

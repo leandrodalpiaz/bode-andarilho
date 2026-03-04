@@ -54,3 +54,12 @@ LEMBRETE_CORPO = (
     "🍽️ Ágape: {agape}\n\n"
     "Até amanhã! 🤝"
 )
+# src/messages.py (adicione no final)
+LEMBRETE_MEIO_DIA_TITULO = "🕛 *MEIO DIA EM PONTO!*"
+LEMBRETE_MEIO_DIA_CORPO = (
+    "Irmão {nome}, hoje tem sessão!\n\n"
+    "🏛 Loja {loja}{numero}\n"
+    "📍 {local}\n"
+    "🕕 {horario}\n\n"
+    "Até logo mais! 🤝"
+)
