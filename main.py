@@ -23,7 +23,7 @@ from telegram.ext import (
     CommandHandler,
     filters,
 )
-
+from src.sheets import buscar_membro
 from src.cadastro import cadastro_handler, cadastro_start
 from src.bot import botao_handler
 from src.eventos import (
@@ -115,8 +115,28 @@ async def shutdown(server, telegram_app: Application):
 
 
 async def bode_grupo_handler(update: Update, context):
-    """Captura a palavra 'bode' em grupos e redireciona para o cadastro."""
-    if update.effective_chat.type in ("group", "supergroup"):
+    """Captura a palavra 'bode' em grupos e redireciona para o privado."""
+    if update.effective_chat.type not in ("group", "supergroup"):
+        return
+    
+    user_id = update.effective_user.id
+    membro = buscar_membro(user_id)
+    
+    if membro:
+        # Já cadastrado: envia mensagem no privado (sem responder no grupo)
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text="🐐 *Bode Andarilho*\n\nA conversa seguirá por aqui. Use /start para acessar o menu.",
+                parse_mode="Markdown"
+            )
+            # Não responde no grupo - apenas um answerCallbackQuery silencioso se vier de callback
+            if update.callback_query:
+                await update.callback_query.answer()
+        except Exception as e:
+            logger.error(f"Erro ao enviar mensagem privada para {user_id}: {e}")
+    else:
+        # Não cadastrado: chama cadastro_start para responder no grupo
         await cadastro_start(update, context)
 
 
