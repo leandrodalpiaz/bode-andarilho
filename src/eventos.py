@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 MAX_EVENTOS_LISTA = 40  # evita estourar limite de botões do Telegram
 MESES_PROXIMOS_QTD = 6  # "Próximos meses" = próximos N meses contando a partir de hoje
 
-# Tokens de filtro (reaproveitando handlers existentes: data|... e grau|...|...)
+# Tokens de filtro
 TOKEN_SEMANA_ATUAL = "semana_atual"
 TOKEN_PROXIMA_SEMANA = "proxima_semana"
 TOKEN_MES_ATUAL = "mes_atual"
@@ -369,9 +369,6 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # -------------------------
 # 2) Handler: data|...
-#    - listar período
-#    - abrir submenu "Por grau"
-#    - compatibilidade com data dd/mm/aaaa (fluxo antigo)
 # -------------------------
 async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -386,9 +383,9 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
     if token_or_data == TOKEN_POR_GRAU_MENU:
         teclado = InlineKeyboardMarkup(
             [
-                [InlineKeyboardButton(f"Botão 5.1 — Grau 1 — {GRAU_APRENDIZ}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_APRENDIZ}")],
-                [InlineKeyboardButton(f"Botão 5.2 — Grau 2 — {GRAU_COMPANHEIRO}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_COMPANHEIRO}")],
-                [InlineKeyboardButton(f"Botão 5.3 — Grau 3 — {GRAU_MESTRE}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_MESTRE}")],
+                [InlineKeyboardButton(f"🔺 {GRAU_APRENDIZ}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_APRENDIZ}")],
+                [InlineKeyboardButton(f"🔺 {GRAU_COMPANHEIRO}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_COMPANHEIRO}")],
+                [InlineKeyboardButton(f"🔺 {GRAU_MESTRE}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_MESTRE}")],
                 [InlineKeyboardButton("⬅️ Voltar", callback_data="ver_eventos")],
                 [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
             ]
@@ -447,7 +444,7 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         await _safe_edit(query, "Não existem sessões disponíveis para esta data no momento.", reply_markup=teclado)
         return
 
-    # Fluxo antigo: agrupar por grau (mantido, mas normalizando)
+    # Fluxo antigo: agrupar por grau
     graus: Dict[str, List[dict]] = {}
     for evento in eventos_data:
         grau = normalizar_grau_nome(str(evento.get("Grau", "Indefinido")))
@@ -470,8 +467,6 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
 
 # -------------------------
 # 3) Handler: grau|{data_ou_menu}|{grau}
-#    - novo: data_ou_menu = por_grau -> lista por grau direto
-#    - antigo: data_ou_menu = dd/mm/aaaa -> lista por data+grau
 # -------------------------
 async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -654,7 +649,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         await _safe_edit(query, "Comando inválido.")
         return ConversationHandler.END
 
-    _, id_evento_cod, tipo_agape = partes[0], partes[1], partes[2]
+    _, id_evento_cod, tipo_agape = partes
     id_evento = _decode_cb(id_evento_cod)
     user_id = update.effective_user.id
 
@@ -666,7 +661,13 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
 
     membro = buscar_membro(user_id)
     if not membro:
-        botoes_cadastro = InlineKeyboardMarkup([[InlineKeyboardButton("📝 Fazer cadastro", callback_data="meu_cadastro")]])
+        # Guarda intenção de confirmar após cadastro
+        context.user_data["pos_cadastro"] = {
+            "acao": "confirmar",
+            "id_evento": id_evento,
+            "tipo_agape": tipo_agape
+        }
+        botoes_cadastro = InlineKeyboardMarkup([[InlineKeyboardButton("📝 Fazer cadastro", callback_data="iniciar_cadastro")]])
         await _safe_edit(
             query,
             "Olá! Antes de confirmar sua presença, preciso fazer seu cadastro.\n\nClique no botão abaixo para começar:",
@@ -704,6 +705,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         "oriente": membro.get("Oriente", ""),
         "potencia": membro.get("Potência", ""),
         "agape": f"{participacao_agape} ({desc_agape})" if participacao_agape == "Confirmada" else "Não",
+        "veneravel_mestre": membro.get("Venerável Mestre", ""),
     }
     registrar_confirmacao(dados_confirmacao)
 
@@ -719,10 +721,12 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     else:
         dia_semana = str(evento.get("Dia da semana", "") or "").strip()
 
+    numero_fmt = f" {numero_loja}" if numero_loja else ""
+
     resposta = (
         f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
         "*Resumo da confirmação:*\n"
-        f"📅 {data} — {nome_loja} {numero_loja}\n"
+        f"📅 {data} — {nome_loja}{numero_fmt}\n"
         f"⚜️ Potência: {potencia_evento}\n"
         f"📆 Dia: {dia_semana}\n"
         f"🕕 Horário: {horario}\n"
@@ -753,6 +757,83 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     return ConversationHandler.END
 
 
+# Função auxiliar para continuar confirmação após cadastro
+async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE, pos: dict):
+    """Continua o fluxo de confirmação após o cadastro ser concluído."""
+    user_id = update.effective_user.id
+    id_evento = pos.get("id_evento")
+    tipo_agape = pos.get("tipo_agape", "sem")
+
+    if not id_evento:
+        return
+
+    eventos = listar_eventos() or []
+    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    if not evento:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="Evento não encontrado. Tente confirmar novamente."
+        )
+        return
+
+    membro = buscar_membro(user_id)
+    if not membro:
+        return
+
+    # Verifica se já confirmou
+    if buscar_confirmacao(id_evento, user_id):
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="Você já estava confirmado para este evento."
+        )
+        return
+
+    participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não selecionada"
+    if tipo_agape == "gratuito":
+        desc_agape = "Gratuito"
+    elif tipo_agape == "pago":
+        desc_agape = "Pago"
+    else:
+        desc_agape = "Não aplicável"
+
+    dados_confirmacao = {
+        "id_evento": id_evento,
+        "telegram_id": str(user_id),
+        "nome": membro.get("Nome", ""),
+        "grau": normalizar_grau_nome(membro.get("Grau", "")),
+        "cargo": membro.get("Cargo", ""),
+        "loja": membro.get("Loja", ""),
+        "numero_loja": membro.get("Número da loja", ""),
+        "oriente": membro.get("Oriente", ""),
+        "potencia": membro.get("Potência", ""),
+        "agape": f"{participacao_agape} ({desc_agape})" if participacao_agape == "Confirmada" else "Não",
+        "veneravel_mestre": membro.get("Venerável Mestre", ""),
+    }
+    registrar_confirmacao(dados_confirmacao)
+
+    data = str(evento.get("Data do evento", "") or "").strip()
+    nome_loja = str(evento.get("Nome da loja", "") or "").strip()
+    numero_loja = str(evento.get("Número da loja", "") or "").strip()
+    horario = str(evento.get("Hora", "") or "").strip()
+
+    numero_fmt = f" {numero_loja}" if numero_loja else ""
+
+    resposta = (
+        f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
+        "*Resumo da confirmação:*\n"
+        f"📅 {data} — {nome_loja}{numero_fmt}\n"
+        f"🕕 Horário: {horario}\n"
+        f"🍽 Participação no ágape: {participacao_agape} ({desc_agape})\n\n"
+        "Fraterno abraço!"
+    )
+
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=resposta,
+        parse_mode="Markdown",
+    )
+
+
 # -------------------------
 # 6) Cancelar presença
 # -------------------------
@@ -773,8 +854,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await _safe_edit(
                 query,
                 "❌ Presença cancelada.\n\n"
-                f"Evento: {id_evento}\n\n"
-                "Se mudar de ideia, basta confirmar novamente.",
+                f"Se mudar de ideia, basta confirmar novamente.",
             )
         else:
             await _safe_edit(query, "Não foi possível cancelar. Você não estava confirmado para este evento.")
@@ -795,7 +875,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await context.bot.send_message(
                 chat_id=user_id,
-                text=f"Confirmar cancelamento da sessão {id_evento}?",
+                text=f"Confirmar cancelamento da sua presença?",
                 reply_markup=teclado,
             )
             await _safe_edit(query, "Instruções enviadas no privado.")
@@ -806,8 +886,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await _safe_edit(
                 query,
                 "❌ Presença cancelada.\n\n"
-                f"Evento: {id_evento}\n\n"
-                "Se mudar de ideia, basta confirmar novamente.",
+                f"Se mudar de ideia, basta confirmar novamente.",
             )
         else:
             await _safe_edit(query, "Não foi possível cancelar. Você não estava confirmado para este evento.")
@@ -817,7 +896,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # -------------------------
-# 7) Ver confirmados (cortina)
+# 7) Ver confirmados
 # -------------------------
 async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -875,12 +954,16 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     botoes.append([InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")])
 
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=texto,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(botoes),
-    )
+    # Se já está em grupo, envia nova mensagem; se for privado, edita
+    if update.effective_chat.type in ["group", "supergroup"]:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=texto,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(botoes),
+        )
+    else:
+        await _safe_edit(query, texto, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(botoes))
 
 
 # -------------------------
@@ -974,7 +1057,7 @@ async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 # -------------------------
-# 9) Fechar mensagem (cortina)
+# 9) Fechar mensagem
 # -------------------------
 async def fechar_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query

@@ -1,6 +1,6 @@
 # main.py
 # ============================================
-# VERSAO FINAL - BODE ANDARILHO (RENDER) - REESCRITA
+# VERSAO FINAL - BODE ANDARILHO (RENDER) - CORRIGIDO
 # ============================================
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ from telegram.ext import (
     filters,
 )
 
-from src.cadastro import cadastro_handler
+from src.cadastro import cadastro_handler, cadastro_start
 from src.bot import botao_handler
 from src.eventos import (
     mostrar_eventos,
@@ -43,6 +43,7 @@ from src.admin_acoes import (
     promover_handler,
     rebaixar_handler,
     editar_membro_handler,
+    ver_todos_membros,
 )
 from src.editar_perfil import editar_perfil_handler
 from src.eventos_secretario import (
@@ -53,7 +54,7 @@ from src.eventos_secretario import (
     executar_cancelamento,
 )
 
-print("INICIANDO BOT - VERSAO FINAL 2026-03-02 (MAIN REESCRITO)")
+print("INICIANDO BOT - VERSAO FINAL 2026-03-03 (MAIN CORRIGIDO)")
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -113,6 +114,12 @@ async def shutdown(server, telegram_app: Application):
         logger.error("Erro no shutdown: %s", e, exc_info=True)
 
 
+async def bode_grupo_handler(update: Update, context):
+    """Captura a palavra 'bode' em grupos e redireciona para o cadastro."""
+    if update.effective_chat.type in ("group", "supergroup"):
+        await cadastro_start(update, context)
+
+
 async def mensagem_grupo_handler(update: Update, context):
     """
     Handler simples para mensagens em grupo/supergrupo:
@@ -146,8 +153,8 @@ def register_handlers(app: Application) -> None:
     Ordem é importante:
     1) ConversationHandlers (cadastro/confirmacao/evento/admin/secretario)
     2) CallbackQueryHandlers específicos (com pattern)
-    3) CallbackQueryHandler genérico do menu (por último)
-    4) MessageHandlers genéricos por fim
+    3) Handlers de mensagens (grupo, "bode")
+    4) CallbackQueryHandler genérico do menu (por último)
     """
 
     # 1) Fluxos conversacionais (prioridade alta)
@@ -163,15 +170,6 @@ def register_handlers(app: Application) -> None:
 
     app.add_handler(editar_evento_secretario_handler)
 
-    # Se estes forem handlers (ConversationHandler/CallbackQueryHandler) no seu módulo, registramos:
-    # (se forem funções simples, não atrapalha: app.add_handler espera Handler; então aqui assumimos que são Handlers)
-    for h in (meus_eventos, menu_gerenciar_evento, confirmar_cancelamento, executar_cancelamento):
-        try:
-            app.add_handler(h)
-        except Exception:
-            # Se algum desses for apenas função (não Handler), ignore sem quebrar o boot.
-            pass
-
     # 2) Callbacks específicos de eventos
     app.add_handler(CallbackQueryHandler(mostrar_eventos, pattern=r"^(ver_eventos|mostrar_eventos|eventos)$"))
     app.add_handler(CallbackQueryHandler(mostrar_eventos_por_data, pattern=r"^data\|"))
@@ -185,10 +183,27 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(cancelar_presenca, pattern=r"^cancelar\|"))
     app.add_handler(CallbackQueryHandler(fechar_mensagem, pattern=r"^fechar_mensagem$"))
 
-    # 3) Menu principal / botões genéricos (catch-all) — sempre por último
+    # 3) Callbacks específicos da área do secretário
+    app.add_handler(CallbackQueryHandler(meus_eventos, pattern=r"^meus_eventos$"))
+    app.add_handler(CallbackQueryHandler(menu_gerenciar_evento, pattern=r"^gerenciar_evento\|"))
+    app.add_handler(CallbackQueryHandler(confirmar_cancelamento, pattern=r"^confirmar_cancelamento\|"))
+    app.add_handler(CallbackQueryHandler(executar_cancelamento, pattern=r"^cancelar_evento\|"))
+
+    # 4) Callbacks específicos da área administrativa
+    app.add_handler(CallbackQueryHandler(ver_todos_membros, pattern=r"^admin_ver_membros$"))
+
+    # 5) Handler para a palavra "bode" em grupos (deve vir antes do genérico)
+    app.add_handler(
+        MessageHandler(
+            filters.Regex(r"^(?i:bode)[.!?]*$") & filters.ChatType.GROUPS,
+            bode_grupo_handler
+        )
+    )
+
+    # 6) Menu principal / botões genéricos (catch-all) — sempre por último
     app.add_handler(CallbackQueryHandler(botao_handler))
 
-    # 4) Mensagens (grupo e fallback)
+    # 7) Mensagens (grupo e fallback)
     app.add_handler(MessageHandler(filters.ChatType.GROUPS & filters.TEXT & ~filters.COMMAND, mensagem_grupo_handler))
     app.add_handler(MessageHandler(filters.ChatType.GROUPS & filters.COMMAND, mensagem_grupo_handler))
 
@@ -267,6 +282,11 @@ async def main():
         timeout_keep_alive=60,
     )
     server = uvicorn.Server(config)
+
+    # ===== INICIAR SCHEDULER DE LEMBRETES =====
+    from src.scheduler import iniciar_scheduler
+    await iniciar_scheduler(telegram_app)
+    # ==========================================
 
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):

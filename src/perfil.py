@@ -1,51 +1,101 @@
 # src/perfil.py
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+
 from src.sheets import buscar_membro
 
+logger = logging.getLogger(__name__)
+
+
+async def _safe_edit(query, text: str, **kwargs):
+    try:
+        await query.edit_message_text(text, **kwargs)
+    except Exception as e:
+        if "Message is not modified" not in str(e):
+            raise
+
+
+def _formatar_data_nasc(data_str: str) -> str:
+    """Tenta formatar data de nascimento de forma amigável."""
+    if not data_str:
+        return "Não informada"
+    
+    # Tenta vários formatos comuns
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d"):
+        try:
+            dt = datetime.strptime(data_str.strip(), fmt)
+            return dt.strftime("%d/%m/%Y")
+        except:
+            pass
+    
+    # Se não conseguir formatar, retorna o original
+    return data_str
+
+
 async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra o perfil do usuário. Se estiver em grupo, redireciona para privado."""
+    """Exibe o perfil do usuário com opção de editar."""
     query = update.callback_query
+    if not query:
+        return
     await query.answer()
 
-    # Se a interação veio de um grupo, redireciona para privado
-    if update.effective_chat.type in ["group", "supergroup"]:
-        await query.edit_message_text(
-            "🔔 Seus dados pessoais só podem ser visualizados no meu chat privado.\n\n"
-            "Por favor, clique no meu nome e envie /start no privado para acessar seu cadastro."
-        )
-        
-        # Envia uma mensagem no privado para facilitar
-        user_id = update.effective_user.id
-        await context.bot.send_message(
-            chat_id=user_id,
-            text="👤 Para ver e editar seu cadastro, use o menu abaixo:",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("👤 Meu cadastro", callback_data="meu_cadastro")
-            ]])
+    user_id = update.effective_user.id
+    membro = buscar_membro(user_id)
+
+    if not membro:
+        teclado = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📝 Fazer cadastro", callback_data="iniciar_cadastro")],
+            [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
+        ])
+        await _safe_edit(
+            query,
+            "👤 *Meu cadastro*\n\nVocê ainda não possui cadastro.\nClique abaixo para iniciar:",
+            parse_mode="Markdown",
+            reply_markup=teclado,
         )
         return
 
-    # Se já está em privado, mostra o perfil
-    telegram_id = update.effective_user.id
-    membro = buscar_membro(telegram_id)
+    # Extrai dados com fallbacks para diferentes nomes de coluna
+    nome = membro.get("Nome") or membro.get("nome") or "Não informado"
+    data_nasc = _formatar_data_nasc(membro.get("Data de nascimento") or membro.get("data_nasc") or "")
+    grau = membro.get("Grau") or membro.get("grau") or "Não informado"
+    loja = membro.get("Loja") or membro.get("loja") or "Não informado"
+    numero_loja = membro.get("Número da loja") or membro.get("numero_loja") or ""
+    oriente = membro.get("Oriente") or membro.get("oriente") or "Não informado"
+    potencia = membro.get("Potência") or membro.get("potencia") or "Não informado"
+    vm = membro.get("Venerável Mestre") or membro.get("veneravel_mestre") or membro.get("vm") or "Não"
+    nivel = membro.get("Nivel") or "1"
 
-    if membro:
-        texto_perfil = (
-            f"👤 *Seu Cadastro:*\n"
-            f"Nome: {membro.get('Nome', 'N/A')}\n"
-            f"Loja: {membro.get('Loja', 'N/A')}\n"
-            f"Grau: {membro.get('Grau', 'N/A')}\n"
-            f"Oriente: {membro.get('Oriente', 'N/A')}\n"
-            f"Potência: {membro.get('Potência', 'N/A')}\n"
-            f"Telefone: {membro.get('Telefone', 'N/A')}\n"
-            f"Nível: {membro.get('Nivel', '1')}\n"
-        )
-        # Botão para editar
-        teclado = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✏️ Editar dados", callback_data="editar_perfil")],
-            [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")]
-        ])
-        await query.edit_message_text(texto_perfil, parse_mode="Markdown", reply_markup=teclado)
-    else:
-        await query.edit_message_text("Seu cadastro não foi encontrado. Envie /start para se cadastrar.")
+    # Mapeia nível para texto
+    nivel_texto = {
+        "1": "Membro",
+        "2": "Secretário",
+        "3": "Administrador",
+    }.get(nivel, "Membro")
+
+    # Formata número da loja
+    numero_fmt = f" - Nº {numero_loja}" if numero_loja and numero_loja not in ("0", "Não informado") else ""
+
+    texto = (
+        f"👤 *Meu Perfil*\n\n"
+        f"*Nome:* {nome}\n"
+        f"*Data de nascimento:* {data_nasc}\n"
+        f"*Grau:* {grau}\n"
+        f"*Loja:* {loja}{numero_fmt}\n"
+        f"*Oriente:* {oriente}\n"
+        f"*Potência:* {potencia}\n"
+        f"*Venerável Mestre:* {vm}\n"
+        f"*Nível:* {nivel_texto}\n"
+    )
+
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✏️ Editar perfil", callback_data="editar_perfil")],
+        [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
+    ])
+
+    await _safe_edit(query, texto, parse_mode="Markdown", reply_markup=teclado)

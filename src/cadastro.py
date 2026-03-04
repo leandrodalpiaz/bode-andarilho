@@ -168,15 +168,15 @@ def _resumo_cadastro(context: ContextTypes.DEFAULT_TYPE) -> str:
     oriente = (context.user_data.get("cadastro_oriente") or "").strip()
     potencia = (context.user_data.get("cadastro_potencia") or "").strip()
 
-    # Markdown V1: melhor evitar caracteres problemáticos; aqui só usamos texto simples.
+    numero_fmt = f" - Nº {numero_loja}" if numero_loja and numero_loja not in ("0", "") else ""
+
     return (
         "*Confira seus dados:*\n\n"
         f"👤 *Nome:* {nome}\n"
         f"🎂 *Nascimento:* {data_nasc}\n"
         f"🔺 *Grau:* {grau}\n"
         f"🔨 *Venerável Mestre:* {vm}\n"
-        f"🏛 *Loja:* {loja}\n"
-        f"#️⃣ *Número:* {numero_loja}\n"
+        f"🏛 *Loja:* {loja}{numero_fmt}\n"
         f"📍 *Oriente:* {oriente}\n"
         f"⚜️ *Potência:* {potencia}\n"
     )
@@ -197,15 +197,22 @@ async def _mostrar_confirmacao(update: Update, context: ContextTypes.DEFAULT_TYP
 # -------------------------
 async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Usado quando o usuário entra no privado.
+    Usado quando o usuário entra no privado ou digita 'bode' no grupo.
     Se já cadastrado: oferece editar.
     Se não: oferece iniciar.
     """
     try:
+        # Se veio do grupo e não é privado, orienta
         if update.effective_chat and update.effective_chat.type in ("group", "supergroup"):
-            await update.message.reply_text("🔒 Para seu cadastro, fale comigo no privado.")
-            return ConversationHandler.END
+            # Se for mensagem de texto (bode), responde no grupo
+            if update.message:
+                await update.message.reply_text(
+                    "🔒 Para seu cadastro, fale comigo no privado.\n\n"
+                    "Clique aqui: @BodeAndarilhoBot e envie /start"
+                )
+            return
 
+        # Aqui já é privado
         telegram_id = update.effective_user.id
         membro = buscar_membro(telegram_id)
         cadastrado = bool(membro)
@@ -216,7 +223,19 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Se estiver tudo certo, volte ao menu principal."
         )
 
-        await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=_teclado_inicio(cadastrado))
+        # Se veio por callback_query (do menu), edita a mensagem
+        if update.callback_query:
+            await update.callback_query.edit_message_text(
+                texto,
+                parse_mode="Markdown",
+                reply_markup=_teclado_inicio(cadastrado)
+            )
+        elif update.message:
+            await update.message.reply_text(
+                texto,
+                parse_mode="Markdown",
+                reply_markup=_teclado_inicio(cadastrado)
+            )
         return ConversationHandler.END
     except Exception as e:
         logger.error(f"Erro em cadastro_start: {e}\n{traceback.format_exc()}")
@@ -277,14 +296,14 @@ async def editar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT
         return ConversationHandler.END
 
     # Pré-preenche com dados existentes (aceita várias chaves, pois a planilha pode variar)
-    context.user_data["cadastro_nome"] = (membro.get("nome") or membro.get("Nome") or "").strip()
-    context.user_data["cadastro_data_nasc"] = (membro.get("data_nasc") or membro.get("Data de nascimento") or membro.get("Data Nasc") or "").strip()
-    context.user_data["cadastro_grau"] = (membro.get("grau") or membro.get("Grau") or "").strip()
-    context.user_data["cadastro_vm"] = (membro.get("veneravel_mestre") or membro.get("Venerável Mestre") or membro.get("VM") or "").strip()
-    context.user_data["cadastro_loja"] = (membro.get("loja") or membro.get("Loja") or "").strip()
-    context.user_data["cadastro_numero_loja"] = (membro.get("numero_loja") or membro.get("Número da loja") or membro.get("Numero da loja") or "").strip()
-    context.user_data["cadastro_oriente"] = (membro.get("oriente") or membro.get("Oriente") or "").strip()
-    context.user_data["cadastro_potencia"] = (membro.get("potencia") or membro.get("Potência") or membro.get("Potencia") or "").strip()
+    context.user_data["cadastro_nome"] = (membro.get("Nome") or membro.get("nome") or "").strip()
+    context.user_data["cadastro_data_nasc"] = (membro.get("Data de nascimento") or membro.get("data_nasc") or "").strip()
+    context.user_data["cadastro_grau"] = (membro.get("Grau") or membro.get("grau") or "").strip()
+    context.user_data["cadastro_vm"] = (membro.get("Venerável Mestre") or membro.get("veneravel_mestre") or membro.get("vm") or "").strip()
+    context.user_data["cadastro_loja"] = (membro.get("Loja") or membro.get("loja") or "").strip()
+    context.user_data["cadastro_numero_loja"] = (membro.get("Número da loja") or membro.get("numero_loja") or "").strip()
+    context.user_data["cadastro_oriente"] = (membro.get("Oriente") or membro.get("oriente") or "").strip()
+    context.user_data["cadastro_potencia"] = (membro.get("Potência") or membro.get("potencia") or "").strip()
 
     await query.edit_message_text(
         "✏️ *Editar cadastro*\n\nVamos passar pelos campos novamente.\nComece enviando seu *nome completo*:",
@@ -467,7 +486,6 @@ async def confirmar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if pos and isinstance(pos, dict) and pos.get("acao") == "confirmar":
             try:
                 from src.eventos import iniciar_confirmacao_presenca_pos_cadastro
-
                 await iniciar_confirmacao_presenca_pos_cadastro(update, context, pos)
                 context.user_data.pop("pos_cadastro", None)
             except Exception as e:

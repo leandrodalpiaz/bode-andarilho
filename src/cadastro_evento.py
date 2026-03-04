@@ -50,7 +50,7 @@ MAX_TEXTO = 250
 ) = range(16)
 
 # =========================
-# ÃšNICA padronizaÃ§Ã£o pedida: Grau por botÃµes
+# Opções fixas
 # =========================
 GRAUS_OPCOES = [
     ("Aprendiz", "Aprendiz"),
@@ -59,9 +59,9 @@ GRAUS_OPCOES = [
     ("Mestre Instalado", "Mestre Instalado"),
 ]
 
-AGAPE_RESPOSTAS = [("Sim", "sim"), ("NÃ£o", "nao")]
+AGAPE_RESPOSTAS = [("Sim", "sim"), ("Não", "nao")]
 AGAPE_TIPOS = [("Gratuito", "gratuito"), ("Pago (dividido)", "pago")]
-OBS_RESPOSTAS = [("Sim", "sim"), ("NÃ£o", "nao")]
+OBS_RESPOSTAS = [("Sim", "sim"), ("Não", "nao")]
 
 
 # =========================
@@ -78,12 +78,12 @@ def _truncate(s: str, n: int = MAX_TEXTO) -> str:
     s = _norm_text(s)
     if len(s) <= n:
         return s
-    return s[: n - 1].rstrip() + "â€¦"
+    return s[: n - 1].rstrip() + "…"
 
 
 def _escape_md(s: str) -> str:
     """
-    Escapa Markdown V1 (parse_mode="Markdown") para nÃ£o quebrar formataÃ§Ã£o.
+    Escapa Markdown V1 (parse_mode="Markdown") para não quebrar formatação.
     """
     s = _norm_text(s)
     for ch in ("_", "*", "`", "["):
@@ -119,19 +119,19 @@ def _parse_hora(texto: str) -> Optional[str]:
 
 
 def _dia_semana_ingles(dt: datetime) -> str:
-    # MantÃ©m compatibilidade com sua planilha (Monday, Tuesday...)
+    # Mantém compatibilidade com sua planilha (Monday, Tuesday...)
     return dt.strftime("%A")
 
 
 def _teclado_cancelar() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("âŒ Cancelar", callback_data="ev_cancelar")]])
+    return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")]])
 
 
 def _teclado_voltar_cancelar() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("â¬…ï¸ Voltar", callback_data="ev_voltar")],
-            [InlineKeyboardButton("âŒ Cancelar", callback_data="ev_cancelar")],
+            [InlineKeyboardButton("⬅️ Voltar", callback_data="ev_voltar")],
+            [InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")],
         ]
     )
 
@@ -139,22 +139,22 @@ def _teclado_voltar_cancelar() -> InlineKeyboardMarkup:
 def _teclado_sim_nao(prefix: str) -> InlineKeyboardMarkup:
     opcoes = AGAPE_RESPOSTAS if prefix == "agape" else OBS_RESPOSTAS
     linhas = [[InlineKeyboardButton(lbl, callback_data=f"{prefix}|{val}")] for (lbl, val) in opcoes]
-    linhas.append([InlineKeyboardButton("â¬…ï¸ Voltar", callback_data="ev_voltar")])
-    linhas.append([InlineKeyboardButton("âŒ Cancelar", callback_data="ev_cancelar")])
+    linhas.append([InlineKeyboardButton("⬅️ Voltar", callback_data="ev_voltar")])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")])
     return InlineKeyboardMarkup(linhas)
 
 
 def _teclado_graus() -> InlineKeyboardMarkup:
     linhas = [[InlineKeyboardButton(lbl, callback_data=f"grau|{val}")] for (lbl, val) in GRAUS_OPCOES]
-    linhas.append([InlineKeyboardButton("â¬…ï¸ Voltar", callback_data="ev_voltar")])
-    linhas.append([InlineKeyboardButton("âŒ Cancelar", callback_data="ev_cancelar")])
+    linhas.append([InlineKeyboardButton("⬅️ Voltar", callback_data="ev_voltar")])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")])
     return InlineKeyboardMarkup(linhas)
 
 
 def _teclado_agape_tipos() -> InlineKeyboardMarkup:
     linhas = [[InlineKeyboardButton(lbl, callback_data=f"agape_tipo|{val}")] for (lbl, val) in AGAPE_TIPOS]
-    linhas.append([InlineKeyboardButton("â¬…ï¸ Voltar", callback_data="ev_voltar")])
-    linhas.append([InlineKeyboardButton("âŒ Cancelar", callback_data="ev_cancelar")])
+    linhas.append([InlineKeyboardButton("⬅️ Voltar", callback_data="ev_voltar")])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")])
     return InlineKeyboardMarkup(linhas)
 
 
@@ -180,7 +180,7 @@ def _encontrar_duplicado(evento: Dict[str, Any], eventos_existentes: List[Dict[s
         evento.get("Data do evento", ""),
         evento.get("Hora", ""),
         evento.get("Nome da loja", ""),
-        evento.get("NÃºmero da loja", ""),
+        evento.get("Número da loja", ""),
     )
 
     for ev in eventos_existentes:
@@ -190,7 +190,7 @@ def _encontrar_duplicado(evento: Dict[str, Any], eventos_existentes: List[Dict[s
             ev.get("Data do evento", ""),
             ev.get("Hora", ""),
             ev.get("Nome da loja", ""),
-            ev.get("NÃºmero da loja", ""),
+            ev.get("Número da loja", ""),
         )
         if k == alvo:
             return ev
@@ -212,11 +212,11 @@ def _montar_evento_dict(context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Any]:
         if agape_tipo == "gratuito":
             agape_str = "Sim (Gratuito)"
         elif agape_tipo == "pago":
-            agape_str = "Sim (Pago (dividido))"
+            agape_str = "Sim (Pago)"
         else:
             agape_str = "Sim"
     else:
-        agape_str = "NÃ£o"
+        agape_str = "Não"
 
     obs_txt = context.user_data.get("novo_evento_observacoes_texto", "")
     if context.user_data.get("novo_evento_observacoes_tem", "nao") != "sim":
@@ -227,19 +227,19 @@ def _montar_evento_dict(context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Any]:
         "Dia da semana": dia_semana,
         "Hora": hora_txt,
         "Nome da loja": context.user_data.get("novo_evento_nome_loja", ""),
-        "NÃºmero da loja": context.user_data.get("novo_evento_numero_loja", ""),
+        "Número da loja": context.user_data.get("novo_evento_numero_loja", ""),
         "Oriente": context.user_data.get("novo_evento_oriente", ""),
-        "Grau": context.user_data.get("novo_evento_grau", ""),  # <- agora vem sÃ³ dos botÃµes
-        "Tipo de sessÃ£o": context.user_data.get("novo_evento_tipo_sessao", ""),
+        "Grau": context.user_data.get("novo_evento_grau", ""),
+        "Tipo de sessão": context.user_data.get("novo_evento_tipo_sessao", ""),
         "Rito": context.user_data.get("novo_evento_rito", ""),
-        "PotÃªncia": context.user_data.get("novo_evento_potencia", ""),
-        "Traje obrigatÃ³rio": context.user_data.get("novo_evento_traje", ""),
-        "Ãgape": agape_str,
-        "ObservaÃ§Ãµes": obs_txt,
+        "Potência": context.user_data.get("novo_evento_potencia", ""),
+        "Traje obrigatório": context.user_data.get("novo_evento_traje", ""),
+        "Ágape": agape_str,
+        "Observações": obs_txt,
         "Telegram ID do grupo": context.user_data.get("novo_evento_telegram_id_grupo", GRUPO_PRINCIPAL_ID),
-        "Telegram ID do secretÃ¡rio": context.user_data.get("novo_evento_telegram_id_secretario", ""),
+        "Telegram ID do secretário": context.user_data.get("novo_evento_telegram_id_secretario", ""),
         "Status": "Ativo",
-        "EndereÃ§o da sessÃ£o": context.user_data.get("novo_evento_endereco", ""),
+        "Endereço da sessão": context.user_data.get("novo_evento_endereco", ""),
     }
 
 
@@ -251,7 +251,7 @@ def _limpar_contexto_evento(context: ContextTypes.DEFAULT_TYPE):
 
 def _voltar_um_passo(context: ContextTypes.DEFAULT_TYPE) -> int:
     """
-    Remove o Ãºltimo campo preenchido (ordem do fluxo) e devolve o estado anterior.
+    Remove o último campo preenchido (ordem do fluxo) e devolve o estado anterior.
     """
     # Ordem exata do fluxo
     ordem = [
@@ -272,8 +272,8 @@ def _voltar_um_passo(context: ContextTypes.DEFAULT_TYPE) -> int:
         ("novo_evento_endereco", ENDERECO),
     ]
 
-    # Remove primeiro o que for â€œmais ao fimâ€ e estiver preenchido,
-    # respeitando os ramos (agape_tipo sÃ³ se agape==sim; obs_texto sÃ³ se obs_tem==sim).
+    # Remove primeiro o que for "mais ao fim" e estiver preenchido,
+    # respeitando os ramos (agape_tipo só se agape==sim; obs_texto só se obs_tem==sim).
     for key, state in reversed(ordem):
         if key not in context.user_data:
             continue
@@ -294,15 +294,15 @@ def _voltar_um_passo(context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def _ir_proximo_passo_por_callback(query, context: ContextTypes.DEFAULT_TYPE) -> int:
     """
-    Decide qual a prÃ³xima pergunta com base nos campos jÃ¡ preenchidos.
-    (Usado no "Voltar" e apÃ³s selecionar botÃµes.)
+    Decide qual a próxima pergunta com base nos campos já preenchidos.
+    (Usado no "Voltar" e após selecionar botões.)
     """
     if "novo_evento_data" not in context.user_data:
         await _safe_edit(query, "Qual a *Data do evento*? (Ex: 25/03/2026)", parse_mode="Markdown", reply_markup=_teclado_cancelar())
         return DATA
 
     if "novo_evento_horario" not in context.user_data:
-        await _safe_edit(query, "Qual o *HorÃ¡rio*? (Ex: 19:30)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
+        await _safe_edit(query, "Qual o *Horário*? (Ex: 19:30)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
         return HORARIO
 
     if "novo_evento_nome_loja" not in context.user_data:
@@ -310,7 +310,7 @@ async def _ir_proximo_passo_por_callback(query, context: ContextTypes.DEFAULT_TY
         return NOME_LOJA
 
     if "novo_evento_numero_loja" not in context.user_data:
-        await _safe_edit(query, "Qual o *NÃºmero da loja*? (Ex: 123) (se nÃ£o houver, digite 0)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
+        await _safe_edit(query, "Qual o *Número da loja*? (Ex: 123) (se não houver, digite 0)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
         return NUMERO_LOJA
 
     if "novo_evento_oriente" not in context.user_data:
@@ -318,11 +318,11 @@ async def _ir_proximo_passo_por_callback(query, context: ContextTypes.DEFAULT_TY
         return ORIENTE
 
     if "novo_evento_grau" not in context.user_data:
-        await _safe_edit(query, "Qual o *Grau mÃ­nimo*?", parse_mode="Markdown", reply_markup=_teclado_graus())
+        await _safe_edit(query, "Qual o *Grau mínimo*?", parse_mode="Markdown", reply_markup=_teclado_graus())
         return GRAU
 
     if "novo_evento_tipo_sessao" not in context.user_data:
-        await _safe_edit(query, "Qual o *Tipo de sessÃ£o*? (texto livre)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
+        await _safe_edit(query, "Qual o *Tipo de sessão*? (texto livre)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
         return TIPO_SESSAO
 
     if "novo_evento_rito" not in context.user_data:
@@ -330,34 +330,34 @@ async def _ir_proximo_passo_por_callback(query, context: ContextTypes.DEFAULT_TY
         return RITO
 
     if "novo_evento_potencia" not in context.user_data:
-        await _safe_edit(query, "Qual a *PotÃªncia*? (texto livre)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
+        await _safe_edit(query, "Qual a *Potência*? (texto livre)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
         return POTENCIA
 
     if "novo_evento_traje" not in context.user_data:
-        await _safe_edit(query, "Qual o *Traje obrigatÃ³rio*? (texto livre)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
+        await _safe_edit(query, "Qual o *Traje obrigatório*? (texto livre)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
         return TRAJE
 
     if "novo_evento_agape" not in context.user_data:
-        await _safe_edit(query, "HaverÃ¡ *Ãgape*?", parse_mode="Markdown", reply_markup=_teclado_sim_nao("agape"))
+        await _safe_edit(query, "Haverá *Ágape*?", parse_mode="Markdown", reply_markup=_teclado_sim_nao("agape"))
         return AGAPE
 
     if context.user_data.get("novo_evento_agape") == "sim" and "novo_evento_agape_tipo" not in context.user_data:
-        await _safe_edit(query, "Qual o tipo de Ãgape?", reply_markup=_teclado_agape_tipos())
+        await _safe_edit(query, "Qual o tipo de Ágape?", reply_markup=_teclado_agape_tipos())
         return AGAPE_TIPO
 
     if "novo_evento_observacoes_tem" not in context.user_data:
-        await _safe_edit(query, "Deseja adicionar *observaÃ§Ãµes*?", parse_mode="Markdown", reply_markup=_teclado_sim_nao("obs"))
+        await _safe_edit(query, "Deseja adicionar *observações*?", parse_mode="Markdown", reply_markup=_teclado_sim_nao("obs"))
         return OBSERVACOES_TEM
 
     if context.user_data.get("novo_evento_observacoes_tem") == "sim" and "novo_evento_observacoes_texto" not in context.user_data:
-        await _safe_edit(query, "Digite as *observaÃ§Ãµes* (texto livre):", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
+        await _safe_edit(query, "Digite as *observações* (texto livre):", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
         return OBSERVACOES_TEXTO
 
     if "novo_evento_endereco" not in context.user_data:
-        await _safe_edit(query, "Agora informe o *EndereÃ§o da sessÃ£o*:", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
+        await _safe_edit(query, "Agora informe o *Endereço da sessão*:", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
         return ENDERECO
 
-    # Se chegou aqui, vai para a confirmaÃ§Ã£o
+    # Se chegou aqui, vai para a confirmação
     evento = _montar_evento_dict(context)
     eventos_existentes = listar_eventos() or []
     dup = _encontrar_duplicado(evento, eventos_existentes)
@@ -370,49 +370,49 @@ async def _ir_proximo_passo_por_callback(query, context: ContextTypes.DEFAULT_TY
 
 def _montar_resumo_evento_md(evento: Dict[str, Any], duplicado: Optional[Dict[str, Any]] = None) -> str:
     nome = _escape_md(evento.get("Nome da loja", ""))
-    numero = _escape_md(evento.get("NÃºmero da loja", ""))
+    numero = _escape_md(evento.get("Número da loja", ""))
     numero_fmt = f" {numero}" if numero and numero != "0" else ""
     data_txt = _escape_md(evento.get("Data do evento", ""))
     hora_txt = _escape_md(evento.get("Hora", ""))
     oriente = _escape_md(evento.get("Oriente", ""))
     grau = _escape_md(evento.get("Grau", ""))
-    tipo = _escape_md(evento.get("Tipo de sessÃ£o", ""))
+    tipo = _escape_md(evento.get("Tipo de sessão", ""))
     rito = _escape_md(evento.get("Rito", ""))
-    potencia = _escape_md(evento.get("PotÃªncia", ""))
-    traje = _escape_md(evento.get("Traje obrigatÃ³rio", ""))
-    agape = _escape_md(evento.get("Ãgape", ""))
-    obs = _escape_md(evento.get("ObservaÃ§Ãµes", ""))
-    end = _escape_md(evento.get("EndereÃ§o da sessÃ£o", ""))
+    potencia = _escape_md(evento.get("Potência", ""))
+    traje = _escape_md(evento.get("Traje obrigatório", ""))
+    agape = _escape_md(evento.get("Ágape", ""))
+    obs = _escape_md(evento.get("Observações", ""))
+    end = _escape_md(evento.get("Endereço da sessão", ""))
 
     linhas = [
         "*Confirme os dados do evento:*",
         "",
-        f"ðŸ› *Loja:* {nome}{numero_fmt}",
-        f"ðŸ“… *Data:* {data_txt}",
-        f"ðŸ•• *Hora:* {hora_txt}",
-        f"ðŸ“ *Oriente:* {oriente}",
-        f"ðŸ”º *Grau mÃ­nimo:* {grau}",
-        f"ðŸ—‚ *Tipo de sessÃ£o:* {tipo}",
-        f"ðŸ“œ *Rito:* {rito}",
-        f"âšœï¸ *PotÃªncia:* {potencia}",
-        f"ðŸ‘” *Traje:* {traje}",
-        f"ðŸ½ *Ãgape:* {agape}",
-        f"ðŸ—º *EndereÃ§o:* {end}",
+        f"🏛 *Loja:* {nome}{numero_fmt}",
+        f"📅 *Data:* {data_txt}",
+        f"🕕 *Hora:* {hora_txt}",
+        f"📍 *Oriente:* {oriente}",
+        f"🔺 *Grau mínimo:* {grau}",
+        f"🕯 *Tipo de sessão:* {tipo}",
+        f"📜 *Rito:* {rito}",
+        f"⚜️ *Potência:* {potencia}",
+        f"🎩 *Traje:* {traje}",
+        f"🍽 *Ágape:* {agape}",
+        f"🗺 *Endereço:* {end}",
     ]
     if obs:
-        linhas.append(f"ðŸ“ *ObservaÃ§Ãµes:* {obs}")
+        linhas.append(f"📝 *Observações:* {obs}")
 
     if duplicado:
         d_nome = _escape_md(duplicado.get("Nome da loja", ""))
-        d_num = _escape_md(duplicado.get("NÃºmero da loja", ""))
+        d_num = _escape_md(duplicado.get("Número da loja", ""))
         d_num_fmt = f" {d_num}" if d_num and d_num != "0" else ""
         d_data = _escape_md(duplicado.get("Data do evento", ""))
         d_hora = _escape_md(duplicado.get("Hora", ""))
         linhas.extend(
             [
                 "",
-                "âš ï¸ *AtenÃ§Ã£o:* encontrei um evento ativo com a mesma *data/hora/loja/nÃºmero*:",
-                f"â€¢ {d_nome}{d_num_fmt} â€” {d_data} {d_hora}",
+                "⚠️ *Atenção:* encontrei um evento ativo com a mesma *data/hora/loja/número*:",
+                f"• {d_nome}{d_num_fmt} — {d_data} {d_hora}",
             ]
         )
 
@@ -422,25 +422,25 @@ def _montar_resumo_evento_md(evento: Dict[str, Any], duplicado: Optional[Dict[st
 def _teclado_confirmacao(tem_duplicado: bool) -> InlineKeyboardMarkup:
     linhas = []
     if tem_duplicado:
-        linhas.append([InlineKeyboardButton("âš ï¸ Publicar mesmo assim", callback_data="confirmar_publicacao_forcar")])
-    linhas.append([InlineKeyboardButton("âœ… Confirmar publicaÃ§Ã£o", callback_data="confirmar_publicacao")])
-    linhas.append([InlineKeyboardButton("ðŸ” Refazer", callback_data="refazer_cadastro")])
-    linhas.append([InlineKeyboardButton("âŒ Cancelar", callback_data="cancelar_publicacao")])
+        linhas.append([InlineKeyboardButton("⚠️ Publicar mesmo assim", callback_data="confirmar_publicacao_forcar")])
+    linhas.append([InlineKeyboardButton("✅ Confirmar publicação", callback_data="confirmar_publicacao")])
+    linhas.append([InlineKeyboardButton("🔄 Refazer", callback_data="refazer_cadastro")])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_publicacao")])
     return InlineKeyboardMarkup(linhas)
 
 
 def _teclado_pos_publicacao(id_evento: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("âœ… Confirmar presenÃ§a", callback_data=f"confirmar|{id_evento}|sem")],
-            [InlineKeyboardButton("ðŸ‘¥ Ver confirmados", callback_data=f"ver_confirmados|{id_evento}")],
-            [InlineKeyboardButton("ðŸ§¹ Fechar", callback_data="fechar_mensagem")],
+            [InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_evento}|sem")],
+            [InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{id_evento}")],
+            [InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")],
         ]
     )
 
 
 # =========================
-# InÃ­cio
+# Início
 # =========================
 async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -450,10 +450,10 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nivel = get_nivel(user_id)
 
     if nivel not in ["2", "3"]:
-        await _safe_edit(query, "VocÃª nÃ£o tem permissÃ£o para cadastrar eventos.")
+        await _safe_edit(query, "Você não tem permissão para cadastrar eventos.")
         return ConversationHandler.END
 
-    # Armazena o ID do usuÃ¡rio que estÃ¡ cadastrando
+    # Armazena o ID do usuário que está cadastrando
     context.user_data["novo_evento_telegram_id_secretario"] = str(user_id)
 
     # Se veio do grupo, bloqueia e orienta
@@ -461,8 +461,8 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["novo_evento_telegram_id_grupo"] = str(update.effective_chat.id)
         await _safe_edit(
             query,
-            "ðŸ”” O cadastro de eventos deve ser feito no meu chat privado.\n\n"
-            "Acesse meu privado e utilize o menu 'Ãrea do SecretÃ¡rio' para cadastrar.",
+            "🔔 O cadastro de eventos deve ser feito no meu chat privado.\n\n"
+            "Acesse meu privado e utilize o menu 'Área do Secretário' para cadastrar.",
         )
         return ConversationHandler.END
 
@@ -490,23 +490,23 @@ async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data_text = _norm_text(update.message.text)
     dt = _parse_data_ddmmyyyy(data_text)
     if not dt:
-        await update.message.reply_text("Data invÃ¡lida. Use o formato *dd/mm/aaaa* (Ex: 25/03/2026).", parse_mode="Markdown")
+        await update.message.reply_text("Data inválida. Use o formato *dd/mm/aaaa* (Ex: 25/03/2026).", parse_mode="Markdown")
         return DATA
 
     hoje = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     if dt < hoje:
-        await update.message.reply_text("A data nÃ£o pode ser no passado. Tente novamente:", parse_mode="Markdown")
+        await update.message.reply_text("A data não pode ser no passado. Tente novamente:", parse_mode="Markdown")
         return DATA
 
     context.user_data["novo_evento_data"] = dt.strftime("%d/%m/%Y")
-    await update.message.reply_text("Qual o *HorÃ¡rio*? (Ex: 19:30)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
+    await update.message.reply_text("Qual o *Horário*? (Ex: 19:30)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
     return HORARIO
 
 
 async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     hora = _parse_hora(update.message.text)
     if not hora:
-        await update.message.reply_text("HorÃ¡rio invÃ¡lido. Use *HH:MM* (Ex: 19:30).", parse_mode="Markdown")
+        await update.message.reply_text("Horário inválido. Use *HH:MM* (Ex: 19:30).", parse_mode="Markdown")
         return HORARIO
 
     context.user_data["novo_evento_horario"] = hora
@@ -517,18 +517,18 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nome = _truncate(update.message.text)
     if not nome:
-        await update.message.reply_text("Informe um nome vÃ¡lido para a loja.", parse_mode="Markdown")
+        await update.message.reply_text("Informe um nome válido para a loja.", parse_mode="Markdown")
         return NOME_LOJA
 
     context.user_data["novo_evento_nome_loja"] = nome
-    await update.message.reply_text("Qual o *NÃºmero da loja*? (se nÃ£o houver, digite 0)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
+    await update.message.reply_text("Qual o *Número da loja*? (se não houver, digite 0)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
     return NUMERO_LOJA
 
 
 async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     numero = _norm_text(update.message.text)
 
-    # mantÃ©m comportamento permissivo: aceita "0" e nÃºmeros; se mandar qualquer coisa, salva como texto truncado
+    # mantém comportamento permissivo: aceita "0" e números; se mandar qualquer coisa, salva como texto truncado
     numero = _truncate(numero, 30)
     if not numero:
         numero = "0"
@@ -541,16 +541,16 @@ async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     oriente = _truncate(update.message.text)
     if not oriente:
-        await update.message.reply_text("Informe um oriente vÃ¡lido.", parse_mode="Markdown")
+        await update.message.reply_text("Informe um oriente válido.", parse_mode="Markdown")
         return ORIENTE
 
     context.user_data["novo_evento_oriente"] = oriente
-    await update.message.reply_text("Qual o *Grau mÃ­nimo*?", parse_mode="Markdown", reply_markup=_teclado_graus())
+    await update.message.reply_text("Qual o *Grau mínimo*?", parse_mode="Markdown", reply_markup=_teclado_graus())
     return GRAU
 
 
 # =========================
-# Recebedor de Grau (BOTÃ•ES) â€” Ãºnica mudanÃ§a que vocÃª pediu
+# Recebedor de Grau (BOTÕES)
 # =========================
 async def receber_grau_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -559,15 +559,15 @@ async def receber_grau_callback(update: Update, context: ContextTypes.DEFAULT_TY
     _, grau = query.data.split("|", 1)
     grau = _norm_text(grau)
 
-    # garante que sÃ³ entra valor permitido
+    # garante que só entra valor permitido
     permitidos = {v for _, v in GRAUS_OPCOES}
     if grau not in permitidos:
-        await _safe_edit(query, "Grau invÃ¡lido. Selecione uma opÃ§Ã£o:", parse_mode="Markdown", reply_markup=_teclado_graus())
+        await _safe_edit(query, "Grau inválido. Selecione uma opção:", parse_mode="Markdown", reply_markup=_teclado_graus())
         return GRAU
 
     context.user_data["novo_evento_grau"] = grau
 
-    await _safe_edit(query, "Qual o *Tipo de sessÃ£o*? (texto livre)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
+    await _safe_edit(query, "Qual o *Tipo de sessão*? (texto livre)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
     return TIPO_SESSAO
 
 
@@ -581,27 +581,26 @@ async def receber_tipo_sessao(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val = _truncate(update.message.text)
     context.user_data["novo_evento_rito"] = val
-    await update.message.reply_text("Qual a *PotÃªncia*? (texto livre)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
+    await update.message.reply_text("Qual a *Potência*? (texto livre)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
     return POTENCIA
 
 
 async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val = _truncate(update.message.text)
     context.user_data["novo_evento_potencia"] = val
-    await update.message.reply_text("Qual o *Traje obrigatÃ³rio*? (texto livre)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
+    await update.message.reply_text("Qual o *Traje obrigatório*? (texto livre)", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
     return TRAJE
 
 
 async def receber_traje(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val = _truncate(update.message.text)
     context.user_data["novo_evento_traje"] = val
-    # Ãgape por botÃµes (igual vocÃª jÃ¡ tinha)
-    await update.message.reply_text("HaverÃ¡ *Ãgape*?", parse_mode="Markdown", reply_markup=_teclado_sim_nao("agape"))
+    await update.message.reply_text("Haverá *Ágape*?", parse_mode="Markdown", reply_markup=_teclado_sim_nao("agape"))
     return AGAPE
 
 
 # =========================
-# Fluxos por botÃµes (jÃ¡ existentes)
+# Fluxos por botões
 # =========================
 async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -610,17 +609,17 @@ async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val = _norm_text(val)
 
     if val not in ("sim", "nao"):
-        await _safe_edit(query, "Selecione uma opÃ§Ã£o:", parse_mode="Markdown", reply_markup=_teclado_sim_nao("agape"))
+        await _safe_edit(query, "Selecione uma opção:", parse_mode="Markdown", reply_markup=_teclado_sim_nao("agape"))
         return AGAPE
 
     context.user_data["novo_evento_agape"] = val
     context.user_data.pop("novo_evento_agape_tipo", None)
 
     if val == "sim":
-        await _safe_edit(query, "Qual o tipo de Ãgape?", reply_markup=_teclado_agape_tipos())
+        await _safe_edit(query, "Qual o tipo de Ágape?", reply_markup=_teclado_agape_tipos())
         return AGAPE_TIPO
 
-    await _safe_edit(query, "Deseja adicionar *observaÃ§Ãµes*?", parse_mode="Markdown", reply_markup=_teclado_sim_nao("obs"))
+    await _safe_edit(query, "Deseja adicionar *observações*?", parse_mode="Markdown", reply_markup=_teclado_sim_nao("obs"))
     return OBSERVACOES_TEM
 
 
@@ -631,11 +630,11 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
     val = _norm_text(val)
 
     if val not in ("gratuito", "pago"):
-        await _safe_edit(query, "Selecione uma opÃ§Ã£o:", reply_markup=_teclado_agape_tipos())
+        await _safe_edit(query, "Selecione uma opção:", reply_markup=_teclado_agape_tipos())
         return AGAPE_TIPO
 
     context.user_data["novo_evento_agape_tipo"] = val
-    await _safe_edit(query, "Deseja adicionar *observaÃ§Ãµes*?", parse_mode="Markdown", reply_markup=_teclado_sim_nao("obs"))
+    await _safe_edit(query, "Deseja adicionar *observações*?", parse_mode="Markdown", reply_markup=_teclado_sim_nao("obs"))
     return OBSERVACOES_TEM
 
 
@@ -646,24 +645,24 @@ async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_
     val = _norm_text(val)
 
     if val not in ("sim", "nao"):
-        await _safe_edit(query, "Selecione uma opÃ§Ã£o:", parse_mode="Markdown", reply_markup=_teclado_sim_nao("obs"))
+        await _safe_edit(query, "Selecione uma opção:", parse_mode="Markdown", reply_markup=_teclado_sim_nao("obs"))
         return OBSERVACOES_TEM
 
     context.user_data["novo_evento_observacoes_tem"] = val
     context.user_data.pop("novo_evento_observacoes_texto", None)
 
     if val == "sim":
-        await _safe_edit(query, "Digite as *observaÃ§Ãµes* (texto livre):", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
+        await _safe_edit(query, "Digite as *observações* (texto livre):", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
         return OBSERVACOES_TEXTO
 
-    await _safe_edit(query, "Agora informe o *EndereÃ§o da sessÃ£o*:", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
+    await _safe_edit(query, "Agora informe o *Endereço da sessão*:", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
     return ENDERECO
 
 
 async def receber_observacoes_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val = _truncate(update.message.text, 500)
     context.user_data["novo_evento_observacoes_texto"] = val
-    await update.message.reply_text("Agora informe o *EndereÃ§o da sessÃ£o*:", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
+    await update.message.reply_text("Agora informe o *Endereço da sessão*:", parse_mode="Markdown", reply_markup=_teclado_voltar_cancelar())
     return ENDERECO
 
 
@@ -684,7 +683,7 @@ async def receber_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# ConfirmaÃ§Ã£o / PublicaÃ§Ã£o
+# Confirmação / Publicação
 # =========================
 async def confirmar_publicacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -694,7 +693,7 @@ async def confirmar_publicacao(update: Update, context: ContextTypes.DEFAULT_TYP
     eventos_existentes = listar_eventos() or []
     dup = _encontrar_duplicado(evento, eventos_existentes)
     if dup:
-        texto = _montar_resumo_evento_md(evento, duplicado=dup) + "\n\nâš ï¸ Existe duplicidade. Use *Publicar mesmo assim* se quiser."
+        texto = _montar_resumo_evento_md(evento, duplicado=dup) + "\n\n⚠️ Existe duplicidade. Use *Publicar mesmo assim* se quiser."
         await _safe_edit(query, texto, parse_mode="Markdown", reply_markup=_teclado_confirmacao(tem_duplicado=True))
         return CONFIRMAR
 
@@ -719,14 +718,14 @@ async def _publicar_e_finalizar(query, context: ContextTypes.DEFAULT_TYPE, event
         await _safe_edit(query, f"Erro ao salvar evento na planilha: {e}")
         return
 
-    # Resultado pode ser bool, id, dict... vamos tentar extrair um ID utilizÃ¡vel
+    # Resultado pode ser bool, id, dict... vamos tentar extrair um ID utilizável
     id_evento = ""
     if isinstance(resultado, str):
         id_evento = resultado
     elif isinstance(resultado, dict):
         id_evento = _norm_text(resultado.get("ID Evento") or resultado.get("id_evento") or "")
     if not id_evento:
-        # fallback: gera um id estÃ¡vel para callbacks, mas o ideal Ã© o Sheets retornar/armazenar
+        # fallback: gera um id estável para callbacks, mas o ideal é o Sheets retornar/armazenar
         id_evento = str(uuid.uuid4())
 
     # 2) Publica no grupo
@@ -737,22 +736,22 @@ async def _publicar_e_finalizar(query, context: ContextTypes.DEFAULT_TYPE, event
         grupo_id_int = int(GRUPO_PRINCIPAL_ID)
 
     nome = _escape_md(evento.get("Nome da loja", ""))
-    numero = _escape_md(evento.get("NÃºmero da loja", ""))
+    numero = _escape_md(evento.get("Número da loja", ""))
     numero_fmt = f" {numero}" if numero and numero != "0" else ""
     data_txt = _escape_md(evento.get("Data do evento", ""))
     hora_txt = _escape_md(evento.get("Hora", ""))
     oriente = _escape_md(evento.get("Oriente", ""))
-    potencia = _escape_md(evento.get("PotÃªncia", ""))
-    grau = _escape_md(evento.get("Grau", ""))  # <- exibimos exatamente o que foi escolhido nos botÃµes
+    potencia = _escape_md(evento.get("Potência", ""))
+    grau = _escape_md(evento.get("Grau", ""))
 
     texto_grupo = (
-        "*ðŸ“Œ Novo Evento*\n\n"
-        f"ðŸ› {nome}{numero_fmt}\n"
-        f"ðŸ“… {data_txt}\n"
-        f"ðŸ•• {hora_txt}\n"
-        f"ðŸ“ {oriente}\n"
-        f"âšœï¸ {potencia}\n"
-        f"ðŸ”º Grau mÃ­nimo: {grau}\n"
+        "*🐐 Novo Evento*\n\n"
+        f"🏛 {nome}{numero_fmt}\n"
+        f"📅 {data_txt}\n"
+        f"🕕 {hora_txt}\n"
+        f"📍 {oriente}\n"
+        f"⚜️ {potencia}\n"
+        f"🔺 Grau mínimo: {grau}\n"
     )
 
     try:
@@ -763,13 +762,13 @@ async def _publicar_e_finalizar(query, context: ContextTypes.DEFAULT_TYPE, event
             reply_markup=_teclado_pos_publicacao(id_evento),
         )
     except Exception as e:
-        # Mesmo se falhar publicar no grupo, o evento jÃ¡ foi salvo
+        # Mesmo se falhar publicar no grupo, o evento já foi salvo
         await _safe_edit(query, f"Evento salvo, mas falhou ao publicar no grupo: {e}")
         _limpar_contexto_evento(context)
         return
 
     # 3) Confirma no privado
-    msg = "âœ… Evento cadastrado e publicado no grupo."
+    msg = "✅ Evento cadastrado e publicado no grupo."
     if forcar:
         msg += " (publicado com duplicidade assumida)"
     await _safe_edit(query, msg)
@@ -781,7 +780,7 @@ async def refazer_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    # preserva IDs do grupo/secretÃ¡rio e limpa o resto
+    # preserva IDs do grupo/secretário e limpa o resto
     tg_grupo = context.user_data.get("novo_evento_telegram_id_grupo", GRUPO_PRINCIPAL_ID)
     tg_sec = context.user_data.get("novo_evento_telegram_id_secretario", "")
     _limpar_contexto_evento(context)
@@ -790,7 +789,7 @@ async def refazer_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await _safe_edit(
         query,
-        "Vamos recomeÃ§ar o cadastro.\n\nQual a *Data do evento*? (Ex: 25/03/2026)",
+        "Vamos recomeçar o cadastro.\n\nQual a *Data do evento*? (Ex: 25/03/2026)",
         parse_mode="Markdown",
         reply_markup=_teclado_cancelar(),
     )
@@ -798,14 +797,14 @@ async def refazer_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# NavegaÃ§Ã£o (Voltar/Cancelar)
+# Navegação (Voltar/Cancelar)
 # =========================
 async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     estado = _voltar_um_passo(context)
-    # ApÃ³s remover um campo, reapresenta a pergunta correspondente
+    # Após remover um campo, reapresenta a pergunta correspondente
     return await _ir_proximo_passo_por_callback(query, context)
 
 

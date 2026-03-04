@@ -1,401 +1,400 @@
 # src/eventos_secretario.py
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, CallbackQueryHandler, MessageHandler, filters
-from src.sheets import listar_eventos, atualizar_evento, cancelar_todas_confirmacoes, buscar_membro
-from src.permissoes import get_nivel
-from datetime import datetime
-import urllib.parse
-import re
+from __future__ import annotations
+
 import logging
+import urllib.parse
+from typing import Optional
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ContextTypes,
+    ConversationHandler,
+    CallbackQueryHandler,
+    MessageHandler,
+    filters,
+    CommandHandler,
+)
+
+from src.sheets import (
+    listar_eventos,
+    buscar_membro,
+    listar_confirmacoes_por_evento,
+    cancelar_todas_confirmacoes,
+    atualizar_evento,
+    cadastrar_evento,
+)
+from src.eventos import (
+    normalizar_id_evento,
+    _encode_cb,
+    _decode_cb,
+    _linha_botao_evento,
+    montar_linha_confirmado,
+    _eventos_ordenados,
+    parse_data_evento,
+    traduzir_dia,
+)
+from src.permissoes import get_nivel
 
 logger = logging.getLogger(__name__)
 
-# Estados da conversação
-SELECIONAR_EVENTO, CONFIRMAR_EXCLUSAO, EDITAR_CAMPO, NOVO_VALOR = range(4)
+# Estados da conversação para edição de evento
+SELECIONAR_CAMPO, NOVO_VALOR = range(2)
 
-# Mapeamento de campos editáveis
-CAMPOS_EVENTO = {
-    "data": {"nome": "Data", "chave": "Data do evento"},
-    "hora": {"nome": "Horário", "chave": "Hora"},
+# Mapeamento de campos editáveis por secretário/admin
+CAMPOS_EVENTO_EDITAVEIS = {
+    "data": {"nome": "Data do evento (DD/MM/AAAA)", "chave": "Data do evento"},
+    "hora": {"nome": "Horário (HH:MM)", "chave": "Hora"},
     "nome_loja": {"nome": "Nome da loja", "chave": "Nome da loja"},
-    "numero_loja": {"nome": "Número", "chave": "Número da loja"},
+    "numero_loja": {"nome": "Número da loja", "chave": "Número da loja"},
     "oriente": {"nome": "Oriente", "chave": "Oriente"},
     "grau": {"nome": "Grau mínimo", "chave": "Grau"},
     "tipo_sessao": {"nome": "Tipo de sessão", "chave": "Tipo de sessão"},
     "rito": {"nome": "Rito", "chave": "Rito"},
     "potencia": {"nome": "Potência", "chave": "Potência"},
-    "traje": {"nome": "Traje", "chave": "Traje obrigatório"},
-    "agape": {"nome": "Ágape", "chave": "Ágape"},
+    "traje": {"nome": "Traje obrigatório", "chave": "Traje obrigatório"},
+    "agape": {"nome": "Ágape (texto livre)", "chave": "Ágape"},
     "observacoes": {"nome": "Observações", "chave": "Observações"},
-    "endereco": {"nome": "Endereço", "chave": "Endereço da sessão"},
+    "endereco": {"nome": "Endereço da sessão", "chave": "Endereço da sessão"},
 }
 
-def sanitizar_callback(texto: str) -> str:
-    """Remove caracteres especiais e substitui espaços por underline para callback_data seguro."""
-    if not isinstance(texto, str):
-        texto = str(texto)
-    return re.sub(r'[^a-zA-Z0-9_]', '_', texto)
 
+async def _safe_edit(query, text: str, **kwargs):
+    try:
+        await query.edit_message_text(text, **kwargs)
+    except Exception as e:
+        if "Message is not modified" not in str(e):
+            raise
+
+
+# =========================
+# 1. Meus eventos (listagem)
+# =========================
 async def meus_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Lista eventos criados pelo secretário atual (ou todos se admin)."""
+    """Lista todos os eventos criados pelo secretário (Telegram ID do secretário)."""
     query = update.callback_query
+    if not query:
+        return
     await query.answer()
 
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
-    eventos = listar_eventos()
-
-    if nivel == "3":
-        eventos_usuario = eventos  # admin vê todos
-    else:
-        eventos_usuario = [e for e in eventos if str(e.get("Telegram ID do secretário")) == str(user_id)]
-
-    if not eventos_usuario:
-        await query.edit_message_text(
-            "Você não criou nenhum evento ainda." if nivel != "3" else "Não há eventos cadastrados.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")
-            ]])
-        )
+    if nivel not in ("2", "3"):
+        await _safe_edit(query, "⛔ Acesso negado.")
         return
 
-    texto = "Selecione um evento para gerenciar:\n\n"
+    eventos = listar_eventos() or []
+    # Filtra eventos onde o Telegram ID do secretário corresponde ao user_id
+    meus = [ev for ev in eventos if str(ev.get("Telegram ID do secretário", "")).strip() == str(user_id)]
+
+    if not meus:
+        teclado = InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ Cadastrar evento", callback_data="cadastrar_evento")],
+            [InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario")],
+        ])
+        await _safe_edit(query, "Você ainda não cadastrou nenhum evento.", reply_markup=teclado)
+        return
+
+    meus = _eventos_ordenados(meus)
     botoes = []
-    for evento in eventos_usuario:
-        data = evento.get("Data do evento", "")
-        nome = evento.get("Nome da loja", "")
-        numero = evento.get("Número da loja", "")
-        status = "✅" if evento.get("Status") == "Ativo" else "❌"
-        id_evento = f"{data} — {nome}"
-        id_evento_sanitizado = sanitizar_callback(id_evento)
-        botoes.append([InlineKeyboardButton(
-            f"{status} {data} - {nome} {numero}",
-            callback_data=f"gerenciar_evento|{id_evento_sanitizado}"
-        )])
+    for ev in meus[:20]:  # limite para não estourar
+        id_evento = normalizar_id_evento(ev)
+        botoes.append([
+            InlineKeyboardButton(
+                _linha_botao_evento(ev),
+                callback_data=f"gerenciar_evento|{_encode_cb(id_evento)}"
+            )
+        ])
 
-    botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")])
-    await query.edit_message_text(texto, reply_markup=InlineKeyboardMarkup(botoes))
+    botoes.append([InlineKeyboardButton("➕ Cadastrar novo", callback_data="cadastrar_evento")])
+    botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario")])
 
+    await _safe_edit(
+        query,
+        "📋 *Meus eventos*\n\nSelecione um evento para gerenciar:",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(botoes),
+    )
+
+
+# =========================
+# 2. Menu de gerenciamento de um evento específico
+# =========================
 async def menu_gerenciar_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu de opções para um evento específico."""
+    """Mostra opções para editar, ver confirmados, cancelar evento."""
     query = update.callback_query
+    if not query:
+        return
     await query.answer()
 
-    _, id_evento_sanitizado = query.data.split("|", 1)
-    eventos = listar_eventos()
-    evento = None
-    id_evento_real = None
-    for ev in eventos:
-        id_teste = f"{ev.get('Data do evento', '')} — {ev.get('Nome da loja', '')}"
-        if sanitizar_callback(id_teste) == id_evento_sanitizado:
-            evento = ev
-            id_evento_real = id_teste
-            break
-
-    if not evento:
-        await query.edit_message_text("Evento não encontrado. Pode ter sido excluído.")
+    data = query.data
+    if not data.startswith("gerenciar_evento|"):
         return
 
+    _, id_evento_cod = data.split("|", 1)
+    id_evento = _decode_cb(id_evento_cod)
+
+    eventos = listar_eventos() or []
+    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    if not evento:
+        await _safe_edit(query, "Evento não encontrado.")
+        return
+
+    # Verifica permissão: só quem criou ou admin pode gerenciar
     user_id = update.effective_user.id
+    criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
     nivel = get_nivel(user_id)
-    autor_id = str(evento.get("Telegram ID do secretário", ""))
-
-    if nivel != "3" and str(user_id) != autor_id:
-        await query.edit_message_text("⛔ Você não tem permissão para gerenciar este evento.")
+    if str(user_id) != criador_id and nivel != "3":
+        await _safe_edit(query, "⛔ Você não tem permissão para gerenciar este evento.")
         return
 
-    context.user_data["evento_gerenciando"] = {
-        "id_evento": id_evento_real,
-        "evento": evento,
-        "id_sanitizado": id_evento_sanitizado
-    }
+    context.user_data["evento_gerenciado_id"] = id_evento
+    context.user_data["evento_gerenciado_dados"] = evento
 
-    data = evento.get("Data do evento", "")
     nome = evento.get("Nome da loja", "")
-    numero = evento.get("Número da loja", "")
-    status = evento.get("Status", "Ativo")
+    data_txt = evento.get("Data do evento", "")
+    hora = evento.get("Hora", "")
 
-    texto = (
-        f"📅 *{data} — {nome} {numero}*\n"
-        f"Status: {'✅ Ativo' if status == 'Ativo' else '❌ Cancelado'}\n\n"
-        f"*O que deseja fazer?*"
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✏️ Editar evento", callback_data="editar_evento_secretario")],
+        [InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")],
+        [InlineKeyboardButton("❌ Cancelar evento", callback_data=f"confirmar_cancelamento|{_encode_cb(id_evento)}")],
+        [InlineKeyboardButton("⬅️ Voltar", callback_data="meus_eventos")],
+    ])
+
+    await _safe_edit(
+        query,
+        f"*Gerenciar evento*\n\n"
+        f"🏛 {nome}\n"
+        f"📅 {data_txt} {hora}\n\n"
+        f"Escolha uma opção:",
+        parse_mode="Markdown",
+        reply_markup=teclado,
     )
 
-    botoes = [
-        [InlineKeyboardButton("✏️ Editar evento", callback_data=f"editar_evento|{id_evento_sanitizado}")],
-        [InlineKeyboardButton("❌ Cancelar evento", callback_data=f"confirmar_cancelamento|{id_evento_sanitizado}")],
-        [InlineKeyboardButton("⬅️ Voltar", callback_data="meus_eventos")]
-    ]
 
-    await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(botoes))
-
+# =========================
+# 3. Cancelar evento (com confirmação)
+# =========================
 async def confirmar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Pede confirmação para cancelar o evento."""
+    """Primeiro passo: pede confirmação para cancelar o evento."""
     query = update.callback_query
+    if not query:
+        return
     await query.answer()
 
-    _, id_evento_sanitizado = query.data.split("|", 1)
-    eventos = listar_eventos()
-    evento = None
-    for ev in eventos:
-        id_teste = f"{ev.get('Data do evento', '')} — {ev.get('Nome da loja', '')}"
-        if sanitizar_callback(id_teste) == id_evento_sanitizado:
-            evento = ev
-            break
-
-    if not evento:
-        await query.edit_message_text("Evento não encontrado.")
+    data = query.data
+    if not data.startswith("confirmar_cancelamento|"):
         return
 
-    data = evento.get("Data do evento", "")
-    nome = evento.get("Nome da loja", "")
-    numero = evento.get("Número da loja", "")
+    _, id_evento_cod = data.split("|", 1)
+    id_evento = _decode_cb(id_evento_cod)
 
-    texto = (
-        f"❓ *Confirmar cancelamento*\n\n"
-        f"Evento: {data} — {nome} {numero}\n\n"
-        f"Esta ação irá:\n"
-        f"• Marcar o evento como cancelado\n"
-        f"• Publicar aviso no grupo\n"
-        f"• Remover todas as confirmações\n\n"
-        f"Tem certeza?"
+    eventos = listar_eventos() or []
+    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    if not evento:
+        await _safe_edit(query, "Evento não encontrado.")
+        return
+
+    # Verifica permissão novamente
+    user_id = update.effective_user.id
+    criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
+    nivel = get_nivel(user_id)
+    if str(user_id) != criador_id and nivel != "3":
+        await _safe_edit(query, "⛔ Permissão negada.")
+        return
+
+    nome = evento.get("Nome da loja", "")
+    data_txt = evento.get("Data do evento", "")
+    hora = evento.get("Hora", "")
+
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Sim, cancelar evento", callback_data=f"cancelar_evento|{_encode_cb(id_evento)}")],
+        [InlineKeyboardButton("❌ Não, voltar", callback_data=f"gerenciar_evento|{_encode_cb(id_evento)}")],
+    ])
+
+    await _safe_edit(
+        query,
+        f"*Cancelar evento*\n\n"
+        f"Tem certeza que deseja cancelar o evento?\n"
+        f"🏛 {nome}\n"
+        f"📅 {data_txt} {hora}\n\n"
+        f"⚠️ Isso removerá todas as confirmações e marcará o evento como cancelado.",
+        parse_mode="Markdown",
+        reply_markup=teclado,
     )
 
-    botoes = [
-        [InlineKeyboardButton("✅ Sim, cancelar", callback_data=f"cancelar_evento|{id_evento_sanitizado}")],
-        [InlineKeyboardButton("🔙 Não, voltar", callback_data=f"gerenciar_evento|{id_evento_sanitizado}")]
-    ]
-
-    await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(botoes))
 
 async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Executa o cancelamento do evento e publica aviso no grupo."""
+    """Executa o cancelamento do evento: muda status e remove confirmações."""
     query = update.callback_query
+    if not query:
+        return
     await query.answer()
 
-    _, id_evento_sanitizado = query.data.split("|", 1)
-    eventos = listar_eventos()
-    evento = None
-    indice = None
-    id_evento_real = None
-    for i, ev in enumerate(eventos):
-        id_teste = f"{ev.get('Data do evento', '')} — {ev.get('Nome da loja', '')}"
-        if sanitizar_callback(id_teste) == id_evento_sanitizado:
-            evento = ev
-            indice = i
-            id_evento_real = id_teste
-            break
+    data = query.data
+    if not data.startswith("cancelar_evento|"):
+        return
 
+    _, id_evento_cod = data.split("|", 1)
+    id_evento = _decode_cb(id_evento_cod)
+
+    eventos = listar_eventos() or []
+    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
     if not evento:
-        await query.edit_message_text("Evento não encontrado.")
+        await _safe_edit(query, "Evento não encontrado.")
         return
 
-    # Atualiza status na planilha
-    evento["Status"] = "Cancelado"
-    if not atualizar_evento(indice, evento):
-        await query.edit_message_text("Erro ao cancelar evento. Tente novamente.")
-        return
-
-    # Remove todas as confirmações deste evento
-    cancelar_todas_confirmacoes(id_evento_real)
-
-    # Determina quem está cancelando
+    # Verifica permissão
     user_id = update.effective_user.id
+    criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
     nivel = get_nivel(user_id)
-    autor_nome = "Administrador" if nivel == "3" else "Secretário"
-    autor_info = f"pelo {autor_nome}"
+    if str(user_id) != criador_id and nivel != "3":
+        await _safe_edit(query, "⛔ Permissão negada.")
+        return
 
-    # Publica aviso no grupo
-    grupo_id = evento.get("Telegram ID do grupo")
-    if grupo_id and str(grupo_id).strip() not in ["", "N/A", "n/a"]:
-        try:
-            grupo_id_int = int(float(str(grupo_id).strip()))
-            mensagem_grupo = (
-                f"❌ *EVENTO CANCELADO {autor_info.upper()}*\n"
-                f"━━━━━━━━━━━━━━━━\n"
-                f"🏛 *LOJA {evento['Nome da loja']} {evento['Número da loja']}*\n"
-                f"━━━━━━━━━━━━━━━━\n\n"
-                f"📍 Data: {evento['Data do evento']}\n"
-                f"🕕 Horário: {evento['Hora']}\n\n"
-                f"Este evento foi cancelado {autor_info}.\n"
-                f"Todas as confirmações foram removidas."
-            )
-            await context.bot.send_message(
-                chat_id=grupo_id_int,
-                text=mensagem_grupo,
-                parse_mode="Markdown"
-            )
-        except Exception as e:
-            logger.error(f"Erro ao publicar cancelamento: {e}")
+    # Atualiza status para "Cancelado"
+    evento["Status"] = "Cancelado"
+    sucesso = atualizar_evento(0, evento)  # usando o índice 0, mas a função ignora e usa ID se possível
+    if sucesso:
+        # Remove todas as confirmações
+        cancelar_todas_confirmacoes(id_evento)
+        await _safe_edit(query, "✅ Evento cancelado com sucesso.\nTodas as confirmações foram removidas.")
+    else:
+        await _safe_edit(query, "❌ Erro ao cancelar evento. Tente novamente mais tarde.")
 
-    # Notifica todos os membros que haviam confirmado (opcional, pode ser implementado depois)
-    # Por enquanto, apenas avisa no privado do autor
-    await query.edit_message_text(
-        f"✅ Evento cancelado com sucesso!\n"
-        f"O aviso foi publicado no grupo e todas as confirmações foram removidas.",
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("⬅️ Voltar", callback_data="meus_eventos")
-        ]])
-    )
+    context.user_data.pop("evento_gerenciado_id", None)
+    context.user_data.pop("evento_gerenciado_dados", None)
 
-async def iniciar_edicao(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Inicia o processo de edição de um evento."""
+
+# =========================
+# 4. Editar evento (ConversationHandler)
+# =========================
+async def editar_evento_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Inicia o processo de edição de um evento (chamado pelo menu gerenciar)."""
     query = update.callback_query
+    if not query:
+        return ConversationHandler.END
     await query.answer()
 
-    _, id_evento_sanitizado = query.data.split("|", 1)
-    eventos = listar_eventos()
-    evento = None
-    id_evento_real = None
-    for ev in eventos:
-        id_teste = f"{ev.get('Data do evento', '')} — {ev.get('Nome da loja', '')}"
-        if sanitizar_callback(id_teste) == id_evento_sanitizado:
-            evento = ev
-            id_evento_real = id_teste
-            break
-
-    if not evento:
-        await query.edit_message_text("Evento não encontrado.")
+    if query.data != "editar_evento_secretario":
         return ConversationHandler.END
 
-    context.user_data["editando_evento"] = {
-        "id_evento": id_evento_real,
-        "evento": evento,
-        "id_sanitizado": id_evento_sanitizado
-    }
+    evento = context.user_data.get("evento_gerenciado_dados")
+    if not evento:
+        await _safe_edit(query, "Dados do evento não encontrados. Tente novamente.")
+        return ConversationHandler.END
 
+    # Cria botões para os campos editáveis
     botoes = []
-    for campo_id, campo_info in CAMPOS_EVENTO.items():
-        valor_atual = evento.get(campo_info["chave"], "Não informado")
-        botoes.append([InlineKeyboardButton(
-            f"✏️ {campo_info['nome']}: {str(valor_atual)[:30]}",
-            callback_data=f"editar_campo_evento|{campo_id}"
-        )])
+    for campo_id, campo_info in CAMPOS_EVENTO_EDITAVEIS.items():
+        valor_atual = evento.get(campo_info["chave"], "")
+        if valor_atual is None:
+            valor_atual = ""
+        botoes.append([
+            InlineKeyboardButton(
+                f"✏️ {campo_info['nome']}: {str(valor_atual)[:30]}",
+                callback_data=f"editar_campo_evento|{campo_id}"
+            )
+        ])
 
-    botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data=f"gerenciar_evento|{id_evento_sanitizado}")])
+    botoes.append([InlineKeyboardButton("⬅️ Cancelar", callback_data=f"gerenciar_evento|{_encode_cb(normalizar_id_evento(evento))}")])
+    teclado = InlineKeyboardMarkup(botoes)
 
-    await query.edit_message_text(
-        "📝 *Editar Evento*\n\n"
-        "Selecione o campo que deseja alterar:",
+    await _safe_edit(
+        query,
+        f"*Editando evento:* {evento.get('Nome da loja', '')}\n\n"
+        f"Selecione o campo que deseja alterar:",
         parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(botoes)
+        reply_markup=teclado,
     )
-    return EDITAR_CAMPO
+    return SELECIONAR_CAMPO
+
 
 async def selecionar_campo_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Usuário selecionou um campo para editar."""
     query = update.callback_query
+    if not query:
+        return ConversationHandler.END
     await query.answer()
 
-    campo_id = query.data.split("|")[1]
-    campo_info = CAMPOS_EVENTO.get(campo_id)
-
-    if not campo_info:
-        await query.edit_message_text("Campo inválido.")
+    data = query.data
+    if not data.startswith("editar_campo_evento|"):
         return ConversationHandler.END
 
-    context.user_data["campo_editando_evento"] = campo_id
-    dados = context.user_data["editando_evento"]
-    evento = dados["evento"]
-    valor_atual = evento.get(campo_info["chave"], "Não informado")
+    campo_id = data.split("|")[1]
+    campo_info = CAMPOS_EVENTO_EDITAVEIS.get(campo_id)
+    if not campo_info:
+        await _safe_edit(query, "Campo inválido.")
+        return ConversationHandler.END
 
-    await query.edit_message_text(
+    context.user_data["editando_campo_evento"] = campo_id
+    evento = context.user_data.get("evento_gerenciado_dados", {})
+    valor_atual = evento.get(campo_info["chave"], "")
+
+    await _safe_edit(
+        query,
         f"✏️ *Editando {campo_info['nome']}*\n\n"
         f"Valor atual: {valor_atual}\n\n"
         f"Digite o novo valor (ou /cancelar para desistir):",
-        parse_mode="Markdown"
+        parse_mode="Markdown",
     )
     return NOVO_VALOR
+
 
 async def receber_novo_valor_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o novo valor e atualiza o evento."""
     novo_valor = update.message.text.strip()
-    campo_id = context.user_data.get("campo_editando_evento")
-    campo_info = CAMPOS_EVENTO.get(campo_id)
-    dados = context.user_data.get("editando_evento")
-
-    if not campo_info or not dados:
+    campo_id = context.user_data.get("editando_campo_evento")
+    if not campo_id:
         await update.message.reply_text("Erro: dados não encontrados. Tente novamente.")
         return ConversationHandler.END
 
-    id_evento_real = dados["id_evento"]
-    evento = dados["evento"]
-    id_evento_sanitizado = dados["id_sanitizado"]
+    campo_info = CAMPOS_EVENTO_EDITAVEIS.get(campo_id)
+    evento = context.user_data.get("evento_gerenciado_dados")
+    if not campo_info or not evento:
+        await update.message.reply_text("Erro: dados do evento não encontrados.")
+        return ConversationHandler.END
 
-    # Atualiza o campo
+    # Atualiza o dicionário do evento
     evento[campo_info["chave"]] = novo_valor
 
-    # Encontra o índice atualizado
-    eventos = listar_eventos()
-    indice = None
-    for i, ev in enumerate(eventos):
-        if (ev.get("Data do evento", "") + " — " + ev.get("Nome da loja", "")) == id_evento_real:
-            indice = i
-            break
-
-    if indice is None:
-        await update.message.reply_text("Erro: evento não encontrado na lista atual.")
-        return ConversationHandler.END
-
     # Salva na planilha
-    if not atualizar_evento(indice, evento):
-        await update.message.reply_text("Erro ao atualizar evento. Tente novamente.")
-        return ConversationHandler.END
+    id_evento = normalizar_id_evento(evento)
+    sucesso = atualizar_evento(0, evento)  # a função atualizar_evento usa ID se disponível
 
-    # Remove todas as confirmações (pois o evento foi alterado)
-    cancelar_todas_confirmacoes(id_evento_real)
+    if sucesso:
+        await update.message.reply_text(
+            f"✅ {campo_info['nome']} atualizado com sucesso para:\n{novo_valor}\n\n"
+            f"Use /start para voltar ao menu principal."
+        )
+    else:
+        await update.message.reply_text("❌ Erro ao atualizar o campo. Tente novamente mais tarde.")
 
-    # Determina quem está editando
-    user_id = update.effective_user.id
-    nivel = get_nivel(user_id)
-    autor_nome = "Administrador" if nivel == "3" else "Secretário"
-    autor_info = f"pelo {autor_nome}"
-
-    # Publica aviso de alteração no grupo
-    grupo_id = evento.get("Telegram ID do grupo")
-    if grupo_id and str(grupo_id).strip() not in ["", "N/A", "n/a"]:
-        try:
-            grupo_id_int = int(float(str(grupo_id).strip()))
-            mensagem_grupo = (
-                f"📝 *EVENTO ALTERADO {autor_info.upper()}*\n"
-                f"━━━━━━━━━━━━━━━━\n"
-                f"🏛 *LOJA {evento['Nome da loja']} {evento['Número da loja']}*\n"
-                f"━━━━━━━━━━━━━━━━\n\n"
-                f"📍 Nova data: {evento['Data do evento']}\n"
-                f"🕕 Horário: {evento['Hora']}\n"
-                f"📍 Oriente: {evento['Oriente']}\n\n"
-                f"*Campo alterado:* {campo_info['nome']}\n"
-                f"*Novo valor:* {novo_valor}\n\n"
-                f"Todas as confirmações foram removidas. Por favor, reconfirme sua presença se necessário."
-            )
-            await context.bot.send_message(
-                chat_id=grupo_id_int,
-                text=mensagem_grupo,
-                parse_mode="Markdown"
-            )
-        except Exception as e:
-            logger.error(f"Erro ao publicar alteração: {e}")
-
-    await update.message.reply_text(
-        f"✅ {campo_info['nome']} atualizado com sucesso!\n"
-        f"Todas as confirmações foram removidas e um aviso foi publicado no grupo.\n\n"
-        f"Use /start para voltar ao menu principal."
-    )
-
-    context.user_data.pop("editando_evento", None)
-    context.user_data.pop("campo_editando_evento", None)
-
+    # Limpa dados da sessão
+    context.user_data.pop("editando_campo_evento", None)
+    context.user_data.pop("evento_gerenciado_id", None)
+    context.user_data.pop("evento_gerenciado_dados", None)
     return ConversationHandler.END
 
-async def cancelar_edicao(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def cancelar_edicao_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancela o processo de edição."""
     await update.message.reply_text("Edição cancelada.")
+    context.user_data.pop("editando_campo_evento", None)
+    context.user_data.pop("evento_gerenciado_id", None)
+    context.user_data.pop("evento_gerenciado_dados", None)
     return ConversationHandler.END
 
+
+# ConversationHandler para editar evento
 editar_evento_secretario_handler = ConversationHandler(
-    entry_points=[CallbackQueryHandler(iniciar_edicao, pattern="^editar_evento\\|")],
+    entry_points=[CallbackQueryHandler(editar_evento_inicio, pattern="^editar_evento_secretario$")],
     states={
-        EDITAR_CAMPO: [CallbackQueryHandler(selecionar_campo_evento, pattern="^editar_campo_evento\\|")],
+        SELECIONAR_CAMPO: [CallbackQueryHandler(selecionar_campo_evento, pattern="^editar_campo_evento\|")],
         NOVO_VALOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_novo_valor_evento)],
     },
-    fallbacks=[CommandHandler("cancelar", cancelar_edicao)],
+    fallbacks=[
+        CommandHandler("cancelar", cancelar_edicao_evento),
+        CallbackQueryHandler(cancelar_edicao_evento, pattern="^cancelar$"),
+    ],
 )

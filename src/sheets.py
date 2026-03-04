@@ -173,7 +173,17 @@ def _find_row_by_exact_value(ws: gspread.Worksheet, header: str, exact_value: st
 # =========================
 # Funções para Membros
 # =========================
-def buscar_membro(telegram_id: int):
+def listar_membros() -> List[Dict[str, Any]]:
+    """Retorna lista de todos os membros cadastrados."""
+    try:
+        ws = spreadsheet.worksheet("Membros")
+        return ws.get_all_records()
+    except Exception as e:
+        print(f"Erro ao listar membros: {e}")
+        return []
+
+
+def buscar_membro(telegram_id: int) -> Optional[Dict[str, Any]]:
     """Retorna o dicionário com dados do membro."""
     try:
         ws = spreadsheet.worksheet("Membros")
@@ -231,9 +241,7 @@ def cadastrar_membro(dados: dict) -> bool:
         put("Número da loja", dados.get("Número da loja") or dados.get("numero_loja"))
         put("Oriente", dados.get("Oriente") or dados.get("oriente"))
         put("Potência", dados.get("Potência") or dados.get("potencia"))
-        put("Nascimento", dados.get("Nascimento") or dados.get("nascimento"))
-        put("Telefone", dados.get("Telefone") or dados.get("telefone"))
-        put("Email", dados.get("Email") or dados.get("email"))
+        put("Data de nascimento", dados.get("Data de nascimento") or dados.get("data_nasc") or dados.get("nascimento"))
         put("Venerável Mestre", dados.get("Venerável Mestre") or dados.get("veneravel_mestre") or dados.get("vm"))
 
         # Nivel default
@@ -308,8 +316,10 @@ def atualizar_membro(telegram_id: int, dados_atualizados: dict, preservar_nivel:
             values["Oriente"] = dados_atualizados.get("oriente")
         if "Potência" in hmap and ("potencia" in dados_atualizados) and ("Potência" not in values):
             values["Potência"] = dados_atualizados.get("potencia")
-        if "Venerável Mestre" in hmap and ("vm" in dados_atualizados) and ("Venerável Mestre" not in values):
-            values["Venerável Mestre"] = dados_atualizados.get("vm")
+        if "Data de nascimento" in hmap and ("data_nasc" in dados_atualizados) and ("Data de nascimento" not in values):
+            values["Data de nascimento"] = dados_atualizados.get("data_nasc")
+        if "Venerável Mestre" in hmap and ("vm" in dados_atualizados or "veneravel_mestre" in dados_atualizados) and ("Venerável Mestre" not in values):
+            values["Venerável Mestre"] = dados_atualizados.get("vm") or dados_atualizados.get("veneravel_mestre")
 
         # Reaplica Nivel atual se preservar_nivel
         if preservar_nivel and "Nivel" in hmap:

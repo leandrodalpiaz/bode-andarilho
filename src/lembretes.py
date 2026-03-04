@@ -1,6 +1,7 @@
+# src/lembretes.py
 from datetime import datetime, timedelta
 from telegram import Bot
-from src.sheets import listar_eventos, listar_confirmacoes
+from src.sheets import listar_eventos, listar_confirmacoes_por_evento
 
 async def enviar_lembretes(bot: Bot):
     hoje = datetime.now()
@@ -15,12 +16,12 @@ async def enviar_lembretes(bot: Bot):
             continue
 
         id_evento = data_evento + " — " + evento.get("Nome da loja", "")
-        confirmados = listar_confirmacoes(id_evento)
+        confirmados = listar_confirmacoes_por_evento(id_evento)
 
         nome_loja = evento.get("Nome da loja", "")
         horario = evento.get("Hora", "")
-        local = evento.get("Local", "")
-        grau = evento.get("Grau mínimo", "")
+        local = evento.get("Endereço da sessão", "")
+        grau = evento.get("Grau", "")
         traje = evento.get("Traje obrigatório", "")
         agape = evento.get("Ágape", "")
 
