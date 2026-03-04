@@ -216,6 +216,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
                 [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
                 [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
                 [InlineKeyboardButton("👥 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
+                [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
                 [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
             ]),
         )
@@ -232,6 +233,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
         [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
         [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
         [InlineKeyboardButton("👥 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
+        [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
         [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
     ])
 
@@ -267,6 +269,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
                 [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
                 [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
+                [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
                 [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
             ]),
         )
@@ -286,6 +289,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
         [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
         [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
+        [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
         [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
     ])
 

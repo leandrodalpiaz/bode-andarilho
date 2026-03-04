@@ -23,6 +23,53 @@ from src.sheets import (
     buscar_confirmacao,
     listar_confirmacoes_por_evento,
 )
+async def notificar_secretario(context: ContextTypes.DEFAULT_TYPE, evento: dict, membro: dict, tipo_agape: str, desc_agape: str):
+    """Envia notificação para o secretário sobre nova confirmação (se ele tiver ativo)."""
+    secretario_id = evento.get("Telegram ID do secretário", "")
+    if not secretario_id:
+        return
+
+    try:
+        secretario_id = int(float(secretario_id))
+    except:
+        return
+
+    # Verifica se o secretário tem notificações ativas na planilha
+    from src.sheets import get_notificacao_status
+    if not get_notificacao_status(secretario_id):
+        return  # Secretário optou por não receber notificações
+
+    nome_loja = evento.get("Nome da loja", "")
+    numero = evento.get("Número da loja", "")
+    numero_fmt = f" {numero}" if numero else ""
+    data = evento.get("Data do evento", "")
+    nome_membro = membro.get("Nome", "")
+
+    texto = (
+        f"📢 *NOVA CONFIRMAÇÃO*\n\n"
+        f"👤 *Irmão:* {nome_membro}\n"
+        f"📅 *Evento:* {data} - {nome_loja}{numero_fmt}\n"
+        f"🍽 *Ágape:* {tipo_agape} ({desc_agape})\n"
+    )
+
+    # Criar botões para ações rápidas
+    id_evento = normalizar_id_evento(evento)
+    teclado = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📊 Ver resumo", callback_data=f"resumo_evento|{_encode_cb(id_evento)}"),
+            InlineKeyboardButton("👥 Ver lista", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")
+        ],
+    ])
+
+    try:
+        await context.bot.send_message(
+            chat_id=secretario_id,
+            text=texto,
+            parse_mode="Markdown",
+            reply_markup=teclado,
+        )
+    except Exception as e:
+        logger.error(f"Erro ao notificar secretário {secretario_id}: {e}")
 
 logger = logging.getLogger(__name__)
 
@@ -821,7 +868,11 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
         "agape": f"{participacao_agape} ({desc_agape})" if participacao_agape == "Confirmada" else "Não",
         "veneravel_mestre": membro.get("Venerável Mestre", ""),
     }
+        # Após registrar_confirmacao(dados_confirmacao)
     registrar_confirmacao(dados_confirmacao)
+    
+    # Notifica o secretário (se ele tiver ativo)
+    await notificar_secretario(context, evento, membro, participacao_agape, desc_agape)
 
     data = str(evento.get("Data do evento", "") or "").strip()
     nome_loja = str(evento.get("Nome da loja", "") or "").strip()

@@ -617,3 +617,34 @@ def cancelar_todas_confirmacoes(id_evento: str) -> bool:
     except Exception as e:
         print(f"Erro ao cancelar confirmações: {e}")
         return False
+# =========================
+# Funções para Notificações (coluna M)
+# =========================
+def get_notificacao_status(telegram_id: int) -> bool:
+    """
+    Retorna True se o usuário tem notificações ativas (coluna "Notificações" = "SIM")
+    Retorna False caso contrário.
+    """
+    try:
+        membro = buscar_membro(telegram_id)
+        if not membro:
+            return False
+        notificacao = str(membro.get("Notificações", "") or "").strip().upper()
+        return notificacao == "SIM"
+    except Exception as e:
+        print(f"Erro ao buscar status de notificação: {e}")
+        return False
+
+
+def set_notificacao_status(telegram_id: int, ativo: bool) -> bool:
+    """
+    Atualiza a coluna "Notificações" para "SIM" (True) ou "NÃO" (False).
+    Retorna True se sucesso.
+    """
+    try:
+        from src.sheets import atualizar_membro
+        valor = "SIM" if ativo else "NÃO"
+        return atualizar_membro(telegram_id, {"Notificações": valor}, preservar_nivel=True)
+    except Exception as e:
+        print(f"Erro ao atualizar status de notificação: {e}")
+        return False
