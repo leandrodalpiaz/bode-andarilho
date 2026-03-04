@@ -280,8 +280,6 @@ def _eventos_ordenados(eventos: List[dict]) -> List[dict]:
 
 def _filtrar_por_periodo(eventos: List[dict], token: str) -> Tuple[str, List[dict]]:
     hoje = date.today()
-    logger.info(f"FILTRO PERIODO - Token: {token}, Hoje: {hoje}")
-    logger.info(f"FILTRO PERIODO - Total eventos recebidos: {len(eventos)}")
 
     if token == TOKEN_SEMANA_ATUAL:
         ini, fim = _data_range_semana(hoje)
@@ -304,31 +302,17 @@ def _filtrar_por_periodo(eventos: List[dict], token: str) -> Tuple[str, List[dic
     else:
         return "Eventos", []
 
-    logger.info(f"FILTRO PERIODO - Intervalo: {ini} a {fim}")
-
     filtrados: List[dict] = []
     for ev in eventos:
-        data_raw = ev.get("Data do evento", "")
-        data_dt = parse_data_evento(data_raw)
-        
-        # Log de cada evento
-        logger.info(f"FILTRO PERIODO - Evento: {ev.get('Nome da loja')}, Data raw: '{data_raw}', Data parsed: {data_dt}")
-        
+        data_dt = parse_data_evento(ev.get("Data do evento", ""))
         if not data_dt:
-            logger.info(f"FILTRO PERIODO - Evento ignorado: data não reconhecida")
             continue
-            
         d = data_dt.date()
-        logger.info(f"FILTRO PERIODO - Data do evento (date): {d}, Status: {ev.get('Status')}")
-        
         if ini <= d <= fim:
-            logger.info(f"FILTRO PERIODO - Evento DENTRO do período!")
             filtrados.append(ev)
-        else:
-            logger.info(f"FILTRO PERIODO - Evento FORA do período")
 
-    logger.info(f"FILTRO PERIODO - Total filtrados: {len(filtrados)}")
     return titulo, _eventos_ordenados(filtrados)
+
 
 def _filtrar_por_grau(eventos: List[dict], grau_nome: str) -> Tuple[str, List[dict]]:
     alvo = normalizar_grau_nome(grau_nome)
