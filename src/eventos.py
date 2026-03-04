@@ -1157,7 +1157,70 @@ async def minhas_confirmacoes_historico(update: Update, context: ContextTypes.DE
 
 
 # -------------------------
-# 9) Detalhes do histórico (sem opção de cancelar)
+# 9) Detalhes do confirmado (para eventos futuros)
+# -------------------------
+async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mostra detalhes de uma confirmação futura (com botão cancelar)."""
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer()
+
+    _, id_evento_cod = query.data.split("|", 1)
+    id_evento = _decode_cb(id_evento_cod)
+
+    eventos = listar_eventos() or []
+    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+
+    if not evento:
+        teclado = InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("⬅️ Voltar", callback_data="minhas_confirmacoes_futuro")],
+                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
+            ]
+        )
+        await _safe_edit(query, "Evento não encontrado ou não está mais ativo.", reply_markup=teclado)
+        return
+
+    nome = str(evento.get("Nome da loja", "") or "").strip()
+    numero = str(evento.get("Número da loja", "") or "").strip()
+    numero_fmt = f" {numero}" if numero else ""
+    data_txt = str(evento.get("Data do evento", "") or "").strip()
+    hora = str(evento.get("Hora", "") or "").strip()
+    oriente = str(evento.get("Oriente", "") or "").strip()
+    potencia = str(evento.get("Potência", "") or "").strip()
+
+    # Busca a confirmação para ver detalhes do ágape
+    user_id = update.effective_user.id
+    confirmacao = buscar_confirmacao(id_evento, user_id)
+    agape_info = ""
+    if confirmacao:
+        agape = confirmacao.get("Ágape", "")
+        if agape:
+            agape_info = f"\n🍽 *Ágape:* {agape}"
+
+    texto = (
+        "*Confirmação registrada*\n\n"
+        f"🏛 {nome}{numero_fmt}\n"
+        f"📅 {data_txt}\n"
+        f"🕕 {hora}\n"
+        f"📍 {oriente}\n"
+        f"⚜️ {potencia}{agape_info}\n"
+    )
+
+    teclado = InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")],
+            [InlineKeyboardButton("⬅️ Voltar", callback_data="minhas_confirmacoes_futuro")],
+            [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
+        ]
+    )
+
+    await _safe_edit(query, texto, parse_mode="Markdown", reply_markup=teclado)
+
+
+# -------------------------
+# 10) Detalhes do histórico (sem opção de cancelar)
 # -------------------------
 async def detalhes_historico(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mostra detalhes de uma confirmação passada (sem botão cancelar)."""
@@ -1220,7 +1283,7 @@ async def detalhes_historico(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 # -------------------------
-# 10) Fechar mensagem
+# 11) Fechar mensagem
 # -------------------------
 async def fechar_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1244,9 +1307,3 @@ confirmacao_presenca_handler = ConversationHandler(
     states={},
     fallbacks=[CommandHandler("cancelar", cancelar_presenca)],
 )
-
-# Handlers para minhas confirmações
-minhas_confirmacoes_handler = CallbackQueryHandler(minhas_confirmacoes, pattern=r"^minhas_confirmacoes$")
-minhas_confirmacoes_futuro_handler = CallbackQueryHandler(minhas_confirmacoes_futuro, pattern=r"^minhas_confirmacoes_futuro$")
-minhas_confirmacoes_historico_handler = CallbackQueryHandler(minhas_confirmacoes_historico, pattern=r"^minhas_confirmacoes_historico$")
-detalhes_historico_handler = CallbackQueryHandler(detalhes_historico, pattern=r"^detalhes_historico\|")
