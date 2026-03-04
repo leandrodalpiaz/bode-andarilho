@@ -83,20 +83,41 @@ async def meus_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     eventos = listar_eventos() or []
-    # Filtra eventos onde o Telegram ID do secretário corresponde ao user_id
-    meus = [ev for ev in eventos if str(ev.get("Telegram ID do secretário", "")).strip() == str(user_id)]
+    
+    if nivel == "3":
+        # Admin: vê todos os eventos ativos
+        meus = [ev for ev in eventos if ev.get("Status", "").lower() in ("ativo", "")]
+        titulo = "📋 *Todos os eventos*"
+    else:
+        # Secretário: vê apenas os que criou
+        meus = [ev for ev in eventos if str(ev.get("Telegram ID do secretário", "")).strip() == str(user_id)]
+        titulo = "📋 *Meus eventos*"
 
-    if not meus:
+    # Filtra apenas eventos ativos e futuros (opcional, mas recomendado)
+    from datetime import datetime
+    hoje = datetime.now().date()
+    meus_filtrados = []
+    for ev in meus:
+        data_str = ev.get("Data do evento", "")
+        try:
+            data_evento = datetime.strptime(data_str, "%d/%m/%Y").date()
+            if data_evento >= hoje:
+                meus_filtrados.append(ev)
+        except:
+            # Se não conseguir parsear a data, mantém o evento (fallback)
+            meus_filtrados.append(ev)
+
+    if not meus_filtrados:
         teclado = InlineKeyboardMarkup([
             [InlineKeyboardButton("➕ Cadastrar evento", callback_data="cadastrar_evento")],
-            [InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario")],
+            [InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario" if nivel=="2" else "area_admin")],
         ])
-        await _safe_edit(query, "Você ainda não cadastrou nenhum evento.", reply_markup=teclado)
+        await _safe_edit(query, "Você ainda não cadastrou nenhum evento futuro." if nivel=="2" else "Não há eventos futuros cadastrados.", reply_markup=teclado)
         return
 
-    meus = _eventos_ordenados(meus)
+    meus_filtrados = _eventos_ordenados(meus_filtrados)
     botoes = []
-    for ev in meus[:20]:  # limite para não estourar
+    for ev in meus_filtrados[:20]:  # limite para não estourar
         id_evento = normalizar_id_evento(ev)
         botoes.append([
             InlineKeyboardButton(
@@ -106,11 +127,11 @@ async def meus_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
 
     botoes.append([InlineKeyboardButton("➕ Cadastrar novo", callback_data="cadastrar_evento")])
-    botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario")])
+    botoes.append([InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario" if nivel=="2" else "area_admin")])
 
     await _safe_edit(
         query,
-        "📋 *Meus eventos*\n\nSelecione um evento para gerenciar:",
+        titulo + "\n\nSelecione um evento para gerenciar:",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(botoes),
     )
@@ -155,6 +176,7 @@ async def menu_gerenciar_evento(update: Update, context: ContextTypes.DEFAULT_TY
     hora = evento.get("Hora", "")
 
     teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📊 Resumo da sessão", callback_data=f"resumo_evento|{_encode_cb(id_evento)}")],
         [InlineKeyboardButton("✏️ Editar evento", callback_data="editar_evento_secretario")],
         [InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")],
         [InlineKeyboardButton("❌ Cancelar evento", callback_data=f"confirmar_cancelamento|{_encode_cb(id_evento)}")],
@@ -254,7 +276,7 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
 
     # Atualiza status para "Cancelado"
     evento["Status"] = "Cancelado"
-    sucesso = atualizar_evento(0, evento)  # usando o índice 0, mas a função ignora e usa ID se possível
+    sucesso = atualizar_evento(0, evento)  # a função atualizar_evento usa ID se disponível
     if sucesso:
         # Remove todas as confirmações
         cancelar_todas_confirmacoes(id_evento)
@@ -267,7 +289,107 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 # =========================
-# 4. Editar evento (ConversationHandler)
+# 4. NOVA FUNÇÃO: Resumo da sessão
+# =========================
+async def resumo_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gera um resumo rápido da sessão para o secretário."""
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer("📊 Gerando resumo...")
+
+    data = query.data
+    if not data.startswith("resumo_evento|"):
+        return
+
+    _, id_evento_cod = data.split("|", 1)
+    id_evento = _decode_cb(id_evento_cod)
+
+    eventos = listar_eventos() or []
+    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    if not evento:
+        await _safe_edit(query, "Evento não encontrado.")
+        return
+
+    # Verifica permissão
+    user_id = update.effective_user.id
+    criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
+    nivel = get_nivel(user_id)
+    if str(user_id) != criador_id and nivel != "3":
+        await _safe_edit(query, "⛔ Permissão negada.")
+        return
+
+    # Busca confirmações
+    confirmacoes = listar_confirmacoes_por_evento(id_evento) or []
+    
+    # Estatísticas
+    total = len(confirmacoes)
+    com_agape = 0
+    sem_agape = 0
+    lista_detalhada = []
+
+    for c in confirmacoes:
+        agape = str(c.get("Ágape", "") or "").lower()
+        if "com ágape" in agape or "confirmada" in agape:
+            com_agape += 1
+        else:
+            sem_agape += 1
+
+        # Busca dados do membro para o nome
+        tid = c.get("Telegram ID") or c.get("telegram_id")
+        if tid:
+            try:
+                membro = buscar_membro(int(float(tid)))
+                if membro:
+                    nome = membro.get("Nome", "Desconhecido")
+                    grau = membro.get("Grau", "")
+                else:
+                    nome = c.get("Nome", "Desconhecido")
+                    grau = c.get("Grau", "")
+            except:
+                nome = c.get("Nome", "Desconhecido")
+                grau = c.get("Grau", "")
+        else:
+            nome = c.get("Nome", "Desconhecido")
+            grau = c.get("Grau", "")
+
+        tipo_agape = "Com ágape" if com_agape else "Sem ágape"
+        lista_detalhada.append(f"• {nome} - {grau} ({tipo_agape})")
+
+    # Monta o texto do resumo
+    nome_loja = evento.get("Nome da loja", "")
+    numero = evento.get("Número da loja", "")
+    numero_fmt = f" {numero}" if numero else ""
+    data_txt = evento.get("Data do evento", "")
+    hora = evento.get("Hora", "")
+
+    resumo = (
+        f"📊 *RESUMO DA SESSÃO*\n\n"
+        f"🏛 {nome_loja}{numero_fmt}\n"
+        f"📅 {data_txt} - {hora}\n\n"
+        f"✅ *Total de confirmados:* {total}\n"
+        f"🍽 *Com ágape:* {com_agape}\n"
+        f"🚫 *Sem ágape:* {sem_agape}\n\n"
+    )
+
+    if lista_detalhada:
+        resumo += "*Lista resumida:*\n" + "\n".join(lista_detalhada[:15])  # Limite para não estourar
+        if len(lista_detalhada) > 15:
+            resumo += f"\n... e mais {len(lista_detalhada) - 15} irmãos"
+    else:
+        resumo += "Nenhuma confirmação até o momento."
+
+    # Botões para ações rápidas
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("👥 Ver lista completa", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")],
+        [InlineKeyboardButton("⬅️ Voltar", callback_data=f"gerenciar_evento|{_encode_cb(id_evento)}")],
+    ])
+
+    await _safe_edit(query, resumo, parse_mode="Markdown", reply_markup=teclado)
+
+
+# =========================
+# 5. Editar evento (ConversationHandler)
 # =========================
 async def editar_evento_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia o processo de edição de um evento (chamado pelo menu gerenciar)."""
