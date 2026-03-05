@@ -75,7 +75,7 @@ async def meus_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
-    await query.answer()
+    await query.answer("📋 Buscando seus eventos...")
 
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
@@ -146,7 +146,7 @@ async def menu_gerenciar_evento(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     if not query:
         return
-    await query.answer()
+    await query.answer("⚙️ Carregando opções...")
 
     data = query.data
     if not data.startswith("gerenciar_evento|"):
@@ -204,7 +204,7 @@ async def confirmar_cancelamento(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     if not query:
         return
-    await query.answer()
+    await query.answer("❌ Processando...")
 
     data = query.data
     if not data.startswith("confirmar_cancelamento|"):
@@ -253,7 +253,7 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     if not query:
         return
-    await query.answer()
+    await query.answer("❌ Cancelando evento...")
 
     data = query.data
     if not data.startswith("cancelar_evento|"):
@@ -298,7 +298,7 @@ async def resumo_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     if not query:
         return
-    await query.answer("📊 Gerando resumo...")
+    await query.answer("📊 Gerando resumo da sessão...")
 
     data = query.data
     if not data.startswith("resumo_evento|"):
@@ -395,7 +395,7 @@ async def resumo_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 # =========================
-# 5. Copiar lista de confirmados (NOVA FUNÇÃO)
+# 5. Copiar lista de confirmados
 # =========================
 async def copiar_lista_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gera um texto formatado da lista de confirmados para copiar."""
@@ -519,7 +519,7 @@ async def editar_evento_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     if not query:
         return ConversationHandler.END
-    await query.answer()
+    await query.answer("✏️ Carregando opções de edição...")
 
     if query.data != "editar_evento_secretario":
         return ConversationHandler.END
@@ -560,7 +560,7 @@ async def selecionar_campo_evento(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     if not query:
         return ConversationHandler.END
-    await query.answer()
+    await query.answer("✏️ Preparando edição...")
 
     data = query.data
     if not data.startswith("editar_campo_evento|"):
