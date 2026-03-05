@@ -250,7 +250,7 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     if not query:
         return ConversationHandler.END
-    await query.answer("✅ Salvando loja...")
+    await query.answer()
 
     user_id = update.effective_user.id
     dados = context.user_data.get("nova_loja", {})
@@ -290,7 +290,7 @@ async def cancelar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_T
     """Cancela o cadastro de loja."""
     query = update.callback_query
     if query:
-        await query.answer("❌ Cadastro cancelado")
+        await query.answer()
         await _safe_edit(
             query,
             "Cadastro cancelado.",
@@ -325,6 +325,6 @@ cadastro_loja_handler = ConversationHandler(
     ],
 )
 
-# Handlers simples
+# Handlers simples (para serem usados no main.py)
 listar_lojas_handler_cb = CallbackQueryHandler(listar_lojas_handler, pattern="^loja_listar$")
 menu_lojas_handler = CallbackQueryHandler(menu_lojas, pattern="^menu_lojas$")
