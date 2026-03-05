@@ -54,7 +54,7 @@ async def menu_notificacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
-    await query.answer()
+    await query.answer("🔔 Carregando configurações...")
 
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
@@ -90,7 +90,7 @@ async def notificacoes_ativar(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query
     if not query:
         return
-    await query.answer()
+    await query.answer("✅ Ativando notificações...")
 
     user_id = update.effective_user.id
     
@@ -122,7 +122,7 @@ async def notificacoes_desativar(update: Update, context: ContextTypes.DEFAULT_T
     query = update.callback_query
     if not query:
         return
-    await query.answer()
+    await query.answer("🔕 Desativando notificações...")
 
     user_id = update.effective_user.id
     
@@ -155,7 +155,7 @@ async def notificacoes_desativar(update: Update, context: ContextTypes.DEFAULT_T
 async def promover_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia promoção de membro comum para secretário."""
     query = update.callback_query
-    await query.answer()
+    await query.answer("🟢 Carregando lista de membros...")
 
     if get_nivel(update.effective_user.id) != "3":
         await query.edit_message_text("Apenas administradores podem promover membros.")
@@ -233,7 +233,7 @@ async def selecionar_membro_promover(update: Update, context: ContextTypes.DEFAU
 async def confirmar_promover(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Confirma promoção e atualiza o cargo para 'Secretário'."""
     query = update.callback_query
-    await query.answer()
+    await query.answer("🟢 Promovendo membro...")
 
     if query.data == "cancelar_promocao":
         await query.edit_message_text("Operação cancelada.")
@@ -263,7 +263,7 @@ async def confirmar_promover(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def rebaixar_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia rebaixamento de secretário para comum."""
     query = update.callback_query
-    await query.answer()
+    await query.answer("🔻 Carregando lista de secretários...")
 
     if get_nivel(update.effective_user.id) != "3":
         await query.edit_message_text("Apenas administradores podem rebaixar membros.")
@@ -340,7 +340,7 @@ async def selecionar_membro_rebaixar(update: Update, context: ContextTypes.DEFAU
 async def confirmar_rebaixar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Confirma rebaixamento e limpa o cargo."""
     query = update.callback_query
-    await query.answer()
+    await query.answer("🔻 Rebaixando membro...")
 
     if query.data == "cancelar_rebaixamento":
         await query.edit_message_text("Operação cancelada.")
@@ -372,7 +372,7 @@ async def ver_todos_membros(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
-    await query.answer()
+    await query.answer("👥 Buscando lista de membros...")
 
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
@@ -422,7 +422,7 @@ async def editar_membro_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     if not query:
         return ConversationHandler.END
-    await query.answer()
+    await query.answer("✏️ Carregando lista de membros...")
 
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
