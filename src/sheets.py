@@ -101,7 +101,7 @@ def _col_index(ws: gspread.Worksheet, header_name: str) -> int:
     hmap = _header_map(ws)
     if header_name in hmap:
         return hmap[header_name]
-    raise ValueError(f"Cabeçalho '{header_name}' não encontrado na aba '{ws.title}'.")    
+    raise ValueError(f"Cabeçalho '{header_name}' não encontrado na aba '{ws.title}'.")        
 
 
 def _append_row_by_headers(ws: gspread.Worksheet, values_by_header: Dict[str, Any]) -> bool:
