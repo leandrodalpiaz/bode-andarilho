@@ -445,7 +445,7 @@ def _teclado_pos_publicacao(id_evento: str) -> InlineKeyboardMarkup:
 # =========================
 async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer("🏛 Iniciando cadastro de evento...")
 
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
@@ -520,7 +520,7 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Processa a escolha da loja pelo secretário."""
     query = update.callback_query
-    await query.answer()
+    await query.answer("🏛 Carregando dados da loja...")
 
     data = query.data
     if data == "cadastrar_manual":
@@ -639,7 +639,7 @@ async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 async def receber_grau_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer("🔺 Selecionando grau...")
 
     _, grau = query.data.split("|", 1)
     grau = _norm_text(grau)
@@ -689,7 +689,7 @@ async def receber_traje(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer("🍽 Processando...")
     _, val = query.data.split("|", 1)
     val = _norm_text(val)
 
@@ -710,7 +710,7 @@ async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer("🍽 Processando...")
     _, val = query.data.split("|", 1)
     val = _norm_text(val)
 
@@ -725,7 +725,7 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer("📝 Processando...")
     _, val = query.data.split("|", 1)
     val = _norm_text(val)
 
@@ -772,7 +772,7 @@ async def receber_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 async def confirmar_publicacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer("✅ Publicando evento...")
 
     evento = _montar_evento_dict(context)
     eventos_existentes = listar_eventos() or []
@@ -788,7 +788,7 @@ async def confirmar_publicacao(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def confirmar_publicacao_forcar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer("⚠️ Publicando mesmo com duplicidade...")
 
     evento = _montar_evento_dict(context)
     await _publicar_e_finalizar(query, context, evento, forcar=True)
@@ -863,7 +863,7 @@ async def _publicar_e_finalizar(query, context: ContextTypes.DEFAULT_TYPE, event
 
 async def refazer_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer("🔄 Reiniciando cadastro...")
 
     # preserva IDs do grupo/secretário e limpa o resto
     tg_grupo = context.user_data.get("novo_evento_telegram_id_grupo", GRUPO_PRINCIPAL_ID)
@@ -886,7 +886,7 @@ async def refazer_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer("⬅️ Voltando...")
 
     estado = _voltar_um_passo(context)
     # Após remover um campo, reapresenta a pergunta correspondente
@@ -896,7 +896,7 @@ async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def ev_cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query:
-        await query.answer()
+        await query.answer("❌ Cadastro cancelado")
         await _safe_edit(query, "Cadastro cancelado. Use /start para voltar ao menu principal.")
     else:
         if update.message:
@@ -908,7 +908,7 @@ async def ev_cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cancelar_publicacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer("❌ Cancelando...")
     await _safe_edit(query, "Cadastro cancelado. Use /start para voltar ao menu principal.")
     _limpar_contexto_evento(context)
     return ConversationHandler.END
