@@ -1,3 +1,4 @@
+# src/eventos.py
 from __future__ import annotations
 
 import logging
@@ -51,6 +52,7 @@ DIAS_SEMANA = {
     "Saturday": "Sábado",
     "Sunday": "Domingo",
 }
+
 
 # -------------------------
 # Helpers
@@ -232,6 +234,7 @@ def montar_linha_confirmado(dados_membro_ou_snapshot: dict) -> str:
 
 
 def _data_range_semana(ref: date) -> Tuple[date, date]:
+    # semana = segunda..domingo
     start = ref - timedelta(days=ref.weekday())
     end = start + timedelta(days=6)
     return start, end
@@ -245,6 +248,7 @@ def _ultimo_dia_mes(ano: int, mes: int) -> date:
 
 
 def _add_months(d: date, months: int) -> date:
+    # simples e suficiente para ranges (leva para o 1º dia do mês resultante)
     y = d.year + (d.month - 1 + months) // 12
     m = (d.month - 1 + months) % 12 + 1
     return date(y, m, 1)
@@ -258,6 +262,7 @@ class EventoOrdenavel:
 
     @property
     def sort_key(self):
+        # eventos sem data/hora vão para o final
         dt = self.data_dt or datetime(2100, 1, 1)
         hh, mm = self.hora_tuple
         return (dt.date(), hh, mm, normalizar_id_evento(self.evento))
@@ -321,126 +326,6 @@ def _filtrar_por_grau(eventos: List[dict], grau_nome: str) -> Tuple[str, List[di
 
     return titulo, _eventos_ordenados(filtrados)
 
-# -------------------------
-# Função para gerar calendário visual
-# -------------------------
-def gerar_calendario_mes(ano: int, mes: int, eventos: List[dict]) -> str:
-    """
-    Gera um calendário visual do mês com marcações nos dias que têm evento.
-    """
-    import calendar
-    from datetime import datetime
-
-    meses_pt = {
-        1: "JANEIRO", 2: "FEVEREIRO", 3: "MARÇO", 4: "ABRIL",
-        5: "MAIO", 6: "JUNHO", 7: "JULHO", 8: "AGOSTO",
-        9: "SETEMBRO", 10: "OUTUBRO", 11: "NOVEMBRO", 12: "DEZEMBRO"
-    }
-
-    cal = calendar.monthcalendar(ano, mes)
-
-    dias_com_evento = set()
-    for ev in eventos:
-        data_dt = parse_data_evento(ev.get("Data do evento", ""))
-        if data_dt and data_dt.year == ano and data_dt.month == mes:
-            dias_com_evento.add(data_dt.day)
-
-    linhas = []
-    linhas.append(f"📅 *{meses_pt[mes]} {ano}*")
-    linhas.append("```")
-    linhas.append(" DOM SEG TER QUA QUI SEX SAB")
-
-    for semana in cal:
-        linha = ""
-        for dia in semana:
-            if dia == 0:
-                linha += "    "
-            else:
-                if dia in dias_com_evento:
-                    linha += f" {dia:2d}●"
-                else:
-                    linha += f" {dia:2d} "
-        linhas.append(linha)
-
-    linhas.append("```")
-    linhas.append("")
-    linhas.append("Legenda: ● Dias com evento")
-    linhas.append(f"Total de eventos no mês: {len(dias_com_evento)}")
-
-    return "\n".join(linhas)
-
-
-# -------------------------
-# Handler para mostrar calendário
-# -------------------------
-async def mostrar_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Mostra um calendário visual do mês atual com os eventos."""
-    query = update.callback_query
-    if not query:
-        return
-    await query.answer("📅 Gerando calendário...")
-
-    from datetime import datetime
-
-    hoje = datetime.now()
-    ano = hoje.year
-    mes = hoje.month
-
-    data = query.data
-    if data.startswith("calendario|"):
-        partes = data.split("|")
-        if len(partes) >= 3:
-            try:
-                ano = int(partes[1])
-                mes = int(partes[2])
-            except:
-                pass
-
-    eventos = listar_eventos() or []
-
-    calendario = gerar_calendario_mes(ano, mes, eventos)
-
-    mes_ant = mes - 1
-    ano_ant = ano
-    if mes_ant == 0:
-        mes_ant = 12
-        ano_ant = ano - 1
-
-    mes_prox = mes + 1
-    ano_prox = ano
-    if mes_prox == 13:
-        mes_prox = 1
-        ano_prox = ano + 1
-
-    botoes = [
-        [
-            InlineKeyboardButton("◀️ Anterior", callback_data=f"calendario|{ano_ant}|{mes_ant}"),
-            InlineKeyboardButton("Mês atual", callback_data="calendario_atual"),
-            InlineKeyboardButton("Próximo ▶️", callback_data=f"calendario|{ano_prox}|{mes_prox}")
-        ],
-        [InlineKeyboardButton("📅 Ver eventos do mês", callback_data=f"data|{TOKEN_MES_ATUAL}")],
-        [InlineKeyboardButton("⬅️ Voltar", callback_data="ver_eventos")],
-        [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
-    ]
-
-    await _safe_edit(
-        query,
-        calendario,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(botoes),
-    )
-
-
-async def calendario_atual(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Volta para o calendário do mês atual."""
-    query = update.callback_query
-    if not query:
-        return
-    await query.answer()
-
-    query.data = "calendario|0|0"  # Será ignorado e usará a data atual
-    await mostrar_calendario(update, context)
-
 
 def _formatar_data_curta(ev: dict) -> str:
     dt = parse_data_evento(ev.get("Data do evento", ""))
@@ -472,7 +357,156 @@ async def _safe_edit(query, text: str, **kwargs):
 
 
 # -------------------------
-# 1) 📅 Ver eventos (novo padrão) -> menu com 5 botões
+# Função para gerar calendário visual (CORRIGIDA)
+# -------------------------
+def gerar_calendario_mes(ano: int, mes: int, eventos: List[dict]) -> str:
+    """
+    Gera um calendário visual do mês com marcações nos dias que têm evento.
+    """
+    import calendar
+    from datetime import datetime
+    
+    # Validação de mês e ano
+    if mes < 1 or mes > 12:
+        # Se mês inválido, usa mês atual
+        hoje = datetime.now()
+        ano = hoje.year
+        mes = hoje.month
+    
+    # Nomes dos meses em português
+    meses_pt = {
+        1: "JANEIRO", 2: "FEVEREIRO", 3: "MARÇO", 4: "ABRIL",
+        5: "MAIO", 6: "JUNHO", 7: "JULHO", 8: "AGOSTO",
+        9: "SETEMBRO", 10: "OUTUBRO", 11: "NOVEMBRO", 12: "DEZEMBRO"
+    }
+    
+    # Cria um calendário
+    cal = calendar.monthcalendar(ano, mes)
+    
+    # Identifica quais dias têm evento
+    dias_com_evento = set()
+    for ev in eventos:
+        data_dt = parse_data_evento(ev.get("Data do evento", ""))
+        if data_dt and data_dt.year == ano and data_dt.month == mes:
+            dias_com_evento.add(data_dt.day)
+    
+    # Cabeçalho
+    linhas = []
+    linhas.append(f"📅 *{meses_pt[mes]} {ano}*")
+    linhas.append("```")
+    linhas.append(" DOM SEG TER QUA QUI SEX SAB")
+    
+    # Para cada semana do mês
+    for semana in cal:
+        linha = ""
+        for dia in semana:
+            if dia == 0:
+                linha += "    "  # Espaço para dias fora do mês
+            else:
+                if dia in dias_com_evento:
+                    # Dia com evento - formata com 2 dígitos e marcador
+                    linha += f" {dia:2d}●"
+                else:
+                    # Dia sem evento
+                    linha += f" {dia:2d} "
+        linhas.append(linha)
+    
+    linhas.append("```")
+    linhas.append("")
+    linhas.append(f"Legenda: ● Dias com evento")
+    linhas.append(f"Total de eventos no mês: {len(dias_com_evento)}")
+    
+    return "\n".join(linhas)
+
+
+# -------------------------
+# Handler para mostrar calendário (CORRIGIDO)
+# -------------------------
+async def mostrar_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mostra um calendário visual do mês atual com os eventos."""
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer("📅 Gerando calendário...")
+
+    from datetime import datetime
+    
+    # Pega mês e ano atuais (padrão)
+    hoje = datetime.now()
+    ano = hoje.year
+    mes = hoje.month
+    
+    # Se veio com parâmetro para navegar entre meses
+    data = query.data
+    if data.startswith("calendario|"):
+        partes = data.split("|")
+        if len(partes) >= 3:
+            try:
+                ano_param = int(partes[1])
+                mes_param = int(partes[2])
+                # Só atualiza se mês estiver entre 1 e 12
+                if 1 <= mes_param <= 12:
+                    ano = ano_param
+                    mes = mes_param
+            except:
+                pass  # Se erro, mantém mês atual
+    
+    eventos = listar_eventos() or []
+    
+    # Gera o calendário
+    calendario = gerar_calendario_mes(ano, mes, eventos)
+    
+    # Botões de navegação entre meses
+    from calendar import monthrange
+    
+    # Mês anterior
+    mes_ant = mes - 1
+    ano_ant = ano
+    if mes_ant == 0:
+        mes_ant = 12
+        ano_ant = ano - 1
+    
+    # Mês seguinte
+    mes_prox = mes + 1
+    ano_prox = ano
+    if mes_prox == 13:
+        mes_prox = 1
+        ano_prox = ano + 1
+    
+    botoes = [
+        [
+            InlineKeyboardButton("◀️ Anterior", callback_data=f"calendario|{ano_ant}|{mes_ant}"),
+            InlineKeyboardButton("Mês atual", callback_data="calendario_atual"),
+            InlineKeyboardButton("Próximo ▶️", callback_data=f"calendario|{ano_prox}|{mes_prox}")
+        ],
+        [InlineKeyboardButton("📅 Ver eventos do mês", callback_data=f"data|{TOKEN_MES_ATUAL}")],
+        [InlineKeyboardButton("⬅️ Voltar", callback_data="ver_eventos")],
+        [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
+    ]
+    
+    await _safe_edit(
+        query,
+        calendario,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(botoes),
+    )
+
+
+async def calendario_atual(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Volta para o calendário do mês atual."""
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer()
+    
+    from datetime import datetime
+    hoje = datetime.now()
+    # Chama o calendário com o mês atual
+    await mostrar_calendario(update, context)
+
+
+# -------------------------
+# 1) 📅 Ver eventos (novo padrão) -> menu com 6 botões (incluindo calendário)
 # -------------------------
 async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -482,7 +516,7 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     teclado = InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("📅 Calendário do mês", callback_data="calendario|0|0")],
+            [InlineKeyboardButton("📅 Calendário do mês", callback_data="calendario_atual")],
             [InlineKeyboardButton("Esta semana", callback_data=f"data|{TOKEN_SEMANA_ATUAL}")],
             [InlineKeyboardButton("Próxima semana", callback_data=f"data|{TOKEN_PROXIMA_SEMANA}")],
             [InlineKeyboardButton("Este mês", callback_data=f"data|{TOKEN_MES_ATUAL}")],
@@ -507,6 +541,7 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
     _, token_or_data = query.data.split("|", 1)
     token_or_data = (token_or_data or "").strip()
 
+    # Submenu: Por Grau (abre 3 botões)
     if token_or_data == TOKEN_POR_GRAU_MENU:
         teclado = InlineKeyboardMarkup(
             [
@@ -522,6 +557,7 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
 
     eventos = listar_eventos() or []
 
+    # Tokens de período (novo padrão)
     if token_or_data in (TOKEN_SEMANA_ATUAL, TOKEN_PROXIMA_SEMANA, TOKEN_MES_ATUAL, TOKEN_PROXIMOS_MESES):
         titulo, filtrados = _filtrar_por_periodo(eventos, token_or_data)
 
@@ -557,6 +593,7 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         )
         return
 
+    # Compatibilidade: token_or_data pode ser uma data real dd/mm/aaaa (fluxo antigo)
     eventos_data = [e for e in eventos if str(e.get("Data do evento", "")).strip() == token_or_data]
 
     if not eventos_data:
@@ -569,6 +606,7 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         await _safe_edit(query, "Não existem sessões disponíveis para esta data no momento.", reply_markup=teclado)
         return
 
+    # Fluxo antigo: agrupar por grau
     graus: Dict[str, List[dict]] = {}
     for evento in eventos_data:
         grau = normalizar_grau_nome(str(evento.get("Grau", "Indefinido")))
@@ -608,6 +646,7 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
 
     eventos = listar_eventos() or []
 
+    # Novo fluxo: Por grau (sem data)
     if data_or_menu == TOKEN_POR_GRAU_MENU:
         titulo, filtrados = _filtrar_por_grau(eventos, grau)
 
@@ -643,6 +682,7 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
         )
         return
 
+    # Fluxo antigo: data + grau
     eventos_filtrados = [
         e for e in eventos
         if str(e.get("Data do evento", "")).strip() == str(data_or_menu).strip()
@@ -733,12 +773,15 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         f"🍽 Ágape: {agape}\n\n"
     )
 
+    # Adiciona endereço e, se for link, prepara botão
     botoes_extras = []
     if endereco_raw:
         if endereco_raw.startswith(("http://", "https://")):
+            # É um link - mostra como texto e adiciona botão
             texto += f"📍 *Link do local:* [Clique aqui]({endereco_raw})\n"
             botoes_extras.append([InlineKeyboardButton("📍 Abrir no mapa", url=endereco_raw)])
         else:
+            # É texto normal
             texto += f"📍 *Endereço:* {endereco_raw}\n"
     else:
         texto += "📍 *Endereço:* Não informado\n"
@@ -765,10 +808,11 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
             botoes.append([InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{_encode_cb(id_evento)}|sem")])
 
     botoes.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")])
-
+    
+    # Adiciona botões de mapa se houver
     if botoes_extras:
         botoes.extend(botoes_extras)
-
+    
     botoes.append([InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")])
 
     await _safe_edit(query, texto, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(botoes))
@@ -800,6 +844,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
 
     membro = buscar_membro(user_id)
     if not membro:
+        # Guarda intenção de confirmar após cadastro
         context.user_data["pos_cadastro"] = {
             "acao": "confirmar",
             "id_evento": id_evento,
@@ -846,9 +891,6 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         "veneravel_mestre": membro.get("Venerável Mestre", ""),
     }
     registrar_confirmacao(dados_confirmacao)
-
-    from src.admin_acoes import notificar_secretario
-    await notificar_secretario(context, evento, membro, participacao_agape, desc_agape)
 
     data = str(evento.get("Data do evento", "") or "").strip()
     nome_loja = str(evento.get("Nome da loja", "") or "").strip()
@@ -900,6 +942,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
 
 # Função auxiliar para continuar confirmação após cadastro
 async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE, pos: dict):
+    """Continua o fluxo de confirmação após o cadastro ser concluído."""
     user_id = update.effective_user.id
     id_evento = pos.get("id_evento")
     tipo_agape = pos.get("tipo_agape", "sem")
@@ -920,6 +963,7 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
     if not membro:
         return
 
+    # Verifica se já confirmou
     if buscar_confirmacao(id_evento, user_id):
         await context.bot.send_message(
             chat_id=user_id,
@@ -949,9 +993,6 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
         "veneravel_mestre": membro.get("Venerável Mestre", ""),
     }
     registrar_confirmacao(dados_confirmacao)
-
-    from src.admin_acoes import notificar_secretario
-    await notificar_secretario(context, evento, membro, participacao_agape, desc_agape)
 
     data = str(evento.get("Data do evento", "") or "").strip()
     nome_loja = str(evento.get("Nome da loja", "") or "").strip()
@@ -985,6 +1026,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await query.answer()
 
+    # Confirmação (passo 2)
     if query.data.startswith("confirma_cancelar|"):
         _, id_evento_cod = query.data.split("|", 1)
         id_evento = _decode_cb(id_evento_cod)
@@ -1001,6 +1043,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await _safe_edit(query, "Não foi possível cancelar. Você não estava confirmado para este evento.")
         return
 
+    # Pedido (passo 1)
     if query.data.startswith("cancelar|"):
         _, id_evento_cod = query.data.split("|", 1)
         id_evento = _decode_cb(id_evento_cod)
@@ -1036,7 +1079,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # -------------------------
-# 7) Ver confirmados
+# 7) Ver confirmados (CORRIGIDO - VERSÃO ORIGINAL)
 # -------------------------
 async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1094,6 +1137,7 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     botoes.append([InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")])
 
+    # COMPORTAMENTO ORIGINAL: SEMPRE envia nova mensagem
     await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=texto,
@@ -1103,9 +1147,10 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # -------------------------
-# 8) Minhas confirmações
+# 8) Minhas confirmações (com separação futuro/histórico)
 # -------------------------
 async def minhas_confirmacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu principal de confirmações do membro (escolher entre futuro ou histórico)."""
     query = update.callback_query
     if not query:
         return
@@ -1127,6 +1172,7 @@ async def minhas_confirmacoes(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def minhas_confirmacoes_futuro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lista eventos futuros que o membro confirmou."""
     query = update.callback_query
     if not query:
         return
@@ -1135,19 +1181,22 @@ async def minhas_confirmacoes_futuro(update: Update, context: ContextTypes.DEFAU
     user_id = update.effective_user.id
     eventos = listar_eventos() or []
     eventos = _eventos_ordenados(eventos)
-
+    
+    from datetime import datetime
     hoje = datetime.now().date()
 
     confirmados_futuro = []
     for ev in eventos:
         id_evento = normalizar_id_evento(ev)
         if buscar_confirmacao(id_evento, user_id):
+            # Verifica se é futuro
             data_str = ev.get("Data do evento", "")
             try:
                 data_evento = datetime.strptime(data_str, "%d/%m/%Y").date()
                 if data_evento >= hoje:
                     confirmados_futuro.append(ev)
             except:
+                # Se não conseguir parsear, considera como futuro (fallback seguro)
                 confirmados_futuro.append(ev)
 
     if not confirmados_futuro:
@@ -1186,6 +1235,7 @@ async def minhas_confirmacoes_futuro(update: Update, context: ContextTypes.DEFAU
 
 
 async def minhas_confirmacoes_historico(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lista eventos passados que o membro confirmou."""
     query = update.callback_query
     if not query:
         return
@@ -1194,19 +1244,22 @@ async def minhas_confirmacoes_historico(update: Update, context: ContextTypes.DE
     user_id = update.effective_user.id
     eventos = listar_eventos() or []
     eventos = _eventos_ordenados(eventos)
-
+    
+    from datetime import datetime
     hoje = datetime.now().date()
 
     confirmados_passado = []
     for ev in eventos:
         id_evento = normalizar_id_evento(ev)
         if buscar_confirmacao(id_evento, user_id):
+            # Verifica se é passado
             data_str = ev.get("Data do evento", "")
             try:
                 data_evento = datetime.strptime(data_str, "%d/%m/%Y").date()
                 if data_evento < hoje:
                     confirmados_passado.append(ev)
             except:
+                # Se não conseguir parsear, não inclui no histórico
                 continue
 
     if not confirmados_passado:
@@ -1228,6 +1281,7 @@ async def minhas_confirmacoes_historico(update: Update, context: ContextTypes.DE
     for ev in confirmados_passado[:MAX_EVENTOS_LISTA]:
         id_evento = normalizar_id_evento(ev)
         label = _linha_botao_evento(ev)
+        # No histórico, ao clicar mostra apenas os detalhes (sem opção de cancelar)
         botoes.append([InlineKeyboardButton(label, callback_data=f"detalhes_historico|{_encode_cb(id_evento)}")])
 
     botoes.append([InlineKeyboardButton("📅 Ver próximos", callback_data="minhas_confirmacoes_futuro")])
@@ -1245,9 +1299,10 @@ async def minhas_confirmacoes_historico(update: Update, context: ContextTypes.DE
 
 
 # -------------------------
-# 9) Detalhes do confirmado
+# 9) Detalhes do confirmado (para eventos futuros)
 # -------------------------
 async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mostra detalhes de uma confirmação futura (com botão cancelar)."""
     query = update.callback_query
     if not query:
         return
@@ -1277,6 +1332,7 @@ async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE
     oriente = str(evento.get("Oriente", "") or "").strip()
     potencia = str(evento.get("Potência", "") or "").strip()
 
+    # Busca a confirmação para ver detalhes do ágape
     user_id = update.effective_user.id
     confirmacao = buscar_confirmacao(id_evento, user_id)
     agape_info = ""
@@ -1306,9 +1362,10 @@ async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 # -------------------------
-# 10) Detalhes do histórico
+# 10) Detalhes do histórico (sem opção de cancelar)
 # -------------------------
 async def detalhes_historico(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mostra detalhes de uma confirmação passada (sem botão cancelar)."""
     query = update.callback_query
     if not query:
         return
@@ -1338,6 +1395,7 @@ async def detalhes_historico(update: Update, context: ContextTypes.DEFAULT_TYPE)
     oriente = str(evento.get("Oriente", "") or "").strip()
     potencia = str(evento.get("Potência", "") or "").strip()
 
+    # Busca a confirmação para ver detalhes do ágape
     user_id = update.effective_user.id
     confirmacao = buscar_confirmacao(id_evento, user_id)
     agape_info = ""
@@ -1384,7 +1442,7 @@ async def fechar_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # -------------------------
-# ConversationHandler
+# ConversationHandler (mantido)
 # -------------------------
 confirmacao_presenca_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(iniciar_confirmacao_presenca, pattern=r"^confirmar\|")],
