@@ -1234,7 +1234,7 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # -------------------------
-# 9) Minhas confirmações (com separação futuro/histórico)
+# 9) Minhas confirmações (com separação futuro/histórico) - CORRIGIDO
 # -------------------------
 async def minhas_confirmacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu principal de confirmações do membro (escolher entre futuro ou histórico)."""
@@ -1266,25 +1266,41 @@ async def minhas_confirmacoes_futuro(update: Update, context: ContextTypes.DEFAU
     await query.answer("📅 Buscando eventos futuros...")
 
     user_id = update.effective_user.id
+    logger.info(f"Buscando confirmações futuras para user_id: {user_id}")
+    
     eventos = listar_eventos() or []
+    logger.info(f"Total de eventos encontrados: {len(eventos)}")
+    
     eventos = _eventos_ordenados(eventos)
     
     from datetime import datetime
     hoje = datetime.now().date()
 
     confirmados_futuro = []
+    
     for ev in eventos:
         id_evento = normalizar_id_evento(ev)
-        if buscar_confirmacao(id_evento, user_id):
+        # Verifica se o usuário confirmou este evento
+        confirmacao = buscar_confirmacao(id_evento, user_id)
+        
+        if confirmacao:
+            logger.info(f"Usuário confirmou evento: {ev.get('Nome da loja')} - {ev.get('Data do evento')}")
+            
             # Verifica se é futuro
             data_str = ev.get("Data do evento", "")
             try:
                 data_evento = datetime.strptime(data_str, "%d/%m/%Y").date()
                 if data_evento >= hoje:
                     confirmados_futuro.append(ev)
-            except:
+                    logger.info(f"Evento futuro adicionado: {data_str}")
+                else:
+                    logger.info(f"Evento passado ignorado: {data_str}")
+            except Exception as e:
+                logger.error(f"Erro ao parsear data {data_str}: {e}")
                 # Se não conseguir parsear, considera como futuro (fallback seguro)
                 confirmados_futuro.append(ev)
+
+    logger.info(f"Total de eventos futuros confirmados: {len(confirmados_futuro)}")
 
     if not confirmados_futuro:
         teclado = InlineKeyboardMarkup([
@@ -1329,25 +1345,38 @@ async def minhas_confirmacoes_historico(update: Update, context: ContextTypes.DE
     await query.answer("📜 Buscando histórico...")
 
     user_id = update.effective_user.id
+    logger.info(f"Buscando histórico para user_id: {user_id}")
+    
     eventos = listar_eventos() or []
+    logger.info(f"Total de eventos encontrados: {len(eventos)}")
+    
     eventos = _eventos_ordenados(eventos)
     
     from datetime import datetime
     hoje = datetime.now().date()
 
     confirmados_passado = []
+    
     for ev in eventos:
         id_evento = normalizar_id_evento(ev)
-        if buscar_confirmacao(id_evento, user_id):
+        confirmacao = buscar_confirmacao(id_evento, user_id)
+        
+        if confirmacao:
+            logger.info(f"Usuário confirmou evento: {ev.get('Nome da loja')} - {ev.get('Data do evento')}")
+            
             # Verifica se é passado
             data_str = ev.get("Data do evento", "")
             try:
                 data_evento = datetime.strptime(data_str, "%d/%m/%Y").date()
                 if data_evento < hoje:
                     confirmados_passado.append(ev)
-            except:
+                    logger.info(f"Evento passado adicionado: {data_str}")
+            except Exception as e:
+                logger.error(f"Erro ao parsear data {data_str}: {e}")
                 # Se não conseguir parsear, não inclui no histórico
                 continue
+
+    logger.info(f"Total de eventos passados confirmados: {len(confirmados_passado)}")
 
     if not confirmados_passado:
         teclado = InlineKeyboardMarkup([
