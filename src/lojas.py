@@ -39,7 +39,7 @@ async def menu_lojas(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
-    await query.answer()
+    await query.answer("🏛️ Carregando lojas...")
 
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
@@ -69,7 +69,7 @@ async def listar_lojas_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     if not query:
         return
-    await query.answer()
+    await query.answer("📋 Buscando suas lojas...")
 
     user_id = update.effective_user.id
     lojas = listar_lojas(user_id)
@@ -115,7 +115,7 @@ async def cadastrar_loja_inicio(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     if not query:
         return ConversationHandler.END
-    await query.answer()
+    await query.answer("🏛️ Iniciando cadastro de loja...")
 
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
@@ -250,7 +250,7 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     if not query:
         return ConversationHandler.END
-    await query.answer()
+    await query.answer("✅ Salvando loja...")
 
     user_id = update.effective_user.id
     dados = context.user_data.get("nova_loja", {})
@@ -290,7 +290,7 @@ async def cancelar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_T
     """Cancela o cadastro de loja."""
     query = update.callback_query
     if query:
-        await query.answer()
+        await query.answer("❌ Cadastro cancelado")
         await _safe_edit(
             query,
             "Cadastro cancelado.",
