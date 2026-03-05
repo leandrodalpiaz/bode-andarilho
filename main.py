@@ -19,6 +19,7 @@ from telegram import Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
+    ContextTypes,
     MessageHandler,
     CommandHandler,
     filters,
@@ -27,21 +28,21 @@ from telegram.ext import (
 from src.cadastro import cadastro_handler, cadastro_start
 from src.bot import botao_handler, menu_principal_teclado
 from src.eventos import (
-    calendario_atual,
-    mostrar_calendario,
+    minhas_confirmacoes_futuro,
+    minhas_confirmacoes_historico,
     mostrar_eventos,
     mostrar_detalhes_evento,
     cancelar_presenca,
     ver_confirmados,
     fechar_mensagem,
     minhas_confirmacoes,
-    minhas_confirmacoes_futuro,
-    minhas_confirmacoes_historico,
-    detalhes_confirmado,
-    detalhes_historico,
     mostrar_eventos_por_data,
     mostrar_eventos_por_grau,
+    detalhes_confirmado,
+    detalhes_historico,
     confirmacao_presenca_handler,
+    mostrar_calendario,
+    calendario_atual,
 )
 from src.cadastro_evento import cadastro_evento_handler
 from src.admin_acoes import (
@@ -49,6 +50,9 @@ from src.admin_acoes import (
     rebaixar_handler,
     editar_membro_handler,
     ver_todos_membros,
+    menu_notificacoes,
+    notificacoes_ativar,
+    notificacoes_desativar,
 )
 from src.editar_perfil import editar_perfil_handler
 from src.eventos_secretario import (
@@ -57,11 +61,18 @@ from src.eventos_secretario import (
     menu_gerenciar_evento,
     confirmar_cancelamento,
     executar_cancelamento,
+    resumo_confirmados,
+    copiar_lista_confirmados,
+)
+from src.lojas import (
+    cadastro_loja_handler,
+    menu_lojas,
+    listar_lojas_handler,
 )
 from src.sheets import buscar_membro
 from src.permissoes import get_nivel
 
-print("INICIANDO BOT - VERSAO FINAL 2026-03-03 (MAIN CORRIGIDO)")
+print("INICIANDO BOT - VERSAO FINAL 2026-03-05 (MAIN CORRIGIDO)")
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -142,6 +153,7 @@ async def bode_grupo_handler(update: Update, context):
                 reply_markup=menu_principal_teclado(nivel)
             )
             
+            # Não responde no grupo
             if update.callback_query:
                 await update.callback_query.answer()
         except Exception as e:
@@ -182,26 +194,28 @@ async def mensagem_grupo_handler(update: Update, context):
 def register_handlers(app: Application) -> None:
     """
     Ordem é importante:
-    1) ConversationHandlers (cadastro/confirmacao/evento/admin/secretario)
-    2) CallbackQueryHandlers específicos (com pattern)
-    3) Handlers de mensagens (grupo, "bode")
-    4) CallbackQueryHandler genérico do menu (por último)
+    1) ConversationHandlers (cadastro/confirmacao/evento/admin/secretario/lojas)
+    2) CommandHandler start (PRECISA VIR ANTES DOS CALLBACKS)
+    3) CallbackQueryHandlers específicos (com pattern)
+    4) Handlers de mensagens (grupo, "bode")
+    5) CallbackQueryHandler genérico do menu (por último)
     """
 
     # 1) Fluxos conversacionais (prioridade alta)
-    app.add_handler(cadastro_handler)
+    app.add_handler(cadastro_handler)  # SEM CommandHandler start aqui
     app.add_handler(confirmacao_presenca_handler)
     app.add_handler(cadastro_evento_handler)
-
     app.add_handler(promover_handler)
     app.add_handler(rebaixar_handler)
     app.add_handler(editar_membro_handler)
-
     app.add_handler(editar_perfil_handler)
-
     app.add_handler(editar_evento_secretario_handler)
+    app.add_handler(cadastro_loja_handler)
 
-    # 2) Callbacks específicos de eventos
+    # 2) CommandHandler para /start (DEVE VIR ANTES DOS CALLBACKS)
+    app.add_handler(CommandHandler("start", start))
+
+    # 3) Callbacks específicos de eventos
     app.add_handler(CallbackQueryHandler(mostrar_eventos, pattern=r"^(ver_eventos|mostrar_eventos|eventos)$"))
     app.add_handler(CallbackQueryHandler(mostrar_eventos_por_data, pattern=r"^data\|"))
     app.add_handler(CallbackQueryHandler(mostrar_eventos_por_grau, pattern=r"^grau\|"))
@@ -209,7 +223,6 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(mostrar_calendario, pattern=r"^calendario\|"))
     app.add_handler(CallbackQueryHandler(calendario_atual, pattern=r"^calendario_atual$"))
 
-    # Substituir o handler antigo pelos novos handlers de minhas_confirmacoes
     app.add_handler(CallbackQueryHandler(minhas_confirmacoes, pattern=r"^minhas_confirmacoes$"))
     app.add_handler(CallbackQueryHandler(minhas_confirmacoes_futuro, pattern=r"^minhas_confirmacoes_futuro$"))
     app.add_handler(CallbackQueryHandler(minhas_confirmacoes_historico, pattern=r"^minhas_confirmacoes_historico$"))
@@ -220,16 +233,25 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(cancelar_presenca, pattern=r"^cancelar\|"))
     app.add_handler(CallbackQueryHandler(fechar_mensagem, pattern=r"^fechar_mensagem$"))
 
-    # 3) Callbacks específicos da área do secretário
+    # 4) Callbacks específicos da área do secretário
     app.add_handler(CallbackQueryHandler(meus_eventos, pattern=r"^meus_eventos$"))
     app.add_handler(CallbackQueryHandler(menu_gerenciar_evento, pattern=r"^gerenciar_evento\|"))
     app.add_handler(CallbackQueryHandler(confirmar_cancelamento, pattern=r"^confirmar_cancelamento\|"))
     app.add_handler(CallbackQueryHandler(executar_cancelamento, pattern=r"^cancelar_evento\|"))
+    app.add_handler(CallbackQueryHandler(resumo_confirmados, pattern=r"^resumo_evento\|"))
+    app.add_handler(CallbackQueryHandler(copiar_lista_confirmados, pattern=r"^copiar_lista\|"))
 
-    # 4) Callbacks específicos da área administrativa
+    # 5) Callbacks específicos da área administrativa
     app.add_handler(CallbackQueryHandler(ver_todos_membros, pattern=r"^admin_ver_membros$"))
+    app.add_handler(CallbackQueryHandler(menu_notificacoes, pattern=r"^menu_notificacoes$"))
+    app.add_handler(CallbackQueryHandler(notificacoes_ativar, pattern=r"^notificacoes_ativar$"))
+    app.add_handler(CallbackQueryHandler(notificacoes_desativar, pattern=r"^notificacoes_desativar$"))
 
-    # 5) Handler para a palavra "bode" em grupos (deve vir antes do genérico)
+    # 6) Callbacks específicos da área de lojas
+    app.add_handler(CallbackQueryHandler(menu_lojas, pattern=r"^menu_lojas$"))
+    app.add_handler(CallbackQueryHandler(listar_lojas_handler, pattern=r"^loja_listar$"))
+
+    # 7) Handler para a palavra "bode" em grupos (deve vir antes do genérico)
     app.add_handler(
         MessageHandler(
             filters.Regex(r"^(?i:bode)[.!?]*$") & filters.ChatType.GROUPS,
@@ -237,10 +259,10 @@ def register_handlers(app: Application) -> None:
         )
     )
 
-    # 6) Menu principal / botões genéricos (catch-all) — sempre por último
+    # 8) Menu principal / botões genéricos (catch-all) — sempre por último
     app.add_handler(CallbackQueryHandler(botao_handler))
 
-    # 7) Mensagens (grupo e fallback)
+    # 9) Mensagens (grupo e fallback)
     app.add_handler(MessageHandler(filters.ChatType.GROUPS & filters.TEXT & ~filters.COMMAND, mensagem_grupo_handler))
     app.add_handler(MessageHandler(filters.ChatType.GROUPS & filters.COMMAND, mensagem_grupo_handler))
 
@@ -250,6 +272,41 @@ def register_handlers(app: Application) -> None:
             await update.message.reply_text("OK")
 
     app.add_handler(CommandHandler("ping", ping))
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler para comando /start no privado."""
+    logger.info(
+        "start chamado - chat_type=%s user_id=%s",
+        getattr(update.effective_chat, "type", None),
+        getattr(update.effective_user, "id", None),
+    )
+
+    # Se estiver em grupo, orienta a ir para o privado
+    if update.effective_chat and update.effective_chat.type in ["group", "supergroup"]:
+        await update.message.reply_text(
+            "🔒 Para interagir comigo, fale no privado.\n\n"
+            "Clique aqui: @BodeAndarilhoBot e envie /start"
+        )
+        return
+
+    # Se já está em privado, prossegue normalmente
+    telegram_id = update.effective_user.id
+    membro = buscar_membro(telegram_id)
+
+    if membro:
+        nivel = get_nivel(telegram_id)
+        texto = (
+            f"Bem-vindo de volta, irmão {membro.get('Nome', '')}!\n\n"
+            "O que deseja fazer?"
+        )
+        if update.message:
+            await update.message.reply_text(
+                texto,
+                reply_markup=menu_principal_teclado(nivel),
+            )
+    else:
+        await cadastro_start(update, context)
 
 
 async def main():
