@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Dict, Optional
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
@@ -12,6 +13,10 @@ from src.perfil import mostrar_perfil
 from src.permissoes import get_nivel
 
 logger = logging.getLogger(__name__)
+
+# Dicionário para armazenar a última mensagem de menu de cada usuário
+# Estrutura: {user_id: {"chat_id": id, "message_id": id}}
+ultima_mensagem_menu: Dict[int, dict] = {}
 
 
 def menu_principal_teclado(nivel: str) -> InlineKeyboardMarkup:
@@ -40,17 +45,67 @@ async def _safe_edit(query, text: str, **kwargs):
             raise
 
 
+async def enviar_ou_editar_menu(context, user_id: int, texto: str, teclado) -> bool:
+    """
+    Envia uma nova mensagem ou edita a última mensagem do menu.
+    Retorna True se bem-sucedido.
+    """
+    global ultima_mensagem_menu
+    
+    # Verifica se já existe uma mensagem anterior para este usuário
+    if user_id in ultima_mensagem_menu:
+        try:
+            # Tenta editar a mensagem existente
+            await context.bot.edit_message_text(
+                chat_id=user_id,
+                message_id=ultima_mensagem_menu[user_id]["message_id"],
+                text=texto,
+                parse_mode="Markdown",
+                reply_markup=teclado
+            )
+            logger.info(f"Menu editado para usuário {user_id}")
+            return True
+        except Exception as e:
+            # Se não conseguir editar (mensagem apagada ou muito antiga)
+            logger.warning(f"Não foi possível editar mensagem para {user_id}: {e}")
+            # Remove o registro e continua para enviar nova mensagem
+            ultima_mensagem_menu.pop(user_id, None)
+    
+    # Envia nova mensagem
+    try:
+        msg = await context.bot.send_message(
+            chat_id=user_id,
+            text=texto,
+            parse_mode="Markdown",
+            reply_markup=teclado
+        )
+        
+        # Armazena o ID da nova mensagem
+        ultima_mensagem_menu[user_id] = {
+            "chat_id": user_id,
+            "message_id": msg.message_id
+        }
+        logger.info(f"Novo menu enviado para usuário {user_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Erro ao enviar menu para {user_id}: {e}")
+        return False
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler para comando /start ou palavra 'bode' (quando chamado do grupo)."""
+    """Handler para comando /start no privado."""
     logger.info(
         "start chamado - chat_type=%s user_id=%s",
         getattr(update.effective_chat, "type", None),
         getattr(update.effective_user, "id", None),
     )
 
-    # Se estiver em grupo, chama cadastro_start que cuidará do redirecionamento
+    # Se estiver em grupo, orienta a ir para o privado
     if update.effective_chat and update.effective_chat.type in ["group", "supergroup"]:
-        await cadastro_start(update, context)
+        await update.message.reply_text(
+            "🔒 Para interagir comigo, fale no privado.\n\n"
+            "Clique aqui: @BodeAndarilhoBot e envie /start"
+        )
         return
 
     # Se já está em privado, prossegue normalmente
@@ -59,24 +114,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if membro:
         nivel = get_nivel(telegram_id)
-
         texto = (
             f"Bem-vindo de volta, irmão {membro.get('Nome', '')}!\n\n"
             "O que deseja fazer?"
         )
-
-        # /start normalmente vem como mensagem; mas protege caso venha diferente
-        if update.message:
-            await update.message.reply_text(
-                texto,
-                reply_markup=menu_principal_teclado(nivel),
-            )
-        else:
-            await context.bot.send_message(
-                chat_id=telegram_id,
-                text=texto,
-                reply_markup=menu_principal_teclado(nivel),
-            )
+        
+        # Usa a função unificada para enviar/editar menu
+        await enviar_ou_editar_menu(
+            context,
+            telegram_id,
+            texto,
+            menu_principal_teclado(nivel)
+        )
     else:
         await cadastro_start(update, context)
 
@@ -88,68 +137,10 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     data = query.data or ""
-    
-    # Feedbacks específicos baseados no callback
-    if data == "ver_eventos":
-        await query.answer("📅 Carregando eventos...")
-    elif data.startswith("data|"):
-        await query.answer("📅 Filtrando eventos...")
-    elif data.startswith("grau|"):
-        await query.answer("🔺 Filtrando por grau...")
-    elif data.startswith("evento|"):
-        await query.answer("📋 Carregando detalhes do evento...")
-    elif data.startswith("ver_confirmados|"):
-        await query.answer("👥 Buscando lista de confirmados...")
-    elif data.startswith("cancelar|") or data.startswith("confirma_cancelar|"):
-        await query.answer("❌ Processando cancelamento...")
-    elif data == "fechar_mensagem":
-        await query.answer("🔒 Fechando mensagem...")
-    elif data == "minhas_confirmacoes":
-        await query.answer("✅ Buscando suas confirmações...")
-    elif data.startswith("detalhes_confirmado|"):
-        await query.answer("📋 Carregando detalhes...")
-    elif data.startswith("detalhes_historico|"):
-        await query.answer("📜 Carregando histórico...")
-    elif data == "meu_cadastro":
-        await query.answer("👤 Carregando seu perfil...")
-    elif data == "area_secretario":
-        await query.answer("📋 Acessando área do secretário...")
-    elif data == "area_admin":
-        await query.answer("⚙️ Acessando área do administrador...")
-    elif data == "menu_principal":
-        await query.answer("🏠 Voltando ao menu principal...")
-    elif data == "cadastrar_evento":
-        await query.answer("🏛 Iniciando cadastro de evento...")
-    elif data == "ver_confirmados_secretario":
-        await query.answer("👥 Buscando confirmados...")
-    elif data == "encerrar_evento":
-        await query.answer("❌ Processando...")
-    elif data == "meus_eventos":
-        await query.answer("📋 Buscando seus eventos...")
-    elif data.startswith("gerenciar_evento|"):
-        await query.answer("⚙️ Carregando opções...")
-    elif data.startswith("confirmar_cancelamento|"):
-        await query.answer("❌ Processando...")
-    elif data.startswith("cancelar_evento|"):
-        await query.answer("❌ Cancelando evento...")
-    elif data == "admin_ver_membros":
-        await query.answer("👥 Buscando membros...")
-    elif data == "menu_lojas":
-        await query.answer("🏛️ Carregando lojas...")
-    elif data == "loja_listar":
-        await query.answer("📋 Buscando suas lojas...")
-    elif data == "menu_notificacoes":
-        await query.answer("🔔 Carregando configurações...")
-    elif data == "notificacoes_ativar":
-        await query.answer("✅ Ativando notificações...")
-    elif data == "notificacoes_desativar":
-        await query.answer("🔕 Desativando notificações...")
-    else:
-        await query.answer("⏳ Processando...")
+    await query.answer()
 
     # ============================================================
     # Guardrails: callbacks que DEVEM ser tratados por outros handlers
-    # (ConversationHandlers / handlers específicos registrados antes)
     # ============================================================
 
     # Admin (flows de ConversationHandler em outros módulos)
@@ -219,10 +210,13 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await mostrar_area_admin(update, context)
 
     elif data == "menu_principal":
-        await _safe_edit(
-            query,
-            "O que deseja fazer?",
-            reply_markup=menu_principal_teclado(nivel),
+        # Quando voltar ao menu principal, também usa a função de editar
+        texto = "O que deseja fazer?"
+        await enviar_ou_editar_menu(
+            context,
+            telegram_id,
+            texto,
+            menu_principal_teclado(nivel)
         )
 
     # Secretário/Admin - imports tardios
@@ -275,7 +269,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     if not query:
         return
-    # Feedback já foi dado no botao_handler, não precisa repetir
+    await query.answer()
 
     if update.effective_chat.type in ["group", "supergroup"]:
         await _safe_edit(
@@ -283,8 +277,10 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
             "🔔 A Área do Secretário será aberta no meu chat privado. "
             "Verifique suas mensagens.",
         )
+        # Usa a função unificada para enviar no privado
+        user_id = update.effective_user.id
         await context.bot.send_message(
-            chat_id=update.effective_user.id,
+            chat_id=user_id,
             text="📋 *Área do Secretário*\n\nO que deseja fazer?",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
@@ -327,7 +323,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     if not query:
         return
-    # Feedback já foi dado no botao_handler, não precisa repetir
+    await query.answer()
 
     if update.effective_chat.type in ["group", "supergroup"]:
         await _safe_edit(
@@ -335,8 +331,9 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "🔔 A Área do Administrador será aberta no meu chat privado. "
             "Verifique suas mensagens.",
         )
+        user_id = update.effective_user.id
         await context.bot.send_message(
-            chat_id=update.effective_user.id,
+            chat_id=user_id,
             text="⚙️ *Área do Administrador*\n\nO que deseja fazer?",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
