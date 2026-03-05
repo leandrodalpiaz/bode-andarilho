@@ -27,6 +27,8 @@ from telegram.ext import (
 from src.cadastro import cadastro_handler, cadastro_start
 from src.bot import botao_handler, menu_principal_teclado
 from src.eventos import (
+    calendario_atual,
+    mostrar_calendario,
     mostrar_eventos,
     mostrar_detalhes_evento,
     cancelar_presenca,
@@ -204,6 +206,8 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(mostrar_eventos_por_data, pattern=r"^data\|"))
     app.add_handler(CallbackQueryHandler(mostrar_eventos_por_grau, pattern=r"^grau\|"))
     app.add_handler(CallbackQueryHandler(mostrar_detalhes_evento, pattern=r"^evento\|"))
+    app.add_handler(CallbackQueryHandler(mostrar_calendario, pattern=r"^calendario\|"))
+    app.add_handler(CallbackQueryHandler(calendario_atual, pattern=r"^calendario_atual$"))
 
     # Substituir o handler antigo pelos novos handlers de minhas_confirmacoes
     app.add_handler(CallbackQueryHandler(minhas_confirmacoes, pattern=r"^minhas_confirmacoes$"))
