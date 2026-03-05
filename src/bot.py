@@ -199,6 +199,15 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "loja_listar":
         from src.lojas import listar_lojas_handler
         await listar_lojas_handler(update, context)
+    elif data == "menu_notificacoes":
+        from src.admin_acoes import menu_notificacoes
+        await menu_notificacoes(update, context)
+    elif data == "notificacoes_ativar":
+        from src.admin_acoes import notificacoes_ativar
+        await notificacoes_ativar(update, context)
+    elif data == "notificacoes_desativar":
+        from src.admin_acoes import notificacoes_desativar
+        await notificacoes_desativar(update, context)
 
     else:
         await _safe_edit(query, "Função em desenvolvimento ou comando não reconhecido.")

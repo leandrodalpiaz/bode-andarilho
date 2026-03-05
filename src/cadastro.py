@@ -522,7 +522,6 @@ async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # -------------------------
 cadastro_handler = ConversationHandler(
     entry_points=[
-        CommandHandler("start", cadastro_start),
         CallbackQueryHandler(iniciar_cadastro_callback, pattern=r"^iniciar_cadastro$"),
         CallbackQueryHandler(continuar_cadastro_callback, pattern=r"^continuar_cadastro$"),
         CallbackQueryHandler(editar_cadastro_callback, pattern=r"^editar_cadastro$"),

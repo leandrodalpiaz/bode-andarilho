@@ -15,7 +15,7 @@ from telegram.ext import (
     filters,
 )
 
-from src.sheets import listar_membros, atualizar_membro, buscar_membro, atualizar_nivel_membro
+from src.sheets import listar_membros, atualizar_membro, buscar_membro, atualizar_nivel_membro, get_notificacao_status, set_notificacao_status
 from src.permissoes import get_nivel
 
 logger = logging.getLogger(__name__)
@@ -44,6 +44,109 @@ async def _safe_edit(query, text: str, **kwargs):
     except Exception as e:
         if "Message is not modified" not in str(e):
             raise
+
+
+# =========================
+# Gerenciamento de notificações para secretários (persistente)
+# =========================
+async def menu_notificacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu para o secretário gerenciar notificações."""
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer()
+
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    
+    if nivel not in ["2", "3"]:
+        await _safe_edit(query, "⛔ Apenas secretários e administradores podem acessar esta função.")
+        return
+
+    # Busca status atual da planilha
+    ativo = get_notificacao_status(user_id)
+    status_texto = "✅ Ativadas" if ativo else "🔕 Desativadas"
+
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📥 Ativar notificações", callback_data="notificacoes_ativar")],
+        [InlineKeyboardButton("🔕 Desativar notificações", callback_data="notificacoes_desativar")],
+        [InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")],
+    ])
+
+    await _safe_edit(
+        query,
+        f"🔔 *Configurações de Notificações*\n\n"
+        f"Status atual: {status_texto}\n\n"
+        f"Quando ativadas, você receberá uma mensagem no privado "
+        f"cada vez que alguém confirmar presença em um evento que você criou.\n\n"
+        f"*Nota:* Esta configuração é permanente e ficará salva na planilha.",
+        parse_mode="Markdown",
+        reply_markup=teclado,
+    )
+
+
+async def notificacoes_ativar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ativa as notificações para o secretário (salva na planilha)."""
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer()
+
+    user_id = update.effective_user.id
+    
+    if set_notificacao_status(user_id, True):
+        await _safe_edit(
+            query,
+            "✅ *Notificações ativadas com sucesso!*\n\n"
+            "Agora você receberá alertas de novas confirmações.\n"
+            "Esta configuração está salva permanentemente.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("⬅️ Voltar", callback_data="menu_notificacoes")
+            ]]),
+        )
+    else:
+        await _safe_edit(
+            query,
+            "❌ *Erro ao ativar notificações.*\n\n"
+            "Tente novamente mais tarde ou contate o administrador.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("⬅️ Voltar", callback_data="menu_notificacoes")
+            ]]),
+        )
+
+
+async def notificacoes_desativar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Desativa as notificações para o secretário (salva na planilha)."""
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer()
+
+    user_id = update.effective_user.id
+    
+    if set_notificacao_status(user_id, False):
+        await _safe_edit(
+            query,
+            "🔕 *Notificações desativadas com sucesso!*\n\n"
+            "Você não receberá mais alertas de novas confirmações.\n"
+            "Esta configuração está salva permanentemente.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("⬅️ Voltar", callback_data="menu_notificacoes")
+            ]]),
+        )
+    else:
+        await _safe_edit(
+            query,
+            "❌ *Erro ao desativar notificações.*\n\n"
+            "Tente novamente mais tarde ou contate o administrador.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("⬅️ Voltar", callback_data="menu_notificacoes")
+            ]]),
+        )
 
 
 # =========================
@@ -522,110 +625,6 @@ async def cancelar_operacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.edit_message_text("Operação cancelada.")
     return ConversationHandler.END
 
-# =========================
-# Gerenciamento de notificações para secretários (persistente)
-# =========================
-async def menu_notificacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu para o secretário gerenciar notificações."""
-    query = update.callback_query
-    if not query:
-        return
-    await query.answer()
-
-    user_id = update.effective_user.id
-    nivel = get_nivel(user_id)
-    
-    if nivel not in ["2", "3"]:
-        await _safe_edit(query, "⛔ Apenas secretários e administradores podem acessar esta função.")
-        return
-
-    # Busca status atual da planilha
-    from src.sheets import get_notificacao_status
-    ativo = get_notificacao_status(user_id)
-    status_texto = "✅ Ativadas" if ativo else "🔕 Desativadas"
-
-    teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📥 Ativar notificações", callback_data="notificacoes_ativar")],
-        [InlineKeyboardButton("🔕 Desativar notificações", callback_data="notificacoes_desativar")],
-        [InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")],
-    ])
-
-    await _safe_edit(
-        query,
-        f"🔔 *Configurações de Notificações*\n\n"
-        f"Status atual: {status_texto}\n\n"
-        f"Quando ativadas, você receberá uma mensagem no privado "
-        f"cada vez que alguém confirmar presença em um evento que você criou.\n\n"
-        f"*Nota:* Esta configuração é permanente e ficará salva na planilha.",
-        parse_mode="Markdown",
-        reply_markup=teclado,
-    )
-
-
-async def notificacoes_ativar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ativa as notificações para o secretário (salva na planilha)."""
-    query = update.callback_query
-    if not query:
-        return
-    await query.answer()
-
-    user_id = update.effective_user.id
-    from src.sheets import set_notificacao_status
-    
-    if set_notificacao_status(user_id, True):
-        await _safe_edit(
-            query,
-            "✅ *Notificações ativadas com sucesso!*\n\n"
-            "Agora você receberá alertas de novas confirmações.\n"
-            "Esta configuração está salva permanentemente.",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("⬅️ Voltar", callback_data="menu_notificacoes")
-            ]]),
-        )
-    else:
-        await _safe_edit(
-            query,
-            "❌ *Erro ao ativar notificações.*\n\n"
-            "Tente novamente mais tarde ou contate o administrador.",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("⬅️ Voltar", callback_data="menu_notificacoes")
-            ]]),
-        )
-
-
-async def notificacoes_desativar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Desativa as notificações para o secretário (salva na planilha)."""
-    query = update.callback_query
-    if not query:
-        return
-    await query.answer()
-
-    user_id = update.effective_user.id
-    from src.sheets import set_notificacao_status
-    
-    if set_notificacao_status(user_id, False):
-        await _safe_edit(
-            query,
-            "🔕 *Notificações desativadas com sucesso!*\n\n"
-            "Você não receberá mais alertas de novas confirmações.\n"
-            "Esta configuração está salva permanentemente.",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("⬅️ Voltar", callback_data="menu_notificacoes")
-            ]]),
-        )
-    else:
-        await _safe_edit(
-            query,
-            "❌ *Erro ao desativar notificações.*\n\n"
-            "Tente novamente mais tarde ou contate o administrador.",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("⬅️ Voltar", callback_data="menu_notificacoes")
-            ]]),
-        )
 
 # =========================
 # Handlers de conversação
@@ -666,8 +665,3 @@ editar_membro_handler = ConversationHandler(
     name="editar_membro_handler",
     persistent=False,
 )
-
-# Handlers de notificações
-notificacoes_menu_handler = CallbackQueryHandler(menu_notificacoes, pattern="^menu_notificacoes$")
-notificacoes_ativar_handler = CallbackQueryHandler(notificacoes_ativar, pattern="^notificacoes_ativar$")
-notificacoes_desativar_handler = CallbackQueryHandler(notificacoes_desativar, pattern="^notificacoes_desativar$")
