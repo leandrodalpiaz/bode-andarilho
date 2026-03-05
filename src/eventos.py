@@ -358,7 +358,7 @@ async def _safe_edit(query, text: str, **kwargs):
 
 
 # -------------------------
-# Função para notificar secretário (definida aqui mesmo)
+# Função para notificar secretário
 # -------------------------
 async def notificar_secretario(context: ContextTypes.DEFAULT_TYPE, evento: dict, membro: dict, tipo_agape: str, desc_agape: str):
     """Envia notificação para o secretário sobre nova confirmação (se ele tiver ativo)."""
@@ -409,7 +409,70 @@ async def notificar_secretario(context: ContextTypes.DEFAULT_TYPE, evento: dict,
 
 
 # -------------------------
-# 1) 📅 Ver eventos (novo padrão) -> menu com 6 botões (incluindo calendário)
+# Função para gerar calendário visual
+# -------------------------
+def gerar_calendario_mes(ano: int, mes: int, eventos: List[dict]) -> str:
+    """
+    Gera um calendário visual do mês com marcações nos dias que têm evento.
+    """
+    import calendar
+    from datetime import datetime
+    
+    # Validação de mês e ano
+    if mes < 1 or mes > 12:
+        # Se mês inválido, usa mês atual
+        hoje = datetime.now()
+        ano = hoje.year
+        mes = hoje.month
+    
+    # Nomes dos meses em português
+    meses_pt = {
+        1: "JANEIRO", 2: "FEVEREIRO", 3: "MARÇO", 4: "ABRIL",
+        5: "MAIO", 6: "JUNHO", 7: "JULHO", 8: "AGOSTO",
+        9: "SETEMBRO", 10: "OUTUBRO", 11: "NOVEMBRO", 12: "DEZEMBRO"
+    }
+    
+    # Cria um calendário
+    cal = calendar.monthcalendar(ano, mes)
+    
+    # Identifica quais dias têm evento
+    dias_com_evento = set()
+    for ev in eventos:
+        data_dt = parse_data_evento(ev.get("Data do evento", ""))
+        if data_dt and data_dt.year == ano and data_dt.month == mes:
+            dias_com_evento.add(data_dt.day)
+    
+    # Cabeçalho
+    linhas = []
+    linhas.append(f"📅 *{meses_pt[mes]} {ano}*")
+    linhas.append("```")
+    linhas.append(" DOM SEG TER QUA QUI SEX SAB")
+    
+    # Para cada semana do mês
+    for semana in cal:
+        linha = ""
+        for dia in semana:
+            if dia == 0:
+                linha += "    "  # Espaço para dias fora do mês
+            else:
+                if dia in dias_com_evento:
+                    # Dia com evento - formata com 2 dígitos e marcador
+                    linha += f" {dia:2d}●"
+                else:
+                    # Dia sem evento
+                    linha += f" {dia:2d} "
+        linhas.append(linha)
+    
+    linhas.append("```")
+    linhas.append("")
+    linhas.append(f"Legenda: ● Dias com evento")
+    linhas.append(f"Total de eventos no mês: {len(dias_com_evento)}")
+    
+    return "\n".join(linhas)
+
+
+# -------------------------
+# 1) 📅 Ver eventos (novo padrão) -> menu com 6 botões
 # -------------------------
 async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -419,7 +482,7 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     teclado = InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("📅 Calendário do mês", callback_data="calendario_atual")],
+            [InlineKeyboardButton("📅 Calendário do mês", callback_data="calendario|0|0")],
             [InlineKeyboardButton("Esta semana", callback_data=f"data|{TOKEN_SEMANA_ATUAL}")],
             [InlineKeyboardButton("Próxima semana", callback_data=f"data|{TOKEN_PROXIMA_SEMANA}")],
             [InlineKeyboardButton("Este mês", callback_data=f"data|{TOKEN_MES_ATUAL}")],
@@ -429,7 +492,7 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     )
 
-    await _safe_edit(query, "📅 *Ver eventos*\n\nEscolha uma opção:", parse_mode="Markdown", reply_markup=teclado)
+    await _safe_edit(query, "📅 *Ver eventos*\n\nEscolha um atalho:", parse_mode="Markdown", reply_markup=teclado)
 
 
 # -------------------------
@@ -620,70 +683,7 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
 
 
 # -------------------------
-# 4) Função para gerar calendário visual
-# -------------------------
-def gerar_calendario_mes(ano: int, mes: int, eventos: List[dict]) -> str:
-    """
-    Gera um calendário visual do mês com marcações nos dias que têm evento.
-    """
-    import calendar
-    from datetime import datetime
-    
-    # Validação de mês e ano
-    if mes < 1 or mes > 12:
-        # Se mês inválido, usa mês atual
-        hoje = datetime.now()
-        ano = hoje.year
-        mes = hoje.month
-    
-    # Nomes dos meses em português
-    meses_pt = {
-        1: "JANEIRO", 2: "FEVEREIRO", 3: "MARÇO", 4: "ABRIL",
-        5: "MAIO", 6: "JUNHO", 7: "JULHO", 8: "AGOSTO",
-        9: "SETEMBRO", 10: "OUTUBRO", 11: "NOVEMBRO", 12: "DEZEMBRO"
-    }
-    
-    # Cria um calendário
-    cal = calendar.monthcalendar(ano, mes)
-    
-    # Identifica quais dias têm evento
-    dias_com_evento = set()
-    for ev in eventos:
-        data_dt = parse_data_evento(ev.get("Data do evento", ""))
-        if data_dt and data_dt.year == ano and data_dt.month == mes:
-            dias_com_evento.add(data_dt.day)
-    
-    # Cabeçalho
-    linhas = []
-    linhas.append(f"📅 *{meses_pt[mes]} {ano}*")
-    linhas.append("```")
-    linhas.append(" DOM SEG TER QUA QUI SEX SAB")
-    
-    # Para cada semana do mês
-    for semana in cal:
-        linha = ""
-        for dia in semana:
-            if dia == 0:
-                linha += "    "  # Espaço para dias fora do mês
-            else:
-                if dia in dias_com_evento:
-                    # Dia com evento - formata com 2 dígitos e marcador
-                    linha += f" {dia:2d}●"
-                else:
-                    # Dia sem evento
-                    linha += f" {dia:2d} "
-        linhas.append(linha)
-    
-    linhas.append("```")
-    linhas.append("")
-    linhas.append(f"Legenda: ● Dias com evento")
-    linhas.append(f"Total de eventos no mês: {len(dias_com_evento)}")
-    
-    return "\n".join(linhas)
-
-
-# -------------------------
-# 5) Handler para mostrar calendário
+# 4) Handler para mostrar calendário
 # -------------------------
 async def mostrar_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mostra um calendário visual do mês atual com os eventos."""
@@ -765,12 +765,11 @@ async def calendario_atual(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from datetime import datetime
     hoje = datetime.now()
     # Chama o calendário com o mês atual
-    query.data = f"calendario|{hoje.year}|{hoje.month}"
     await mostrar_calendario(update, context)
 
 
 # -------------------------
-# 6) Detalhes do evento (card) com botão de mapa
+# 5) Detalhes do evento (card) com botão de mapa
 # -------------------------
 async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -872,13 +871,13 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
 
 
 # -------------------------
-# 7) Confirmar presença
+# 6) Confirmar presença (CORRIGIDO COM LOGS)
 # -------------------------
 async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return ConversationHandler.END
-    await query.answer("✅ Processando confirmação...")
+    await query.answer()
 
     partes = query.data.split("|")
     if len(partes) < 3:
@@ -945,7 +944,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     }
     registrar_confirmacao(dados_confirmacao)
 
-    # Notifica o secretário (função definida localmente)
+    # Notifica o secretário (se ele tiver ativo)
     await notificar_secretario(context, evento, membro, participacao_agape, desc_agape)
 
     data = str(evento.get("Data do evento", "") or "").strip()
@@ -981,12 +980,41 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         ]
     )
 
-    await context.bot.send_message(
-        chat_id=user_id,
-        text=resposta,
-        parse_mode="Markdown",
-        reply_markup=botoes_privado,
-    )
+    # LOGS PARA DIAGNÓSTICO
+    logger.info(f"Tentando enviar mensagem de confirmação para user_id: {user_id}")
+    logger.info(f"Conteúdo da mensagem: {resposta[:100]}...")
+
+    try:
+        # Verifica se o usuário tem chat com o bot
+        try:
+            await context.bot.get_chat(user_id)
+            logger.info(f"Chat com {user_id} existe")
+        except Exception as e:
+            logger.error(f"Usuário {user_id} não tem chat com o bot: {e}")
+            await query.answer("Você precisa iniciar conversa comigo no privado primeiro!")
+            return ConversationHandler.END
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=resposta,
+            parse_mode="Markdown",
+            reply_markup=botoes_privado,
+        )
+        logger.info(f"Mensagem de confirmação enviada com sucesso para {user_id}")
+    except Exception as e:
+        logger.error(f"ERRO ao enviar mensagem de confirmação para {user_id}: {e}", exc_info=True)
+        # Tenta enviar sem Markdown como fallback
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=resposta.replace("*", "").replace("_", ""),  # Remove markdown
+                reply_markup=botoes_privado,
+            )
+            logger.info(f"Mensagem de confirmação enviada (sem markdown) para {user_id}")
+        except Exception as e2:
+            logger.error(f"ERRO FATAL ao enviar mensagem para {user_id}: {e2}")
+            await query.answer("Erro ao enviar mensagem no privado. Verifique se você me bloqueou!")
+            return ConversationHandler.END
 
     if update.effective_chat.type in ["group", "supergroup"]:
         await query.answer("Presença confirmada! Verifique seu privado.")
@@ -1077,13 +1105,13 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
 
 
 # -------------------------
-# 8) Cancelar presença
+# 7) Cancelar presença
 # -------------------------
 async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
-    await query.answer("❌ Processando cancelamento...")
+    await query.answer()
 
     # Confirmação (passo 2)
     if query.data.startswith("confirma_cancelar|"):
@@ -1138,7 +1166,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # -------------------------
-# 9) Ver confirmados
+# 8) Ver confirmados (CORRIGIDO - VERSÃO ORIGINAL)
 # -------------------------
 async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1206,14 +1234,14 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # -------------------------
-# 10) Minhas confirmações (com separação futuro/histórico)
+# 9) Minhas confirmações (com separação futuro/histórico)
 # -------------------------
 async def minhas_confirmacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu principal de confirmações do membro (escolher entre futuro ou histórico)."""
     query = update.callback_query
     if not query:
         return
-    await query.answer("📌 Carregando...")
+    await query.answer()
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("📅 Próximos eventos", callback_data="minhas_confirmacoes_futuro")],
@@ -1358,7 +1386,7 @@ async def minhas_confirmacoes_historico(update: Update, context: ContextTypes.DE
 
 
 # -------------------------
-# 11) Detalhes do confirmado (para eventos futuros)
+# 10) Detalhes do confirmado (para eventos futuros)
 # -------------------------
 async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mostra detalhes de uma confirmação futura (com botão cancelar)."""
@@ -1421,7 +1449,7 @@ async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 # -------------------------
-# 12) Detalhes do histórico (sem opção de cancelar)
+# 11) Detalhes do histórico (sem opção de cancelar)
 # -------------------------
 async def detalhes_historico(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mostra detalhes de uma confirmação passada (sem botão cancelar)."""
@@ -1484,7 +1512,7 @@ async def detalhes_historico(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 # -------------------------
-# 13) Fechar mensagem
+# 12) Fechar mensagem
 # -------------------------
 async def fechar_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
