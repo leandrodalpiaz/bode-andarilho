@@ -11,14 +11,6 @@ from src.cadastro import cadastro_start
 from src.perfil import mostrar_perfil
 from src.permissoes import get_nivel
 
-# Importações corrigidas - apontando para o novo módulo lojas.py
-from src.lojas import (
-    menu_lojas,
-    listar_lojas_handler,
-    cadastro_loja_handler,
-    excluir_loja_handler
-)
-
 logger = logging.getLogger(__name__)
 
 
@@ -118,10 +110,6 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Eventos secretário (ConversationHandler do eventos_secretario.py)
     if data == "editar_evento_secretario":
         return
-    
-    # Lojas (ConversationHandler do lojas.py)
-    if data == "loja_cadastrar":
-        return  # Deixar o ConversationHandler lidar com isso
 
     telegram_id = update.effective_user.id
     nivel = get_nivel(telegram_id)
@@ -162,6 +150,9 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("detalhes_confirmado|"):
         from src.eventos import detalhes_confirmado
         await detalhes_confirmado(update, context)
+    elif data.startswith("detalhes_historico|"):
+        from src.eventos import detalhes_historico
+        await detalhes_historico(update, context)
     elif data == "meu_cadastro":
         await mostrar_perfil(update, context)
 
@@ -177,7 +168,7 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=menu_principal_teclado(nivel),
         )
 
-    # Secretário/Admin - imports tardios (mantidos)
+    # Secretário/Admin - imports tardios
     elif data == "cadastrar_evento":
         from src.cadastro_evento import novo_evento_start
         await novo_evento_start(update, context)
@@ -202,11 +193,11 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "admin_ver_membros":
         from src.admin_acoes import ver_todos_membros
         await ver_todos_membros(update, context)
-
-    # Handlers de lojas (agora apontando para o módulo correto)
     elif data == "menu_lojas":
+        from src.lojas import menu_lojas
         await menu_lojas(update, context)
     elif data == "loja_listar":
+        from src.lojas import listar_lojas_handler
         await listar_lojas_handler(update, context)
 
     else:
@@ -289,6 +280,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
                 [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
                 [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
+                [InlineKeyboardButton("🏛️ Minhas lojas", callback_data="menu_lojas")],
                 [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
                 [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
             ]),
@@ -309,6 +301,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
         [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
         [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
+        [InlineKeyboardButton("🏛️ Minhas lojas", callback_data="menu_lojas")],
         [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
         [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
     ])
