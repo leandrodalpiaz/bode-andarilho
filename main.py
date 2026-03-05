@@ -19,7 +19,6 @@ from telegram import Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
-    ContextTypes,
     MessageHandler,
     CommandHandler,
     filters,
@@ -28,14 +27,14 @@ from telegram.ext import (
 from src.cadastro import cadastro_handler, cadastro_start
 from src.bot import botao_handler, menu_principal_teclado
 from src.eventos import (
-    minhas_confirmacoes_futuro,
-    minhas_confirmacoes_historico,
     mostrar_eventos,
     mostrar_detalhes_evento,
     cancelar_presenca,
     ver_confirmados,
     fechar_mensagem,
     minhas_confirmacoes,
+    minhas_confirmacoes_futuro,
+    minhas_confirmacoes_historico,
     mostrar_eventos_por_data,
     mostrar_eventos_por_grau,
     detalhes_confirmado,
@@ -223,6 +222,7 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(mostrar_calendario, pattern=r"^calendario\|"))
     app.add_handler(CallbackQueryHandler(calendario_atual, pattern=r"^calendario_atual$"))
 
+    # HANDLERS DE MINHAS CONFIRMAÇÕES - CRÍTICO!
     app.add_handler(CallbackQueryHandler(minhas_confirmacoes, pattern=r"^minhas_confirmacoes$"))
     app.add_handler(CallbackQueryHandler(minhas_confirmacoes_futuro, pattern=r"^minhas_confirmacoes_futuro$"))
     app.add_handler(CallbackQueryHandler(minhas_confirmacoes_historico, pattern=r"^minhas_confirmacoes_historico$"))
