@@ -88,7 +88,64 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     data = query.data or ""
-    await query.answer()
+    
+    # Feedbacks específicos baseados no callback
+    if data == "ver_eventos":
+        await query.answer("📅 Carregando eventos...")
+    elif data.startswith("data|"):
+        await query.answer("📅 Filtrando eventos...")
+    elif data.startswith("grau|"):
+        await query.answer("🔺 Filtrando por grau...")
+    elif data.startswith("evento|"):
+        await query.answer("📋 Carregando detalhes do evento...")
+    elif data.startswith("ver_confirmados|"):
+        await query.answer("👥 Buscando lista de confirmados...")
+    elif data.startswith("cancelar|") or data.startswith("confirma_cancelar|"):
+        await query.answer("❌ Processando cancelamento...")
+    elif data == "fechar_mensagem":
+        await query.answer("🔒 Fechando mensagem...")
+    elif data == "minhas_confirmacoes":
+        await query.answer("✅ Buscando suas confirmações...")
+    elif data.startswith("detalhes_confirmado|"):
+        await query.answer("📋 Carregando detalhes...")
+    elif data.startswith("detalhes_historico|"):
+        await query.answer("📜 Carregando histórico...")
+    elif data == "meu_cadastro":
+        await query.answer("👤 Carregando seu perfil...")
+    elif data == "area_secretario":
+        await query.answer("📋 Acessando área do secretário...")
+    elif data == "area_admin":
+        await query.answer("⚙️ Acessando área do administrador...")
+    elif data == "menu_principal":
+        await query.answer("🏠 Voltando ao menu principal...")
+    elif data == "cadastrar_evento":
+        await query.answer("🏛 Iniciando cadastro de evento...")
+    elif data == "ver_confirmados_secretario":
+        await query.answer("👥 Buscando confirmados...")
+    elif data == "encerrar_evento":
+        await query.answer("❌ Processando...")
+    elif data == "meus_eventos":
+        await query.answer("📋 Buscando seus eventos...")
+    elif data.startswith("gerenciar_evento|"):
+        await query.answer("⚙️ Carregando opções...")
+    elif data.startswith("confirmar_cancelamento|"):
+        await query.answer("❌ Processando...")
+    elif data.startswith("cancelar_evento|"):
+        await query.answer("❌ Cancelando evento...")
+    elif data == "admin_ver_membros":
+        await query.answer("👥 Buscando membros...")
+    elif data == "menu_lojas":
+        await query.answer("🏛️ Carregando lojas...")
+    elif data == "loja_listar":
+        await query.answer("📋 Buscando suas lojas...")
+    elif data == "menu_notificacoes":
+        await query.answer("🔔 Carregando configurações...")
+    elif data == "notificacoes_ativar":
+        await query.answer("✅ Ativando notificações...")
+    elif data == "notificacoes_desativar":
+        await query.answer("🔕 Desativando notificações...")
+    else:
+        await query.answer("⏳ Processando...")
 
     # ============================================================
     # Guardrails: callbacks que DEVEM ser tratados por outros handlers
@@ -218,7 +275,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     if not query:
         return
-    await query.answer()
+    # Feedback já foi dado no botao_handler, não precisa repetir
 
     if update.effective_chat.type in ["group", "supergroup"]:
         await _safe_edit(
@@ -270,7 +327,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     if not query:
         return
-    await query.answer()
+    # Feedback já foi dado no botao_handler, não precisa repetir
 
     if update.effective_chat.type in ["group", "supergroup"]:
         await _safe_edit(
