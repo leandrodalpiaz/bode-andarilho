@@ -22,6 +22,7 @@ from src.sheets import (
     cancelar_confirmacao,
     buscar_confirmacao,
     listar_confirmacoes_por_evento,
+    get_notificacao_status,
 )
 
 logger = logging.getLogger(__name__)
@@ -357,7 +358,58 @@ async def _safe_edit(query, text: str, **kwargs):
 
 
 # -------------------------
-# 1) 📅 Ver eventos (novo padrão) -> menu com 5 botões + calendário
+# Função para notificar secretário (definida aqui mesmo)
+# -------------------------
+async def notificar_secretario(context: ContextTypes.DEFAULT_TYPE, evento: dict, membro: dict, tipo_agape: str, desc_agape: str):
+    """Envia notificação para o secretário sobre nova confirmação (se ele tiver ativo)."""
+    secretario_id = evento.get("Telegram ID do secretário", "")
+    if not secretario_id:
+        return
+
+    try:
+        secretario_id = int(float(secretario_id))
+    except:
+        return
+
+    # Verifica se o secretário tem notificações ativas na planilha
+    if not get_notificacao_status(secretario_id):
+        return  # Secretário optou por não receber notificações
+
+    nome_loja = evento.get("Nome da loja", "")
+    numero = evento.get("Número da loja", "")
+    numero_fmt = f" {numero}" if numero else ""
+    data = evento.get("Data do evento", "")
+    nome_membro = membro.get("Nome", "")
+
+    texto = (
+        f"📢 *NOVA CONFIRMAÇÃO*\n\n"
+        f"👤 *Irmão:* {nome_membro}\n"
+        f"📅 *Evento:* {data} - {nome_loja}{numero_fmt}\n"
+        f"🍽 *Ágape:* {tipo_agape} ({desc_agape})\n"
+    )
+
+    # Criar botões para ações rápidas
+    id_evento = normalizar_id_evento(evento)
+    teclado = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📊 Ver resumo", callback_data=f"resumo_evento|{_encode_cb(id_evento)}"),
+            InlineKeyboardButton("👥 Ver lista", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")
+        ],
+    ])
+
+    try:
+        await context.bot.send_message(
+            chat_id=secretario_id,
+            text=texto,
+            parse_mode="Markdown",
+            reply_markup=teclado,
+        )
+    except Exception as e:
+        logger.error(f"Erro ao notificar secretário {secretario_id}: {e}")
+
+
+# -------------------------
+# 1) 📅 Ver eventos (novo padrão) -> menu com 6 botões (incluindo calendário)
 # -------------------------
 async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -568,7 +620,7 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
 
 
 # -------------------------
-# Função para gerar calendário visual
+# 4) Função para gerar calendário visual
 # -------------------------
 def gerar_calendario_mes(ano: int, mes: int, eventos: List[dict]) -> str:
     """
@@ -631,7 +683,7 @@ def gerar_calendario_mes(ano: int, mes: int, eventos: List[dict]) -> str:
 
 
 # -------------------------
-# Handler para mostrar calendário
+# 5) Handler para mostrar calendário
 # -------------------------
 async def mostrar_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mostra um calendário visual do mês atual com os eventos."""
@@ -708,22 +760,23 @@ async def calendario_atual(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
-    await query.answer("📅 Voltando ao mês atual...")
+    await query.answer()
     
     from datetime import datetime
     hoje = datetime.now()
     # Chama o calendário com o mês atual
+    query.data = f"calendario|{hoje.year}|{hoje.month}"
     await mostrar_calendario(update, context)
 
 
 # -------------------------
-# 4) Detalhes do evento (card) com botão de mapa
+# 6) Detalhes do evento (card) com botão de mapa
 # -------------------------
 async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
-    await query.answer("📋 Carregando detalhes do evento...")
+    await query.answer("📋 Carregando detalhes...")
 
     _, id_evento_cod = query.data.split("|", 1)
     id_evento = _decode_cb(id_evento_cod)
@@ -819,7 +872,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
 
 
 # -------------------------
-# 5) Confirmar presença
+# 7) Confirmar presença
 # -------------------------
 async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -892,8 +945,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     }
     registrar_confirmacao(dados_confirmacao)
 
-    # Notifica o secretário (se ele tiver ativo)
-    from src.admin_acoes import notificar_secretario
+    # Notifica o secretário (função definida localmente)
     await notificar_secretario(context, evento, membro, participacao_agape, desc_agape)
 
     data = str(evento.get("Data do evento", "") or "").strip()
@@ -999,7 +1051,6 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
     registrar_confirmacao(dados_confirmacao)
 
     # Notifica o secretário
-    from src.admin_acoes import notificar_secretario
     await notificar_secretario(context, evento, membro, participacao_agape, desc_agape)
 
     data = str(evento.get("Data do evento", "") or "").strip()
@@ -1026,7 +1077,7 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
 
 
 # -------------------------
-# 6) Cancelar presença
+# 8) Cancelar presença
 # -------------------------
 async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1087,7 +1138,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # -------------------------
-# 7) Ver confirmados
+# 9) Ver confirmados
 # -------------------------
 async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1155,14 +1206,14 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # -------------------------
-# 8) Minhas confirmações (com separação futuro/histórico)
+# 10) Minhas confirmações (com separação futuro/histórico)
 # -------------------------
 async def minhas_confirmacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu principal de confirmações do membro (escolher entre futuro ou histórico)."""
     query = update.callback_query
     if not query:
         return
-    await query.answer("📌 Carregando menu de confirmações...")
+    await query.answer("📌 Carregando...")
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("📅 Próximos eventos", callback_data="minhas_confirmacoes_futuro")],
@@ -1307,7 +1358,7 @@ async def minhas_confirmacoes_historico(update: Update, context: ContextTypes.DE
 
 
 # -------------------------
-# 9) Detalhes do confirmado (para eventos futuros)
+# 11) Detalhes do confirmado (para eventos futuros)
 # -------------------------
 async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mostra detalhes de uma confirmação futura (com botão cancelar)."""
@@ -1370,7 +1421,7 @@ async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 # -------------------------
-# 10) Detalhes do histórico (sem opção de cancelar)
+# 12) Detalhes do histórico (sem opção de cancelar)
 # -------------------------
 async def detalhes_historico(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mostra detalhes de uma confirmação passada (sem botão cancelar)."""
@@ -1433,13 +1484,13 @@ async def detalhes_historico(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 # -------------------------
-# 11) Fechar mensagem
+# 13) Fechar mensagem
 # -------------------------
 async def fechar_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
-    await query.answer("🔒 Fechando...")
+    await query.answer()
     try:
         await query.delete_message()
     except Exception:
