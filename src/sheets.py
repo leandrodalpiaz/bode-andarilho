@@ -101,7 +101,7 @@ def _col_index(ws: gspread.Worksheet, header_name: str) -> int:
     hmap = _header_map(ws)
     if header_name in hmap:
         return hmap[header_name]
-    raise ValueError(f"Cabeçalho '{header_name}' não encontrado na aba '{ws.title}'.")
+    raise ValueError(f"Cabeçalho '{header_name}' não encontrado na aba '{ws.title}'.")    
 
 
 def _append_row_by_headers(ws: gspread.Worksheet, values_by_header: Dict[str, Any]) -> bool:
@@ -564,7 +564,7 @@ def cancelar_confirmacao(id_evento: str, telegram_id: int) -> bool:
         col_tid = _col_index(ws, "Telegram ID")
 
         cell_list = ws.findall(target_evento, in_column=col_evento)
-        for cell in cell_list:
+        for cell in reversed(cell_list):
             if _norm_text(ws.cell(cell.row, col_evento).value) != target_evento:
                 continue
             if _norm_intlike(ws.cell(cell.row, col_tid).value) == target_id:
@@ -617,34 +617,85 @@ def cancelar_todas_confirmacoes(id_evento: str) -> bool:
     except Exception as e:
         print(f"Erro ao cancelar confirmações: {e}")
         return False
+
+
 # =========================
-# Funções para Notificações (coluna M)
+# Funções para Lojas (pré-cadastro)
 # =========================
-def get_notificacao_status(telegram_id: int) -> bool:
+def listar_lojas(telegram_id: int) -> List[Dict[str, Any]]:
     """
-    Retorna True se o usuário tem notificações ativas (coluna "Notificações" = "SIM")
-    Retorna False caso contrário.
+    Retorna lista de lojas cadastradas por um secretário.
+    Se não existir a aba "Lojas", cria uma.
     """
     try:
-        membro = buscar_membro(telegram_id)
-        if not membro:
-            return False
-        notificacao = str(membro.get("Notificações", "") or "").strip().upper()
-        return notificacao == "SIM"
+        # Verifica se a aba existe
+        try:
+            ws = spreadsheet.worksheet("Lojas")
+        except gspread.WorksheetNotFound:
+            # Cria a aba com cabeçalhos
+            ws = spreadsheet.add_worksheet(title="Lojas", rows=100, cols=20)
+            cabecalhos = ["Telegram ID", "Nome da Loja", "Número", "Rito", "Potência", "Endereço", "Data Cadastro"]
+            ws.append_row(cabecalhos)
+            return []
+
+        data = ws.get_all_records()
+        lojas = []
+        for row in data:
+            if str(row.get("Telegram ID", "")).strip() == str(telegram_id):
+                lojas.append(row)
+        return lojas
     except Exception as e:
-        print(f"Erro ao buscar status de notificação: {e}")
+        print(f"Erro ao listar lojas: {e}")
+        return []
+
+
+def cadastrar_loja(telegram_id: int, dados: Dict[str, Any]) -> bool:
+    """
+    Cadastra uma nova loja para o secretário.
+    """
+    try:
+        # Verifica se a aba existe
+        try:
+            ws = spreadsheet.worksheet("Lojas")
+        except gspread.WorksheetNotFound:
+            ws = spreadsheet.add_worksheet(title="Lojas", rows=100, cols=20)
+            cabecalhos = ["Telegram ID", "Nome da Loja", "Número", "Rito", "Potência", "Endereço", "Data Cadastro"]
+            ws.append_row(cabecalhos)
+
+        from datetime import datetime
+        data_cadastro = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+        valores = [
+            str(telegram_id),
+            dados.get("nome", ""),
+            dados.get("numero", ""),
+            dados.get("rito", ""),
+            dados.get("potencia", ""),
+            dados.get("endereco", ""),
+            data_cadastro
+        ]
+
+        ws.append_row(valores, value_input_option="USER_ENTERED")
+        return True
+    except Exception as e:
+        print(f"Erro ao cadastrar loja: {e}")
         return False
 
 
-def set_notificacao_status(telegram_id: int, ativo: bool) -> bool:
+def excluir_loja(telegram_id: int, nome_loja: str) -> bool:
     """
-    Atualiza a coluna "Notificações" para "SIM" (True) ou "NÃO" (False).
-    Retorna True se sucesso.
+    Exclui uma loja pelo nome (para simplificar).
     """
     try:
-        from src.sheets import atualizar_membro
-        valor = "SIM" if ativo else "NÃO"
-        return atualizar_membro(telegram_id, {"Notificações": valor}, preservar_nivel=True)
+        ws = spreadsheet.worksheet("Lojas")
+        data = ws.get_all_records()
+
+        for i, row in enumerate(data, start=2):  # linha 1 é cabeçalho
+            if str(row.get("Telegram ID", "")).strip() == str(telegram_id) and \
+               str(row.get("Nome da Loja", "")).strip() == nome_loja:
+                ws.delete_rows(i)
+                return True
+        return False
     except Exception as e:
-        print(f"Erro ao atualizar status de notificação: {e}")
+        print(f"Erro ao excluir loja: {e}")
         return False

@@ -17,7 +17,7 @@ from telegram.ext import (
     filters,
 )
 
-from src.sheets import cadastrar_evento, listar_eventos
+from src.sheets import cadastrar_evento, listar_eventos, listar_lojas
 from src.permissoes import get_nivel
 
 
@@ -31,6 +31,7 @@ MAX_TEXTO = 250
 # Estados
 # =========================
 (
+    ESCOLHER_LOJA,
     DATA,
     HORARIO,
     NOME_LOJA,
@@ -47,7 +48,7 @@ MAX_TEXTO = 250
     OBSERVACOES_TEXTO,
     ENDERECO,
     CONFIRMAR,
-) = range(16)
+) = range(17)
 
 # =========================
 # Opções fixas
@@ -247,6 +248,7 @@ def _limpar_contexto_evento(context: ContextTypes.DEFAULT_TYPE):
     for k in list(context.user_data.keys()):
         if k.startswith("novo_evento_"):
             context.user_data.pop(k, None)
+    context.user_data.pop("lojas_disponiveis", None)
 
 
 def _voltar_um_passo(context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -473,13 +475,97 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if k.startswith("novo_evento_") and k not in ("novo_evento_telegram_id_grupo", "novo_evento_telegram_id_secretario"):
             context.user_data.pop(k, None)
 
-    await _safe_edit(
-        query,
-        "Certo, vamos cadastrar um novo evento.\n\nQual a *Data do evento*? (Ex: 25/03/2026)",
-        parse_mode="Markdown",
-        reply_markup=_teclado_cancelar(),
-    )
-    return DATA
+    # Verifica se o secretário tem lojas cadastradas
+    lojas = listar_lojas(user_id)
+    
+    if lojas:
+        # Oferece opção de usar uma loja cadastrada
+        botoes_lojas = []
+        for i, loja in enumerate(lojas[:5]):  # Limite de 5 lojas para não estourar
+            nome = loja.get("Nome da Loja", "")
+            numero = loja.get("Número", "")
+            nome_fmt = f"{nome} {numero}" if numero else nome
+            botoes_lojas.append([
+                InlineKeyboardButton(
+                    f"🏛 {nome_fmt}",
+                    callback_data=f"usar_loja_{i}"
+                )
+            ])
+        
+        botoes_lojas.append([InlineKeyboardButton("➕ Cadastrar manualmente", callback_data="cadastrar_manual")])
+        botoes_lojas.append([InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")])
+        
+        # Guarda as lojas no context para usar depois
+        context.user_data["lojas_disponiveis"] = lojas
+        
+        await _safe_edit(
+            query,
+            "🏛️ *Cadastro de Evento*\n\n"
+            "Você tem lojas cadastradas. Deseja usar os dados de alguma como atalho?",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(botoes_lojas),
+        )
+        return ESCOLHER_LOJA
+    else:
+        # Segue fluxo normal
+        await _safe_edit(
+            query,
+            "Certo, vamos cadastrar um novo evento.\n\nQual a *Data do evento*? (Ex: 25/03/2026)",
+            parse_mode="Markdown",
+            reply_markup=_teclado_cancelar(),
+        )
+        return DATA
+
+
+async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Processa a escolha da loja pelo secretário."""
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+    if data == "cadastrar_manual":
+        # Segue fluxo normal
+        await _safe_edit(
+            query,
+            "Certo, vamos cadastrar um novo evento.\n\nQual a *Data do evento*? (Ex: 25/03/2026)",
+            parse_mode="Markdown",
+            reply_markup=_teclado_cancelar(),
+        )
+        return DATA
+    
+    if data.startswith("usar_loja_"):
+        try:
+            index = int(data.split("_")[2])
+            lojas = context.user_data.get("lojas_disponiveis", [])
+            
+            if 0 <= index < len(lojas):
+                loja = lojas[index]
+                # Pré-preenche os dados da loja
+                context.user_data["novo_evento_nome_loja"] = loja.get("Nome da Loja", "")
+                context.user_data["novo_evento_numero_loja"] = str(loja.get("Número", "0"))
+                context.user_data["novo_evento_rito"] = loja.get("Rito", "")
+                context.user_data["novo_evento_potencia"] = loja.get("Potência", "")
+                context.user_data["novo_evento_endereco"] = loja.get("Endereço", "")
+                
+                # Pula para a próxima pergunta não preenchida
+                await _safe_edit(
+                    query,
+                    "✅ Dados da loja carregados!\n\n"
+                    "Agora vamos preencher os detalhes da sessão.\n\n"
+                    "Qual a *Data do evento*? (Ex: 25/03/2026)",
+                    parse_mode="Markdown",
+                    reply_markup=_teclado_voltar_cancelar(),
+                )
+                return DATA
+            else:
+                await _safe_edit(query, "❌ Loja não encontrada. Tente novamente.")
+                return ESCOLHER_LOJA
+        except (ValueError, IndexError):
+            await _safe_edit(query, "❌ Erro ao processar seleção. Tente novamente.")
+            return ESCOLHER_LOJA
+    
+    # Fallback
+    return ESCOLHER_LOJA
 
 
 # =========================
@@ -841,6 +927,7 @@ async def cancelar_cadastro_evento(update: Update, context: ContextTypes.DEFAULT
 cadastro_evento_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(novo_evento_start, pattern=r"^cadastrar_evento$")],
     states={
+        ESCOLHER_LOJA: [CallbackQueryHandler(escolher_loja_callback, pattern="^(usar_loja_|cadastrar_manual)$")],
         DATA: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_data),
             CallbackQueryHandler(ev_cancelar, pattern=r"^ev_cancelar$"),

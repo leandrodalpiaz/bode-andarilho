@@ -11,6 +11,14 @@ from src.cadastro import cadastro_start
 from src.perfil import mostrar_perfil
 from src.permissoes import get_nivel
 
+# Importações corrigidas - apontando para o novo módulo lojas.py
+from src.lojas import (
+    menu_lojas,
+    listar_lojas_handler,
+    cadastro_loja_handler,
+    excluir_loja_handler
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -110,6 +118,10 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Eventos secretário (ConversationHandler do eventos_secretario.py)
     if data == "editar_evento_secretario":
         return
+    
+    # Lojas (ConversationHandler do lojas.py)
+    if data == "loja_cadastrar":
+        return  # Deixar o ConversationHandler lidar com isso
 
     telegram_id = update.effective_user.id
     nivel = get_nivel(telegram_id)
@@ -191,6 +203,12 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from src.admin_acoes import ver_todos_membros
         await ver_todos_membros(update, context)
 
+    # Handlers de lojas (agora apontando para o módulo correto)
+    elif data == "menu_lojas":
+        await menu_lojas(update, context)
+    elif data == "loja_listar":
+        await listar_lojas_handler(update, context)
+
     else:
         await _safe_edit(query, "Função em desenvolvimento ou comando não reconhecido.")
 
@@ -216,6 +234,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
                 [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
                 [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
                 [InlineKeyboardButton("👥 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
+                [InlineKeyboardButton("🏛️ Minhas lojas", callback_data="menu_lojas")],
                 [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
                 [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
             ]),
@@ -233,6 +252,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
         [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
         [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
         [InlineKeyboardButton("👥 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
+        [InlineKeyboardButton("🏛️ Minhas lojas", callback_data="menu_lojas")],
         [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
         [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_principal")],
     ])
