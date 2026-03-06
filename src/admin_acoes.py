@@ -70,6 +70,19 @@ CAMPOS_EDITAVEIS = {
 
 
 # ============================================
+# FUNÇÃO AUXILIAR DE CANCELAMENTO
+# ============================================
+
+async def cancelar_operacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancela operação (fallback para ConversationHandlers)."""
+    if update.message:
+        await update.message.reply_text("Operação cancelada.")
+    elif update.callback_query:
+        await update.callback_query.edit_message_text("Operação cancelada.")
+    return ConversationHandler.END
+
+
+# ============================================
 # FUNÇÃO PRINCIPAL DO MENU ADMIN
 # ============================================
 
@@ -766,16 +779,3 @@ editar_membro_handler = ConversationHandler(
     name="editar_membro_handler",
     persistent=False,
 )
-
-
-# ============================================
-# FUNÇÃO AUXILIAR
-# ============================================
-
-async def cancelar_operacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Cancela operação (fallback)."""
-    if update.message:
-        await update.message.reply_text("Operação cancelada.")
-    elif update.callback_query:
-        await update.callback_query.edit_message_text("Operação cancelada.")
-    return ConversationHandler.END
