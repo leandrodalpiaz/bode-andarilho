@@ -92,6 +92,22 @@ async def enviar_ou_editar_menu(context, user_id: int, texto: str, teclado) -> b
         return False
 
 
+async def enviar_menu_principal(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int, membro: dict):
+    """
+    Função unificada para enviar o menu principal.
+    Usa enviar_ou_editar_menu para manter apenas uma mensagem.
+    """
+    nivel = get_nivel(user_id)
+    texto = f"🐐 *Bode Andarilho*\n\nBem-vindo de volta, irmão {membro.get('Nome', '')}!\n\nO que deseja fazer?"
+    
+    await enviar_ou_editar_menu(
+        context,
+        user_id,
+        texto,
+        menu_principal_teclado(nivel)
+    )
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler para comando /start no privado."""
     logger.info(
@@ -113,19 +129,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     membro = buscar_membro(telegram_id)
 
     if membro:
-        nivel = get_nivel(telegram_id)
-        texto = (
-            f"Bem-vindo de volta, irmão {membro.get('Nome', '')}!\n\n"
-            "O que deseja fazer?"
-        )
-        
-        # Usa a função unificada para enviar/editar menu
-        await enviar_ou_editar_menu(
-            context,
-            telegram_id,
-            texto,
-            menu_principal_teclado(nivel)
-        )
+        await enviar_menu_principal(update, context, telegram_id, membro)
     else:
         await cadastro_start(update, context)
 
@@ -210,14 +214,10 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await mostrar_area_admin(update, context)
 
     elif data == "menu_principal":
-        # Quando voltar ao menu principal, também usa a função de editar
-        texto = "O que deseja fazer?"
-        await enviar_ou_editar_menu(
-            context,
-            telegram_id,
-            texto,
-            menu_principal_teclado(nivel)
-        )
+        # Quando voltar ao menu principal, usa a função unificada
+        membro = buscar_membro(telegram_id)
+        if membro:
+            await enviar_menu_principal(update, context, telegram_id, membro)
 
     # Secretário/Admin - imports tardios
     elif data == "cadastrar_evento":
@@ -279,18 +279,18 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
         )
         # Usa a função unificada para enviar no privado
         user_id = update.effective_user.id
-        await context.bot.send_message(
-            chat_id=user_id,
-            text="📋 *Área do Secretário*\n\nO que deseja fazer?",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([
+        await enviar_ou_editar_menu(
+            context,
+            user_id,
+            "📋 *Área do Secretário*\n\nO que deseja fazer?",
+            InlineKeyboardMarkup([
                 [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
                 [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
                 [InlineKeyboardButton("👥 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
                 [InlineKeyboardButton("🏛️ Minhas lojas", callback_data="menu_lojas")],
                 [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
                 [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
-            ]),
+            ])
         )
         return
 
@@ -332,11 +332,11 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "Verifique suas mensagens.",
         )
         user_id = update.effective_user.id
-        await context.bot.send_message(
-            chat_id=user_id,
-            text="⚙️ *Área do Administrador*\n\nO que deseja fazer?",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([
+        await enviar_ou_editar_menu(
+            context,
+            user_id,
+            "⚙️ *Área do Administrador*\n\nO que deseja fazer?",
+            InlineKeyboardMarkup([
                 [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
                 [InlineKeyboardButton("📋 Gerenciar eventos", callback_data="meus_eventos")],
                 [InlineKeyboardButton("👥 Ver todos os membros", callback_data="admin_ver_membros")],
@@ -346,7 +346,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 [InlineKeyboardButton("🏛️ Minhas lojas", callback_data="menu_lojas")],
                 [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
                 [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
-            ]),
+            ])
         )
         return
 
