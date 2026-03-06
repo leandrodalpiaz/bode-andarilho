@@ -515,7 +515,7 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
 
 
 # ============================================
-# RECEBEDORES DE DADOS (TEXTO)
+# RECEBEDORES DE DADOS (TEXTO) - CORRIGIDOS
 # ============================================
 
 async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -538,10 +538,12 @@ async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return DATA
 
     context.user_data["novo_evento_data"] = dt.strftime("%d/%m/%Y")
-    await update.message.reply_text(
+    
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento > Data",
         "Qual o *Horário*? (Ex: 19:30)",
-        parse_mode="Markdown",
-        reply_markup=_teclado_voltar_cancelar()
+        _teclado_voltar_cancelar()
     )
     return HORARIO
 
@@ -557,10 +559,12 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return HORARIO
 
     context.user_data["novo_evento_horario"] = hora
-    await update.message.reply_text(
+    
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento > Horário",
         "Qual o *Nome da loja*?",
-        parse_mode="Markdown",
-        reply_markup=_teclado_voltar_cancelar()
+        _teclado_voltar_cancelar()
     )
     return NOME_LOJA
 
@@ -576,10 +580,12 @@ async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return NOME_LOJA
 
     context.user_data["novo_evento_nome_loja"] = nome
-    await update.message.reply_text(
+    
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento > Nome da Loja",
         "Qual o *Número da loja*? (se não houver, digite 0)",
-        parse_mode="Markdown",
-        reply_markup=_teclado_voltar_cancelar()
+        _teclado_voltar_cancelar()
     )
     return NUMERO_LOJA
 
@@ -592,10 +598,12 @@ async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
         numero = "0"
 
     context.user_data["novo_evento_numero_loja"] = numero
-    await update.message.reply_text(
+    
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento > Número da Loja",
         "Qual o *Oriente*?",
-        parse_mode="Markdown",
-        reply_markup=_teclado_voltar_cancelar()
+        _teclado_voltar_cancelar()
     )
     return ORIENTE
 
@@ -611,16 +619,18 @@ async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ORIENTE
 
     context.user_data["novo_evento_oriente"] = oriente
-    await update.message.reply_text(
+    
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento > Oriente",
         "Qual o *Grau mínimo*?",
-        parse_mode="Markdown",
-        reply_markup=_teclado_graus()
+        _teclado_graus()
     )
     return GRAU
 
 
 # ============================================
-# RECEBEDOR DE GRAU (BOTÕES)
+# RECEBEDOR DE GRAU (BOTÕES) - CORRIGIDO
 # ============================================
 
 async def receber_grau_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -640,24 +650,33 @@ async def receber_grau_callback(update: Update, context: ContextTypes.DEFAULT_TY
         )
         return GRAU
 
+    # Salva o grau escolhido
     context.user_data["novo_evento_grau"] = grau
 
-    await _enviar_ou_editar_mensagem(
-        context, update.effective_user.id, TIPO_RESULTADO,
+    # Avança para a próxima pergunta usando navegar_para
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento > Grau",
         "Qual o *Tipo de sessão*? (texto livre)",
         _teclado_voltar_cancelar()
     )
     return TIPO_SESSAO
 
 
+# ============================================
+# RECEBEDORES DAS PRÓXIMAS ETAPAS
+# ============================================
+
 async def receber_tipo_sessao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o tipo de sessão."""
     val = _truncate(update.message.text)
     context.user_data["novo_evento_tipo_sessao"] = val
-    await update.message.reply_text(
+    
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento > Tipo de Sessão",
         "Qual o *Rito*? (texto livre)",
-        parse_mode="Markdown",
-        reply_markup=_teclado_voltar_cancelar()
+        _teclado_voltar_cancelar()
     )
     return RITO
 
@@ -666,10 +685,12 @@ async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o rito."""
     val = _truncate(update.message.text)
     context.user_data["novo_evento_rito"] = val
-    await update.message.reply_text(
+    
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento > Rito",
         "Qual a *Potência*? (texto livre)",
-        parse_mode="Markdown",
-        reply_markup=_teclado_voltar_cancelar()
+        _teclado_voltar_cancelar()
     )
     return POTENCIA
 
@@ -678,10 +699,12 @@ async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe a potência."""
     val = _truncate(update.message.text)
     context.user_data["novo_evento_potencia"] = val
-    await update.message.reply_text(
+    
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento > Potência",
         "Qual o *Traje obrigatório*? (texto livre)",
-        parse_mode="Markdown",
-        reply_markup=_teclado_voltar_cancelar()
+        _teclado_voltar_cancelar()
     )
     return TRAJE
 
@@ -690,10 +713,12 @@ async def receber_traje(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o traje obrigatório."""
     val = _truncate(update.message.text)
     context.user_data["novo_evento_traje"] = val
-    await update.message.reply_text(
+    
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento > Traje",
         "Haverá *Ágape*?",
-        parse_mode="Markdown",
-        reply_markup=_teclado_sim_nao("agape")
+        _teclado_sim_nao("agape")
     )
     return AGAPE
 
@@ -721,15 +746,17 @@ async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop("novo_evento_agape_tipo", None)
 
     if val == "sim":
-        await _enviar_ou_editar_mensagem(
-            context, update.effective_user.id, TIPO_RESULTADO,
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento > Ágape",
             "Qual o tipo de Ágape?",
             _teclado_agape_tipos()
         )
         return AGAPE_TIPO
 
-    await _enviar_ou_editar_mensagem(
-        context, update.effective_user.id, TIPO_RESULTADO,
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento > Ágape",
         "Deseja adicionar *observações*?",
         _teclado_sim_nao("obs")
     )
@@ -752,8 +779,10 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return AGAPE_TIPO
 
     context.user_data["novo_evento_agape_tipo"] = val
-    await _enviar_ou_editar_mensagem(
-        context, update.effective_user.id, TIPO_RESULTADO,
+    
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento > Tipo de Ágape",
         "Deseja adicionar *observações*?",
         _teclado_sim_nao("obs")
     )
@@ -779,15 +808,17 @@ async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_
     context.user_data.pop("novo_evento_observacoes_texto", None)
 
     if val == "sim":
-        await _enviar_ou_editar_mensagem(
-            context, update.effective_user.id, TIPO_RESULTADO,
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento > Observações",
             "Digite as *observações* (texto livre):",
             _teclado_voltar_cancelar()
         )
         return OBSERVACOES_TEXTO
 
-    await _enviar_ou_editar_mensagem(
-        context, update.effective_user.id, TIPO_RESULTADO,
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento > Observações",
         "Agora informe o *Endereço da sessão*:",
         _teclado_voltar_cancelar()
     )
@@ -798,10 +829,12 @@ async def receber_observacoes_texto(update: Update, context: ContextTypes.DEFAUL
     """Recebe o texto das observações."""
     val = _truncate(update.message.text, 500)
     context.user_data["novo_evento_observacoes_texto"] = val
-    await update.message.reply_text(
+    
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento > Observações",
         "Agora informe o *Endereço da sessão*:",
-        parse_mode="Markdown",
-        reply_markup=_teclado_voltar_cancelar()
+        _teclado_voltar_cancelar()
     )
     return ENDERECO
 
@@ -815,10 +848,11 @@ async def receber_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE):
     eventos_existentes = listar_eventos() or []
     dup = _encontrar_duplicado(evento, eventos_existentes)
 
-    await update.message.reply_text(
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento > Endereço",
         _montar_resumo_evento_md(evento, duplicado=dup),
-        parse_mode="Markdown",
-        reply_markup=_teclado_confirmacao(tem_duplicado=dup is not None),
+        _teclado_confirmacao(tem_duplicado=dup is not None)
     )
     return CONFIRMAR
 
