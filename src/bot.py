@@ -15,7 +15,7 @@ from src.permissoes import get_nivel
 logger = logging.getLogger(__name__)
 
 # Dicionário para armazenar a última mensagem de menu de cada usuário
-# Estrutura: {user_id: {"chat_id": id, "message_id": id}}
+# Estrutura: {user_id: {"chat_id": id, "message_id": id, "content_hash": str}}
 ultima_mensagem_menu: Dict[int, dict] = {}
 
 
@@ -45,28 +45,60 @@ async def _safe_edit(query, text: str, **kwargs):
             raise
 
 
+def _gerar_hash_conteudo(texto: str, teclado) -> str:
+    """
+    Gera um hash simples do conteúdo para verificar se mudou.
+    """
+    import hashlib
+    
+    # Converte o teclado para string representativa
+    teclado_str = str(teclado.to_dict()) if teclado else ""
+    conteudo = f"{texto}|{teclado_str}"
+    
+    return hashlib.md5(conteudo.encode()).hexdigest()
+
+
 async def enviar_ou_editar_menu(context, user_id: int, texto: str, teclado) -> bool:
     """
     Envia uma nova mensagem ou edita a última mensagem do menu.
     Retorna True se bem-sucedido.
+    
+    Regras:
+    - Se não existe mensagem anterior: envia nova
+    - Se existe e o conteúdo mudou: tenta editar
+    - Se existe e o conteúdo é o mesmo: NÃO FAZ NADA (mantém a mensagem existente)
     """
     global ultima_mensagem_menu
     
+    # Gera hash do conteúdo atual
+    hash_atual = _gerar_hash_conteudo(texto, teclado)
+    
     # Verifica se já existe uma mensagem anterior para este usuário
     if user_id in ultima_mensagem_menu:
+        dados_anteriores = ultima_mensagem_menu[user_id]
+        
+        # Se o conteúdo for o mesmo, não faz nada
+        if dados_anteriores.get("content_hash") == hash_atual:
+            logger.info(f"Conteúdo do menu inalterado para usuário {user_id} - mantendo mensagem existente")
+            return True
+        
+        # Conteúdo diferente: tenta editar
         try:
-            # Tenta editar a mensagem existente
             await context.bot.edit_message_text(
                 chat_id=user_id,
-                message_id=ultima_mensagem_menu[user_id]["message_id"],
+                message_id=dados_anteriores["message_id"],
                 text=texto,
                 parse_mode="Markdown",
                 reply_markup=teclado
             )
             logger.info(f"Menu editado para usuário {user_id}")
+            
+            # Atualiza o hash
+            ultima_mensagem_menu[user_id]["content_hash"] = hash_atual
             return True
+            
         except Exception as e:
-            # Se não conseguir editar (mensagem apagada ou muito antiga)
+            # Se não conseguir editar (mensagem apagada ou erro)
             logger.warning(f"Não foi possível editar mensagem para {user_id}: {e}")
             # Remove o registro e continua para enviar nova mensagem
             ultima_mensagem_menu.pop(user_id, None)
@@ -80,10 +112,11 @@ async def enviar_ou_editar_menu(context, user_id: int, texto: str, teclado) -> b
             reply_markup=teclado
         )
         
-        # Armazena o ID da nova mensagem
+        # Armazena o ID da nova mensagem e o hash
         ultima_mensagem_menu[user_id] = {
             "chat_id": user_id,
-            "message_id": msg.message_id
+            "message_id": msg.message_id,
+            "content_hash": hash_atual
         }
         logger.info(f"Novo menu enviado para usuário {user_id}")
         return True
