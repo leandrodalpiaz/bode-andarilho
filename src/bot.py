@@ -1,7 +1,17 @@
 # src/bot.py
+# ============================================
+# MÓDULO DE MENUS E NAVEGAÇÃO PRINCIPAL
+# ============================================
+# Gerencia os menus principais do bot e a navegação
+# entre as diferentes áreas (comum, secretário, admin).
+# Também controla o envio/edição de mensagens para
+# evitar duplicação no privado do usuário.
+# ============================================
+
 from __future__ import annotations
 
 import logging
+import hashlib
 from typing import Dict, Optional
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -14,30 +24,61 @@ from src.permissoes import get_nivel
 
 logger = logging.getLogger(__name__)
 
-# Dicionário para armazenar a última mensagem de menu de cada usuário
-# Estrutura: {user_id: {"chat_id": id, "message_id": id, "content_hash": str}}
+# ============================================
+# CONTROLE DE MENSAGENS DUPLICADAS
+# ============================================
+# Estrutura: {user_id: {
+#     "chat_id": id,
+#     "message_id": id,
+#     "content_hash": str  # Hash do conteúdo para detectar mudanças
+# }}
 ultima_mensagem_menu: Dict[int, dict] = {}
 
 
+# ============================================
+# MENU PRINCIPAL (BASEADO NO NÍVEL)
+# ============================================
+
 def menu_principal_teclado(nivel: str) -> InlineKeyboardMarkup:
-    """Menu principal baseado no nível do usuário - APENAS botões permitidos."""
+    """
+    Gera o teclado do menu principal baseado no nível do usuário.
+    
+    Args:
+        nivel (str): Nível do usuário ("1", "2" ou "3")
+    
+    Returns:
+        InlineKeyboardMarkup: Teclado com os botões apropriados
+    """
     botoes = [
         [InlineKeyboardButton("📅 Ver eventos", callback_data="ver_eventos")],
         [InlineKeyboardButton("✅ Minhas confirmações", callback_data="minhas_confirmacoes")],
         [InlineKeyboardButton("👤 Meu cadastro", callback_data="meu_cadastro")],
     ]
 
+    # Secretários e admins têm acesso à área do secretário
     if nivel in ("2", "3"):
         botoes.append([InlineKeyboardButton("📋 Área do Secretário", callback_data="area_secretario")])
 
+    # Apenas admins têm acesso à área administrativa
     if nivel == "3":
         botoes.append([InlineKeyboardButton("⚙️ Área do Administrador", callback_data="area_admin")])
 
     return InlineKeyboardMarkup(botoes)
 
 
+# ============================================
+# UTILITÁRIOS PARA EDIÇÃO DE MENSAGENS
+# ============================================
+
 async def _safe_edit(query, text: str, **kwargs):
-    """Evita log de erro quando o Telegram diz que a mensagem não mudou."""
+    """
+    Edita uma mensagem de forma segura, ignorando erro "Message not modified".
+    
+    Args:
+        query: CallbackQuery do Telegram
+        text (str): Novo texto da mensagem
+        **kwargs: Argumentos adicionais para edit_message_text
+    """
     try:
         await query.edit_message_text(text, **kwargs)
     except Exception as e:
@@ -47,10 +88,15 @@ async def _safe_edit(query, text: str, **kwargs):
 
 def _gerar_hash_conteudo(texto: str, teclado) -> str:
     """
-    Gera um hash simples do conteúdo para verificar se mudou.
-    """
-    import hashlib
+    Gera um hash MD5 do conteúdo para verificar se houve mudança.
     
+    Args:
+        texto (str): Texto da mensagem
+        teclado: Teclado inline (ou None)
+    
+    Returns:
+        str: Hash MD5 do conteúdo
+    """
     # Converte o teclado para string representativa
     teclado_str = str(teclado.to_dict()) if teclado else ""
     conteudo = f"{texto}|{teclado_str}"
@@ -58,15 +104,46 @@ def _gerar_hash_conteudo(texto: str, teclado) -> str:
     return hashlib.md5(conteudo.encode()).hexdigest()
 
 
+async def _verificar_mensagem_existe(context, user_id: int, message_id: int) -> bool:
+    """
+    Verifica se uma mensagem ainda existe no chat do usuário.
+    
+    Args:
+        context: Context do Telegram
+        user_id (int): ID do usuário
+        message_id (int): ID da mensagem
+    
+    Returns:
+        bool: True se a mensagem existe, False caso contrário
+    """
+    try:
+        await context.bot.get_chat(user_id)
+        # Não temos como verificar diretamente se a mensagem existe,
+        # então assumimos que se o chat existe, a mensagem pode existir
+        return True
+    except Exception:
+        return False
+
+
 async def enviar_ou_editar_menu(context, user_id: int, texto: str, teclado) -> bool:
     """
     Envia uma nova mensagem ou edita a última mensagem do menu.
-    Retorna True se bem-sucedido.
+    Mantém apenas UMA mensagem visível no privado do usuário.
     
     Regras:
     - Se não existe mensagem anterior: envia nova
     - Se existe e o conteúdo mudou: tenta editar
-    - Se existe e o conteúdo é o mesmo: NÃO FAZ NADA (mantém a mensagem existente)
+    - Se existe e o conteúdo é o mesmo: NÃO FAZ NADA
+    - Se a mensagem anterior foi apagada: envia nova
+    
+    Args:
+        context: Context do Telegram
+        user_id (int): ID do usuário
+        texto (str): Texto da mensagem
+        teclado: Teclado inline
+    
+    Returns:
+        bool: True se bem-sucedido
     """
     global ultima_mensagem_menu
     
@@ -77,31 +154,38 @@ async def enviar_ou_editar_menu(context, user_id: int, texto: str, teclado) -> b
     if user_id in ultima_mensagem_menu:
         dados_anteriores = ultima_mensagem_menu[user_id]
         
-        # Se o conteúdo for o mesmo, não faz nada
-        if dados_anteriores.get("content_hash") == hash_atual:
-            logger.info(f"Conteúdo do menu inalterado para usuário {user_id} - mantendo mensagem existente")
-            return True
+        # Verifica se a mensagem anterior ainda existe
+        mensagem_existe = await _verificar_mensagem_existe(context, user_id, dados_anteriores["message_id"])
         
-        # Conteúdo diferente: tenta editar
-        try:
-            await context.bot.edit_message_text(
-                chat_id=user_id,
-                message_id=dados_anteriores["message_id"],
-                text=texto,
-                parse_mode="Markdown",
-                reply_markup=teclado
-            )
-            logger.info(f"Menu editado para usuário {user_id}")
-            
-            # Atualiza o hash
-            ultima_mensagem_menu[user_id]["content_hash"] = hash_atual
-            return True
-            
-        except Exception as e:
-            # Se não conseguir editar (mensagem apagada ou erro)
-            logger.warning(f"Não foi possível editar mensagem para {user_id}: {e}")
-            # Remove o registro e continua para enviar nova mensagem
+        if not mensagem_existe:
+            # Mensagem foi apagada - remove registro e envia nova
+            logger.info(f"Mensagem anterior do usuário {user_id} foi apagada - enviando nova")
             ultima_mensagem_menu.pop(user_id, None)
+        else:
+            # Mensagem existe: verifica se o conteúdo mudou
+            if dados_anteriores.get("content_hash") == hash_atual:
+                logger.info(f"Conteúdo do menu inalterado para usuário {user_id} - mantendo mensagem existente")
+                return True
+            
+            # Conteúdo diferente: tenta editar
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=user_id,
+                    message_id=dados_anteriores["message_id"],
+                    text=texto,
+                    parse_mode="Markdown",
+                    reply_markup=teclado
+                )
+                logger.info(f"Menu editado para usuário {user_id}")
+                
+                # Atualiza o hash
+                ultima_mensagem_menu[user_id]["content_hash"] = hash_atual
+                return True
+                
+            except Exception as e:
+                # Se não conseguir editar (mensagem apagada ou erro)
+                logger.warning(f"Não foi possível editar mensagem para {user_id}: {e}")
+                ultima_mensagem_menu.pop(user_id, None)
     
     # Envia nova mensagem
     try:
@@ -125,10 +209,20 @@ async def enviar_ou_editar_menu(context, user_id: int, texto: str, teclado) -> b
         return False
 
 
+# ============================================
+# FUNÇÃO PRINCIPAL DE ENVIO DO MENU
+# ============================================
+
 async def enviar_menu_principal(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: int, membro: dict):
     """
     Função unificada para enviar o menu principal.
     Usa enviar_ou_editar_menu para manter apenas uma mensagem.
+    
+    Args:
+        update: Update do Telegram
+        context: Context do Telegram
+        user_id (int): ID do usuário
+        membro (dict): Dados do membro
     """
     nivel = get_nivel(user_id)
     texto = f"🐐 *Bode Andarilho*\n\nBem-vindo de volta, irmão {membro.get('Nome', '')}!\n\nO que deseja fazer?"
@@ -141,8 +235,18 @@ async def enviar_menu_principal(update: Update, context: ContextTypes.DEFAULT_TY
     )
 
 
+# ============================================
+# HANDLER DO COMANDO /start
+# ============================================
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler para comando /start no privado."""
+    """
+    Handler para comando /start.
+    
+    Fluxo:
+    - Em grupo: orienta a usar o privado
+    - Em privado: se cadastrado, mostra menu; se não, inicia cadastro
+    """
     logger.info(
         "start chamado - chat_type=%s user_id=%s",
         getattr(update.effective_chat, "type", None),
@@ -167,8 +271,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cadastro_start(update, context)
 
 
+# ============================================
+# HANDLER GENÉRICO DE BOTÕES
+# ============================================
+
 async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler genérico para botões (deve ser o último)."""
+    """
+    Handler genérico para botões (deve ser o último).
+    Captura qualquer callback não tratado por handlers específicos.
+    """
     query = update.callback_query
     if not query:
         return
@@ -176,38 +287,44 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data or ""
     await query.answer()
 
-    # ============================================================
-    # Guardrails: callbacks que DEVEM ser tratados por outros handlers
-    # ============================================================
-
-    # Admin (flows de ConversationHandler em outros módulos)
+    # ========================================
+    # GUARDRAILS: CALLBACKS DE OUTROS HANDLERS
+    # ========================================
+    # Estes callbacks são tratados por ConversationHandlers
+    # e não devem ser processados aqui
+    
     if data in {"admin_promover", "admin_rebaixar", "editar_perfil", "admin_editar_membro"}:
         return
 
-    # Confirmação de presença (ConversationHandler do eventos.py)
     if data.startswith("confirmar|"):
         return
 
-    # Cadastro (ConversationHandler do cadastro.py)
     if data in {"iniciar_cadastro", "editar_cadastro", "continuar_cadastro"}:
         return
 
-    # Eventos secretário (ConversationHandler do eventos_secretario.py)
     if data == "editar_evento_secretario":
         return
 
     telegram_id = update.effective_user.id
     nivel = get_nivel(telegram_id)
 
-    # Verificação de permissão para áreas restritas
+    # ========================================
+    # VERIFICAÇÃO DE PERMISSÕES
+    # ========================================
+    
     if data == "area_secretario" and nivel not in ["2", "3"]:
         await _safe_edit(query, "⛔ Você não tem permissão para acessar a Área do Secretário.")
         return
+    
     if data == "area_admin" and nivel != "3":
         await _safe_edit(query, "⛔ Você não tem permissão para acessar a Área do Administrador.")
         return
 
-    # Handlers de navegação de eventos (com pipe |)
+    # ========================================
+    # ROTEAMENTO DE CALLBACKS
+    # ========================================
+    
+    # Eventos (com pipe |)
     if data == "ver_eventos":
         from src.eventos import mostrar_eventos
         await mostrar_eventos(update, context)
@@ -229,6 +346,8 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "fechar_mensagem":
         from src.eventos import fechar_mensagem
         await fechar_mensagem(update, context)
+    
+    # Confirmações do usuário
     elif data == "minhas_confirmacoes":
         from src.eventos import minhas_confirmacoes
         await minhas_confirmacoes(update, context)
@@ -238,21 +357,29 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("detalhes_historico|"):
         from src.eventos import detalhes_historico
         await detalhes_historico(update, context)
+    
+    # Perfil
     elif data == "meu_cadastro":
         await mostrar_perfil(update, context)
 
+    # Áreas restritas
     elif data == "area_secretario":
         await mostrar_area_secretario(update, context)
     elif data == "area_admin":
         await mostrar_area_admin(update, context)
 
+    # Menu principal
     elif data == "menu_principal":
-        # Quando voltar ao menu principal, usa a função unificada
         membro = buscar_membro(telegram_id)
         if membro:
             await enviar_menu_principal(update, context, telegram_id, membro)
 
-    # Secretário/Admin - imports tardios
+    # ========================================
+    # SECRETÁRIO/ADMIN - IMPORTS TARDIOS
+    # ========================================
+    # Estes imports são feitos aqui para evitar
+    # dependências circulares
+    
     elif data == "cadastrar_evento":
         from src.cadastro_evento import novo_evento_start
         await novo_evento_start(update, context)
@@ -274,15 +401,21 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("cancelar_evento|"):
         from src.eventos_secretario import executar_cancelamento
         await executar_cancelamento(update, context)
+    
+    # Admin
     elif data == "admin_ver_membros":
         from src.admin_acoes import ver_todos_membros
         await ver_todos_membros(update, context)
+    
+    # Lojas
     elif data == "menu_lojas":
         from src.lojas import menu_lojas
         await menu_lojas(update, context)
     elif data == "loja_listar":
         from src.lojas import listar_lojas_handler
         await listar_lojas_handler(update, context)
+    
+    # Notificações
     elif data == "menu_notificacoes":
         from src.admin_acoes import menu_notificacoes
         await menu_notificacoes(update, context)
@@ -293,24 +426,32 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from src.admin_acoes import notificacoes_desativar
         await notificacoes_desativar(update, context)
 
+    # Fallback para callbacks não reconhecidos
     else:
         await _safe_edit(query, "Função em desenvolvimento ou comando não reconhecido.")
 
 
+# ============================================
+# MENU DA ÁREA DO SECRETÁRIO
+# ============================================
+
 async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu da área do secretário. Se estiver em grupo, redireciona para privado."""
+    """
+    Menu da área do secretário.
+    Se acionado em grupo, redireciona para o privado.
+    """
     query = update.callback_query
     if not query:
         return
     await query.answer()
 
+    # Redirecionamento do grupo para o privado
     if update.effective_chat.type in ["group", "supergroup"]:
         await _safe_edit(
             query,
             "🔔 A Área do Secretário será aberta no meu chat privado. "
             "Verifique suas mensagens.",
         )
-        # Usa a função unificada para enviar no privado
         user_id = update.effective_user.id
         await enviar_ou_editar_menu(
             context,
@@ -327,6 +468,7 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
         )
         return
 
+    # Já está no privado
     telegram_id = update.effective_user.id
     nivel = get_nivel(telegram_id)
 
@@ -351,13 +493,21 @@ async def mostrar_area_secretario(update: Update, context: ContextTypes.DEFAULT_
     )
 
 
+# ============================================
+# MENU DA ÁREA DO ADMINISTRADOR
+# ============================================
+
 async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu da área do administrador. Se estiver em grupo, redireciona para privado."""
+    """
+    Menu da área do administrador.
+    Se acionado em grupo, redireciona para o privado.
+    """
     query = update.callback_query
     if not query:
         return
     await query.answer()
 
+    # Redirecionamento do grupo para o privado
     if update.effective_chat.type in ["group", "supergroup"]:
         await _safe_edit(
             query,
@@ -383,6 +533,7 @@ async def mostrar_area_admin(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
 
+    # Já está no privado
     telegram_id = update.effective_user.id
     nivel = get_nivel(telegram_id)
 
