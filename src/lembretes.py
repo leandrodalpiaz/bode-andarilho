@@ -1,11 +1,45 @@
 # src/lembretes.py
+# ============================================
+# BODE ANDARILHO - SISTEMA DE LEMBRETES AUTOMÁTICOS
+# ============================================
+# 
+# Este módulo gerencia o envio de lembretes automáticos para
+# os membros que confirmaram presença em eventos.
+# 
+# Dois tipos de lembretes:
+# 1. 24h antes do evento (enviado às 8h da manhã do dia anterior)
+# 2. Meio-dia do dia do evento (enviado às 12h)
+# 
+# Os lembretes são disparados pelo scheduler.py e utilizam
+# as mensagens centralizadas em messages.py.
+# 
+# ============================================
+
 from datetime import datetime, timedelta
 from telegram import Bot
 from src.sheets import listar_eventos, listar_confirmacoes_por_evento
+from src.messages import (
+    LEMBRETE_TITULO,
+    LEMBRETE_CORPO,
+    LEMBRETE_MEIO_DIA_TITULO,
+    LEMBRETE_MEIO_DIA_CORPO
+)
+
+
+# ============================================
+# LEMBRETE DE 24H ANTES
+# ============================================
 
 async def enviar_lembretes_24h(bot: Bot):
     """
-    Envia lembretes 24h antes do evento (execução às 8h da manhã)
+    Envia lembretes 24h antes do evento.
+    Executado pelo scheduler às 8h da manhã.
+    
+    Fluxo:
+    1. Calcula a data de amanhã
+    2. Busca todos os eventos desta data
+    3. Para cada evento, busca os confirmados
+    4. Envia mensagem personalizada para cada confirmado
     """
     hoje = datetime.now()
     amanha = hoje + timedelta(days=1)
@@ -18,6 +52,7 @@ async def enviar_lembretes_24h(bot: Bot):
         if data_evento != amanha_str:
             continue
 
+        # Gera ID do evento (fallback para compatibilidade)
         id_evento = data_evento + " — " + evento.get("Nome da loja", "")
         confirmados = listar_confirmacoes_por_evento(id_evento)
 
@@ -36,17 +71,19 @@ async def enviar_lembretes_24h(bot: Bot):
             if not telegram_id:
                 continue
 
+            # Monta mensagem usando template
             texto = (
-                f"🐐 *Lembrete de evento — Bode Andarilho*\n\n"
-                f"Olá, irmão {nome}! Você confirmou presença no seguinte evento:\n\n"
-                f"📅 Data: {data_evento}\n"
-                f"🏛️ Loja: {nome_loja}{numero_fmt}\n"
-                f"🕐 Horário: {horario}\n"
-                f"📍 Local: {local}\n"
-                f"🔷 Grau mínimo: {grau}\n"
-                f"👔 Traje: {traje}\n"
-                f"🍽️ Ágape: {agape}\n\n"
-                f"Até amanhã! 🤝"
+                f"{LEMBRETE_TITULO}\n\n"
+                f"{LEMBRETE_CORPO.format(
+                    nome=nome,
+                    data=data_evento,
+                    loja=nome_loja,
+                    horario=horario,
+                    local=local,
+                    grau=grau,
+                    traje=traje,
+                    agape=agape
+                )}"
             )
 
             try:
@@ -60,9 +97,20 @@ async def enviar_lembretes_24h(bot: Bot):
                 print(f"Erro ao enviar lembrete 24h para {telegram_id}: {e}")
 
 
+# ============================================
+# LEMBRETE DE MEIO-DIA
+# ============================================
+
 async def enviar_lembretes_meio_dia(bot: Bot):
     """
-    Envia lembretes ao meio-dia do dia do evento com a frase "MEIO DIA EM PONTO!"
+    Envia lembretes ao meio-dia do dia do evento.
+    Executado pelo scheduler às 12h.
+    
+    Fluxo:
+    1. Calcula a data de hoje
+    2. Busca todos os eventos desta data
+    3. Para cada evento, busca os confirmados
+    4. Envia mensagem especial de meio-dia
     """
     hoje = datetime.now()
     hoje_str = hoje.strftime("%d/%m")
@@ -74,6 +122,7 @@ async def enviar_lembretes_meio_dia(bot: Bot):
         if data_evento != hoje_str:
             continue
 
+        # Gera ID do evento (fallback para compatibilidade)
         id_evento = data_evento + " — " + evento.get("Nome da loja", "")
         confirmados = listar_confirmacoes_por_evento(id_evento)
 
@@ -89,13 +138,16 @@ async def enviar_lembretes_meio_dia(bot: Bot):
             if not telegram_id:
                 continue
 
+            # Monta mensagem usando template
             texto = (
-                f"🕛 *MEIO DIA EM PONTO!*\n\n"
-                f"Irmão {nome}, hoje tem sessão!\n\n"
-                f"🏛 Loja {nome_loja}{numero_fmt}\n"
-                f"📍 {local}\n"
-                f"🕕 {horario}\n\n"
-                f"Até logo mais! 🤝"
+                f"{LEMBRETE_MEIO_DIA_TITULO}\n\n"
+                f"{LEMBRETE_MEIO_DIA_CORPO.format(
+                    nome=nome,
+                    loja=nome_loja,
+                    numero=numero_fmt,
+                    local=local,
+                    horario=horario
+                )}"
             )
 
             try:

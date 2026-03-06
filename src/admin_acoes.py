@@ -1,8 +1,22 @@
 # src/admin_acoes.py
+# ============================================
+# BODE ANDARILHO - AÇÕES ADMINISTRATIVAS
+# ============================================
+# 
+# Este módulo gerencia todas as funcionalidades exclusivas para administradores:
+# - Promoção e rebaixamento de membros
+# - Edição de membros (qualquer campo)
+# - Visualização da lista completa de membros
+# - Configuração de notificações
+# 
+# Todas as funções que exibem resultados utilizam o sistema de
+# navegação do bot.py para manter a consistência da interface.
+# 
+# ============================================
+
 from __future__ import annotations
 
 import logging
-import traceback
 from typing import Optional
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -15,10 +29,27 @@ from telegram.ext import (
     filters,
 )
 
-from src.sheets import listar_membros, atualizar_membro, buscar_membro, atualizar_nivel_membro, get_notificacao_status, set_notificacao_status
+from src.sheets import (
+    listar_membros,
+    atualizar_membro,
+    buscar_membro,
+    atualizar_nivel_membro,
+    get_notificacao_status,
+    set_notificacao_status,
+)
 from src.permissoes import get_nivel
 
+from src.bot import (
+    navegar_para,
+    _enviar_ou_editar_mensagem,
+    TIPO_RESULTADO
+)
+
 logger = logging.getLogger(__name__)
+
+# ============================================
+# CONSTANTES E CONFIGURAÇÕES
+# ============================================
 
 # Estados da conversação
 SELECIONAR_MEMBRO, SELECIONAR_CAMPO, NOVO_VALOR = range(3)
@@ -38,141 +69,153 @@ CAMPOS_EDITAVEIS = {
 }
 
 
-async def _safe_edit(query, text: str, **kwargs):
-    try:
-        await query.edit_message_text(text, **kwargs)
-    except Exception as e:
-        if "Message is not modified" not in str(e):
-            raise
+# ============================================
+# FUNÇÃO PRINCIPAL DO MENU ADMIN
+# ============================================
+
+async def exibir_menu_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Exibe o menu principal da área do administrador.
+    Esta função é chamada pelo bot.py quando o usuário acessa a área.
+    """
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    
+    if nivel != "3":
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⛔ Você não tem permissão para acessar esta área."
+        )
+        return
+
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
+        [InlineKeyboardButton("📋 Gerenciar eventos", callback_data="meus_eventos")],
+        [InlineKeyboardButton("👥 Ver todos os membros", callback_data="admin_ver_membros")],
+        [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
+        [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
+        [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
+        [InlineKeyboardButton("🏛️ Minhas lojas", callback_data="menu_lojas")],
+        [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
+        [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
+    ])
+
+    await navegar_para(
+        update, context,
+        "Área do Administrador",
+        "⚙️ *Bem-vindo à Área do Administrador*\n\nO que deseja fazer?",
+        teclado
+    )
 
 
-# =========================
-# Gerenciamento de notificações para secretários (persistente)
-# =========================
+# ============================================
+# GERENCIAMENTO DE NOTIFICAÇÕES
+# ============================================
+
 async def menu_notificacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Menu para o secretário gerenciar notificações."""
-    query = update.callback_query
-    if not query:
-        return
-    await query.answer("🔔 Carregando configurações...")
-
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
     
     if nivel not in ["2", "3"]:
-        await _safe_edit(query, "⛔ Apenas secretários e administradores podem acessar esta função.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⛔ Apenas secretários e administradores podem acessar esta função."
+        )
         return
 
-    # Busca status atual da planilha
     ativo = get_notificacao_status(user_id)
     status_texto = "✅ Ativadas" if ativo else "🔕 Desativadas"
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("📥 Ativar notificações", callback_data="notificacoes_ativar")],
         [InlineKeyboardButton("🔕 Desativar notificações", callback_data="notificacoes_desativar")],
-        [InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")],
+        [InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")],
     ])
 
-    await _safe_edit(
-        query,
+    await navegar_para(
+        update, context,
+        "Configurações > Notificações",
         f"🔔 *Configurações de Notificações*\n\n"
         f"Status atual: {status_texto}\n\n"
         f"Quando ativadas, você receberá uma mensagem no privado "
         f"cada vez que alguém confirmar presença em um evento que você criou.\n\n"
         f"*Nota:* Esta configuração é permanente e ficará salva na planilha.",
-        parse_mode="Markdown",
-        reply_markup=teclado,
+        teclado
     )
 
 
 async def notificacoes_ativar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ativa as notificações para o secretário (salva na planilha)."""
-    query = update.callback_query
-    if not query:
-        return
-    await query.answer("✅ Ativando notificações...")
-
+    """Ativa as notificações para o secretário."""
     user_id = update.effective_user.id
     
     if set_notificacao_status(user_id, True):
-        await _safe_edit(
-            query,
+        await navegar_para(
+            update, context,
+            "Configurações > Notificações",
             "✅ *Notificações ativadas com sucesso!*\n\n"
-            "Agora você receberá alertas de novas confirmações.\n"
-            "Esta configuração está salva permanentemente.",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("⬅️ Voltar", callback_data="menu_notificacoes")
-            ]]),
+            "Agora você receberá alertas de novas confirmações.",
+            InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Voltar", callback_data="menu_notificacoes")
+            ]])
         )
     else:
-        await _safe_edit(
-            query,
-            "❌ *Erro ao ativar notificações.*\n\n"
-            "Tente novamente mais tarde ou contate o administrador.",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("⬅️ Voltar", callback_data="menu_notificacoes")
-            ]]),
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "❌ *Erro ao ativar notificações.*\n\nTente novamente mais tarde."
         )
 
 
 async def notificacoes_desativar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Desativa as notificações para o secretário (salva na planilha)."""
-    query = update.callback_query
-    if not query:
-        return
-    await query.answer("🔕 Desativando notificações...")
-
+    """Desativa as notificações para o secretário."""
     user_id = update.effective_user.id
     
     if set_notificacao_status(user_id, False):
-        await _safe_edit(
-            query,
+        await navegar_para(
+            update, context,
+            "Configurações > Notificações",
             "🔕 *Notificações desativadas com sucesso!*\n\n"
-            "Você não receberá mais alertas de novas confirmações.\n"
-            "Esta configuração está salva permanentemente.",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("⬅️ Voltar", callback_data="menu_notificacoes")
-            ]]),
+            "Você não receberá mais alertas de novas confirmações.",
+            InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Voltar", callback_data="menu_notificacoes")
+            ]])
         )
     else:
-        await _safe_edit(
-            query,
-            "❌ *Erro ao desativar notificações.*\n\n"
-            "Tente novamente mais tarde ou contate o administrador.",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("⬅️ Voltar", callback_data="menu_notificacoes")
-            ]]),
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "❌ *Erro ao desativar notificações.*\n\nTente novamente mais tarde."
         )
 
 
-# =========================
-# Promover membro (comum -> secretário)
-# =========================
+# ============================================
+# PROMOVER MEMBRO (COMUM -> SECRETÁRIO)
+# ============================================
+
 async def promover_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia promoção de membro comum para secretário."""
-    query = update.callback_query
-    await query.answer("🟢 Carregando lista de membros...")
-
-    if get_nivel(update.effective_user.id) != "3":
-        await query.edit_message_text("Apenas administradores podem promover membros.")
+    user_id = update.effective_user.id
+    
+    if get_nivel(user_id) != "3":
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "Apenas administradores podem promover membros."
+        )
         return ConversationHandler.END
 
     membros = listar_membros()
     if not membros:
-        await query.edit_message_text("Nenhum membro cadastrado.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "Nenhum membro cadastrado."
+        )
         return ConversationHandler.END
 
     botoes = []
     for membro in membros:
         nivel = str(membro.get("Nivel", "1")).strip()
-        if nivel == "1":  # Apenas membros comuns
+        if nivel == "1":
             nome = membro.get("Nome", "Sem nome")
             telegram_id = membro.get("Telegram ID")
-            # Converte para inteiro para garantir formato
             try:
                 tid = int(float(telegram_id))
                 botoes.append([InlineKeyboardButton(nome, callback_data=f"promover_{tid}")])
@@ -180,16 +223,20 @@ async def promover_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 continue
 
     if not botoes:
-        await query.edit_message_text("Não há membros comuns para promover.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "Não há membros comuns para promover."
+        )
         return ConversationHandler.END
 
     botoes.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_promocao")])
     teclado = InlineKeyboardMarkup(botoes)
 
-    await query.edit_message_text(
+    await navegar_para(
+        update, context,
+        "Admin > Promover Secretário",
         "Selecione o membro que deseja promover a **secretário**:",
-        parse_mode="Markdown",
-        reply_markup=teclado
+        teclado
     )
     return 1  # SELECIONAR_MEMBRO
 
@@ -197,24 +244,32 @@ async def promover_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def selecionar_membro_promover(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Seleciona membro para promoção."""
     query = update.callback_query
-    await query.answer()
-
     data = query.data
+    
     if data == "cancelar_promocao":
-        await query.edit_message_text("Operação cancelada.")
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            "Operação cancelada."
+        )
         return ConversationHandler.END
 
     try:
         telegram_id = int(data.split("_")[1])
     except:
-        await query.edit_message_text("Erro ao processar seleção.")
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            "Erro ao processar seleção."
+        )
         return ConversationHandler.END
 
     context.user_data["promover_telegram_id"] = telegram_id
-
     membro = buscar_membro(telegram_id)
+
     if not membro:
-        await query.edit_message_text("Membro não encontrado.")
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            "Membro não encontrado."
+        )
         return ConversationHandler.END
 
     teclado = InlineKeyboardMarkup([
@@ -222,62 +277,82 @@ async def selecionar_membro_promover(update: Update, context: ContextTypes.DEFAU
         [InlineKeyboardButton("❌ Não, cancelar", callback_data="cancelar_promocao")]
     ])
 
-    await query.edit_message_text(
+    await navegar_para(
+        update, context,
+        "Admin > Promover Secretário > Confirmar",
         f"Confirmar promoção de *{membro.get('Nome')}* para secretário?",
-        parse_mode="Markdown",
-        reply_markup=teclado
+        teclado
     )
     return 2  # CONFIRMAR_PROMOCAO
 
 
 async def confirmar_promover(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Confirma promoção e atualiza o cargo para 'Secretário'."""
+    """Confirma promoção e atualiza o cargo."""
     query = update.callback_query
-    await query.answer("🟢 Promovendo membro...")
-
+    user_id = update.effective_user.id
+    
     if query.data == "cancelar_promocao":
-        await query.edit_message_text("Operação cancelada.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "Operação cancelada."
+        )
         return ConversationHandler.END
 
     telegram_id = context.user_data.get("promover_telegram_id")
     if not telegram_id:
-        await query.edit_message_text("Erro: dados não encontrados.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "Erro: dados não encontrados."
+        )
         return ConversationHandler.END
 
-    # Atualiza nível para secretário (2)
     if atualizar_nivel_membro(telegram_id, "2"):
-        # Atualiza o cargo para "Secretário"
         atualizar_membro(telegram_id, {"Cargo": "Secretário"}, preservar_nivel=True)
-        await query.edit_message_text("✅ Membro promovido a secretário com sucesso!")
+        await navegar_para(
+            update, context,
+            "Admin > Promover Secretário",
+            "✅ Membro promovido a secretário com sucesso!",
+            InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Voltar", callback_data="area_admin")
+            ]])
+        )
     else:
-        await query.edit_message_text("❌ Erro ao promover membro.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "❌ Erro ao promover membro."
+        )
 
-    # Limpa dados
     context.user_data.pop("promover_telegram_id", None)
     return ConversationHandler.END
 
 
-# =========================
-# Rebaixar membro (secretário -> comum)
-# =========================
+# ============================================
+# REBAIXAR MEMBRO (SECRETÁRIO -> COMUM)
+# ============================================
+
 async def rebaixar_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia rebaixamento de secretário para comum."""
-    query = update.callback_query
-    await query.answer("🔻 Carregando lista de secretários...")
-
-    if get_nivel(update.effective_user.id) != "3":
-        await query.edit_message_text("Apenas administradores podem rebaixar membros.")
+    user_id = update.effective_user.id
+    
+    if get_nivel(user_id) != "3":
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "Apenas administradores podem rebaixar membros."
+        )
         return ConversationHandler.END
 
     membros = listar_membros()
     if not membros:
-        await query.edit_message_text("Nenhum membro cadastrado.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "Nenhum membro cadastrado."
+        )
         return ConversationHandler.END
 
     botoes = []
     for membro in membros:
         nivel = str(membro.get("Nivel", "1")).strip()
-        if nivel == "2":  # Apenas secretários
+        if nivel == "2":
             nome = membro.get("Nome", "Sem nome")
             telegram_id = membro.get("Telegram ID")
             try:
@@ -287,16 +362,20 @@ async def rebaixar_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 continue
 
     if not botoes:
-        await query.edit_message_text("Não há secretários para rebaixar.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "Não há secretários para rebaixar."
+        )
         return ConversationHandler.END
 
     botoes.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_rebaixamento")])
     teclado = InlineKeyboardMarkup(botoes)
 
-    await query.edit_message_text(
+    await navegar_para(
+        update, context,
+        "Admin > Rebaixar Secretário",
         "Selecione o secretário que deseja rebaixar a **comum**:",
-        parse_mode="Markdown",
-        reply_markup=teclado
+        teclado
     )
     return 1  # SELECIONAR_MEMBRO
 
@@ -304,24 +383,32 @@ async def rebaixar_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def selecionar_membro_rebaixar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Seleciona membro para rebaixamento."""
     query = update.callback_query
-    await query.answer()
-
     data = query.data
+    
     if data == "cancelar_rebaixamento":
-        await query.edit_message_text("Operação cancelada.")
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            "Operação cancelada."
+        )
         return ConversationHandler.END
 
     try:
         telegram_id = int(data.split("_")[1])
     except:
-        await query.edit_message_text("Erro ao processar seleção.")
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            "Erro ao processar seleção."
+        )
         return ConversationHandler.END
 
     context.user_data["rebaixar_telegram_id"] = telegram_id
-
     membro = buscar_membro(telegram_id)
+
     if not membro:
-        await query.edit_message_text("Membro não encontrado.")
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            "Membro não encontrado."
+        )
         return ConversationHandler.END
 
     teclado = InlineKeyboardMarkup([
@@ -329,10 +416,11 @@ async def selecionar_membro_rebaixar(update: Update, context: ContextTypes.DEFAU
         [InlineKeyboardButton("❌ Não, cancelar", callback_data="cancelar_rebaixamento")]
     ])
 
-    await query.edit_message_text(
+    await navegar_para(
+        update, context,
+        "Admin > Rebaixar Secretário > Confirmar",
         f"Confirmar rebaixamento de *{membro.get('Nome')}* para comum?",
-        parse_mode="Markdown",
-        reply_markup=teclado
+        teclado
     )
     return 2  # CONFIRMAR_REBAIXAMENTO
 
@@ -340,54 +428,68 @@ async def selecionar_membro_rebaixar(update: Update, context: ContextTypes.DEFAU
 async def confirmar_rebaixar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Confirma rebaixamento e limpa o cargo."""
     query = update.callback_query
-    await query.answer("🔻 Rebaixando membro...")
-
+    user_id = update.effective_user.id
+    
     if query.data == "cancelar_rebaixamento":
-        await query.edit_message_text("Operação cancelada.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "Operação cancelada."
+        )
         return ConversationHandler.END
 
     telegram_id = context.user_data.get("rebaixar_telegram_id")
     if not telegram_id:
-        await query.edit_message_text("Erro: dados não encontrados.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "Erro: dados não encontrados."
+        )
         return ConversationHandler.END
 
-    # Rebaixa para comum (nível 1)
     if atualizar_nivel_membro(telegram_id, "1"):
-        # Limpa o cargo (volta a ser vazio)
         atualizar_membro(telegram_id, {"Cargo": ""}, preservar_nivel=True)
-        await query.edit_message_text("✅ Secretário rebaixado a comum com sucesso!")
+        await navegar_para(
+            update, context,
+            "Admin > Rebaixar Secretário",
+            "✅ Secretário rebaixado a comum com sucesso!",
+            InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Voltar", callback_data="area_admin")
+            ]])
+        )
     else:
-        await query.edit_message_text("❌ Erro ao rebaixar membro.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "❌ Erro ao rebaixar membro."
+        )
 
-    # Limpa dados
     context.user_data.pop("rebaixar_telegram_id", None)
     return ConversationHandler.END
 
 
-# =========================
-# Ver todos os membros
-# =========================
+# ============================================
+# VER TODOS OS MEMBROS
+# ============================================
+
 async def ver_todos_membros(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Lista todos os membros para o administrador."""
-    query = update.callback_query
-    if not query:
-        return
-    await query.answer("👥 Buscando lista de membros...")
-
     user_id = update.effective_user.id
-    nivel = get_nivel(user_id)
-    if nivel != "3":
-        await _safe_edit(query, "⛔ Apenas administradores podem ver todos os membros.")
+    
+    if get_nivel(user_id) != "3":
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⛔ Apenas administradores podem ver todos os membros."
+        )
         return
 
     membros = listar_membros()
     if not membros:
-        await _safe_edit(query, "Nenhum membro cadastrado.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "Nenhum membro cadastrado."
+        )
         return
 
-    # Divide em lotes para não exceder limite de mensagem
     linhas = []
-    for membro in membros[:50]:  # limite de 50 membros por vez
+    for membro in membros[:50]:
         nome = membro.get("Nome", "Sem nome")
         nivel = membro.get("Nivel", "1")
         cargo = membro.get("Cargo", "")
@@ -401,41 +503,42 @@ async def ver_todos_membros(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         linhas.append(linha)
 
-    if not linhas:
-        await _safe_edit(query, "Nenhum membro listado.")
-        return
-
     texto = "*Membros cadastrados:*\n\n" + "\n".join(linhas)
 
     teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("⬅️ Voltar", callback_data="area_admin")]
+        [InlineKeyboardButton("🔙 Voltar", callback_data="area_admin")]
     ])
 
-    await _safe_edit(query, texto, parse_mode="Markdown", reply_markup=teclado)
+    await navegar_para(
+        update, context,
+        "Admin > Membros",
+        texto,
+        teclado
+    )
 
 
-# =========================
-# Editar membro (admin e secretário)
-# =========================
+# ============================================
+# EDIÇÃO DE MEMBRO (CONVERSATION HANDLER)
+# ============================================
+
 async def editar_membro_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Inicia o processo de edição de um membro (admin ou secretário)."""
-    query = update.callback_query
-    if not query:
-        return ConversationHandler.END
-    await query.answer("✏️ Carregando lista de membros...")
-
+    """Inicia o processo de edição de um membro."""
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
 
-    # Verifica permissão (admin ou secretário)
     if nivel not in ["2", "3"]:
-        await query.edit_message_text("⛔ Você não tem permissão para editar membros.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⛔ Você não tem permissão para editar membros."
+        )
         return ConversationHandler.END
 
-    # Lista todos os membros
     membros = listar_membros()
     if not membros:
-        await query.edit_message_text("Nenhum membro cadastrado.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "Nenhum membro cadastrado."
+        )
         return ConversationHandler.END
 
     botoes = []
@@ -445,17 +548,13 @@ async def editar_membro_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
         nome = membro.get("Nome", "Sem nome")
         cargo = membro.get("Cargo", "")
 
-        # Converte ID para inteiro
         try:
             tid = int(float(membro_id))
         except:
             continue
 
-        # Secretário só pode editar membros comuns (nível 1)
         if nivel == "2" and membro_nivel != "1":
             continue
-
-        # Não permitir que secretário edite admin ou outros secretários
         if nivel == "2" and membro_nivel in ["2", "3"]:
             continue
 
@@ -469,10 +568,12 @@ async def editar_membro_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
         )])
 
     if not botoes:
-        await query.edit_message_text(
+        await navegar_para(
+            update, context,
+            "Admin > Editar Membro",
             "Nenhum membro disponível para edição." if nivel == "2" else "Nenhum membro cadastrado.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("⬅️ Voltar", callback_data="area_admin" if nivel == "3" else "area_secretario")
+            InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Voltar", callback_data="area_admin" if nivel == "3" else "area_secretario")
             ]])
         )
         return ConversationHandler.END
@@ -480,9 +581,11 @@ async def editar_membro_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
     botoes.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_edicao")])
     teclado = InlineKeyboardMarkup(botoes)
 
-    await query.edit_message_text(
+    await navegar_para(
+        update, context,
+        "Admin > Editar Membro",
         "Selecione o membro que deseja editar:",
-        reply_markup=teclado
+        teclado
     )
     return SELECIONAR_MEMBRO
 
@@ -490,23 +593,31 @@ async def editar_membro_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
 async def selecionar_membro_para_editar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Usuário selecionou um membro para editar."""
     query = update.callback_query
-    await query.answer()
-
     data = query.data
+    
     if data == "cancelar_edicao":
-        await query.edit_message_text("Operação cancelada.")
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            "Operação cancelada."
+        )
         return ConversationHandler.END
 
     try:
         telegram_id = int(data.split("|")[1])
     except:
-        await query.edit_message_text("Erro ao processar seleção.")
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            "Erro ao processar seleção."
+        )
         return ConversationHandler.END
 
     membro = buscar_membro(telegram_id)
 
     if not membro:
-        await query.edit_message_text("Membro não encontrado.")
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            "Membro não encontrado."
+        )
         return ConversationHandler.END
 
     context.user_data["editando_membro_id"] = telegram_id
@@ -514,16 +625,12 @@ async def selecionar_membro_para_editar(update: Update, context: ContextTypes.DE
 
     nivel_usuario = get_nivel(update.effective_user.id)
 
-    # Cria botões para campos editáveis
     botoes = []
     for campo_id, campo_info in CAMPOS_EDITAVEIS.items():
-        # Verifica se o usuário tem permissão para editar este campo
         if int(nivel_usuario) < int(campo_info["nivel_minimo"]):
             continue
 
         valor_atual = membro.get(campo_info["chave"], "")
-        if valor_atual is None:
-            valor_atual = ""
         botoes.append([InlineKeyboardButton(
             f"✏️ {campo_info['nome']}: {str(valor_atual)[:30]}",
             callback_data=f"editar_campo_membro|{campo_id}"
@@ -532,10 +639,11 @@ async def selecionar_membro_para_editar(update: Update, context: ContextTypes.DE
     botoes.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_edicao")])
     teclado = InlineKeyboardMarkup(botoes)
 
-    await query.edit_message_text(
+    await navegar_para(
+        update, context,
+        f"Admin > Editar > {membro.get('Nome')}",
         f"Editando *{membro.get('Nome')}*\n\nSelecione o campo que deseja alterar:",
-        parse_mode="Markdown",
-        reply_markup=teclado
+        teclado
     )
     return SELECIONAR_CAMPO
 
@@ -543,29 +651,36 @@ async def selecionar_membro_para_editar(update: Update, context: ContextTypes.DE
 async def selecionar_campo_membro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Usuário selecionou um campo para editar."""
     query = update.callback_query
-    await query.answer()
-
     data = query.data
+    
     if data == "cancelar_edicao":
-        await query.edit_message_text("Operação cancelada.")
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            "Operação cancelada."
+        )
         return ConversationHandler.END
 
     campo_id = data.split("|")[1]
     campo_info = CAMPOS_EDITAVEIS.get(campo_id)
 
     if not campo_info:
-        await query.edit_message_text("Campo inválido.")
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            "Campo inválido."
+        )
         return ConversationHandler.END
 
     context.user_data["editando_campo"] = campo_id
     membro = context.user_data.get("editando_membro_dados", {})
     valor_atual = membro.get(campo_info["chave"], "")
 
-    await query.edit_message_text(
+    await navegar_para(
+        update, context,
+        f"Admin > Editar > {campo_info['nome']}",
         f"✏️ *Editando {campo_info['nome']}*\n\n"
         f"Valor atual: {valor_atual}\n\n"
         f"Digite o novo valor (ou /cancelar para desistir):",
-        parse_mode="Markdown"
+        None
     )
     return NOVO_VALOR
 
@@ -581,26 +696,20 @@ async def receber_novo_valor_membro(update: Update, context: ContextTypes.DEFAUL
         await update.message.reply_text("Erro: dados não encontrados. Tente novamente.")
         return ConversationHandler.END
 
-    # Validações específicas
-    if campo_id == "nivel":
-        if novo_valor not in ("1", "2", "3"):
-            await update.message.reply_text("❌ Nível inválido. Use 1, 2 ou 3.")
-            return NOVO_VALOR
+    if campo_id == "nivel" and novo_valor not in ("1", "2", "3"):
+        await update.message.reply_text("❌ Nível inválido. Use 1, 2 ou 3.")
+        return NOVO_VALOR
 
-    # Atualiza na planilha (apenas o campo alterado)
     sucesso = atualizar_membro(telegram_id, {campo_info["chave"]: novo_valor}, preservar_nivel=(campo_id != "nivel"))
 
     if sucesso:
         await update.message.reply_text(
-            f"✅ {campo_info['nome']} atualizado com sucesso para: {novo_valor}\n\n"
-            f"Use /start para voltar ao menu principal."
+            f"✅ {campo_info['nome']} atualizado com sucesso!\n\n"
+            f"Use o menu acima para continuar."
         )
     else:
-        await update.message.reply_text(
-            "❌ Erro ao atualizar o campo. Tente novamente mais tarde."
-        )
+        await update.message.reply_text("❌ Erro ao atualizar o campo. Tente novamente mais tarde.")
 
-    # Limpa dados da sessão
     context.user_data.pop("editando_membro_id", None)
     context.user_data.pop("editando_membro_dados", None)
     context.user_data.pop("editando_campo", None)
@@ -617,18 +726,10 @@ async def cancelar_edicao_membro(update: Update, context: ContextTypes.DEFAULT_T
     return ConversationHandler.END
 
 
-async def cancelar_operacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Cancela operação (fallback)."""
-    if update.message:
-        await update.message.reply_text("Operação cancelada.")
-    elif update.callback_query:
-        await update.callback_query.edit_message_text("Operação cancelada.")
-    return ConversationHandler.END
+# ============================================
+# CONVERSATION HANDLERS
+# ============================================
 
-
-# =========================
-# Handlers de conversação
-# =========================
 promover_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(promover_inicio, pattern="^admin_promover$")],
     states={
@@ -665,3 +766,16 @@ editar_membro_handler = ConversationHandler(
     name="editar_membro_handler",
     persistent=False,
 )
+
+
+# ============================================
+# FUNÇÃO AUXILIAR
+# ============================================
+
+async def cancelar_operacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancela operação (fallback)."""
+    if update.message:
+        await update.message.reply_text("Operação cancelada.")
+    elif update.callback_query:
+        await update.callback_query.edit_message_text("Operação cancelada.")
+    return ConversationHandler.END

@@ -1,4 +1,21 @@
 # src/perfil.py
+# ============================================
+# BODE ANDARILHO - PERFIL DO USUÁRIO
+# ============================================
+# 
+# Este módulo gerencia a exibição do perfil do usuário
+# e oferece acesso à edição do próprio cadastro.
+# 
+# Funcionalidades:
+# - Exibição dos dados cadastrais do membro
+# - Botão para acessar a edição do perfil
+# - Formatação amigável das informações
+# 
+# Todas as funções que exibem resultados utilizam o sistema de
+# navegação do bot.py para manter a consistência da interface.
+# 
+# ============================================
+
 from __future__ import annotations
 
 import logging
@@ -8,20 +25,29 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from src.sheets import buscar_membro
+from src.bot import (
+    navegar_para,
+    _enviar_ou_editar_mensagem,
+    TIPO_RESULTADO
+)
 
 logger = logging.getLogger(__name__)
 
 
-async def _safe_edit(query, text: str, **kwargs):
-    try:
-        await query.edit_message_text(text, **kwargs)
-    except Exception as e:
-        if "Message is not modified" not in str(e):
-            raise
-
+# ============================================
+# FUNÇÕES AUXILIARES
+# ============================================
 
 def _formatar_data_nasc(data_str: str) -> str:
-    """Tenta formatar data de nascimento de forma amigável."""
+    """
+    Tenta formatar data de nascimento de forma amigável.
+    
+    Args:
+        data_str (str): Data no formato original da planilha
+    
+    Returns:
+        str: Data formatada ou string original
+    """
     if not data_str:
         return "Não informada"
     
@@ -33,30 +59,39 @@ def _formatar_data_nasc(data_str: str) -> str:
         except:
             pass
     
-    # Se não conseguir formatar, retorna o original
     return data_str
 
 
-async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Exibe o perfil do usuário com opção de editar."""
-    query = update.callback_query
-    if not query:
-        return
-    await query.answer()
+# ============================================
+# EXIBIÇÃO DO PERFIL
+# ============================================
 
+async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Exibe o perfil do usuário com opção de editar.
+    
+    Fluxo:
+    - Se usuário não tem cadastro: oferece para iniciar cadastro
+    - Se tem cadastro: mostra todos os dados formatados
+    - Botão "✏️ Editar perfil" redireciona para edição
+    """
+    query = update.callback_query
     user_id = update.effective_user.id
+    
     membro = buscar_membro(user_id)
 
     if not membro:
+        # Usuário não tem cadastro
         teclado = InlineKeyboardMarkup([
             [InlineKeyboardButton("📝 Fazer cadastro", callback_data="iniciar_cadastro")],
-            [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
+            [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
         ])
-        await _safe_edit(
-            query,
+        
+        await navegar_para(
+            update, context,
+            "Meu Perfil",
             "👤 *Meu cadastro*\n\nVocê ainda não possui cadastro.\nClique abaixo para iniciar:",
-            parse_mode="Markdown",
-            reply_markup=teclado,
+            teclado
         )
         return
 
@@ -71,7 +106,7 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     vm = membro.get("Venerável Mestre") or membro.get("veneravel_mestre") or membro.get("vm") or "Não"
     nivel = membro.get("Nivel") or "1"
 
-    # Mapeia nível para texto
+    # Mapeia nível para texto amigável
     nivel_texto = {
         "1": "Membro",
         "2": "Secretário",
@@ -95,7 +130,12 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("✏️ Editar perfil", callback_data="editar_perfil")],
-        [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
+        [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
     ])
 
-    await _safe_edit(query, texto, parse_mode="Markdown", reply_markup=teclado)
+    await navegar_para(
+        update, context,
+        "Meu Perfil",
+        texto,
+        teclado
+    )

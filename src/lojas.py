@@ -1,4 +1,22 @@
 # src/lojas.py
+# ============================================
+# BODE ANDARILHO - GERENCIAMENTO DE LOJAS
+# ============================================
+# 
+# Este módulo permite que secretários e administradores
+# pré-cadastrem os dados fixos de suas lojas para usar
+# como atalho na criação de novos eventos.
+# 
+# Funcionalidades:
+# - Cadastro de nova loja (nome, número, rito, potência, endereço)
+# - Listagem das lojas cadastradas
+# - Integração com o cadastro de eventos para pré-preenchimento
+# 
+# Todas as funções que exibem resultados utilizam o sistema de
+# navegação do bot.py para manter a consistência da interface.
+# 
+# ============================================
+
 from __future__ import annotations
 
 import logging
@@ -17,13 +35,29 @@ from telegram.ext import (
 from src.sheets import listar_lojas, cadastrar_loja, excluir_loja
 from src.permissoes import get_nivel
 
+from src.bot import (
+    navegar_para,
+    voltar_ao_menu_principal,
+    _enviar_ou_editar_mensagem,
+    TIPO_RESULTADO
+)
+
 logger = logging.getLogger(__name__)
 
-# Estados da conversação
+# ============================================
+# CONSTANTES E CONFIGURAÇÕES
+# ============================================
+
+# Estados da conversação para cadastro de loja
 NOME, NUMERO, RITO, POTENCIA, ENDERECO, CONFIRMAR = range(6)
 
 
+# ============================================
+# FUNÇÕES AUXILIARES
+# ============================================
+
 async def _safe_edit(query, text: str, **kwargs):
+    """Edita mensagem ignorando erro 'Message not modified'."""
     try:
         await query.edit_message_text(text, **kwargs)
     except Exception as e:
@@ -31,60 +65,60 @@ async def _safe_edit(query, text: str, **kwargs):
             raise
 
 
-# =========================
-# Menu principal de lojas
-# =========================
-async def menu_lojas(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Menu principal para gerenciar lojas."""
-    query = update.callback_query
-    if not query:
-        return
-    await query.answer("🏛️ Carregando lojas...")
+# ============================================
+# MENU PRINCIPAL DE LOJAS
+# ============================================
 
+async def menu_lojas(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Menu principal para gerenciar lojas.
+    Exibe opções de cadastrar nova loja ou listar as existentes.
+    """
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
     
     if nivel not in ["2", "3"]:
-        await _safe_edit(query, "⛔ Apenas secretários e administradores podem acessar esta função.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⛔ Apenas secretários e administradores podem acessar esta função."
+        )
         return
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Cadastrar nova loja", callback_data="loja_cadastrar")],
         [InlineKeyboardButton("📋 Listar minhas lojas", callback_data="loja_listar")],
-        [InlineKeyboardButton("⬅️ Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")],
+        [InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")],
     ])
 
-    await _safe_edit(
-        query,
+    await navegar_para(
+        update, context,
+        "Gerenciamento de Lojas",
         "🏛️ *Gerenciamento de Lojas*\n\n"
         "Aqui você pode cadastrar os dados fixos da sua loja "
         "para usar como atalho ao criar novos eventos.",
-        parse_mode="Markdown",
-        reply_markup=teclado,
+        teclado
     )
 
 
+# ============================================
+# LISTAR LOJAS CADASTRADAS
+# ============================================
+
 async def listar_lojas_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Lista as lojas cadastradas pelo secretário."""
-    query = update.callback_query
-    if not query:
-        return
-    await query.answer("📋 Buscando suas lojas...")
-
     user_id = update.effective_user.id
     lojas = listar_lojas(user_id)
 
     if not lojas:
         teclado = InlineKeyboardMarkup([
             [InlineKeyboardButton("➕ Cadastrar nova loja", callback_data="loja_cadastrar")],
-            [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_lojas")],
+            [InlineKeyboardButton("🔙 Voltar", callback_data="menu_lojas")],
         ])
-        await _safe_edit(
-            query,
-            "📋 *Minhas Lojas*\n\n"
-            "Você ainda não cadastrou nenhuma loja.",
-            parse_mode="Markdown",
-            reply_markup=teclado,
+        await navegar_para(
+            update, context,
+            "Gerenciamento de Lojas > Minhas Lojas",
+            "📋 *Minhas Lojas*\n\nVocê ainda não cadastrou nenhuma loja.",
+            teclado
         )
         return
 
@@ -101,39 +135,40 @@ async def listar_lojas_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Cadastrar nova", callback_data="loja_cadastrar")],
-        [InlineKeyboardButton("⬅️ Voltar", callback_data="menu_lojas")],
+        [InlineKeyboardButton("🔙 Voltar", callback_data="menu_lojas")],
     ])
 
-    await _safe_edit(query, texto, parse_mode="Markdown", reply_markup=teclado)
+    await navegar_para(
+        update, context,
+        "Gerenciamento de Lojas > Minhas Lojas",
+        texto,
+        teclado
+    )
 
 
-# =========================
-# Cadastro de nova loja (ConversationHandler)
-# =========================
+# ============================================
+# CADASTRO DE NOVA LOJA (CONVERSATION HANDLER)
+# ============================================
+
 async def cadastrar_loja_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia o cadastro de uma nova loja."""
-    query = update.callback_query
-    if not query:
-        return ConversationHandler.END
-    await query.answer("🏛️ Iniciando cadastro de loja...")
-
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
     
     if nivel not in ["2", "3"]:
-        await _safe_edit(query, "⛔ Permissão negada.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⛔ Permissão negada."
+        )
         return ConversationHandler.END
 
     context.user_data["nova_loja"] = {}
     
-    await _safe_edit(
-        query,
-        "🏛️ *Cadastro de Loja*\n\n"
-        "Qual o *nome da loja*?",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_cadastro_loja")
-        ]]),
+    await navegar_para(
+        update, context,
+        "Cadastro de Loja",
+        "🏛️ *Cadastro de Loja*\n\nQual o *nome da loja*?",
+        None
     )
     return NOME
 
@@ -248,38 +283,32 @@ async def receber_endereco_loja(update: Update, context: ContextTypes.DEFAULT_TY
 async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Confirma e salva a loja na planilha."""
     query = update.callback_query
-    if not query:
-        return ConversationHandler.END
-    await query.answer()
-
     user_id = update.effective_user.id
     dados = context.user_data.get("nova_loja", {})
 
     if not dados:
-        await _safe_edit(query, "❌ Erro: dados não encontrados.")
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "❌ Erro: dados não encontrados."
+        )
         return ConversationHandler.END
 
     sucesso = cadastrar_loja(user_id, dados)
 
     if sucesso:
-        await _safe_edit(
-            query,
+        await navegar_para(
+            update, context,
+            "Cadastro de Loja",
             "✅ *Loja cadastrada com sucesso!*\n\n"
             "Agora você pode usar este cadastro como atalho ao criar novos eventos.",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardMarkup([[
                 InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")
-            ]]),
+            ]])
         )
     else:
-        await _safe_edit(
-            query,
-            "❌ *Erro ao cadastrar loja.*\n\n"
-            "Tente novamente mais tarde.",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🏛️ Voltar", callback_data="menu_lojas")
-            ]]),
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "❌ *Erro ao cadastrar loja.*\n\nTente novamente mais tarde."
         )
 
     context.user_data.pop("nova_loja", None)
@@ -289,14 +318,17 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
 async def cancelar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cancela o cadastro de loja."""
     query = update.callback_query
+    user_id = update.effective_user.id
+    
     if query:
         await query.answer()
-        await _safe_edit(
-            query,
+        await navegar_para(
+            update, context,
+            "Cadastro de Loja",
             "Cadastro cancelado.",
-            reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardMarkup([[
                 InlineKeyboardButton("🏛️ Voltar ao menu de lojas", callback_data="menu_lojas")
-            ]]),
+            ]])
         )
     else:
         if update.message:
@@ -306,9 +338,10 @@ async def cancelar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_T
     return ConversationHandler.END
 
 
-# =========================
-# ConversationHandler
-# =========================
+# ============================================
+# CONVERSATION HANDLER
+# ============================================
+
 cadastro_loja_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(cadastrar_loja_inicio, pattern="^loja_cadastrar$")],
     states={
@@ -325,6 +358,11 @@ cadastro_loja_handler = ConversationHandler(
     ],
 )
 
-# Handlers simples (para serem usados no main.py)
+
+# ============================================
+# HANDLERS SIMPLES (PARA REGISTRO NO MAIN.PY)
+# ============================================
+
+# Estes handlers são referenciados no main.py
 listar_lojas_handler_cb = CallbackQueryHandler(listar_lojas_handler, pattern="^loja_listar$")
 menu_lojas_handler = CallbackQueryHandler(menu_lojas, pattern="^menu_lojas$")
