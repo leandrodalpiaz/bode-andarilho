@@ -703,7 +703,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
 
 
 # ============================================
-# CONFIRMAÇÃO DE PRESENÇA (CORRIGIDO)
+# CONFIRMAÇÃO DE PRESENÇA
 # ============================================
 
 async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -800,7 +800,6 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         reply_markup=teclado
     )
 
-    # Responde ao callback com feedback
     if update.effective_chat.type in ["group", "supergroup"]:
         await query.answer("✅ Presença confirmada! Verifique seu privado.")
 
@@ -937,11 +936,15 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# LISTA DE CONFIRMADOS
+# LISTA DE CONFIRMADOS (CORRIGIDO - COMPORTAMENTO ORIGINAL)
 # ============================================
 
 async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    if not query:
+        return
+    await query.answer("👥 Buscando lista de confirmados...")
+
     _, id_evento_cod = query.data.split("|", 1)
     id_evento = _decode_cb(id_evento_cod)
 
@@ -949,19 +952,17 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
 
     if not evento:
-        await _enviar_ou_editar_mensagem(
-            context, update.effective_user.id, TIPO_RESULTADO,
-            "Evento não encontrado."
-        )
-        return
-
-    nome_loja = str(evento.get("Nome da loja", "") or "").strip()
-    data_evento = str(evento.get("Data do evento", "") or "").strip()
-    titulo = f"CONFIRMADOS - {nome_loja}"
+        titulo = "CONFIRMADOS"
+        data_evento = ""
+        nome_loja = ""
+    else:
+        nome_loja = str(evento.get("Nome da loja", "") or "").strip()
+        data_evento = str(evento.get("Data do evento", "") or "").strip()
+        titulo = f"CONFIRMADOS - {nome_loja}"
 
     confirmacoes = listar_confirmacoes_por_evento(id_evento) or []
 
-    linhas = []
+    linhas: List[str] = []
     for c in confirmacoes:
         tid = _tid_to_int(c.get("Telegram ID") or c.get("telegram_id"))
         membro = buscar_membro(tid) if tid is not None else None
@@ -970,13 +971,13 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
             linhas.append(montar_linha_confirmado(membro))
         else:
             snapshot = {
-                "Grau": c.get("Grau", ""),
-                "Nome": c.get("Nome", ""),
-                "Loja": c.get("Loja", ""),
-                "Número da loja": c.get("Número da loja", ""),
-                "Oriente": c.get("Oriente", ""),
-                "Potência": c.get("Potência", ""),
-                "Venerável Mestre": c.get("Venerável Mestre", ""),
+                "Grau": c.get("Grau", c.get("grau", "")),
+                "Nome": c.get("Nome", c.get("nome", "")),
+                "Loja": c.get("Loja", c.get("loja", "")),
+                "Número da loja": c.get("Número da loja", c.get("numero_loja", "")),
+                "Oriente": c.get("Oriente", c.get("oriente", "")),
+                "Potência": c.get("Potência", c.get("potencia", "")),
+                "Venerável Mestre": c.get("Venerável Mestre", c.get("veneravel_mestre", "")),
             }
             linhas.append(montar_linha_confirmado(snapshot))
 
@@ -989,14 +990,17 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     botoes = []
     if ja_confirmou:
         botoes.append([InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")])
+    else:
+        botoes.append([InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{_encode_cb(id_evento)}|sem")])
 
-    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data=f"evento|{_encode_cb(id_evento)}")])
+    botoes.append([InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")])
 
-    await navegar_para(
-        update, context,
-        f"Confirmados > {nome_loja}",
-        texto,
-        InlineKeyboardMarkup(botoes)
+    # COMPORTAMENTO ORIGINAL: SEMPRE envia nova mensagem
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=texto,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(botoes),
     )
 
 
@@ -1211,6 +1215,24 @@ async def detalhes_historico(update: Update, context: ContextTypes.DEFAULT_TYPE)
         texto,
         teclado
     )
+
+
+# ============================================
+# FECHAR MENSAGEM (PARA A LISTA DE CONFIRMADOS)
+# ============================================
+
+async def fechar_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query:
+        return
+    await query.answer()
+    try:
+        await query.delete_message()
+    except Exception:
+        try:
+            await query.edit_message_text("🔒 Fechado.")
+        except Exception:
+            pass
 
 
 # ============================================
