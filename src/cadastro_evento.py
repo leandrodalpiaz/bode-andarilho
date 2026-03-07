@@ -11,8 +11,7 @@
 # - Verificação de duplicidade de eventos
 # - Publicação automática no grupo
 # - Navegação com botões Voltar/Cancelar
-# 
-# Utiliza um ConversationHandler com 17 estados (incluindo escolha de loja).
+# - NOVO: Cada etapa mostra APENAS a pergunta atual (sem acumular respostas)
 # 
 # ============================================
 
@@ -52,6 +51,7 @@ MAX_TEXTO = 250
 # Estados da conversação
 (
     ESCOLHER_LOJA,
+    CONFIRMAR_LOJA,
     DATA,
     HORARIO,
     NOME_LOJA,
@@ -68,7 +68,7 @@ MAX_TEXTO = 250
     OBSERVACOES_TEXTO,
     ENDERECO,
     CONFIRMAR,
-) = range(17)
+) = range(18)
 
 # Opções fixas
 GRAUS_OPCOES = [
@@ -269,6 +269,7 @@ def _limpar_contexto_evento(context: ContextTypes.DEFAULT_TYPE):
         if k.startswith("novo_evento_"):
             context.user_data.pop(k, None)
     context.user_data.pop("lojas_disponiveis", None)
+    context.user_data.pop("loja_selecionada", None)
 
 
 def _voltar_um_passo(context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -398,7 +399,8 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if nivel not in ["2", "3"]:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Você não tem permissão para cadastrar eventos."
+            "Você não tem permissão para cadastrar eventos.",
+            limpar_conteudo=True
         )
         return ConversationHandler.END
 
@@ -411,7 +413,8 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "🔔 O cadastro de eventos deve ser feito no meu chat privado.\n\n"
-            "Acesse meu privado e utilize o menu 'Área do Secretário' para cadastrar."
+            "Acesse meu privado e utilize o menu 'Área do Secretário' para cadastrar.",
+            limpar_conteudo=True
         )
         return ConversationHandler.END
 
@@ -440,7 +443,7 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             ])
         
-        botoes_lojas.append([InlineKeyboardButton("➕ Cadastrar manualmente", callback_data="cadastrar_manual")])
+        botoes_lojas.append([InlineKeyboardButton("📝 Cadastrar manualmente", callback_data="cadastrar_manual")])
         botoes_lojas.append([InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")])
         
         context.user_data["lojas_disponiveis"] = lojas
@@ -449,7 +452,8 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update, context,
             "Cadastro de Evento",
             "🏛️ *Cadastro de Evento*\n\nVocê tem lojas cadastradas. Deseja usar os dados de alguma como atalho?",
-            InlineKeyboardMarkup(botoes_lojas)
+            InlineKeyboardMarkup(botoes_lojas),
+            limpar_conteudo=True
         )
         return ESCOLHER_LOJA
     else:
@@ -458,7 +462,8 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update, context,
             "Cadastro de Evento",
             "📅 *Data do evento* (Ex: 25/03/2026)",
-            _teclado_cancelar()
+            _teclado_cancelar(),
+            limpar_conteudo=True
         )
         return DATA
 
@@ -473,7 +478,8 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
             update, context,
             "Cadastro de Evento",
             "📅 *Data do evento* (Ex: 25/03/2026)",
-            _teclado_cancelar()
+            _teclado_cancelar(),
+            limpar_conteudo=True
         )
         return DATA
     
@@ -484,38 +490,132 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
             
             if 0 <= index < len(lojas):
                 loja = lojas[index]
-                # Pré-preenche os dados da loja
-                context.user_data["novo_evento_nome_loja"] = loja.get("Nome da Loja", "")
-                context.user_data["novo_evento_numero_loja"] = str(loja.get("Número", "0"))
-                context.user_data["novo_evento_rito"] = loja.get("Rito", "")
-                context.user_data["novo_evento_potencia"] = loja.get("Potência", "")
-                context.user_data["novo_evento_endereco"] = loja.get("Endereço", "")
+                # Guarda a loja selecionada
+                context.user_data["loja_selecionada"] = loja
+                
+                # Mostra os dados da loja e pergunta confirmação
+                dados_loja = (
+                    f"🏛 *{loja.get('Nome da Loja')}* {loja.get('Número', '')}\n"
+                    f"📜 Rito: {loja.get('Rito')}\n"
+                    f"⚜️ Potência: {loja.get('Potência')}\n"
+                    f"📍 Endereço: {loja.get('Endereço')}\n\n"
+                    f"Deseja usar esta loja?"
+                )
+                
+                teclado = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("✅ Sim, usar esta loja", callback_data="confirmar_loja_sim")],
+                    [InlineKeyboardButton("❌ Não, escolher outra", callback_data="escolher_outra_loja")],
+                    [InlineKeyboardButton("📝 Cadastrar manualmente", callback_data="cadastrar_manual")],
+                ])
                 
                 await navegar_para(
                     update, context,
-                    "Cadastro de Evento",
-                    "✅ Dados da loja carregados!\n\n📅 *Data do evento* (Ex: 25/03/2026)",
-                    _teclado_voltar_cancelar()
+                    "Cadastro de Evento > Confirmar Loja",
+                    dados_loja,
+                    teclado,
+                    limpar_conteudo=True
                 )
-                return DATA
+                return CONFIRMAR_LOJA
             else:
                 await _enviar_ou_editar_mensagem(
                     context, update.effective_user.id, TIPO_RESULTADO,
-                    "❌ Loja não encontrada. Tente novamente."
+                    "❌ Loja não encontrada. Tente novamente.",
+                    limpar_conteudo=True
                 )
                 return ESCOLHER_LOJA
-        except (ValueError, IndexError):
+        except (ValueError, IndexError) as e:
+            logger.error(f"Erro ao processar seleção de loja: {e}")
             await _enviar_ou_editar_mensagem(
                 context, update.effective_user.id, TIPO_RESULTADO,
-                "❌ Erro ao processar seleção. Tente novamente."
+                "❌ Erro ao processar seleção. Tente novamente.",
+                limpar_conteudo=True
             )
             return ESCOLHER_LOJA
+    
+    # Se chegou aqui, comando inválido
+    await _enviar_ou_editar_mensagem(
+        context, update.effective_user.id, TIPO_RESULTADO,
+        "❌ Comando inválido. Tente novamente.",
+        limpar_conteudo=True
+    )
+    return ESCOLHER_LOJA
+
+
+async def confirmar_loja_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Confirma o uso da loja selecionada."""
+    query = update.callback_query
+    data = query.data
+
+    if data == "confirmar_loja_sim":
+        loja = context.user_data.get("loja_selecionada")
+        if loja:
+            # Pré-preenche os dados da loja
+            context.user_data["novo_evento_nome_loja"] = loja.get("Nome da Loja", "")
+            context.user_data["novo_evento_numero_loja"] = str(loja.get("Número", "0"))
+            context.user_data["novo_evento_rito"] = loja.get("Rito", "")
+            context.user_data["novo_evento_potencia"] = loja.get("Potência", "")
+            context.user_data["novo_evento_endereco"] = loja.get("Endereço", "")
+            
+            await navegar_para(
+                update, context,
+                "Cadastro de Evento",
+                "📅 *Data do evento* (Ex: 25/03/2026)",
+                _teclado_voltar_cancelar(),
+                limpar_conteudo=True
+            )
+            return DATA
+        else:
+            await navegar_para(
+                update, context,
+                "Cadastro de Evento",
+                "Erro ao carregar loja. Tente novamente.",
+                _teclado_cancelar(),
+                limpar_conteudo=True
+            )
+            return ESCOLHER_LOJA
+    
+    elif data == "escolher_outra_loja":
+        # Volta para a escolha de lojas
+        lojas = context.user_data.get("lojas_disponiveis", [])
+        botoes_lojas = []
+        for i, loja in enumerate(lojas[:5]):
+            nome = loja.get("Nome da Loja", "")
+            numero = loja.get("Número", "")
+            nome_fmt = f"{nome} {numero}" if numero else nome
+            botoes_lojas.append([
+                InlineKeyboardButton(
+                    f"🏛 {nome_fmt}",
+                    callback_data=f"usar_loja_{i}"
+                )
+            ])
+        
+        botoes_lojas.append([InlineKeyboardButton("📝 Cadastrar manualmente", callback_data="cadastrar_manual")])
+        botoes_lojas.append([InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")])
+        
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento",
+            "🏛️ *Cadastro de Evento*\n\nEscolha uma loja:",
+            InlineKeyboardMarkup(botoes_lojas),
+            limpar_conteudo=True
+        )
+        return ESCOLHER_LOJA
+    
+    elif data == "cadastrar_manual":
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento",
+            "📅 *Data do evento* (Ex: 25/03/2026)",
+            _teclado_cancelar(),
+            limpar_conteudo=True
+        )
+        return DATA
     
     return ESCOLHER_LOJA
 
 
 # ============================================
-# RECEBEDORES DE DADOS (TEXTO) - CORRIGIDOS
+# RECEBEDORES DE DADOS (TEXTO) - COM LIMPEZA
 # ============================================
 
 async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -543,7 +643,8 @@ async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update, context,
         "Cadastro de Evento",
         "🕕 *Horário* (Ex: 19:30)",
-        _teclado_voltar_cancelar()
+        _teclado_voltar_cancelar(),
+        limpar_conteudo=True
     )
     return HORARIO
 
@@ -560,13 +661,25 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["novo_evento_horario"] = hora
     
-    await navegar_para(
-        update, context,
-        "Cadastro de Evento",
-        "🏛 *Nome da loja*",
-        _teclado_voltar_cancelar()
-    )
-    return NOME_LOJA
+    # Se já tem nome da loja (veio de cadastro com loja), pula direto
+    if "novo_evento_nome_loja" in context.user_data:
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento",
+            "📍 *Oriente*",
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
+        )
+        return ORIENTE
+    else:
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento",
+            "🏛 *Nome da loja*",
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
+        )
+        return NOME_LOJA
 
 
 async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -585,7 +698,8 @@ async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update, context,
         "Cadastro de Evento",
         "🔢 *Número da loja* (se não houver, digite 0)",
-        _teclado_voltar_cancelar()
+        _teclado_voltar_cancelar(),
+        limpar_conteudo=True
     )
     return NUMERO_LOJA
 
@@ -603,7 +717,8 @@ async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
         update, context,
         "Cadastro de Evento",
         "📍 *Oriente*",
-        _teclado_voltar_cancelar()
+        _teclado_voltar_cancelar(),
+        limpar_conteudo=True
     )
     return ORIENTE
 
@@ -624,7 +739,8 @@ async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update, context,
         "Cadastro de Evento",
         "🔺 *Grau mínimo*",
-        _teclado_graus()
+        _teclado_graus(),
+        limpar_conteudo=True
     )
     return GRAU
 
@@ -646,19 +762,20 @@ async def receber_grau_callback(update: Update, context: ContextTypes.DEFAULT_TY
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
             "Grau inválido. Selecione uma opção:",
-            _teclado_graus()
+            _teclado_graus(),
+            limpar_conteudo=True
         )
         return GRAU
 
     # Salva o grau escolhido
     context.user_data["novo_evento_grau"] = grau
 
-    # Avança para a próxima pergunta usando navegar_para
     await navegar_para(
         update, context,
         "Cadastro de Evento",
         "🕯 *Tipo de sessão* (texto livre)",
-        _teclado_voltar_cancelar()
+        _teclado_voltar_cancelar(),
+        limpar_conteudo=True
     )
     return TIPO_SESSAO
 
@@ -672,13 +789,25 @@ async def receber_tipo_sessao(update: Update, context: ContextTypes.DEFAULT_TYPE
     val = _truncate(update.message.text)
     context.user_data["novo_evento_tipo_sessao"] = val
     
-    await navegar_para(
-        update, context,
-        "Cadastro de Evento",
-        "📜 *Rito* (texto livre)",
-        _teclado_voltar_cancelar()
-    )
-    return RITO
+    # Se já tem rito (veio de cadastro com loja), pula
+    if "novo_evento_rito" in context.user_data:
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento",
+            "👔 *Traje obrigatório* (texto livre)",
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
+        )
+        return TRAJE
+    else:
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento",
+            "📜 *Rito* (texto livre)",
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
+        )
+        return RITO
 
 
 async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -686,13 +815,25 @@ async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val = _truncate(update.message.text)
     context.user_data["novo_evento_rito"] = val
     
-    await navegar_para(
-        update, context,
-        "Cadastro de Evento",
-        "⚜️ *Potência* (texto livre)",
-        _teclado_voltar_cancelar()
-    )
-    return POTENCIA
+    # Se já tem potência (veio de cadastro com loja), pula
+    if "novo_evento_potencia" in context.user_data:
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento",
+            "👔 *Traje obrigatório* (texto livre)",
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
+        )
+        return TRAJE
+    else:
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento",
+            "⚜️ *Potência* (texto livre)",
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
+        )
+        return POTENCIA
 
 
 async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -704,7 +845,8 @@ async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update, context,
         "Cadastro de Evento",
         "👔 *Traje obrigatório* (texto livre)",
-        _teclado_voltar_cancelar()
+        _teclado_voltar_cancelar(),
+        limpar_conteudo=True
     )
     return TRAJE
 
@@ -718,7 +860,8 @@ async def receber_traje(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update, context,
         "Cadastro de Evento",
         "🍽 *Haverá Ágape?*",
-        _teclado_sim_nao("agape")
+        _teclado_sim_nao("agape"),
+        limpar_conteudo=True
     )
     return AGAPE
 
@@ -738,7 +881,8 @@ async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
             "Selecione uma opção:",
-            _teclado_sim_nao("agape")
+            _teclado_sim_nao("agape"),
+            limpar_conteudo=True
         )
         return AGAPE
 
@@ -750,7 +894,8 @@ async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update, context,
             "Cadastro de Evento",
             "💰 *Tipo de Ágape?*",
-            _teclado_agape_tipos()
+            _teclado_agape_tipos(),
+            limpar_conteudo=True
         )
         return AGAPE_TIPO
 
@@ -758,7 +903,8 @@ async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update, context,
         "Cadastro de Evento",
         "📝 *Deseja adicionar observações?*",
-        _teclado_sim_nao("obs")
+        _teclado_sim_nao("obs"),
+        limpar_conteudo=True
     )
     return OBSERVACOES_TEM
 
@@ -774,7 +920,8 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
             "Selecione uma opção:",
-            _teclado_agape_tipos()
+            _teclado_agape_tipos(),
+            limpar_conteudo=True
         )
         return AGAPE_TIPO
 
@@ -784,7 +931,8 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
         update, context,
         "Cadastro de Evento",
         "📝 *Deseja adicionar observações?*",
-        _teclado_sim_nao("obs")
+        _teclado_sim_nao("obs"),
+        limpar_conteudo=True
     )
     return OBSERVACOES_TEM
 
@@ -800,7 +948,8 @@ async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
             "Selecione uma opção:",
-            _teclado_sim_nao("obs")
+            _teclado_sim_nao("obs"),
+            limpar_conteudo=True
         )
         return OBSERVACOES_TEM
 
@@ -812,17 +961,34 @@ async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_
             update, context,
             "Cadastro de Evento",
             "✏️ *Digite as observações* (texto livre)",
-            _teclado_voltar_cancelar()
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
         )
         return OBSERVACOES_TEXTO
 
-    await navegar_para(
-        update, context,
-        "Cadastro de Evento",
-        "📍 *Endereço da sessão*",
-        _teclado_voltar_cancelar()
-    )
-    return ENDERECO
+    # Se já tem endereço (veio de cadastro com loja), pula para confirmação
+    if "novo_evento_endereco" in context.user_data:
+        evento = _montar_evento_dict(context)
+        eventos_existentes = listar_eventos() or []
+        dup = _encontrar_duplicado(evento, eventos_existentes)
+        
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento",
+            _montar_resumo_evento_md(evento, duplicado=dup),
+            _teclado_confirmacao(tem_duplicado=dup is not None),
+            limpar_conteudo=True
+        )
+        return CONFIRMAR
+    else:
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento",
+            "📍 *Endereço da sessão*",
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
+        )
+        return ENDERECO
 
 
 async def receber_observacoes_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -830,13 +996,29 @@ async def receber_observacoes_texto(update: Update, context: ContextTypes.DEFAUL
     val = _truncate(update.message.text, 500)
     context.user_data["novo_evento_observacoes_texto"] = val
     
-    await navegar_para(
-        update, context,
-        "Cadastro de Evento",
-        "📍 *Endereço da sessão*",
-        _teclado_voltar_cancelar()
-    )
-    return ENDERECO
+    # Se já tem endereço (veio de cadastro com loja), pula para confirmação
+    if "novo_evento_endereco" in context.user_data:
+        evento = _montar_evento_dict(context)
+        eventos_existentes = listar_eventos() or []
+        dup = _encontrar_duplicado(evento, eventos_existentes)
+        
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento",
+            _montar_resumo_evento_md(evento, duplicado=dup),
+            _teclado_confirmacao(tem_duplicado=dup is not None),
+            limpar_conteudo=True
+        )
+        return CONFIRMAR
+    else:
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento",
+            "📍 *Endereço da sessão*",
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
+        )
+        return ENDERECO
 
 
 async def receber_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -852,7 +1034,8 @@ async def receber_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update, context,
         "Cadastro de Evento",
         _montar_resumo_evento_md(evento, duplicado=dup),
-        _teclado_confirmacao(tem_duplicado=dup is not None)
+        _teclado_confirmacao(tem_duplicado=dup is not None),
+        limpar_conteudo=True
     )
     return CONFIRMAR
 
@@ -875,7 +1058,8 @@ async def confirmar_publicacao(update: Update, context: ContextTypes.DEFAULT_TYP
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
             texto,
-            _teclado_confirmacao(tem_duplicado=True)
+            _teclado_confirmacao(tem_duplicado=True),
+            limpar_conteudo=True
         )
         return CONFIRMAR
 
@@ -903,7 +1087,8 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
     except Exception as e:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            f"Erro ao salvar evento na planilha: {e}"
+            f"Erro ao salvar evento na planilha: {e}",
+            limpar_conteudo=True
         )
         return
 
@@ -964,7 +1149,8 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
     except Exception as e:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            f"Evento salvo, mas falhou ao publicar no grupo: {e}"
+            f"Evento salvo, mas falhou ao publicar no grupo: {e}",
+            limpar_conteudo=True
         )
         _limpar_contexto_evento(context)
         return
@@ -980,7 +1166,8 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
         msg,
         InlineKeyboardMarkup([[
             InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")
-        ]])
+        ]]),
+        limpar_conteudo=True
     )
 
     _limpar_contexto_evento(context)
@@ -1001,7 +1188,8 @@ async def refazer_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update, context,
         "Cadastro de Evento",
         "📅 *Data do evento* (Ex: 25/03/2026)",
-        _teclado_cancelar()
+        _teclado_cancelar(),
+        limpar_conteudo=True
     )
     return DATA
 
@@ -1024,91 +1212,106 @@ async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "📅 *Data do evento* (Ex: 25/03/2026)",
-            _teclado_cancelar()
+            _teclado_cancelar(),
+            limpar_conteudo=True
         )
     elif estado == HORARIO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "🕕 *Horário* (Ex: 19:30)",
-            _teclado_voltar_cancelar()
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
         )
     elif estado == NOME_LOJA:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "🏛 *Nome da loja*",
-            _teclado_voltar_cancelar()
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
         )
     elif estado == NUMERO_LOJA:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "🔢 *Número da loja* (se não houver, digite 0)",
-            _teclado_voltar_cancelar()
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
         )
     elif estado == ORIENTE:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "📍 *Oriente*",
-            _teclado_voltar_cancelar()
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
         )
     elif estado == GRAU:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "🔺 *Grau mínimo*",
-            _teclado_graus()
+            _teclado_graus(),
+            limpar_conteudo=True
         )
     elif estado == TIPO_SESSAO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "🕯 *Tipo de sessão* (texto livre)",
-            _teclado_voltar_cancelar()
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
         )
     elif estado == RITO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "📜 *Rito* (texto livre)",
-            _teclado_voltar_cancelar()
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
         )
     elif estado == POTENCIA:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "⚜️ *Potência* (texto livre)",
-            _teclado_voltar_cancelar()
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
         )
     elif estado == TRAJE:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "👔 *Traje obrigatório* (texto livre)",
-            _teclado_voltar_cancelar()
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
         )
     elif estado == AGAPE:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "🍽 *Haverá Ágape?*",
-            _teclado_sim_nao("agape")
+            _teclado_sim_nao("agape"),
+            limpar_conteudo=True
         )
     elif estado == AGAPE_TIPO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "💰 *Tipo de Ágape?*",
-            _teclado_agape_tipos()
+            _teclado_agape_tipos(),
+            limpar_conteudo=True
         )
     elif estado == OBSERVACOES_TEM:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "📝 *Deseja adicionar observações?*",
-            _teclado_sim_nao("obs")
+            _teclado_sim_nao("obs"),
+            limpar_conteudo=True
         )
     elif estado == OBSERVACOES_TEXTO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "✏️ *Digite as observações* (texto livre)",
-            _teclado_voltar_cancelar()
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
         )
     elif estado == ENDERECO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "📍 *Endereço da sessão*",
-            _teclado_voltar_cancelar()
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
         )
     
     return estado
@@ -1127,7 +1330,8 @@ async def ev_cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Cadastro cancelado. Use o menu acima para voltar.",
             InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")
-            ]])
+            ]]),
+            limpar_conteudo=True
         )
     else:
         if update.message:
@@ -1161,6 +1365,7 @@ cadastro_evento_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(novo_evento_start, pattern=r"^cadastrar_evento$")],
     states={
         ESCOLHER_LOJA: [CallbackQueryHandler(escolher_loja_callback, pattern="^(usar_loja_|cadastrar_manual)$")],
+        CONFIRMAR_LOJA: [CallbackQueryHandler(confirmar_loja_callback, pattern="^(confirmar_loja_sim|escolher_outra_loja|cadastrar_manual)$")],
         DATA: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_data),
             CallbackQueryHandler(ev_cancelar, pattern=r"^ev_cancelar$"),
