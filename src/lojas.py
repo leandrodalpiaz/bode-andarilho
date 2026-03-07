@@ -152,6 +152,10 @@ async def listar_lojas_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def cadastrar_loja_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia o cadastro de uma nova loja."""
+    query = update.callback_query
+    if query:
+        await query.answer("🏛️ Iniciando cadastro...")
+    
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
     
@@ -168,7 +172,9 @@ async def cadastrar_loja_inicio(update: Update, context: ContextTypes.DEFAULT_TY
         update, context,
         "Cadastro de Loja",
         "🏛️ *Cadastro de Loja*\n\nQual o *nome da loja*?",
-        None
+        InlineKeyboardMarkup([[
+            InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_cadastro_loja")
+        ]])
     )
     return NOME
 
@@ -183,7 +189,7 @@ async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["nova_loja"]["nome"] = nome
     
     await update.message.reply_text(
-        "Qual o *número da loja*? (Digite 0 se não houver)",
+        "🔢 *Número da loja* (Digite 0 se não houver)",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_cadastro_loja")
@@ -202,7 +208,7 @@ async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["nova_loja"]["numero"] = numero
     
     await update.message.reply_text(
-        "Qual o *Rito*?",
+        "📜 *Rito*",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_cadastro_loja")
@@ -221,7 +227,7 @@ async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["nova_loja"]["rito"] = rito
     
     await update.message.reply_text(
-        "Qual a *Potência*?",
+        "⚜️ *Potência*",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_cadastro_loja")
@@ -240,7 +246,7 @@ async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["nova_loja"]["potencia"] = potencia
     
     await update.message.reply_text(
-        "Qual o *Endereço* da loja?\n"
+        "📍 *Endereço* da loja?\n"
         "(Pode ser texto ou link do Google Maps)",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([[
@@ -280,22 +286,38 @@ async def receber_endereco_loja(update: Update, context: ContextTypes.DEFAULT_TY
     return CONFIRMAR
 
 
+# ============================================
+# CONFIRMAÇÃO DE CADASTRO DE LOJA (CORRIGIDO)
+# ============================================
+
 async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Confirma e salva a loja na planilha."""
     query = update.callback_query
     user_id = update.effective_user.id
+    
+    # Responde ao callback imediatamente para evitar timeout
+    await query.answer("✅ Processando...")
+
+    # Recupera os dados do user_data
     dados = context.user_data.get("nova_loja", {})
 
     if not dados:
-        await _enviar_ou_editar_mensagem(
-            context, user_id, TIPO_RESULTADO,
-            "❌ Erro: dados não encontrados."
+        logger.error(f"Erro: dados não encontrados para usuário {user_id}")
+        await navegar_para(
+            update, context,
+            "Cadastro de Loja",
+            "❌ *Erro: dados não encontrados.*\n\nTente novamente.",
+            InlineKeyboardMarkup([[
+                InlineKeyboardButton("🏛️ Voltar ao menu de lojas", callback_data="menu_lojas")
+            ]])
         )
         return ConversationHandler.END
 
+    # Tenta cadastrar na planilha
     sucesso = cadastrar_loja(user_id, dados)
 
     if sucesso:
+        logger.info(f"Loja cadastrada com sucesso para usuário {user_id}: {dados.get('nome')}")
         await navegar_para(
             update, context,
             "Cadastro de Loja",
@@ -306,11 +328,18 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
             ]])
         )
     else:
-        await _enviar_ou_editar_mensagem(
-            context, user_id, TIPO_RESULTADO,
-            "❌ *Erro ao cadastrar loja.*\n\nTente novamente mais tarde."
+        logger.error(f"Erro ao cadastrar loja para usuário {user_id}: {dados.get('nome')}")
+        await navegar_para(
+            update, context,
+            "Cadastro de Loja",
+            "❌ *Erro ao cadastrar loja.*\n\n"
+            "Tente novamente mais tarde.",
+            InlineKeyboardMarkup([[
+                InlineKeyboardButton("🏛️ Voltar ao menu de lojas", callback_data="menu_lojas")
+            ]])
         )
 
+    # Limpa os dados da sessão
     context.user_data.pop("nova_loja", None)
     return ConversationHandler.END
 
@@ -350,12 +379,18 @@ cadastro_loja_handler = ConversationHandler(
         RITO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_rito)],
         POTENCIA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_potencia)],
         ENDERECO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_endereco_loja)],
-        CONFIRMAR: [CallbackQueryHandler(confirmar_cadastro_loja, pattern="^confirmar_cadastro_loja$")],
+        CONFIRMAR: [
+            CallbackQueryHandler(confirmar_cadastro_loja, pattern="^confirmar_cadastro_loja$"),
+            CallbackQueryHandler(cancelar_cadastro_loja, pattern="^cancelar_cadastro_loja$"),
+            CallbackQueryHandler(cadastrar_loja_inicio, pattern="^loja_cadastrar$"),
+        ],
     },
     fallbacks=[
         CommandHandler("cancelar", cancelar_cadastro_loja),
         CallbackQueryHandler(cancelar_cadastro_loja, pattern="^cancelar_cadastro_loja$"),
     ],
+    name="cadastro_loja_handler",
+    persistent=False,
 )
 
 
