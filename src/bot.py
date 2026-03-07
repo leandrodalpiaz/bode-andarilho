@@ -13,11 +13,11 @@
 # 
 # 2. MENSAGEM DE CONTEXTO: Mostra onde o usuário está
 #    - Editada a cada navegação
-#    - Exibe o caminho percorrido (ex: "Ver Eventos > Esta semana")
+#    - Exibe o caminho percorrido (ex: "Cadastro de Evento")
 # 
 # 3. MENSAGEM DE RESULTADO: Mostra o conteúdo/opções atuais
 #    - Editada a cada ação
-#    - Contém os botões específicos da função atual
+#    - Agora com suporte a "limpar_conteudo" para mostrar APENAS a pergunta atual
 # 
 # ============================================
 
@@ -129,7 +129,8 @@ async def _enviar_ou_editar_mensagem(
     tipo: str, 
     texto: str, 
     teclado = None,
-    parse_mode: str = "Markdown"
+    parse_mode: str = "Markdown",
+    limpar_conteudo: bool = False
 ) -> bool:
     """
     Gerencia o envio/edição de mensagens do sistema de menu fixo.
@@ -139,6 +140,7 @@ async def _enviar_ou_editar_mensagem(
     - Se existe e o conteúdo mudou: tenta editar
     - Se existe e o conteúdo é o mesmo: NÃO FAZ NADA
     - Se a mensagem anterior foi apagada: envia nova
+    - Se limpar_conteudo=True: substitui completamente a mensagem
     
     Args:
         context: Context do Telegram
@@ -147,6 +149,7 @@ async def _enviar_ou_editar_mensagem(
         texto (str): Texto da mensagem
         teclado: Teclado inline (opcional)
         parse_mode (str): Modo de formatação do texto
+        limpar_conteudo (bool): Se True, substitui completamente a mensagem
     
     Returns:
         bool: True se bem-sucedido
@@ -161,7 +164,7 @@ async def _enviar_ou_editar_mensagem(
     dados_anteriores = estado_mensagens[user_id].get(tipo)
     
     # Se já existe uma mensagem deste tipo
-    if dados_anteriores:
+    if dados_anteriores and not limpar_conteudo:
         # Verifica se a mensagem anterior ainda existe
         mensagem_existe = await _verificar_mensagem_existe(context, user_id, dados_anteriores["message_id"])
         
@@ -195,7 +198,7 @@ async def _enviar_ou_editar_mensagem(
                 logger.warning(f"[{tipo}] Não foi possível editar mensagem para {user_id}: {e}")
                 estado_mensagens[user_id].pop(tipo, None)
     
-    # Envia nova mensagem
+    # Envia nova mensagem (ou substitui completamente se limpar_conteudo=True)
     try:
         msg = await context.bot.send_message(
             chat_id=user_id,
@@ -203,6 +206,17 @@ async def _enviar_ou_editar_mensagem(
             parse_mode=parse_mode,
             reply_markup=teclado
         )
+        
+        # Se estava limpando conteúdo e já existia uma mensagem, tenta apagar a anterior
+        if limpar_conteudo and tipo in estado_mensagens[user_id]:
+            try:
+                await context.bot.delete_message(
+                    chat_id=user_id,
+                    message_id=estado_mensagens[user_id][tipo]["message_id"]
+                )
+                logger.info(f"[{tipo}] Mensagem anterior deletada para usuário {user_id}")
+            except Exception:
+                pass  # Ignora se não conseguir apagar
         
         # Armazena o ID da nova mensagem e o hash
         estado_mensagens[user_id][tipo] = {
@@ -293,7 +307,8 @@ async def navegar_para(
     context: ContextTypes.DEFAULT_TYPE,
     caminho: str,
     conteudo: str,
-    teclado = None
+    teclado = None,
+    limpar_conteudo: bool = False
 ) -> bool:
     """
     Função auxiliar para navegação entre telas.
@@ -302,9 +317,10 @@ async def navegar_para(
     Args:
         update: Update do Telegram
         context: Context do Telegram
-        caminho (str): Caminho atual (ex: "Ver Eventos > Esta semana")
-        conteudo (str): Conteúdo a ser exibido
+        caminho (str): Caminho atual (ex: "Cadastro de Evento")
+        conteudo (str): Conteúdo a ser exibido (agora apenas a pergunta atual)
         teclado: Teclado para a mensagem de resultado
+        limpar_conteudo (bool): Se True, substitui completamente a mensagem de resultado
     
     Returns:
         bool: True se bem-sucedido
@@ -317,9 +333,9 @@ async def navegar_para(
             context, user_id, TIPO_CONTEXTO, f"📍 *{caminho}*"
         )
     
-    # Atualiza mensagem de resultado
+    # Atualiza mensagem de resultado (com opção de limpar)
     return await _enviar_ou_editar_mensagem(
-        context, user_id, TIPO_RESULTADO, conteudo, teclado
+        context, user_id, TIPO_RESULTADO, conteudo, teclado, limpar_conteudo=limpar_conteudo
     )
 
 
@@ -339,10 +355,11 @@ async def voltar_ao_menu_principal(update: Update, context: ContextTypes.DEFAULT
         context, user_id, TIPO_CONTEXTO, "📍 *Menu Principal*"
     )
     
-    # Atualiza resultado
+    # Atualiza resultado (limpa conteúdo)
     await _enviar_ou_editar_mensagem(
         context, user_id, TIPO_RESULTADO,
-        "Escolha uma opção no menu acima para começar."
+        "Escolha uma opção no menu acima para começar.",
+        limpar_conteudo=True
     )
 
 
@@ -429,14 +446,16 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "area_secretario" and nivel not in ["2", "3"]:
         await _enviar_ou_editar_mensagem(
             context, telegram_id, TIPO_RESULTADO,
-            "⛔ Você não tem permissão para acessar a Área do Secretário."
+            "⛔ Você não tem permissão para acessar a Área do Secretário.",
+            limpar_conteudo=True
         )
         return
     
     if data == "area_admin" and nivel != "3":
         await _enviar_ou_editar_mensagem(
             context, telegram_id, TIPO_RESULTADO,
-            "⛔ Você não tem permissão para acessar a Área do Administrador."
+            "⛔ Você não tem permissão para acessar a Área do Administrador.",
+            limpar_conteudo=True
         )
         return
 
@@ -560,7 +579,8 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await _enviar_ou_editar_mensagem(
             context, telegram_id, TIPO_RESULTADO,
-            "Função em desenvolvimento ou comando não reconhecido."
+            "Função em desenvolvimento ou comando não reconhecido.",
+            limpar_conteudo=True
         )
 
 
