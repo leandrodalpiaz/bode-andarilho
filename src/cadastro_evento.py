@@ -457,7 +457,7 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "Certo, vamos cadastrar um novo evento.\n\nQual a *Data do evento*? (Ex: 25/03/2026)",
+            "📅 *Data do evento* (Ex: 25/03/2026)",
             _teclado_cancelar()
         )
         return DATA
@@ -472,7 +472,7 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "Certo, vamos cadastrar um novo evento.\n\nQual a *Data do evento*? (Ex: 25/03/2026)",
+            "📅 *Data do evento* (Ex: 25/03/2026)",
             _teclado_cancelar()
         )
         return DATA
@@ -494,7 +494,7 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
                 await navegar_para(
                     update, context,
                     "Cadastro de Evento",
-                    "✅ Dados da loja carregados!\n\nAgora vamos preencher os detalhes da sessão.\n\nQual a *Data do evento*? (Ex: 25/03/2026)",
+                    "✅ Dados da loja carregados!\n\n📅 *Data do evento* (Ex: 25/03/2026)",
                     _teclado_voltar_cancelar()
                 )
                 return DATA
@@ -541,8 +541,8 @@ async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await navegar_para(
         update, context,
-        "Cadastro de Evento > Data",
-        "Qual o *Horário*? (Ex: 19:30)",
+        "Cadastro de Evento",
+        "🕕 *Horário* (Ex: 19:30)",
         _teclado_voltar_cancelar()
     )
     return HORARIO
@@ -562,8 +562,8 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await navegar_para(
         update, context,
-        "Cadastro de Evento > Horário",
-        "Qual o *Nome da loja*?",
+        "Cadastro de Evento",
+        "🏛 *Nome da loja*",
         _teclado_voltar_cancelar()
     )
     return NOME_LOJA
@@ -583,8 +583,8 @@ async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await navegar_para(
         update, context,
-        "Cadastro de Evento > Nome da Loja",
-        "Qual o *Número da loja*? (se não houver, digite 0)",
+        "Cadastro de Evento",
+        "🔢 *Número da loja* (se não houver, digite 0)",
         _teclado_voltar_cancelar()
     )
     return NUMERO_LOJA
@@ -601,8 +601,8 @@ async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     await navegar_para(
         update, context,
-        "Cadastro de Evento > Número da Loja",
-        "Qual o *Oriente*?",
+        "Cadastro de Evento",
+        "📍 *Oriente*",
         _teclado_voltar_cancelar()
     )
     return ORIENTE
@@ -622,8 +622,8 @@ async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await navegar_para(
         update, context,
-        "Cadastro de Evento > Oriente",
-        "Qual o *Grau mínimo*?",
+        "Cadastro de Evento",
+        "🔺 *Grau mínimo*",
         _teclado_graus()
     )
     return GRAU
@@ -656,8 +656,8 @@ async def receber_grau_callback(update: Update, context: ContextTypes.DEFAULT_TY
     # Avança para a próxima pergunta usando navegar_para
     await navegar_para(
         update, context,
-        "Cadastro de Evento > Grau",
-        "Qual o *Tipo de sessão*? (texto livre)",
+        "Cadastro de Evento",
+        "🕯 *Tipo de sessão* (texto livre)",
         _teclado_voltar_cancelar()
     )
     return TIPO_SESSAO
@@ -674,8 +674,8 @@ async def receber_tipo_sessao(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     await navegar_para(
         update, context,
-        "Cadastro de Evento > Tipo de Sessão",
-        "Qual o *Rito*? (texto livre)",
+        "Cadastro de Evento",
+        "📜 *Rito* (texto livre)",
         _teclado_voltar_cancelar()
     )
     return RITO
@@ -688,8 +688,8 @@ async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await navegar_para(
         update, context,
-        "Cadastro de Evento > Rito",
-        "Qual a *Potência*? (texto livre)",
+        "Cadastro de Evento",
+        "⚜️ *Potência* (texto livre)",
         _teclado_voltar_cancelar()
     )
     return POTENCIA
@@ -702,8 +702,8 @@ async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await navegar_para(
         update, context,
-        "Cadastro de Evento > Potência",
-        "Qual o *Traje obrigatório*? (texto livre)",
+        "Cadastro de Evento",
+        "👔 *Traje obrigatório* (texto livre)",
         _teclado_voltar_cancelar()
     )
     return TRAJE
@@ -716,8 +716,8 @@ async def receber_traje(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await navegar_para(
         update, context,
-        "Cadastro de Evento > Traje",
-        "Haverá *Ágape*?",
+        "Cadastro de Evento",
+        "🍽 *Haverá Ágape?*",
         _teclado_sim_nao("agape")
     )
     return AGAPE
@@ -748,16 +748,16 @@ async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if val == "sim":
         await navegar_para(
             update, context,
-            "Cadastro de Evento > Ágape",
-            "Qual o tipo de Ágape?",
+            "Cadastro de Evento",
+            "💰 *Tipo de Ágape?*",
             _teclado_agape_tipos()
         )
         return AGAPE_TIPO
 
     await navegar_para(
         update, context,
-        "Cadastro de Evento > Ágape",
-        "Deseja adicionar *observações*?",
+        "Cadastro de Evento",
+        "📝 *Deseja adicionar observações?*",
         _teclado_sim_nao("obs")
     )
     return OBSERVACOES_TEM
@@ -782,8 +782,8 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     await navegar_para(
         update, context,
-        "Cadastro de Evento > Tipo de Ágape",
-        "Deseja adicionar *observações*?",
+        "Cadastro de Evento",
+        "📝 *Deseja adicionar observações?*",
         _teclado_sim_nao("obs")
     )
     return OBSERVACOES_TEM
@@ -810,16 +810,16 @@ async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_
     if val == "sim":
         await navegar_para(
             update, context,
-            "Cadastro de Evento > Observações",
-            "Digite as *observações* (texto livre):",
+            "Cadastro de Evento",
+            "✏️ *Digite as observações* (texto livre)",
             _teclado_voltar_cancelar()
         )
         return OBSERVACOES_TEXTO
 
     await navegar_para(
         update, context,
-        "Cadastro de Evento > Observações",
-        "Agora informe o *Endereço da sessão*:",
+        "Cadastro de Evento",
+        "📍 *Endereço da sessão*",
         _teclado_voltar_cancelar()
     )
     return ENDERECO
@@ -832,8 +832,8 @@ async def receber_observacoes_texto(update: Update, context: ContextTypes.DEFAUL
     
     await navegar_para(
         update, context,
-        "Cadastro de Evento > Observações",
-        "Agora informe o *Endereço da sessão*:",
+        "Cadastro de Evento",
+        "📍 *Endereço da sessão*",
         _teclado_voltar_cancelar()
     )
     return ENDERECO
@@ -850,7 +850,7 @@ async def receber_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await navegar_para(
         update, context,
-        "Cadastro de Evento > Endereço",
+        "Cadastro de Evento",
         _montar_resumo_evento_md(evento, duplicado=dup),
         _teclado_confirmacao(tem_duplicado=dup is not None)
     )
@@ -923,6 +923,7 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
     except Exception:
         grupo_id_int = int(GRUPO_PRINCIPAL_ID)
 
+    # Escapa caracteres especiais para Markdown
     nome = _escape_md(evento.get("Nome da loja", ""))
     numero = _escape_md(evento.get("Número da loja", ""))
     numero_fmt = f" {numero}" if numero and numero != "0" else ""
@@ -931,15 +932,26 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
     oriente = _escape_md(evento.get("Oriente", ""))
     potencia = _escape_md(evento.get("Potência", ""))
     grau = _escape_md(evento.get("Grau", ""))
+    tipo = _escape_md(evento.get("Tipo de sessão", ""))
+    rito = _escape_md(evento.get("Rito", ""))
+    traje = _escape_md(evento.get("Traje obrigatório", ""))
+    agape = _escape_md(evento.get("Ágape", ""))
+    endereco = _escape_md(evento.get("Endereço da sessão", ""))
 
     texto_grupo = (
-        "*🐐 Novo Evento*\n\n"
-        f"🏛 {nome}{numero_fmt}\n"
-        f"📅 {data_txt}\n"
-        f"🕕 {hora_txt}\n"
-        f"📍 {oriente}\n"
-        f"⚜️ {potencia}\n"
+        "*🐐 NOVA SESSÃO DISPONÍVEL PARA VISITAS!*\n\n"
+        f"🏛 *LOJA {nome}{numero_fmt}*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📍 Oriente: {oriente}\n"
+        f"⚜️ Potência: {potencia}\n"
+        f"📅 Data: {data_txt}\n"
+        f"🕕 Horário: {hora_txt}\n"
+        f"🕯 Tipo: {tipo}\n"
+        f"📜 Rito: {rito}\n"
         f"🔺 Grau mínimo: {grau}\n"
+        f"👔 Traje: {traje}\n"
+        f"🍽 Ágape: {agape}\n"
+        f"📍 Endereço: {endereco}\n"
     )
 
     try:
@@ -988,7 +1000,7 @@ async def refazer_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await navegar_para(
         update, context,
         "Cadastro de Evento",
-        "Vamos recomeçar o cadastro.\n\nQual a *Data do evento*? (Ex: 25/03/2026)",
+        "📅 *Data do evento* (Ex: 25/03/2026)",
         _teclado_cancelar()
     )
     return DATA
@@ -1011,91 +1023,91 @@ async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if estado == DATA:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Qual a *Data do evento*? (Ex: 25/03/2026)",
+            "📅 *Data do evento* (Ex: 25/03/2026)",
             _teclado_cancelar()
         )
     elif estado == HORARIO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Qual o *Horário*? (Ex: 19:30)",
+            "🕕 *Horário* (Ex: 19:30)",
             _teclado_voltar_cancelar()
         )
     elif estado == NOME_LOJA:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Qual o *Nome da loja*?",
+            "🏛 *Nome da loja*",
             _teclado_voltar_cancelar()
         )
     elif estado == NUMERO_LOJA:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Qual o *Número da loja*? (Ex: 123) (se não houver, digite 0)",
+            "🔢 *Número da loja* (se não houver, digite 0)",
             _teclado_voltar_cancelar()
         )
     elif estado == ORIENTE:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Qual o *Oriente*?",
+            "📍 *Oriente*",
             _teclado_voltar_cancelar()
         )
     elif estado == GRAU:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Qual o *Grau mínimo*?",
+            "🔺 *Grau mínimo*",
             _teclado_graus()
         )
     elif estado == TIPO_SESSAO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Qual o *Tipo de sessão*? (texto livre)",
+            "🕯 *Tipo de sessão* (texto livre)",
             _teclado_voltar_cancelar()
         )
     elif estado == RITO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Qual o *Rito*? (texto livre)",
+            "📜 *Rito* (texto livre)",
             _teclado_voltar_cancelar()
         )
     elif estado == POTENCIA:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Qual a *Potência*? (texto livre)",
+            "⚜️ *Potência* (texto livre)",
             _teclado_voltar_cancelar()
         )
     elif estado == TRAJE:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Qual o *Traje obrigatório*? (texto livre)",
+            "👔 *Traje obrigatório* (texto livre)",
             _teclado_voltar_cancelar()
         )
     elif estado == AGAPE:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Haverá *Ágape*?",
+            "🍽 *Haverá Ágape?*",
             _teclado_sim_nao("agape")
         )
     elif estado == AGAPE_TIPO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Qual o tipo de Ágape?",
+            "💰 *Tipo de Ágape?*",
             _teclado_agape_tipos()
         )
     elif estado == OBSERVACOES_TEM:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Deseja adicionar *observações*?",
+            "📝 *Deseja adicionar observações?*",
             _teclado_sim_nao("obs")
         )
     elif estado == OBSERVACOES_TEXTO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Digite as *observações* (texto livre):",
+            "✏️ *Digite as observações* (texto livre)",
             _teclado_voltar_cancelar()
         )
     elif estado == ENDERECO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Agora informe o *Endereço da sessão*:",
+            "📍 *Endereço da sessão*",
             _teclado_voltar_cancelar()
         )
     
