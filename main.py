@@ -53,6 +53,7 @@ from src.eventos import (
     mostrar_detalhes_evento,
     cancelar_presenca,
     ver_confirmados,
+    fechar_mensagem,
     minhas_confirmacoes,
     minhas_confirmacoes_futuro,
     minhas_confirmacoes_historico,
@@ -250,6 +251,10 @@ def register_handlers(app: Application) -> None:
     ))
     app.add_handler(CallbackQueryHandler(
         cancelar_presenca, pattern=r"^cancelar\|"
+    ))
+    # Handler para fechar a lista de confirmados
+    app.add_handler(CallbackQueryHandler(
+        fechar_mensagem, pattern=r"^fechar_mensagem$"
     ))
 
     # ===== 6. CALLBACKS DA ÁREA DO SECRETÁRIO =====
