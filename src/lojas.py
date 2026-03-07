@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import logging
+import asyncio
 from typing import Any, Dict
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -287,7 +288,7 @@ async def receber_endereco_loja(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 # ============================================
-# CONFIRMAÇÃO DE CADASTRO DE LOJA (CORRIGIDO)
+# CONFIRMAÇÃO DE CADASTRO DE LOJA (UX MELHORADO)
 # ============================================
 
 async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -295,7 +296,17 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     user_id = update.effective_user.id
     
-    # Responde ao callback imediatamente para evitar timeout
+    # FEEDBACK IMEDIATO: Muda o texto do botão para "Processando..."
+    try:
+        await query.edit_message_text(
+            text="🔄 *Processando seu cadastro...*\n\nAguarde um momento.",
+            parse_mode="Markdown",
+            reply_markup=None  # Remove os botões para evitar cliques duplicados
+        )
+    except Exception as e:
+        logger.warning(f"Erro ao editar mensagem para feedback: {e}")
+    
+    # Responde ao callback para evitar timeout
     await query.answer("✅ Processando...")
 
     # Recupera os dados do user_data
@@ -303,6 +314,7 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
 
     if not dados:
         logger.error(f"Erro: dados não encontrados para usuário {user_id}")
+        await asyncio.sleep(0.5)  # Pequena pausa para UX
         await navegar_para(
             update, context,
             "Cadastro de Loja",
@@ -315,6 +327,9 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
 
     # Tenta cadastrar na planilha
     sucesso = cadastrar_loja(user_id, dados)
+    
+    # Pequena pausa para dar sensação de processamento
+    await asyncio.sleep(0.5)
 
     if sucesso:
         logger.info(f"Loja cadastrada com sucesso para usuário {user_id}: {dados.get('nome')}")
