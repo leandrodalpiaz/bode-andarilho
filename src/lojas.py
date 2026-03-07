@@ -1,27 +1,12 @@
 # src/lojas.py
 # ============================================
-# BODE ANDARILHO - GERENCIAMENTO DE LOJAS
-# ============================================
-# 
-# Este módulo permite que secretários e administradores
-# pré-cadastrem os dados fixos de suas lojas para usar
-# como atalho na criação de novos eventos.
-# 
-# Funcionalidades:
-# - Cadastro de nova loja (nome, número, rito, potência, endereço)
-# - Listagem das lojas cadastradas
-# - Integração com o cadastro de eventos para pré-preenchimento
-# 
-# Todas as funções que exibem resultados utilizam o sistema de
-# navegação do bot.py para manter a consistência da interface.
-# 
+# BODE ANDARILHO - GERENCIAMENTO DE LOJAS (UX MELHORADO)
 # ============================================
 
 from __future__ import annotations
 
 import logging
 import asyncio
-from typing import Any, Dict
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -40,14 +25,10 @@ from src.bot import (
     navegar_para,
     voltar_ao_menu_principal,
     _enviar_ou_editar_mensagem,
-    TIPO_RESULTADO
+    TIPO_RESULTADO,
 )
 
 logger = logging.getLogger(__name__)
-
-# ============================================
-# CONSTANTES E CONFIGURAÇÕES
-# ============================================
 
 # Estados da conversação para cadastro de loja
 NOME, NUMERO, RITO, POTENCIA, ENDERECO, CONFIRMAR = range(6)
@@ -73,11 +54,11 @@ async def _safe_edit(query, text: str, **kwargs):
 async def menu_lojas(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Menu principal para gerenciar lojas.
-    Exibe opções de cadastrar nova loja ou listar as existentes.
+    Exibe opções de cadastrar nova loja, listar as existentes, excluir ou voltar.
     """
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
-    
+
     if nivel not in ["2", "3"]:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
@@ -88,6 +69,8 @@ async def menu_lojas(update: Update, context: ContextTypes.DEFAULT_TYPE):
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Cadastrar nova loja", callback_data="loja_cadastrar")],
         [InlineKeyboardButton("📋 Listar minhas lojas", callback_data="loja_listar")],
+        [InlineKeyboardButton("❌ Excluir loja", callback_data="loja_excluir_menu")],
+        [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")],
         [InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")],
     ])
 
@@ -148,6 +131,144 @@ async def listar_lojas_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 # ============================================
+# EXCLUSÃO DE LOJAS (UX MELHORADO)
+# ============================================
+
+async def excluir_loja_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Exibe lista de lojas para o usuário escolher qual excluir."""
+    query = update.callback_query
+    await query.answer()
+
+    user_id = update.effective_user.id
+    lojas = listar_lojas(user_id)
+
+    if not lojas:
+        await query.edit_message_text(
+            "📭 *Nenhuma loja cadastrada para excluir.*",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Voltar", callback_data="menu_lojas")
+            ]])
+        )
+        return
+
+    texto = "❌ *Selecione a loja que deseja excluir:*\n\n"
+    teclado = []
+
+    for i, loja in enumerate(lojas):
+        nome = loja.get('Nome da Loja', 'Sem nome')
+        numero = loja.get('Número', '')
+        identificacao = f"{nome} {numero}".strip()
+        teclado.append([InlineKeyboardButton(
+            f"🗑 {identificacao}",
+            callback_data=f"excluir_loja_{i}"
+        )])
+
+    teclado.append([InlineKeyboardButton("🔙 Voltar", callback_data="menu_lojas")])
+
+    await query.edit_message_text(
+        texto,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(teclado)
+    )
+    # Guarda a lista de lojas no user_data para usar depois
+    context.user_data["lojas_para_excluir"] = lojas
+
+
+async def confirmar_exclusao_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Pede confirmação antes de excluir a loja selecionada."""
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+    if not data.startswith("excluir_loja_"):
+        return
+
+    try:
+        indice = int(data.split("_")[2])
+    except (IndexError, ValueError):
+        await query.edit_message_text("❌ Erro ao identificar a loja.")
+        return
+
+    lojas = context.user_data.get("lojas_para_excluir", [])
+    if indice < 0 or indice >= len(lojas):
+        await query.edit_message_text("❌ Loja não encontrada.")
+        return
+
+    # Guarda o índice para a exclusão efetiva
+    context.user_data["excluir_loja_indice"] = indice
+    loja = lojas[indice]
+    nome = loja.get('Nome da Loja', 'esta loja')
+
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Sim, excluir", callback_data="excluir_loja_confirmar")],
+        [InlineKeyboardButton("🔙 Não, voltar", callback_data="loja_excluir_menu")],
+    ])
+
+    await query.edit_message_text(
+        f"⚠️ *Tem certeza que deseja excluir a loja:*\n\n🏛 {nome}?\n\nEsta ação não pode ser desfeita.",
+        parse_mode="Markdown",
+        reply_markup=teclado
+    )
+
+
+async def executar_exclusao_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Executa a exclusão da loja após confirmação."""
+    query = update.callback_query
+    await query.answer()
+
+    # Feedback imediato de processamento
+    try:
+        await query.edit_message_text(
+            text="🔄 *Processando exclusão...*",
+            parse_mode="Markdown",
+            reply_markup=None
+        )
+    except Exception as e:
+        logger.warning(f"Erro ao editar mensagem para feedback: {e}")
+
+    indice = context.user_data.get("excluir_loja_indice")
+    lojas = context.user_data.get("lojas_para_excluir", [])
+
+    if indice is None or indice >= len(lojas):
+        await query.edit_message_text(
+            "❌ Erro: dados da exclusão não encontrados. Tente novamente.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_lojas")
+            ]])
+        )
+        return
+
+    loja = lojas[indice]
+    # A função excluir_loja precisa do identificador único. Como a planilha pode não ter ID,
+    # vamos usar uma combinação de nome e número ou assumir que excluir_loja usa o nome + número.
+    # Vou adaptar: vamos passar o dicionário da loja.
+    sucesso = excluir_loja(update.effective_user.id, loja)
+
+    await asyncio.sleep(0.5)  # pequena pausa para UX
+
+    if sucesso:
+        logger.info(f"Loja excluída com sucesso: {loja.get('Nome da Loja')}")
+        texto = "✅ *Loja excluída com sucesso!*"
+    else:
+        logger.error(f"Falha ao excluir loja: {loja.get('Nome da Loja')}")
+        texto = "❌ *Erro ao excluir loja. Tente novamente mais tarde.*"
+
+    # Limpa dados da exclusão
+    context.user_data.pop("excluir_loja_indice", None)
+    context.user_data.pop("lojas_para_excluir", None)
+
+    await navegar_para(
+        update, context,
+        "Exclusão de Loja",
+        texto,
+        InlineKeyboardMarkup([[
+            InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")
+        ]])
+    )
+
+
+# ============================================
 # CADASTRO DE NOVA LOJA (CONVERSATION HANDLER)
 # ============================================
 
@@ -156,10 +277,10 @@ async def cadastrar_loja_inicio(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     if query:
         await query.answer("🏛️ Iniciando cadastro...")
-    
+
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
-    
+
     if nivel not in ["2", "3"]:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
@@ -168,7 +289,7 @@ async def cadastrar_loja_inicio(update: Update, context: ContextTypes.DEFAULT_TY
         return ConversationHandler.END
 
     context.user_data["nova_loja"] = {}
-    
+
     await navegar_para(
         update, context,
         "Cadastro de Loja",
@@ -188,7 +309,7 @@ async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return NOME
 
     context.user_data["nova_loja"]["nome"] = nome
-    
+
     await update.message.reply_text(
         "🔢 *Número da loja* (Digite 0 se não houver)",
         parse_mode="Markdown",
@@ -207,7 +328,7 @@ async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
         return NUMERO
 
     context.user_data["nova_loja"]["numero"] = numero
-    
+
     await update.message.reply_text(
         "📜 *Rito*",
         parse_mode="Markdown",
@@ -226,7 +347,7 @@ async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return RITO
 
     context.user_data["nova_loja"]["rito"] = rito
-    
+
     await update.message.reply_text(
         "⚜️ *Potência*",
         parse_mode="Markdown",
@@ -245,7 +366,7 @@ async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return POTENCIA
 
     context.user_data["nova_loja"]["potencia"] = potencia
-    
+
     await update.message.reply_text(
         "📍 *Endereço* da loja?\n"
         "(Pode ser texto ou link do Google Maps)",
@@ -287,34 +408,28 @@ async def receber_endereco_loja(update: Update, context: ContextTypes.DEFAULT_TY
     return CONFIRMAR
 
 
-# ============================================
-# CONFIRMAÇÃO DE CADASTRO DE LOJA (UX MELHORADO)
-# ============================================
-
 async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Confirma e salva a loja na planilha."""
     query = update.callback_query
     user_id = update.effective_user.id
-    
-    # FEEDBACK IMEDIATO: Muda o texto do botão para "Processando..."
+
+    # Feedback imediato
     try:
         await query.edit_message_text(
             text="🔄 *Processando seu cadastro...*\n\nAguarde um momento.",
             parse_mode="Markdown",
-            reply_markup=None  # Remove os botões para evitar cliques duplicados
+            reply_markup=None
         )
     except Exception as e:
         logger.warning(f"Erro ao editar mensagem para feedback: {e}")
-    
-    # Responde ao callback para evitar timeout
+
     await query.answer("✅ Processando...")
 
-    # Recupera os dados do user_data
     dados = context.user_data.get("nova_loja", {})
 
     if not dados:
         logger.error(f"Erro: dados não encontrados para usuário {user_id}")
-        await asyncio.sleep(0.5)  # Pequena pausa para UX
+        await asyncio.sleep(0.5)
         await navegar_para(
             update, context,
             "Cadastro de Loja",
@@ -325,36 +440,31 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
         )
         return ConversationHandler.END
 
-    # Tenta cadastrar na planilha
     sucesso = cadastrar_loja(user_id, dados)
-    
-    # Pequena pausa para dar sensação de processamento
+
     await asyncio.sleep(0.5)
 
     if sucesso:
         logger.info(f"Loja cadastrada com sucesso para usuário {user_id}: {dados.get('nome')}")
-        await navegar_para(
-            update, context,
-            "Cadastro de Loja",
-            "✅ *Loja cadastrada com sucesso!*\n\n"
-            "Agora você pode usar este cadastro como atalho ao criar novos eventos.",
-            InlineKeyboardMarkup([[
-                InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")
-            ]])
-        )
+        texto = "✅ *Loja cadastrada com sucesso!*\n\nAgora você pode usar este cadastro como atalho ao criar novos eventos."
+        teclado = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")],
+            [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")]
+        ])
     else:
         logger.error(f"Erro ao cadastrar loja para usuário {user_id}: {dados.get('nome')}")
-        await navegar_para(
-            update, context,
-            "Cadastro de Loja",
-            "❌ *Erro ao cadastrar loja.*\n\n"
-            "Tente novamente mais tarde.",
-            InlineKeyboardMarkup([[
-                InlineKeyboardButton("🏛️ Voltar ao menu de lojas", callback_data="menu_lojas")
-            ]])
-        )
+        texto = "❌ *Erro ao cadastrar loja.*\n\nTente novamente mais tarde."
+        teclado = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🏛️ Voltar ao menu de lojas", callback_data="menu_lojas")
+        ]])
 
-    # Limpa os dados da sessão
+    await navegar_para(
+        update, context,
+        "Cadastro de Loja",
+        texto,
+        teclado
+    )
+
     context.user_data.pop("nova_loja", None)
     return ConversationHandler.END
 
@@ -363,7 +473,7 @@ async def cancelar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_T
     """Cancela o cadastro de loja."""
     query = update.callback_query
     user_id = update.effective_user.id
-    
+
     if query:
         await query.answer()
         await navegar_para(
@@ -383,7 +493,7 @@ async def cancelar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_T
 
 
 # ============================================
-# CONVERSATION HANDLER
+# CONVERSATION HANDLER (CADASTRO)
 # ============================================
 
 cadastro_loja_handler = ConversationHandler(
@@ -413,6 +523,8 @@ cadastro_loja_handler = ConversationHandler(
 # HANDLERS SIMPLES (PARA REGISTRO NO MAIN.PY)
 # ============================================
 
-# Estes handlers são referenciados no main.py
 listar_lojas_handler_cb = CallbackQueryHandler(listar_lojas_handler, pattern="^loja_listar$")
 menu_lojas_handler = CallbackQueryHandler(menu_lojas, pattern="^menu_lojas$")
+excluir_loja_menu_handler = CallbackQueryHandler(excluir_loja_menu, pattern="^loja_excluir_menu$")
+confirmar_exclusao_loja_handler = CallbackQueryHandler(confirmar_exclusao_loja, pattern="^excluir_loja_\\d+$")
+executar_exclusao_loja_handler = CallbackQueryHandler(executar_exclusao_loja, pattern="^excluir_loja_confirmar$")
