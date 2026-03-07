@@ -457,7 +457,7 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ESCOLHER_LOJA
     else:
-        # Segue fluxo normal
+        # Segue fluxo normal (sempre tem opção manual)
         await navegar_para(
             update, context,
             "Cadastro de Evento",
@@ -472,8 +472,10 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
     """Processa a escolha da loja pelo secretário."""
     query = update.callback_query
     data = query.data
+    user_id = update.effective_user.id
 
     if data == "cadastrar_manual":
+        # Opção manual sempre disponível
         await navegar_para(
             update, context,
             "Cadastro de Evento",
@@ -518,7 +520,7 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
                 return CONFIRMAR_LOJA
             else:
                 await _enviar_ou_editar_mensagem(
-                    context, update.effective_user.id, TIPO_RESULTADO,
+                    context, user_id, TIPO_RESULTADO,
                     "❌ Loja não encontrada. Tente novamente.",
                     limpar_conteudo=True
                 )
@@ -526,7 +528,7 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
         except (ValueError, IndexError) as e:
             logger.error(f"Erro ao processar seleção de loja: {e}")
             await _enviar_ou_editar_mensagem(
-                context, update.effective_user.id, TIPO_RESULTADO,
+                context, user_id, TIPO_RESULTADO,
                 "❌ Erro ao processar seleção. Tente novamente.",
                 limpar_conteudo=True
             )
@@ -534,7 +536,7 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
     
     # Se chegou aqui, comando inválido
     await _enviar_ou_editar_mensagem(
-        context, update.effective_user.id, TIPO_RESULTADO,
+        context, user_id, TIPO_RESULTADO,
         "❌ Comando inválido. Tente novamente.",
         limpar_conteudo=True
     )
@@ -545,6 +547,10 @@ async def confirmar_loja_callback(update: Update, context: ContextTypes.DEFAULT_
     """Confirma o uso da loja selecionada."""
     query = update.callback_query
     data = query.data
+    user_id = update.effective_user.id
+
+    # Log para debug
+    logger.info(f"confirmar_loja_callback chamado com data: {data}")
 
     if data == "confirmar_loja_sim":
         loja = context.user_data.get("loja_selecionada")
@@ -611,7 +617,13 @@ async def confirmar_loja_callback(update: Update, context: ContextTypes.DEFAULT_
         )
         return DATA
     
-    return ESCOLHER_LOJA
+    # Se chegou aqui, comando não reconhecido
+    await _enviar_ou_editar_mensagem(
+        context, user_id, TIPO_RESULTADO,
+        "❌ Opção inválida. Tente novamente.",
+        limpar_conteudo=True
+    )
+    return CONFIRMAR_LOJA
 
 
 # ============================================
@@ -1358,14 +1370,16 @@ async def cancelar_cadastro_evento(update: Update, context: ContextTypes.DEFAULT
 
 
 # ============================================
-# CONVERSATION HANDLER
+# CONVERSATION HANDLER (CORRIGIDO)
 # ============================================
 
 cadastro_evento_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(novo_evento_start, pattern=r"^cadastrar_evento$")],
     states={
-        ESCOLHER_LOJA: [CallbackQueryHandler(escolher_loja_callback, pattern="^(usar_loja_|cadastrar_manual)$")],
-        CONFIRMAR_LOJA: [CallbackQueryHandler(confirmar_loja_callback, pattern="^(confirmar_loja_sim|escolher_outra_loja|cadastrar_manual)$")],
+        ESCOLHER_LOJA: [CallbackQueryHandler(escolher_loja_callback, pattern="^(usar_loja_\\d+|cadastrar_manual)$")],
+        CONFIRMAR_LOJA: [
+            CallbackQueryHandler(confirmar_loja_callback, pattern="^(confirmar_loja_sim|escolher_outra_loja|cadastrar_manual)$")
+        ],
         DATA: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_data),
             CallbackQueryHandler(ev_cancelar, pattern=r"^ev_cancelar$"),
