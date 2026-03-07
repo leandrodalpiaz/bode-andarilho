@@ -11,7 +11,7 @@
 # - Verificação de duplicidade de eventos
 # - Publicação automática no grupo
 # - Navegação com botões Voltar/Cancelar
-# - NOVO: Cada etapa mostra APENAS a pergunta atual (sem acumular respostas)
+# - Cada etapa mostra APENAS a pergunta atual (sem acumular respostas)
 # 
 # ============================================
 
@@ -20,6 +20,7 @@ from __future__ import annotations
 import os
 import re
 import uuid
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -40,6 +41,12 @@ from src.bot import (
     _enviar_ou_editar_mensagem,
     TIPO_RESULTADO
 )
+
+# ============================================
+# CONFIGURAÇÃO DE LOG
+# ============================================
+
+logger = logging.getLogger(__name__)
 
 # ============================================
 # CONSTANTES E CONFIGURAÇÕES
@@ -475,7 +482,6 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
     user_id = update.effective_user.id
 
     if data == "cadastrar_manual":
-        # Opção manual sempre disponível
         await navegar_para(
             update, context,
             "Cadastro de Evento",
@@ -543,13 +549,17 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
     return ESCOLHER_LOJA
 
 
+# ============================================
+# CONFIRMAÇÃO DE LOJA (CORRIGIDO COM LOGGER)
+# ============================================
+
 async def confirmar_loja_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Confirma o uso da loja selecionada."""
     query = update.callback_query
     data = query.data
     user_id = update.effective_user.id
 
-    # Log para debug
+    # Log para debug (agora com logger definido)
     logger.info(f"confirmar_loja_callback chamado com data: {data}")
 
     if data == "confirmar_loja_sim":
@@ -758,7 +768,7 @@ async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# RECEBEDOR DE GRAU (BOTÕES) - CORRIGIDO
+# RECEBEDOR DE GRAU (BOTÕES)
 # ============================================
 
 async def receber_grau_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1370,7 +1380,7 @@ async def cancelar_cadastro_evento(update: Update, context: ContextTypes.DEFAULT
 
 
 # ============================================
-# CONVERSATION HANDLER (CORRIGIDO)
+# CONVERSATION HANDLER
 # ============================================
 
 cadastro_evento_handler = ConversationHandler(
