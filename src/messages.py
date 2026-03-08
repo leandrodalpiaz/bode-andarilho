@@ -86,6 +86,30 @@ LEMBRETE_MEIO_DIA_CORPO = (
     "Até logo mais! 🤝"
 )
 
+LEMBRETE_SECRETARIO_TITULO = "📋 *ALERTA PARA SECRETÁRIO*"
+LEMBRETE_SECRETARIO_CORPO = (
+    "Olá, irmão {nome}! Você é o secretário responsável pelo seguinte evento:\n\n"
+    "📅 Data: {data}\n"
+    "🏛️ Loja: {loja}\n"
+    "🕐 Horário: {horario}\n"
+    "📍 Local: {local}\n"
+    "🔷 Grau mínimo: {grau}\n"
+    "👔 Traje: {traje}\n"
+    "🍽️ Ágape: {agape}\n\n"
+    "Confirmações até o momento: {num_confirmados}\n\n"
+    "Prepare-se para a sessão! 🤝"
+)
+
+LEMBRETE_SECRETARIO_MEIO_DIA_TITULO = "🕛 *ALERTA SECRETÁRIO - MEIO DIA!*"
+LEMBRETE_SECRETARIO_MEIO_DIA_CORPO = (
+    "Irmão {nome}, hoje é o dia da sessão que você organiza!\n\n"
+    "🏛 Loja {loja}{numero}\n"
+    "📍 {local}\n"
+    "🕕 {horario}\n\n"
+    "Confirmações: {num_confirmados}\n\n"
+    "Até logo mais! 🤝"
+)
+
 
 # ============================================
 # NOTIFICAÇÕES
