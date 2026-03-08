@@ -562,6 +562,7 @@ async def ver_todos_membros(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Admin > Membros",
         texto,
         InlineKeyboardMarkup(botoes)
+    )
 
 
 # ============================================
