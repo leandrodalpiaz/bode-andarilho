@@ -373,11 +373,17 @@ def _montar_resumo_evento_md(evento: Dict[str, Any], duplicado: Optional[Dict[st
 
 
 def _teclado_confirmacao(tem_duplicado: bool) -> InlineKeyboardMarkup:
-    """Teclado para tela de confirmação."""
+    """Teclado para tela de confirmação.
+
+    Quando há duplicidade mostramos apenas a opção de "Publicar mesmo assim";
+    o botão "Confirmar publicação" anterior fazia o fluxo repetir a mesma tela
+    (o que confundia os usuários).
+    """
     linhas = []
     if tem_duplicado:
         linhas.append([InlineKeyboardButton("⚠️ Publicar mesmo assim", callback_data="confirmar_publicacao_forcar")])
-    linhas.append([InlineKeyboardButton("✅ Confirmar publicação", callback_data="confirmar_publicacao")])
+    else:
+        linhas.append([InlineKeyboardButton("✅ Confirmar publicação", callback_data="confirmar_publicacao")])
     linhas.append([InlineKeyboardButton("🔄 Refazer", callback_data="refazer_cadastro")])
     linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_publicacao")])
     return InlineKeyboardMarkup(linhas)
@@ -646,17 +652,22 @@ async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data_text = _norm_text(update.message.text)
     dt = _parse_data_ddmmyyyy(data_text)
     if not dt:
-        await update.message.reply_text(
+        # mostra o erro na própria mensagem de resultado (mantém teclado)
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
             "Data inválida. Use o formato *dd/mm/aaaa* (Ex: 25/03/2026).",
-            parse_mode="Markdown"
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True,
         )
         return DATA
 
     hoje = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     if dt < hoje:
-        await update.message.reply_text(
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
             "A data não pode ser no passado. Tente novamente:",
-            parse_mode="Markdown"
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True,
         )
         return DATA
 
@@ -676,9 +687,11 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe e valida o horário."""
     hora = _parse_hora(update.message.text)
     if not hora:
-        await update.message.reply_text(
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
             "Horário inválido. Use *HH:MM* (Ex: 19:30).",
-            parse_mode="Markdown"
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True,
         )
         return HORARIO
 
@@ -709,9 +722,11 @@ async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o nome da loja."""
     nome = _truncate(update.message.text)
     if not nome:
-        await update.message.reply_text(
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
             "Informe um nome válido para a loja.",
-            parse_mode="Markdown"
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True,
         )
         return NOME_LOJA
 
@@ -750,9 +765,11 @@ async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o oriente."""
     oriente = _truncate(update.message.text)
     if not oriente:
-        await update.message.reply_text(
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
             "Informe um oriente válido.",
-            parse_mode="Markdown"
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True,
         )
         return ORIENTE
 
@@ -1047,6 +1064,14 @@ async def receber_observacoes_texto(update: Update, context: ContextTypes.DEFAUL
 async def receber_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o endereço e exibe tela de confirmação."""
     val = _truncate(update.message.text, 400)
+    if len(val) < 3:
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            "Endereço muito curto. Digite novamente:",
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True,
+        )
+        return ENDERECO
     context.user_data["novo_evento_endereco"] = val
 
     evento = _montar_evento_dict(context)
@@ -1077,13 +1102,8 @@ async def confirmar_publicacao(update: Update, context: ContextTypes.DEFAULT_TYP
     dup = _encontrar_duplicado(evento, eventos_existentes)
     
     if dup:
-        texto = _montar_resumo_evento_md(evento, duplicado=dup) + "\n\n⚠️ Existe duplicidade. Use *Publicar mesmo assim* se quiser."
-        await _enviar_ou_editar_mensagem(
-            context, update.effective_user.id, TIPO_RESULTADO,
-            texto,
-            _teclado_confirmacao(tem_duplicado=True),
-            limpar_conteudo=True
-        )
+        # ao invés de reapresentar a tela idêntica, mostra um alerta explicando a ação
+        await query.answer("Existe duplicidade. Use 'Publicar mesmo assim' se quiser.", show_alert=True)
         return CONFIRMAR
 
     await _publicar_e_finalizar(update, context, evento)
