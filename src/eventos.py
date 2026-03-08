@@ -790,7 +790,18 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     }
     registrar_confirmacao(dados_confirmacao)
 
-    await notificar_secretario(context, evento, membro, participacao_agape, desc_agape)
+    # Verificar se o usuário é o secretário do evento
+    secretario_id = evento.get("Telegram ID do secretário", "")
+    try:
+        secretario_id = int(float(secretario_id))
+    except:
+        secretario_id = None
+    
+    eh_secretario = secretario_id == user_id
+
+    # Notificar secretário apenas se não for o próprio usuário
+    if not eh_secretario:
+        await notificar_secretario(context, evento, membro, participacao_agape, desc_agape)
 
     data = str(evento.get("Data do evento", "") or "").strip()
     nome_loja = str(evento.get("Nome da loja", "") or "").strip()
@@ -798,18 +809,39 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     horario = str(evento.get("Hora", "") or "").strip()
     numero_fmt = f" {numero_loja}" if numero_loja else ""
 
-    resposta = (
-        f"✅ *Presença confirmada, irmão {membro.get('Nome', '')}!*\n\n"
-        f"📅 {data} — {nome_loja}{numero_fmt}\n"
-        f"🕕 {horario}\n"
-        f"🍽 {participacao_agape} ({desc_agape})\n\n"
-        "Sua confirmação é muito importante! 🙏"
-    )
+    if eh_secretario:
+        # Mensagem combinada para secretário
+        resposta = (
+            f"✅ *Presença confirmada, irmão {membro.get('Nome', '')}!*\n\n"
+            f"📅 {data} — {nome_loja}{numero_fmt}\n"
+            f"🕕 {horario}\n"
+            f"🍽 {participacao_agape} ({desc_agape})\n\n"
+            "Sua confirmação é muito importante! 🙏\n\n"
+            f"📢 *Nova confirmação registrada*"
+        )
+        
+        teclado = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("📊 Ver resumo", callback_data=f"resumo_evento|{_encode_cb(id_evento)}"),
+                InlineKeyboardButton("👥 Ver lista", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")
+            ],
+            [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")],
+            [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
+        ])
+    else:
+        # Mensagem normal para usuário comum
+        resposta = (
+            f"✅ *Presença confirmada, irmão {membro.get('Nome', '')}!*\n\n"
+            f"📅 {data} — {nome_loja}{numero_fmt}\n"
+            f"🕕 {horario}\n"
+            f"🍽 {participacao_agape} ({desc_agape})\n\n"
+            "Sua confirmação é muito importante! 🙏"
+        )
 
-    teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")],
-        [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
-    ])
+        teclado = InlineKeyboardMarkup([
+            [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")],
+            [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
+        ])
 
     await context.bot.send_message(
         chat_id=user_id,
