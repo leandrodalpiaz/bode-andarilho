@@ -463,12 +463,13 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ROTEAMENTO DE CALLBACKS
     # ========================================
     
-    # Voltar ao menu principal
+    # Voltar ao menu principal (incluindo retorno de detalhes de evento antigo)
     if data == "menu_principal":
         await voltar_ao_menu_principal(update, context)
     
     # Eventos
-    elif data == "ver_eventos":
+    elif data == "ver_eventos" or data == "voltar_eventos":
+        # voltar_eventos era usado em versões anteriores ao exibir detalhes
         from src.eventos import mostrar_eventos
         await mostrar_eventos(update, context)
     elif data.startswith("data|"):
@@ -510,7 +511,9 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ver_confirmados(update, context)
     
     # Cancelar presença
-    elif data.startswith("cancelar|") or data.startswith("confirma_cancelar|"):
+    # cancel_presenca deve ser chamado apenas para confirmações de presença
+    # ignorar callbacks usados para cancelar eventos (secretário/admin)
+    elif (data.startswith("cancelar|") and not data.startswith("cancelar_evento|")) or data.startswith("confirma_cancelar|"):
         from src.eventos import cancelar_presenca
         await cancelar_presenca(update, context)
     

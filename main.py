@@ -213,7 +213,7 @@ def register_handlers(app: Application) -> None:
 
     # ===== 3. CALLBACKS ESPECÍFICOS DE EVENTOS =====
     app.add_handler(CallbackQueryHandler(
-        mostrar_eventos, pattern=r"^(ver_eventos|mostrar_eventos|eventos)$"
+        mostrar_eventos, pattern=r"^(ver_eventos|mostrar_eventos|eventos|voltar_eventos)$"
     ))
     app.add_handler(CallbackQueryHandler(
         mostrar_eventos_por_data, pattern=r"^data\|"

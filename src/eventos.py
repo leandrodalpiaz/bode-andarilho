@@ -693,7 +693,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     if botoes_extras:
         botoes.extend(botoes_extras)
     
-    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="voltar_eventos")])
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")])
 
     await navegar_para(
         update, context,
