@@ -164,34 +164,25 @@ async def bode_grupo_handler(update: Update, context):
         from src.bot import criar_estrutura_inicial
         await criar_estrutura_inicial(context, user_id, membro)
     else:
-        # Iniciar cadastro no privado
-        from src.cadastro import cadastro_start
-        # Simular update no privado
-        fake_update = Update(
-            update_id=update.update_id,
-            message=None,
-            callback_query=None,
-            inline_query=None,
-            chosen_inline_result=None,
-            edited_message=None,
-            channel_post=None,
-            edited_channel_post=None,
-            chat_member=None,
-            my_chat_member=None,
-        )
-        # Criar uma mensagem fake no privado
-        from telegram import Message, Chat, User
-        chat_privado = Chat(id=user_id, type="private")
-        user = update.effective_user
-        message_privado = Message(
-            message_id=1,  # fake
-            date=datetime.now(),
-            chat=chat_privado,
-            from_user=user,
-            text="/start"  # simular /start
-        )
-        fake_update.message = message_privado
-        await cadastro_start(fake_update, context)
+        # Enviar mensagem no privado para iniciar cadastro
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=(
+                    "🐐 *Bode Andarilho*\n\n"
+                    "Bem-vindo! Você ainda não está cadastrado.\n"
+                    "Vamos começar seu cadastro?\n\n"
+                    "Envie /start para prosseguir."
+                ),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            print(f"Erro ao enviar mensagem no privado para {user_id}: {e}")
+            # Fallback: responde no grupo
+            if update.message:
+                await update.message.reply_text(
+                    "📩 Não consegui enviar mensagem no privado. Verifique se você iniciou uma conversa comigo primeiro."
+                )
 
 
 async def mensagem_grupo_handler(update: Update, context):
@@ -236,10 +227,11 @@ async def novo_membro_grupo_handler(update: Update, context):
             return
 
         # Enviar mensagem de boas-vindas no grupo
+        nome = user.first_name or "irmão"
         await context.bot.send_message(
             chat_id=chat.id,
             text=(
-                f"Salve, irmão {user.first_name}! 🐐\n\n"
+                f"Salve, {nome}! 🐐\n\n"
                 "Bem-vindo ao grupo do Bode Andarilho.\n"
                 "Para acessar o menu e confirmar presenças, digite *bode* no grupo."
             ),

@@ -17,7 +17,7 @@
 
 from datetime import datetime, timedelta
 from telegram import Bot
-from src.sheets import listar_eventos, listar_confirmacoes_por_evento
+from src.sheets import listar_eventos, listar_confirmacoes_por_evento, buscar_membro
 from src.messages import (
     LEMBRETE_TITULO,
     LEMBRETE_CORPO,
@@ -56,8 +56,8 @@ async def enviar_lembretes_24h(bot: Bot):
         if data_evento != amanha_str:
             continue
 
-        # Gera ID do evento (fallback para compatibilidade)
-        id_evento = data_evento + " — " + evento.get("Nome da loja", "")
+        # Gera ID do evento (preferencialmente da coluna ID Evento, fallback para compatibilidade)
+        id_evento = str(evento.get("ID Evento", "")).strip() or (data_evento + " — " + evento.get("Nome da loja", ""))
         confirmados = listar_confirmacoes_por_evento(id_evento)
 
         nome_loja = evento.get("Nome da loja", "")
@@ -104,7 +104,6 @@ async def enviar_lembretes_24h(bot: Bot):
         # Envia lembrete para o secretário
         secretario_id = evento.get("Telegram ID do secretário", "")
         if secretario_id:
-            from src.sheets import buscar_membro
             secretario = buscar_membro(int(secretario_id))
             if secretario:
                 nome_secretario = secretario.get("Nome", "")
@@ -161,8 +160,8 @@ async def enviar_lembretes_meio_dia(bot: Bot):
         if data_evento != hoje_str:
             continue
 
-        # Gera ID do evento (fallback para compatibilidade)
-        id_evento = data_evento + " — " + evento.get("Nome da loja", "")
+        # Gera ID do evento (preferencialmente da coluna ID Evento, fallback para compatibilidade)
+        id_evento = str(evento.get("ID Evento", "")).strip() or (data_evento + " — " + evento.get("Nome da loja", ""))
         confirmados = listar_confirmacoes_por_evento(id_evento)
 
         nome_loja = evento.get("Nome da loja", "")
@@ -203,7 +202,6 @@ async def enviar_lembretes_meio_dia(bot: Bot):
         # Envia lembrete para o secretário
         secretario_id = evento.get("Telegram ID do secretário", "")
         if secretario_id:
-            from src.sheets import buscar_membro
             secretario = buscar_membro(int(secretario_id))
             if secretario:
                 nome_secretario = secretario.get("Nome", "")
