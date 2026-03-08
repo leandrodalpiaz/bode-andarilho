@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 import hashlib
+import time
 from typing import Dict, Optional
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -34,6 +35,11 @@ from src.sheets import buscar_membro
 from src.permissoes import get_nivel
 
 logger = logging.getLogger(__name__)
+
+# ============================================
+# CACHE PARA OTIMIZAÇÕES
+# ============================================
+_last_check_times = {}  # user_id -> timestamp (para verificação de mensagens)
 
 # ============================================
 # CONTROLE DE ESTADO DAS MENSAGENS
@@ -104,7 +110,7 @@ def _gerar_hash_conteudo(texto: str, teclado) -> str:
 
 async def _verificar_mensagem_existe(context, user_id: int, message_id: int) -> bool:
     """
-    Verifica se uma mensagem ainda existe no chat do usuário.
+    Verifica se uma mensagem ainda existe no chat do usuário. Otimizado com cache.
     
     Args:
         context: Context do Telegram
@@ -114,12 +120,20 @@ async def _verificar_mensagem_existe(context, user_id: int, message_id: int) -> 
     Returns:
         bool: True se a mensagem existe, False caso contrário
     """
+    # Se já verificamos nos últimos 30 segundos, assume que OK
+    now = time.time()
+    if user_id in _last_check_times:
+        if now - _last_check_times[user_id] < 30:
+            return True
+    
     try:
         await context.bot.get_chat(user_id)
         # Não temos como verificar diretamente se a mensagem existe,
         # então assumimos que se o chat existe, a mensagem pode existir
+        _last_check_times[user_id] = now
         return True
     except Exception:
+        _last_check_times.pop(user_id, None)
         return False
 
 

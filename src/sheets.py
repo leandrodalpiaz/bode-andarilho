@@ -4,10 +4,20 @@ from __future__ import annotations
 import os
 import json
 import uuid
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import gspread
+
+
+# =========================
+# Cache para otimizações de performance
+# =========================
+_cache_membros = {}  # telegram_id -> (dados, timestamp)
+_ttl_membros = 600  # 10 minutos
+_cache_confirmacoes = {}  # (id_evento, telegram_id) -> (dados, timestamp)
+_ttl_confirmacoes = 300  # 5 minutos
 
 
 # =========================
@@ -184,22 +194,39 @@ def listar_membros() -> List[Dict[str, Any]]:
 
 
 def buscar_membro(telegram_id: int) -> Optional[Dict[str, Any]]:
-    """Retorna o dicionário com dados do membro."""
+    """Retorna o dicionário com dados do membro. Otimizado com cache e findall()."""
+    # Verificar cache
+    if telegram_id in _cache_membros:
+        cached, timestamp = _cache_membros[telegram_id]
+        if time.time() - timestamp < _ttl_membros:
+            return cached
+
     try:
         ws = spreadsheet.worksheet("Membros")
-        data = ws.get_all_records()
+        col_tg = _col_index(ws, "Telegram ID")
+        
+        # Buscar apenas linhas com esse Telegram ID
+        matches = ws.findall(str(telegram_id), in_column=col_tg)
+        
+        if not matches:
+            # Cachear None para evitar buscas repetidas
+            _cache_membros[telegram_id] = (None, time.time())
+            return None
+        
+        # Carregar apenas a linha encontrada
+        row = ws.row_values(matches[0].row)
+        headers = _headers(ws)
+        membro = dict(zip(headers, row))
+        
+        # Garantir que Nivel seja string e tenha valor padrão "1"
+        nivel = membro.get("Nivel")
+        nivel = _norm_intlike(nivel) or "1"
+        membro["Nivel"] = nivel
+        
+        # Cachear resultado
+        _cache_membros[telegram_id] = (membro, time.time())
+        return membro
 
-        target_id = _norm_intlike(telegram_id)
-        for row in data:
-            row_id = _norm_intlike(row.get("Telegram ID"))
-            if row_id and row_id == target_id:
-                # Garantir que Nivel seja string e tenha valor padrão "1"
-                nivel = row.get("Nivel")
-                nivel = _norm_intlike(nivel) or "1"
-                row["Nivel"] = nivel
-                return row
-
-        return None
     except Exception as e:
         print(f"Erro ao buscar membro: {e}")
         return None
@@ -530,19 +557,37 @@ def registrar_confirmacao(dados: dict) -> bool:
 
 
 def buscar_confirmacao(id_evento: str, telegram_id: int) -> Optional[dict]:
-    """Verifica se um usuário já confirmou em determinado evento."""
+    """Verifica se um usuário já confirmou em determinado evento. Otimizado com cache e findall()."""
+    cache_key = (id_evento, telegram_id)
+    
+    # Verificar cache
+    if cache_key in _cache_confirmacoes:
+        cached, timestamp = _cache_confirmacoes[cache_key]
+        if time.time() - timestamp < _ttl_confirmacoes:
+            return cached
+
     try:
         ws = spreadsheet.worksheet("Confirmações")
-        data = ws.get_all_records()
-
-        target_evento = _norm_text(id_evento)
+        col_evento = _col_index(ws, "ID Evento")
+        col_tid = _col_index(ws, "Telegram ID")
+        
+        # Buscar apenas linhas com o ID evento
+        matches = ws.findall(_norm_text(id_evento), in_column=col_evento)
+        
         target_id = _norm_intlike(telegram_id)
-
-        for row in data:
-            row_evento = _norm_text(row.get("ID Evento"))
-            row_tid = _norm_intlike(row.get("Telegram ID"))
-            if row_evento == target_evento and row_tid == target_id:
-                return row
+        headers = _headers(ws)
+        
+        for cell in matches:
+            row = ws.row_values(cell.row)
+            row_data = dict(zip(headers, row))
+            row_tid = _norm_intlike(row_data.get("Telegram ID"))
+            if row_tid == target_id:
+                # Cachear resultado
+                _cache_confirmacoes[cache_key] = (row_data, time.time())
+                return row_data
+        
+        # Cachear None
+        _cache_confirmacoes[cache_key] = (None, time.time())
         return None
 
     except Exception as e:
@@ -579,16 +624,22 @@ def cancelar_confirmacao(id_evento: str, telegram_id: int) -> bool:
 
 
 def listar_confirmacoes_por_evento(id_evento: str) -> List[dict]:
-    """Retorna lista de confirmações para um evento específico."""
+    """Retorna lista de confirmações para um evento específico. Otimizado com findall()."""
     try:
         ws = spreadsheet.worksheet("Confirmações")
-        data = ws.get_all_records()
-
-        target_evento = _norm_text(id_evento)
+        col_evento = _col_index(ws, "ID Evento")
+        
+        # Buscar apenas linhas com o ID evento
+        matches = ws.findall(_norm_text(id_evento), in_column=col_evento)
+        
+        headers = _headers(ws)
         confirmacoes = []
-        for row in data:
-            if _norm_text(row.get("ID Evento")) == target_evento:
-                confirmacoes.append(row)
+        for cell in matches:
+            row = ws.row_values(cell.row)
+            row_data = dict(zip(headers, row))
+            if _norm_text(row_data.get("ID Evento")) == _norm_text(id_evento):
+                confirmacoes.append(row_data)
+        
         return confirmacoes
 
     except Exception as e:
@@ -751,3 +802,26 @@ def set_notificacao_status(telegram_id: int, ativo: bool) -> bool:
     except Exception as e:
         print(f"Erro ao atualizar status de notificação: {e}")
         return False
+
+
+# ============================================
+# UTILITÁRIOS DE PERFORMANCE
+# ============================================
+
+def _with_timeout(func, timeout=2.0, default=None):
+    """
+    Wrapper para executar função síncrona com timeout.
+    Retorna default se timeout ou erro.
+    """
+    import asyncio
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        future = asyncio.wait_for(
+            loop.run_in_executor(None, func),
+            timeout=timeout
+        )
+        return loop.run_until_complete(future)
+    except (asyncio.TimeoutError, Exception) as e:
+        print(f"Timeout ou erro em {func.__name__}: {e}")
+        return default

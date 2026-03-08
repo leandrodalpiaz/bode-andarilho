@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import urllib.parse
 import calendar
+import functools
 from dataclasses import dataclass
 from datetime import datetime, date, timedelta
 from typing import Optional, Tuple, List, Dict, Any
@@ -118,6 +119,7 @@ def normalizar_grau_nome(valor: str) -> str:
     return (valor or "").strip()
 
 
+@functools.lru_cache(maxsize=1024)
 def parse_data_evento(valor: Any) -> Optional[datetime]:
     if valor is None:
         return None
@@ -717,8 +719,20 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     id_evento = _decode_cb(id_evento_cod)
     user_id = update.effective_user.id
 
-    eventos = listar_eventos() or []
-    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    # Paralelizar buscas para reduzir latência
+    import asyncio
+    
+    async def buscar_eventos_async():
+        eventos = listar_eventos() or []
+        return next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    
+    async def buscar_membro_async():
+        return buscar_membro(user_id)
+    
+    evento, membro = await asyncio.gather(
+        asyncio.to_thread(buscar_eventos_async),
+        asyncio.to_thread(buscar_membro_async)
+    )
 
     if not evento:
         await _enviar_ou_editar_mensagem(
@@ -728,7 +742,6 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         )
         return ConversationHandler.END
 
-    membro = buscar_membro(user_id)
     if not membro:
         context.user_data["pos_cadastro"] = {
             "acao": "confirmar",
@@ -744,6 +757,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         )
         return ConversationHandler.END
 
+    # Verificar confirmação existente (agora cacheada)
     if buscar_confirmacao(id_evento, user_id):
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,

@@ -36,6 +36,7 @@ from src.sheets import (
     atualizar_nivel_membro,
     get_notificacao_status,
     set_notificacao_status,
+    listar_eventos,
 )
 from src.permissoes import get_nivel
 
@@ -146,14 +147,18 @@ async def menu_notificacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")],
     ])
 
-    await navegar_para(
-        update, context,
-        "Configurações > Notificações",
+    texto = (
         f"🔔 *Configurações de Notificações*\n\n"
         f"Status atual: {status_texto}\n\n"
         f"Quando ativadas, você receberá uma mensagem no privado "
         f"cada vez que alguém confirmar presença em um evento que você criou.\n\n"
-        f"*Nota:* Esta configuração é permanente e ficará salva na planilha.",
+        f"*Nota:* Esta configuração é permanente e ficará salva na planilha."
+    )
+
+    await navegar_para(
+        update, context,
+        "Configurações > Notificações",
+        texto,
         teclado
     )
 
@@ -483,7 +488,7 @@ async def confirmar_rebaixar(update: Update, context: ContextTypes.DEFAULT_TYPE)
 # ============================================
 
 async def ver_todos_membros(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Lista todos os membros para o administrador."""
+    """Lista todos os membros para o administrador com paginação."""
     user_id = update.effective_user.id
     
     if get_nivel(user_id) != "3":
@@ -501,8 +506,26 @@ async def ver_todos_membros(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    linhas = []
-    for membro in membros[:50]:
+    # Paginação: 15 membros por página
+    PAGE_SIZE = 15
+    page = max(0, context.user_data.get("membros_page", 0))  # Garante que page >= 0
+    
+    start = page * PAGE_SIZE
+    end = (page + 1) * PAGE_SIZE
+    
+    # Valida se a página tem membros
+    if start >= len(membros):
+        # Página inválida, volta para página 0
+        context.user_data["membros_page"] = 0
+        page = 0
+        start = 0
+        end = PAGE_SIZE
+    
+    pagina = membros[start:end]
+    total_pages = (len(membros) + PAGE_SIZE - 1) // PAGE_SIZE
+    
+    botoes = []
+    for membro in pagina:
         nome = membro.get("Nome", "Sem nome")
         nivel = membro.get("Nivel", "1")
         cargo = membro.get("Cargo", "")
@@ -510,24 +533,35 @@ async def ver_todos_membros(update: Update, context: ContextTypes.DEFAULT_TYPE):
         nivel_texto = {"1": "👤", "2": "🔰", "3": "⚜️"}.get(str(nivel), "👤")
         
         if cargo:
-            linha = f"{nivel_texto} *{nome}* - {cargo} - {loja} (Nível {nivel})"
+            texto_botao = f"{nivel_texto} {nome} - {cargo}"
         else:
-            linha = f"{nivel_texto} *{nome}* - {loja} (Nível {nivel})"
+            texto_botao = f"{nivel_texto} {nome}"
         
-        linhas.append(linha)
-
-    texto = "*Membros cadastrados:*\n\n" + "\n".join(linhas)
-
-    teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 Voltar", callback_data="area_admin")]
-    ])
+        # Limitar tamanho do botão
+        if len(texto_botao) > 30:
+            texto_botao = texto_botao[:27] + "..."
+        
+        botoes.append([InlineKeyboardButton(texto_botao, callback_data=f"editar_membro_{membro['Telegram ID']}")])
+    
+    # Botões de navegação
+    botoes_nav = []
+    if page > 0:
+        botoes_nav.append(InlineKeyboardButton("◀️ Anterior", callback_data="membros_page_prev"))
+    if page < total_pages - 1:
+        botoes_nav.append(InlineKeyboardButton("Próximo ▶️", callback_data="membros_page_next"))
+    
+    if botoes_nav:
+        botoes.append(botoes_nav)
+    
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="area_admin")])
+    
+    texto = f"*Membros cadastrados (Página {page + 1}/{total_pages}):*\n\nSelecione um membro para editar."
 
     await navegar_para(
         update, context,
         "Admin > Membros",
         texto,
-        teclado
-    )
+        InlineKeyboardMarkup(botoes)
 
 
 # ============================================
@@ -567,8 +601,6 @@ async def editar_membro_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
             continue
 
         if nivel == "2" and membro_nivel != "1":
-            continue
-        if nivel == "2" and membro_nivel in ["2", "3"]:
             continue
 
         texto_botao = f"{nome} (Nível {membro_nivel})"
@@ -652,10 +684,13 @@ async def selecionar_membro_para_editar(update: Update, context: ContextTypes.DE
     botoes.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_edicao")])
     teclado = InlineKeyboardMarkup(botoes)
 
+    titulo = f"Admin > Editar > {membro.get('Nome')}"
+    mensagem = f"Editando *{membro.get('Nome')}*\n\nSelecione o campo que deseja alterar:"
+
     await navegar_para(
         update, context,
-        f"Admin > Editar > {membro.get('Nome')}",
-        f"Editando *{membro.get('Nome')}*\n\nSelecione o campo que deseja alterar:",
+        titulo,
+        mensagem,
         teclado
     )
     return SELECIONAR_CAMPO
@@ -687,12 +722,17 @@ async def selecionar_campo_membro(update: Update, context: ContextTypes.DEFAULT_
     membro = context.user_data.get("editando_membro_dados", {})
     valor_atual = membro.get(campo_info["chave"], "")
 
-    await navegar_para(
-        update, context,
-        f"Admin > Editar > {campo_info['nome']}",
+    titulo = f"Admin > Editar > {campo_info['nome']}"
+    mensagem = (
         f"✏️ *Editando {campo_info['nome']}*\n\n"
         f"Valor atual: {valor_atual}\n\n"
-        f"Digite o novo valor (ou /cancelar para desistir):",
+        f"Digite o novo valor (ou /cancelar para desistir):"
+    )
+
+    await navegar_para(
+        update, context,
+        titulo,
+        mensagem,
         None
     )
     return NOVO_VALOR
@@ -751,7 +791,6 @@ async def ver_confirmados_secretario(update: Update, context: ContextTypes.DEFAU
     Para secretários (nível 2): mostra apenas seus eventos.
     Para administradores (nível 3): mostra todos os eventos.
     """
-    from src.sheets import listar_eventos
     from src.eventos import normalizar_id_evento, _encode_cb, _eventos_ordenados
     from datetime import datetime
 
@@ -835,6 +874,23 @@ async def ver_confirmados_secretario(update: Update, context: ContextTypes.DEFAU
         f"{titulo}\n\nSelecione um evento para ver a lista de irmãos confirmados:",
         InlineKeyboardMarkup(botoes)
     )
+
+
+async def membros_pagina_anterior(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Vai para a página anterior da lista de membros."""
+    page = context.user_data.get("membros_page", 0)
+    if page > 0:
+        context.user_data["membros_page"] = page - 1
+    await ver_todos_membros(update, context)
+
+
+async def membros_pagina_proxima(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Vai para a próxima página da lista de membros."""
+    page = context.user_data.get("membros_page", 0)
+    # Incrementa a página sem recalcular total_pages para evitar chamadas desnecessárias
+    context.user_data["membros_page"] = page + 1
+    # ver_todos_membros fará a validação se a página existe
+    await ver_todos_membros(update, context)
 
 
 # ============================================
