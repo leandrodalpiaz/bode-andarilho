@@ -31,7 +31,7 @@ from src.bot import (
 logger = logging.getLogger(__name__)
 
 # Estados da conversação para cadastro de loja
-NOME, NUMERO, RITO, POTENCIA, ENDERECO, CONFIRMAR = range(6)
+NOME, NUMERO, ORIENTE, RITO, POTENCIA, ENDERECO, CONFIRMAR = range(7)
 
 
 # ============================================
@@ -330,6 +330,25 @@ async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["nova_loja"]["numero"] = numero
 
     await update.message.reply_text(
+        "� *Oriente* (cidade da loja)",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_cadastro_loja")
+        ]]),
+    )
+    return ORIENTE
+
+
+async def receber_oriente_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Recebe o oriente da loja."""
+    oriente = update.message.text.strip()
+    if len(oriente) < 2:
+        await update.message.reply_text("❌ Oriente muito curto. Digite novamente:")
+        return ORIENTE
+
+    context.user_data["nova_loja"]["oriente"] = oriente
+
+    await update.message.reply_text(
         "📜 *Rito*",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([[
@@ -337,9 +356,6 @@ async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
         ]]),
     )
     return RITO
-
-
-async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o rito."""
     rito = update.message.text.strip()
     if len(rito) < 2:
@@ -392,6 +408,7 @@ async def receber_endereco_loja(update: Update, context: ContextTypes.DEFAULT_TY
         f"🏛️ *Confirme os dados da loja:*\n\n"
         f"*Nome:* {dados['nome']}\n"
         f"*Número:* {dados['numero']}\n"
+        f"*Oriente:* {dados['oriente']}\n"
         f"*Rito:* {dados['rito']}\n"
         f"*Potência:* {dados['potencia']}\n"
         f"*Endereço:* {dados['endereco']}\n\n"
@@ -501,6 +518,7 @@ cadastro_loja_handler = ConversationHandler(
     states={
         NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome_loja)],
         NUMERO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_numero_loja)],
+        ORIENTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_oriente_loja)],
         RITO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_rito)],
         POTENCIA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_potencia)],
         ENDERECO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_endereco_loja)],

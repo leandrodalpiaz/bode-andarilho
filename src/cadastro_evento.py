@@ -568,6 +568,7 @@ async def confirmar_loja_callback(update: Update, context: ContextTypes.DEFAULT_
             # Pré-preenche os dados da loja
             context.user_data["novo_evento_nome_loja"] = loja.get("Nome da Loja", "")
             context.user_data["novo_evento_numero_loja"] = str(loja.get("Número", "0"))
+            context.user_data["novo_evento_oriente"] = loja.get("Oriente", "")
             context.user_data["novo_evento_rito"] = loja.get("Rito", "")
             context.user_data["novo_evento_potencia"] = loja.get("Potência", "")
             context.user_data["novo_evento_endereco"] = loja.get("Endereço", "")
@@ -683,8 +684,17 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["novo_evento_horario"] = hora
     
-    # Se já tem nome da loja (veio de cadastro com loja), pula direto
-    if "novo_evento_nome_loja" in context.user_data:
+    # Se já tem oriente da loja, pula direto para grau
+    if "novo_evento_oriente" in context.user_data:
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento",
+            "🔺 *Grau mínimo* (Aprendiz, Companheiro, Mestre)",
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
+        )
+        return GRAU
+    else:
         await navegar_para(
             update, context,
             "Cadastro de Evento",
@@ -693,11 +703,6 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
             limpar_conteudo=True
         )
         return ORIENTE
-    else:
-        await navegar_para(
-            update, context,
-            "Cadastro de Evento",
-            "🏛 *Nome da loja*",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )

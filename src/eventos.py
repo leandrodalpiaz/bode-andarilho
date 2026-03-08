@@ -722,16 +722,16 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     # Paralelizar buscas para reduzir latência
     import asyncio
     
-    async def buscar_eventos_async():
+    def buscar_eventos_sync():
         eventos = listar_eventos() or []
         return next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
     
-    async def buscar_membro_async():
+    def buscar_membro_sync():
         return buscar_membro(user_id)
     
     evento, membro = await asyncio.gather(
-        asyncio.to_thread(buscar_eventos_async),
-        asyncio.to_thread(buscar_membro_async)
+        asyncio.to_thread(buscar_eventos_sync),
+        asyncio.to_thread(buscar_membro_sync)
     )
 
     if not evento:

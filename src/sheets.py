@@ -685,7 +685,7 @@ def listar_lojas(telegram_id: int) -> List[Dict[str, Any]]:
         except gspread.WorksheetNotFound:
             # Cria a aba com cabeçalhos
             ws = spreadsheet.add_worksheet(title="Lojas", rows=100, cols=20)
-            cabecalhos = ["Telegram ID", "Nome da Loja", "Número", "Rito", "Potência", "Endereço", "Data Cadastro"]
+            cabecalhos = ["Telegram ID", "Nome da Loja", "Número", "Oriente", "Rito", "Potência", "Endereço", "Data Cadastro"]
             ws.append_row(cabecalhos)
             return []
 
@@ -710,7 +710,7 @@ def cadastrar_loja(telegram_id: int, dados: Dict[str, Any]) -> bool:
             ws = spreadsheet.worksheet("Lojas")
         except gspread.WorksheetNotFound:
             ws = spreadsheet.add_worksheet(title="Lojas", rows=100, cols=20)
-            cabecalhos = ["Telegram ID", "Nome da Loja", "Número", "Rito", "Potência", "Endereço", "Data Cadastro"]
+            cabecalhos = ["Telegram ID", "Nome da Loja", "Número", "Oriente", "Rito", "Potência", "Endereço", "Data Cadastro"]
             ws.append_row(cabecalhos)
 
         data_cadastro = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -719,6 +719,7 @@ def cadastrar_loja(telegram_id: int, dados: Dict[str, Any]) -> bool:
             str(telegram_id),
             dados.get("nome", ""),
             dados.get("numero", ""),
+            dados.get("oriente", ""),
             dados.get("rito", ""),
             dados.get("potencia", ""),
             dados.get("endereco", ""),
