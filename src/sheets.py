@@ -101,7 +101,7 @@ def _col_index(ws: gspread.Worksheet, header_name: str) -> int:
     hmap = _header_map(ws)
     if header_name in hmap:
         return hmap[header_name]
-    raise ValueError(f"Cabeçalho '{header_name}' não encontrado na aba '{ws.title}'.")        
+    raise ValueError(f"Cabeçalho '{header_name}' não encontrado na aba '{ws.title}'.")
 
 
 def _append_row_by_headers(ws: gspread.Worksheet, values_by_header: Dict[str, Any]) -> bool:
@@ -662,7 +662,6 @@ def cadastrar_loja(telegram_id: int, dados: Dict[str, Any]) -> bool:
             cabecalhos = ["Telegram ID", "Nome da Loja", "Número", "Rito", "Potência", "Endereço", "Data Cadastro"]
             ws.append_row(cabecalhos)
 
-        from datetime import datetime
         data_cadastro = datetime.now().strftime("%d/%m/%Y %H:%M")
 
         valores = [
@@ -682,24 +681,46 @@ def cadastrar_loja(telegram_id: int, dados: Dict[str, Any]) -> bool:
         return False
 
 
-def excluir_loja(telegram_id: int, nome_loja: str) -> bool:
+def excluir_loja(telegram_id: int, loja: dict) -> bool:
     """
-    Exclui uma loja pelo nome (para simplificar).
+    Exclui uma loja específica com base nos dados fornecidos.
+    Utiliza uma combinação de campos para identificar a linha correta.
     """
     try:
         ws = spreadsheet.worksheet("Lojas")
-        data = ws.get_all_records()
+        records = ws.get_all_records()
 
-        for i, row in enumerate(data, start=2):  # linha 1 é cabeçalho
-            if str(row.get("Telegram ID", "")).strip() == str(telegram_id) and \
-               str(row.get("Nome da Loja", "")).strip() == nome_loja:
-                ws.delete_rows(i)
-                return True
+        for idx, row in enumerate(records, start=2):  # linha 1 é cabeçalho
+            # Compara Telegram ID
+            if str(row.get("Telegram ID", "")) != str(telegram_id):
+                continue
+
+            # Compara Nome da Loja
+            if str(row.get("Nome da Loja", "")) != str(loja.get("Nome da Loja", "")):
+                continue
+
+            # Compara Número (se existir em ambos)
+            row_num = str(row.get("Número", "")).strip()
+            loja_num = str(loja.get("Número", "")).strip()
+            if row_num != loja_num:
+                continue
+
+            # Compara Rito (se existir)
+            row_rito = str(row.get("Rito", "")).strip()
+            loja_rito = str(loja.get("Rito", "")).strip()
+            if row_rito != loja_rito:
+                continue
+
+            # Se chegou até aqui, encontrou a loja correspondente
+            ws.delete_rows(idx)
+            return True
+
         return False
     except Exception as e:
         print(f"Erro ao excluir loja: {e}")
         return False
-    
+
+
 # =========================
 # Funções para Notificações (coluna M)
 # =========================
