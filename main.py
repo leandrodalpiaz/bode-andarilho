@@ -96,11 +96,14 @@ from src.eventos_secretario import (
     exibir_menu_secretario,
 )
 
-# Gerenciamento de lojas
+# Gerenciamento de lojas (com exclusão)
 from src.lojas import (
     cadastro_loja_handler,
     menu_lojas,
     listar_lojas_handler,
+    excluir_loja_menu,
+    confirmar_exclusao_loja,
+    executar_exclusao_loja,
 )
 
 # Utilitários
@@ -292,12 +295,12 @@ def register_handlers(app: Application) -> None:
     ))
 
     # ===== 8. CALLBACKS DE LOJAS =====
-    app.add_handler(CallbackQueryHandler(
-        menu_lojas, pattern=r"^menu_lojas$"
-    ))
-    app.add_handler(CallbackQueryHandler(
-        listar_lojas_handler, pattern=r"^loja_listar$"
-    ))
+    app.add_handler(CallbackQueryHandler(menu_lojas, pattern=r"^menu_lojas$"))
+    app.add_handler(CallbackQueryHandler(listar_lojas_handler, pattern=r"^loja_listar$"))
+    # Handlers para exclusão de lojas (adicionados)
+    app.add_handler(CallbackQueryHandler(excluir_loja_menu, pattern=r"^loja_excluir_menu$"))
+    app.add_handler(CallbackQueryHandler(confirmar_exclusao_loja, pattern=r"^excluir_loja_\d+$"))
+    app.add_handler(CallbackQueryHandler(executar_exclusao_loja, pattern=r"^excluir_loja_confirmar$"))
 
     # ===== 9. HANDLER DA PALAVRA "BODE" =====
     app.add_handler(
