@@ -714,7 +714,7 @@ async def cancelar_edicao_evento(update: Update, context: ContextTypes.DEFAULT_T
 editar_evento_secretario_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(editar_evento_inicio, pattern="^editar_evento_secretario$")],
     states={
-        SELECIONAR_CAMPO: [CallbackQueryHandler(selecionar_campo_evento, pattern="^editar_campo_evento\|")],
+        SELECIONAR_CAMPO: [CallbackQueryHandler(selecionar_campo_evento, pattern=r"^editar_campo_evento\|")],
         NOVO_VALOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_novo_valor_evento)],
     },
     fallbacks=[

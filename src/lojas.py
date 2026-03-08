@@ -356,6 +356,9 @@ async def receber_oriente_loja(update: Update, context: ContextTypes.DEFAULT_TYP
         ]]),
     )
     return RITO
+
+
+async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o rito."""
     rito = update.message.text.strip()
     if len(rito) < 2:
