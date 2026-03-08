@@ -740,6 +740,104 @@ async def cancelar_edicao_membro(update: Update, context: ContextTypes.DEFAULT_T
 
 
 # ============================================
+# VER CONFIRMADOS POR EVENTO (SECRETÁRIO/ADMIN)
+# ============================================
+
+async def ver_confirmados_secretario(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Lista eventos (seu ou todos, conforme nível) e permite
+    selecionar um para visualizar a lista de confirmados.
+    
+    Para secretários (nível 2): mostra apenas seus eventos.
+    Para administradores (nível 3): mostra todos os eventos.
+    """
+    from src.sheets import listar_eventos
+    from src.eventos import normalizar_id_evento, _encode_cb, _eventos_ordenados
+    from datetime import datetime
+
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+
+    if nivel not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⛔ Apenas secretários e administradores podem acessar esta função."
+        )
+        return
+
+    eventos = listar_eventos() or []
+
+    if nivel == "3":
+        # Admin: todos os eventos ativos
+        eventos_filtrados = [ev for ev in eventos if str(ev.get("Status", "")).lower() in ("ativo", "")]
+        titulo = "👥 *Confirmados por Evento (Admin)*"
+    else:
+        # Secretário: apenas seus eventos
+        eventos_filtrados = [
+            ev for ev in eventos 
+            if str(ev.get("Telegram ID do secretário", "")).strip() == str(user_id)
+        ]
+        titulo = "👥 *Confirmados por Evento*"
+
+    # Filtra apenas eventos futuros
+    hoje = datetime.now().date()
+    eventos_futuros = []
+    for ev in eventos_filtrados:
+        data_str = ev.get("Data do evento", "")
+        try:
+            data_evento = datetime.strptime(data_str, "%d/%m/%Y").date()
+            if data_evento >= hoje:
+                eventos_futuros.append(ev)
+        except:
+            eventos_futuros.append(ev)
+
+    if not eventos_futuros:
+        teclado = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")],
+        ])
+        await navegar_para(
+            update, context,
+            "Ver Confirmados",
+            f"{titulo}\n\nNenhum evento futuro encontrado.",
+            teclado
+        )
+        return
+
+    # Ordena eventos por data
+    eventos_futuros = _eventos_ordenados(eventos_futuros)
+
+    # Monta teclado com botões para cada evento
+    botoes = []
+    for ev in eventos_futuros[:40]:
+        id_evento = normalizar_id_evento(ev)
+        nome = ev.get("Nome da loja", "Evento")
+        data = ev.get("Data do evento", "")
+        hora = ev.get("Hora", "")
+        numero = ev.get("Número da loja", "")
+
+        numero_fmt = f" {numero}" if numero else ""
+        hora_fmt = f" • {hora}" if hora else ""
+        
+        label = f"📅 {data}{hora_fmt} • 🏛 {nome}{numero_fmt}"
+        botoes.append([InlineKeyboardButton(
+            label,
+            callback_data=f"ver_confirmados|{_encode_cb(id_evento)}"
+        )])
+
+    botoes.append([InlineKeyboardButton(
+        "🔙 Voltar",
+        callback_data="area_secretario" if nivel == "2" else "area_admin"
+    )])
+
+    await navegar_para(
+        update, context,
+        "Ver Confirmados",
+        f"{titulo}\n\nSelecione um evento para ver a lista de irmãos confirmados:",
+        InlineKeyboardMarkup(botoes)
+    )
+
+
+# ============================================
 # CONVERSATION HANDLERS
 # ============================================
 

@@ -792,9 +792,10 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         "Sua confirmação é muito importante! 🙏"
     )
 
-    teclado = InlineKeyboardMarkup([[
-        InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")
-    ]])
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")],
+        [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
+    ])
 
     await context.bot.send_message(
         chat_id=user_id,
@@ -919,6 +920,9 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await _enviar_ou_editar_mensagem(
                     context, user_id, TIPO_RESULTADO,
                     "❌ *Presença cancelada*\n\nSe mudar de ideia, basta confirmar novamente.",
+                    InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
+                    ]),
                     limpar_conteudo=True
                 )
             await query.answer("✅ Presença cancelada!")
@@ -958,12 +962,18 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await _enviar_ou_editar_mensagem(
                 context, user_id, TIPO_RESULTADO,
                 "❌ *Presença cancelada*\n\nSe mudar de ideia, basta confirmar novamente.",
+                InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
+                ]),
                 limpar_conteudo=True
             )
         else:
             await _enviar_ou_editar_mensagem(
                 context, user_id, TIPO_RESULTADO,
                 "Não foi possível cancelar. Você não estava confirmado para este evento.",
+                InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
+                ]),
                 limpar_conteudo=True
             )
         return
