@@ -21,6 +21,7 @@ import os
 import asyncio
 import logging
 import signal
+from datetime import datetime
 from typing import Optional
 
 from starlette.applications import Starlette
@@ -32,6 +33,7 @@ from telegram import Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
+    ChatMemberHandler,
     MessageHandler,
     CommandHandler,
     filters,
@@ -150,7 +152,7 @@ async def bode_grupo_handler(update: Update, context):
     """
     Captura a palavra 'bode' em grupos e redireciona para o privado.
     - Se cadastrado: envia/edita menu no privado
-    - Se não cadastrado: orienta a fazer cadastro
+    - Se não cadastrado: inicia cadastro no privado
     """
     if update.effective_chat.type not in ("group", "supergroup"):
         return
@@ -162,7 +164,34 @@ async def bode_grupo_handler(update: Update, context):
         from src.bot import criar_estrutura_inicial
         await criar_estrutura_inicial(context, user_id, membro)
     else:
-        await cadastro_start(update, context)
+        # Iniciar cadastro no privado
+        from src.cadastro import cadastro_start
+        # Simular update no privado
+        fake_update = Update(
+            update_id=update.update_id,
+            message=None,
+            callback_query=None,
+            inline_query=None,
+            chosen_inline_result=None,
+            edited_message=None,
+            channel_post=None,
+            edited_channel_post=None,
+            chat_member=None,
+            my_chat_member=None,
+        )
+        # Criar uma mensagem fake no privado
+        from telegram import Message, Chat, User
+        chat_privado = Chat(id=user_id, type="private")
+        user = update.effective_user
+        message_privado = Message(
+            message_id=1,  # fake
+            date=datetime.now(),
+            chat=chat_privado,
+            from_user=user,
+            text="/start"  # simular /start
+        )
+        fake_update.message = message_privado
+        await cadastro_start(fake_update, context)
 
 
 async def mensagem_grupo_handler(update: Update, context):
@@ -183,6 +212,41 @@ async def mensagem_grupo_handler(update: Update, context):
             )
     except Exception as e:
         logger.warning("Erro em mensagem_grupo_handler: %s", e, exc_info=True)
+
+
+async def novo_membro_grupo_handler(update: Update, context):
+    """
+    Handler para quando um novo membro entra no grupo.
+    Envia mensagem de boas-vindas no grupo orientando a usar 'bode'.
+    """
+    try:
+        if not update.chat_member:
+            return
+
+        chat_member = update.chat_member
+        if chat_member.new_chat_member.status not in ("member", "administrator", "creator"):
+            return  # Não é entrada
+
+        user = chat_member.new_chat_member.user
+        if user.is_bot:
+            return  # Ignorar bots
+
+        chat = update.effective_chat
+        if chat.type not in ("group", "supergroup"):
+            return
+
+        # Enviar mensagem de boas-vindas no grupo
+        await context.bot.send_message(
+            chat_id=chat.id,
+            text=(
+                f"Salve, irmão {user.first_name}! 🐐\n\n"
+                "Bem-vindo ao grupo do Bode Andarilho.\n"
+                "Para acessar o menu e confirmar presenças, digite *bode* no grupo."
+            ),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.warning("Erro em novo_membro_grupo_handler: %s", e, exc_info=True)
 
 
 # ============================================
@@ -301,6 +365,9 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(excluir_loja_menu, pattern=r"^loja_excluir_menu$"))
     app.add_handler(CallbackQueryHandler(confirmar_exclusao_loja, pattern=r"^excluir_loja_\d+$"))
     app.add_handler(CallbackQueryHandler(executar_exclusao_loja, pattern=r"^excluir_loja_confirmar$"))
+
+    # ===== 8. HANDLER PARA NOVOS MEMBROS NO GRUPO =====
+    app.add_handler(ChatMemberHandler(novo_membro_grupo_handler))
 
     # ===== 9. HANDLER DA PALAVRA "BODE" =====
     app.add_handler(
