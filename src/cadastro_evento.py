@@ -703,10 +703,6 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
             limpar_conteudo=True
         )
         return ORIENTE
-            _teclado_voltar_cancelar(),
-            limpar_conteudo=True
-        )
-        return NOME_LOJA
 
 
 async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
