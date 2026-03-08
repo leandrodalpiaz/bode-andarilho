@@ -703,7 +703,7 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update, context,
             "Cadastro de Evento",
             "🔺 *Grau mínimo* (Aprendiz, Companheiro, Mestre)",
-            _teclado_voltar_cancelar(),
+            _teclado_graus(),
             limpar_conteudo=True
         )
         return GRAU
