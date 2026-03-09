@@ -510,6 +510,7 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
                 # Mostra os dados da loja e pergunta confirmação
                 dados_loja = (
                     f"🏛 *{loja.get('Nome da Loja')}* {loja.get('Número', '')}\n"
+                    f"📍 Oriente: {loja.get('Oriente da Loja', loja.get('Oriente', ''))}\n"
                     f"📜 Rito: {loja.get('Rito')}\n"
                     f"⚜️ Potência: {loja.get('Potência')}\n"
                     f"📍 Endereço: {loja.get('Endereço')}\n\n"
@@ -574,7 +575,7 @@ async def confirmar_loja_callback(update: Update, context: ContextTypes.DEFAULT_
             # Pré-preenche os dados da loja
             context.user_data["novo_evento_nome_loja"] = loja.get("Nome da Loja", "")
             context.user_data["novo_evento_numero_loja"] = str(loja.get("Número", "0"))
-            context.user_data["novo_evento_oriente"] = loja.get("Oriente", "")
+            context.user_data["novo_evento_oriente"] = loja.get("Oriente da Loja", loja.get("Oriente", ""))
             context.user_data["novo_evento_rito"] = loja.get("Rito", "")
             context.user_data["novo_evento_potencia"] = loja.get("Potência", "")
             context.user_data["novo_evento_endereco"] = loja.get("Endereço", "")

@@ -111,6 +111,7 @@ async def listar_lojas_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         texto += (
             f"🏛 *{loja.get('Nome da Loja')}*"
             f"{' ' + str(loja.get('Número')) if loja.get('Número') else ''}\n"
+            f"📍 Oriente: {loja.get('Oriente da Loja', loja.get('Oriente', ''))}\n"
             f"📜 Rito: {loja.get('Rito')}\n"
             f"⚜️ Potência: {loja.get('Potência')}\n"
             f"📍 Endereço: {loja.get('Endereço')}\n"
@@ -330,7 +331,7 @@ async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["nova_loja"]["numero"] = numero
 
     await update.message.reply_text(
-        "� *Oriente* (cidade da loja)",
+        "📍 *Oriente da Loja* (cidade da loja)",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_cadastro_loja")
