@@ -567,8 +567,20 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from src.eventos_secretario import executar_cancelamento
         await executar_cancelamento(update, context)
     elif data == "ver_confirmados_secretario":
-        from src.admin_acoes import ver_confirmados_secretario
+        from src.eventos_secretario import ver_confirmados_secretario
         await ver_confirmados_secretario(update, context)
+    elif data.startswith("visualizar_confirmados|"):
+        from src.eventos_secretario import visualizar_confirmados
+        await visualizar_confirmados(update, context)
+    elif data == "listar_eventos_cancelados":
+        from src.eventos_secretario import listar_eventos_cancelados
+        await listar_eventos_cancelados(update, context)
+    elif data.startswith("confirmar_refazer|"):
+        from src.eventos_secretario import confirmar_refazer_evento
+        await confirmar_refazer_evento(update, context)
+    elif data.startswith("executar_refazer|"):
+        from src.eventos_secretario import executar_refazer_evento
+        await executar_refazer_evento(update, context)
 
     # Ações administrativas
     elif data == "admin_ver_membros":

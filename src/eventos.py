@@ -334,16 +334,26 @@ def _linha_botao_evento(ev: dict) -> str:
 # ============================================
 
 async def notificar_secretario(context: ContextTypes.DEFAULT_TYPE, evento: dict, membro: dict, tipo_agape: str, desc_agape: str):
+    """
+    Notifica o secretário que criou o evento sobre uma nova confirmação de presença.
+    
+    O secretário é determinado pelo campo 'Telegram ID do secretário' do evento.
+    Se vazio, nenhuma notificação é enviada (respeita preferência do secretário).
+    """
     secretario_id = evento.get("Telegram ID do secretário", "")
     if not secretario_id:
+        logger.debug(f"Nenhum secretário definido para o evento")
         return
 
     try:
         secretario_id = int(float(secretario_id))
-    except:
+    except (ValueError, TypeError):
+        logger.warning(f"ID do secretário inválido: {secretario_id}")
         return
 
+    # Verifica se o SECRETÁRIO quer receber notificações
     if not get_notificacao_status(secretario_id):
+        logger.debug(f"Secretário {secretario_id} desativou notificações")
         return
 
     nome_loja = evento.get("Nome da loja", "")
@@ -374,6 +384,7 @@ async def notificar_secretario(context: ContextTypes.DEFAULT_TYPE, evento: dict,
             parse_mode="Markdown",
             reply_markup=teclado,
         )
+        logger.info(f"Notificação enviada ao secretário {secretario_id} sobre nova confirmação em {id_evento}")
     except Exception as e:
         logger.error(f"Erro ao notificar secretário {secretario_id}: {e}")
 

@@ -134,7 +134,8 @@ async def exibir_menu_secretario(update: Update, context: ContextTypes.DEFAULT_T
         [InlineKeyboardButton("👥 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
         [InlineKeyboardButton("🏛️ Minhas lojas", callback_data="menu_lojas")],
         [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
-        [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
+        [InlineKeyboardButton("� Ver eventos cancelados", callback_data="listar_eventos_cancelados")],
+        [InlineKeyboardButton("�🔙 Voltar ao menu", callback_data="menu_principal")],
     ])
 
     await navegar_para(
@@ -705,6 +706,348 @@ async def cancelar_edicao_evento(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data.pop("evento_gerenciado_id", None)
     context.user_data.pop("evento_gerenciado_dados", None)
     return ConversationHandler.END
+
+
+# ============================================
+# VER CONFIRMADOS DO SECRETÁRIO
+# ============================================
+
+async def ver_confirmados_secretario(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Menu para visualizar confirmados de um evento específico do secretário."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    # Lista eventos do secretário
+    eventos = listar_eventos() or []
+    eventos_secretario = [
+        e for e in eventos 
+        if str(e.get("Telegram ID do secretário", "")).strip() == str(user_id)
+    ]
+    
+    if not eventos_secretario:
+        if query:
+            await query.answer("Você não tem eventos cadastrados.", show_alert=True)
+        return
+    
+    if query:
+        await query.answer()
+    
+    # Ordenar por data mais próxima
+    eventos_secretario = _eventos_ordenados(eventos_secretario)
+    
+    # Criar botões para cada evento
+    botoes = []
+    for ev in eventos_secretario[:15]:  # Limitar a 15 eventos para não ficar muito longo
+        nome_loja = str(ev.get("Nome da loja", "") or "").strip()
+        data = str(ev.get("Data do evento", "") or "").strip()
+        numero = str(ev.get("Número da loja", "") or "").strip()
+        numero_fmt = f" {numero}" if numero else ""
+        
+        id_evento = normalizar_id_evento(ev)
+        lbl = f"{nome_loja}{numero_fmt} - {data}"
+        botoes.append([
+            InlineKeyboardButton(lbl, callback_data=f"visualizar_confirmados|{_encode_cb(id_evento)}")
+        ])
+    
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario")])
+    
+    from src.bot import navegar_para
+    await navegar_para(
+        update, context,
+        "Ver Confirmados",
+        "👥 *Selecione um evento para visualizar os confirmados:*",
+        InlineKeyboardMarkup(botoes)
+    )
+
+
+async def visualizar_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Exibe lista detalhada de confirmados com informações de ágape."""
+    query = update.callback_query
+    _, id_evento_cod = query.data.split("|", 1)
+    id_evento = _decode_cb(id_evento_cod)
+    
+    user_id = update.effective_user.id
+    
+    # Buscar evento
+    eventos = listar_eventos() or []
+    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    
+    if not evento:
+        await query.answer("Evento não encontrado.", show_alert=True)
+        return
+    
+    # Verificar permissão (secretário que criou ou admin)
+    criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
+    from src.sheets import get_nivel
+    nivel = get_nivel(user_id)
+    
+    if str(user_id) != criador_id and nivel != "3":
+        await query.answer("⛔ Permissão negada.", show_alert=True)
+        return
+    
+    await query.answer()
+    
+    # Buscar confirmações
+    confirmacoes = listar_confirmacoes_por_evento(id_evento) or []
+    
+    # Processar dados
+    nome_loja = str(evento.get("Nome da loja", "") or "").strip()
+    numero = str(evento.get("Número da loja", "") or "").strip()
+    numero_fmt = f" {numero}" if numero else ""
+    data = str(evento.get("Data do evento", "") or "").strip()
+    hora = str(evento.get("Hora", "") or "").strip()
+    
+    total = len(confirmacoes)
+    com_agape = 0
+    sem_agape = 0
+    linhas_detalhadas = []
+    
+    for c in confirmacoes:
+        agape_raw = str(c.get("Ágape", "") or "").lower()
+        
+        # Contar ágape
+        if "sim" in agape_raw or "confirmada" in agape_raw or "gratuito" in agape_raw or "pago" in agape_raw:
+            com_agape += 1
+        else:
+            sem_agape += 1
+        
+        # Montar informações do membro
+        tid = c.get("Telegram ID") or c.get("telegram_id")
+        membro = None
+        if tid:
+            try:
+                membro = buscar_membro(int(float(tid)))
+            except:
+                pass
+        
+        if membro:
+            nome = membro.get("Nome", "Desconhecido")
+            grau = membro.get("Grau", "")
+            cargo = membro.get("Cargo", "")
+            loja = membro.get("Loja", "")
+            numero_loja = membro.get("Número da loja", "")
+            oriente = membro.get("Oriente", "")
+            potencia = membro.get("Potência", "")
+            vm = " (VM)" if _eh_vm(membro) else ""
+        else:
+            nome = c.get("Nome", "Desconhecido")
+            grau = c.get("Grau", "")
+            cargo = c.get("Cargo", "")
+            loja = c.get("Loja", "")
+            numero_loja = c.get("Número da loja", "")
+            oriente = c.get("Oriente", "")
+            potencia = c.get("Potência", "")
+            vm = ""
+        
+        # Formatar tipo de ágape
+        if "gratuito" in agape_raw:
+            tipo_agape = "Ágape: Gratuito 🎁"
+        elif "pago" in agape_raw:
+            tipo_agape = "Ágape: Pago (dividido) 💰"
+        elif "sim" in agape_raw or "confirmada" in agape_raw:
+            tipo_agape = "Ágape: Sim 🍽"
+        else:
+            tipo_agape = "Sem ágape ❌"
+        
+        # Montar linha detalhada
+        numero_fmt_membro = f" {numero_loja}" if numero_loja else ""
+        linha = (
+            f"👤 *{nome}{vm}*\n"
+            f"  🔺 {grau}\n"
+            f"  📍 {loja}{numero_fmt_membro} - {oriente}\n"
+            f"  ⚜️ {potencia}\n"
+            f"  {tipo_agape}\n"
+        )
+        linhas_detalhadas.append(linha)
+    
+    # Montar mensagem
+    titulo = f"📊 *CONFIRMADOS - {nome_loja}{numero_fmt}*\n"
+    header = f"📅 {data} | 🕕 {hora}\n\n"
+    stats = (
+        f"✅ Total: {total}\n"
+        f"🍽 Com ágape: {com_agape}\n"
+        f"❌ Sem ágape: {sem_agape}\n\n"
+    )
+    
+    if linhas_detalhadas:
+        corpo = "\n".join(linhas_detalhadas[:20])  # Limitar a 20 para não ficar muito grande
+        if len(linhas_detalhadas) > 20:
+            corpo += f"\n... e mais {len(linhas_detalhadas) - 20}"
+    else:
+        corpo = "_Nenhuma presença confirmada até o momento._"
+    
+    texto = titulo + header + stats + corpo
+    
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📋 Ver resumo", callback_data=f"resumo_evento|{_encode_cb(id_evento)}")],
+        [InlineKeyboardButton("🔙 Voltar", callback_data="ver_confirmados_secretario")],
+    ])
+    
+    from src.bot import navegar_para
+    await navegar_para(
+        update, context,
+        "Confirmados do Evento",
+        texto,
+        teclado,
+        limpar_conteudo=True
+    )
+
+
+# ============================================
+# REFAZER EVENTOS CANCELADOS
+# ============================================
+
+async def listar_eventos_cancelados(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lista os eventos cancelados do secretário para possível reabertura."""
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+
+    eventos = listar_eventos() or []
+    
+    # Filtra eventos cancelados
+    if nivel == "3":
+        eventos_filtrados = [ev for ev in eventos if ev.get("Status", "").lower() == "cancelado"]
+        titulo = "🔄 *Eventos Cancelados*"
+    else:
+        eventos_filtrados = [
+            ev for ev in eventos 
+            if str(ev.get("Telegram ID do secretário", "")).strip() == str(user_id)
+            and ev.get("Status", "").lower() == "cancelado"
+        ]
+        titulo = "🔄 *Meus Eventos Cancelados*"
+
+    if not eventos_filtrados:
+        teclado = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario")],
+        ])
+        await navegar_para(
+            update, context,
+            "Área do Secretário > Eventos Cancelados",
+            f"{titulo}\n\nNenhum evento cancelado encontrado.",
+            teclado
+        )
+        return
+
+    eventos_cancelados = _eventos_ordenados(eventos_filtrados, reverse=True)  # Mais recentes primeiro
+    botoes = []
+    for ev in eventos_cancelados[:20]:
+        id_evento = normalizar_id_evento(ev)
+        line = _linha_botao_evento(ev)
+        botoes.append([
+            InlineKeyboardButton(
+                f"🔄 {line}",
+                callback_data=f"confirmar_refazer|{_encode_cb(id_evento)}"
+            )
+        ])
+
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario")])
+
+    await navegar_para(
+        update, context,
+        "Área do Secretário > Eventos Cancelados",
+        f"{titulo}\n\nSelecione um evento para refazer:",
+        InlineKeyboardMarkup(botoes)
+    )
+
+
+async def confirmar_refazer_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Mostra confirmação antes de refazer o evento."""
+    query = update.callback_query
+    _, id_evento_cod = query.data.split("|", 1)
+    id_evento = _decode_cb(id_evento_cod)
+
+    eventos = listar_eventos() or []
+    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+
+    if not evento:
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            "Evento não encontrado."
+        )
+        return
+
+    # Verifica permissão
+    user_id = update.effective_user.id
+    criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
+    nivel = get_nivel(user_id)
+    
+    if str(user_id) != criador_id and nivel != "3":
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⛔ Permissão negada."
+        )
+        return
+
+    # Verifica se está realmente cancelado
+    if evento.get("Status", "").lower() != "cancelado":
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "Este evento não está cancelado."
+        )
+        return
+
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Sim, refazer evento", callback_data=f"executar_refazer|{_encode_cb(id_evento)}")],
+        [InlineKeyboardButton("❌ Não, voltar", callback_data="listar_eventos_cancelados")],
+    ])
+
+    await navegar_para(
+        update, context,
+        "Área do Secretário > Refazer Evento",
+        f"*Refazer evento*\n\nTem certeza que deseja reabrir este evento?\n\n"
+        f"{_formatar_resumo_evento(evento)}\n\n"
+        f"⚠️ As confirmações que foram removidas NÃO serão recuperadas.",
+        teclado
+    )
+
+
+async def executar_refazer_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Executa a reabertura do evento (refazer)."""
+    query = update.callback_query
+    _, id_evento_cod = query.data.split("|", 1)
+    id_evento = _decode_cb(id_evento_cod)
+
+    eventos = listar_eventos() or []
+    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+
+    if not evento:
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            "Evento não encontrado."
+        )
+        return
+
+    # Verifica permissão
+    user_id = update.effective_user.id
+    criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
+    nivel = get_nivel(user_id)
+    
+    if str(user_id) != criador_id and nivel != "3":
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⛔ Permissão negada."
+        )
+        return
+
+    # Reativa o evento
+    evento["Status"] = "Ativo"
+    sucesso = atualizar_evento(0, evento)
+    
+    if sucesso:
+        await navegar_para(
+            update, context,
+            "Área do Secretário",
+            "✅ *Evento reaberto com sucesso!*\n\n"
+            f"O evento {evento.get('Nome da loja', '')} foi reativado e aparecerá em 'Meus eventos'.",
+            InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario")
+            ]])
+        )
+    else:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "❌ Erro ao refazer evento. Tente novamente mais tarde."
+        )
 
 
 # ============================================
