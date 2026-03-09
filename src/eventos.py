@@ -820,14 +820,19 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     horario = str(evento.get("Hora", "") or "").strip()
     numero_fmt = f" {numero_loja}" if numero_loja else ""
 
+    # Verificar se o evento tem ágape
+    agape_evento = str(evento.get("Ágape", "") or "").strip()
+    tem_agape = extrair_tipo_agape(agape_evento) != "sem"
+
     if eh_secretario:
         # Mensagem combinada para secretário
         resposta = (
             f"✅ *Presença confirmada, irmão {membro.get('Nome', '')}!*\n\n"
+            f"Resumo da confirmação:\n"
             f"📅 {data} — {nome_loja}{numero_fmt}\n"
-            f"🕕 {horario}\n"
-            f"🍽 {participacao_agape} ({desc_agape})\n\n"
-            "Sua confirmação é muito importante! 🙏\n\n"
+            f"🕕 Horário: {horario}\n"
+            f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
+            "Sua confirmação é muito importante! Ela nos ajuda a organizar tudo com carinho, evitando desperdícios e custos desnecessários.\n\n"
             f"📢 *Nova confirmação registrada*"
         )
         
@@ -841,13 +846,25 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         ])
     else:
         # Mensagem normal para usuário comum
-        resposta = (
-            f"✅ *Presença confirmada, irmão {membro.get('Nome', '')}!*\n\n"
-            f"📅 {data} — {nome_loja}{numero_fmt}\n"
-            f"🕕 {horario}\n"
-            f"🍽 {participacao_agape} ({desc_agape})\n\n"
-            "Sua confirmação é muito importante! 🙏"
-        )
+        if tem_agape:
+            resposta = (
+                f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
+                f"Resumo da confirmação:\n"
+                f"📅 {data} — {nome_loja}{numero_fmt}\n"
+                f"🕕 Horário: {horario}\n"
+                f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
+                "Sua confirmação é muito importante! Ela nos ajuda a organizar tudo com carinho, evitando desperdícios e custos desnecessários.\n\n"
+                "Fraterno abraço!"
+            )
+        else:
+            resposta = (
+                f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
+                f"Resumo da confirmação:\n"
+                f"📅 {data} — {nome_loja}{numero_fmt}\n"
+                f"🕕 Horário: {horario}\n"
+                f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
+                "Fraterno abraço!"
+            )
 
         teclado = InlineKeyboardMarkup([
             [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")],
@@ -925,13 +942,29 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
     horario = str(evento.get("Hora", "") or "").strip()
     numero_fmt = f" {numero_loja}" if numero_loja else ""
 
-    resposta = (
-        f"✅ *Presença confirmada, irmão {membro.get('Nome', '')}!*\n\n"
-        f"📅 {data} — {nome_loja}{numero_fmt}\n"
-        f"🕕 {horario}\n"
-        f"🍽 {participacao_agape} ({desc_agape})\n\n"
-        "Fraterno abraço! 🤝"
-    )
+    # Verificar se o evento tem ágape
+    agape_evento = str(evento.get("Ágape", "") or "").strip()
+    tem_agape = extrair_tipo_agape(agape_evento) != "sem"
+
+    if tem_agape:
+        resposta = (
+            f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
+            f"Resumo da confirmação:\n"
+            f"📅 {data} — {nome_loja}{numero_fmt}\n"
+            f"🕕 Horário: {horario}\n"
+            f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
+            "Sua confirmação é muito importante! Ela nos ajuda a organizar tudo com carinho, evitando desperdícios e custos desnecessários.\n\n"
+            "Fraterno abraço!"
+        )
+    else:
+        resposta = (
+            f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
+            f"Resumo da confirmação:\n"
+            f"📅 {data} — {nome_loja}{numero_fmt}\n"
+            f"🕕 Horário: {horario}\n"
+            f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
+            "Fraterno abraço!"
+        )
 
     await context.bot.send_message(
         chat_id=user_id,
