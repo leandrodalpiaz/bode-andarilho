@@ -34,6 +34,7 @@ from src.sheets import (
     listar_confirmacoes_por_evento,
     get_notificacao_status,
 )
+from src.ajuda.dicas import enviar_dica_contextual
 
 from src.bot import (
     navegar_para,
@@ -877,6 +878,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         parse_mode="Markdown",
         reply_markup=teclado
     )
+    await enviar_dica_contextual(update, context, "confirmacao_presenca")
 
     if update.effective_chat.type in ["group", "supergroup"]:
         await query.answer("✅ Presença confirmada! Verifique seu privado.")
@@ -971,6 +973,7 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
         text=resposta,
         parse_mode="Markdown",
     )
+    await enviar_dica_contextual(update, context, "confirmacao_presenca")
 
 
 # ============================================

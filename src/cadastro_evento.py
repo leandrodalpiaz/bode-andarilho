@@ -35,6 +35,7 @@ from telegram.ext import (
 )
 
 from src.sheets import cadastrar_evento, listar_eventos, listar_lojas
+from src.ajuda.dicas import enviar_dica_contextual
 from src.permissoes import get_nivel
 from src.bot import (
     navegar_para,
@@ -478,6 +479,7 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _teclado_cancelar(),
             limpar_conteudo=True
         )
+        await enviar_dica_contextual(update, context, "cadastro_evento_data")
         return DATA
 
 
@@ -495,6 +497,7 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
             _teclado_cancelar(),
             limpar_conteudo=True
         )
+        await enviar_dica_contextual(update, context, "cadastro_evento_data")
         return DATA
     
     if data.startswith("usar_loja_"):
@@ -587,6 +590,7 @@ async def confirmar_loja_callback(update: Update, context: ContextTypes.DEFAULT_
                 _teclado_voltar_cancelar(),
                 limpar_conteudo=True
             )
+            await enviar_dica_contextual(update, context, "cadastro_evento_data")
             return DATA
         else:
             await navegar_para(
@@ -633,6 +637,7 @@ async def confirmar_loja_callback(update: Update, context: ContextTypes.DEFAULT_
             _teclado_cancelar(),
             limpar_conteudo=True
         )
+        await enviar_dica_contextual(update, context, "cadastro_evento_data")
         return DATA
     
     # Se chegou aqui, comando não reconhecido
@@ -1074,6 +1079,7 @@ async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
+        await enviar_dica_contextual(update, context, "cadastro_evento_endereco")
         return ENDERECO
 
 
@@ -1104,6 +1110,7 @@ async def receber_observacoes_texto(update: Update, context: ContextTypes.DEFAUL
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
+        await enviar_dica_contextual(update, context, "cadastro_evento_endereco")
         return ENDERECO
 
 
@@ -1284,6 +1291,7 @@ async def refazer_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _teclado_cancelar(),
         limpar_conteudo=True
     )
+    await enviar_dica_contextual(update, context, "cadastro_evento_data")
     return DATA
 
 
@@ -1308,6 +1316,7 @@ async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _teclado_cancelar(),
             limpar_conteudo=True
         )
+        await enviar_dica_contextual(update, context, "cadastro_evento_data")
     elif estado == HORARIO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
@@ -1406,6 +1415,7 @@ async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
+        await enviar_dica_contextual(update, context, "cadastro_evento_endereco")
     
     return estado
 

@@ -9,6 +9,7 @@ import logging
 import asyncio
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 from telegram.ext import (
     ContextTypes,
     ConversationHandler,
@@ -44,6 +45,21 @@ async def _safe_edit(query, text: str, **kwargs):
         await query.edit_message_text(text, **kwargs)
     except Exception as e:
         if "Message is not modified" not in str(e):
+            raise
+
+
+async def _safe_answer(query, text: str | None = None):
+    """Responde callback sem quebrar fluxo quando o query expira no Telegram."""
+    try:
+        if text:
+            await query.answer(text)
+        else:
+            await query.answer()
+    except BadRequest as e:
+        msg = str(e)
+        if "Query is too old" in msg or "query id is invalid" in msg:
+            logger.warning("Callback expirado/invalidado ignorado: %s", msg)
+        else:
             raise
 
 
@@ -138,7 +154,7 @@ async def listar_lojas_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 async def excluir_loja_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Exibe lista de lojas para o usuário escolher qual excluir."""
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
 
     user_id = update.effective_user.id
     lojas = listar_lojas(user_id)
@@ -179,7 +195,7 @@ async def excluir_loja_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def confirmar_exclusao_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Pede confirmação antes de excluir a loja selecionada."""
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
 
     data = query.data
     if not data.startswith("excluir_loja_"):
@@ -216,7 +232,7 @@ async def confirmar_exclusao_loja(update: Update, context: ContextTypes.DEFAULT_
 async def executar_exclusao_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Executa a exclusão da loja após confirmação."""
     query = update.callback_query
-    await query.answer()
+    await _safe_answer(query)
 
     # Feedback imediato de processamento
     try:
@@ -277,7 +293,7 @@ async def cadastrar_loja_inicio(update: Update, context: ContextTypes.DEFAULT_TY
     """Inicia o cadastro de uma nova loja."""
     query = update.callback_query
     if query:
-        await query.answer("🏛️ Iniciando cadastro...")
+        await _safe_answer(query, "🏛️ Iniciando cadastro...")
 
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
@@ -434,6 +450,9 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     user_id = update.effective_user.id
 
+    # Responde primeiro para evitar expiração do callback em operações mais lentas.
+    await _safe_answer(query, "✅ Processando...")
+
     # Feedback imediato
     try:
         await query.edit_message_text(
@@ -443,8 +462,6 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
         )
     except Exception as e:
         logger.warning(f"Erro ao editar mensagem para feedback: {e}")
-
-    await query.answer("✅ Processando...")
 
     dados = context.user_data.get("nova_loja", {})
 
@@ -461,7 +478,11 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
         )
         return ConversationHandler.END
 
-    sucesso = cadastrar_loja(user_id, dados)
+    try:
+        sucesso = await asyncio.to_thread(cadastrar_loja, user_id, dados)
+    except Exception as e:
+        logger.error("Erro inesperado ao cadastrar loja para %s: %s", user_id, e, exc_info=True)
+        sucesso = False
 
     await asyncio.sleep(0.5)
 
@@ -496,7 +517,7 @@ async def cancelar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_T
     user_id = update.effective_user.id
 
     if query:
-        await query.answer()
+        await _safe_answer(query)
         await navegar_para(
             update, context,
             "Cadastro de Loja",

@@ -156,3 +156,83 @@ ERRO_GENERICO = "❌ Houve um percalço técnico. Por favor, tente novamente em 
 ERRO_DADOS_NAO_ENCONTRADOS = "Erro: Não foi possível localizar as informações. Tente reiniciar a operação."
 
 ERRO_PERMISSAO = "⛔ Não possui as credenciais necessárias para esta ação."
+
+
+# ============================================
+# CENTRAL DE AJUDA
+# ============================================
+
+TEXTO_MENU_AJUDA_PRINCIPAL = (
+    "🧭 *CENTRAL DE AJUDA*\n\n"
+    "Escolha o tipo de orientação:"
+)
+
+TEXTO_GUIA_MEMBRO = (
+    "👤 *Guia do Membro*\n\n"
+    "Aqui você encontra o básico para usar o Bode Andarilho como membro comum."
+)
+
+TEXTO_GUIA_SECRETARIO = (
+    "🔰 *Guia do Secretário*\n\n"
+    "Aqui você encontra as orientações para gerenciar eventos e lojas."
+)
+
+TEXTO_GUIA_ADMINISTRADOR = (
+    "⚜️ *Guia do Administrador*\n\n"
+    "Aqui você encontra as funcionalidades exclusivas para administradores."
+)
+
+TEXTO_SOBRE_BODE = (
+    "🏛️ *SOBRE O BODE ANDARILHO*\n\n"
+    "O Bode Andarilho é um bot para Telegram criado para incentivar a visitação "
+    "entre lojas maçônicas de potências regulares. Ele simplifica a divulgação "
+    "de sessões, a confirmação de presença e o planejamento para secretários.\n\n"
+    "Nossa missão é fortalecer a cultura da visitação, quebrar barreiras "
+    "tecnológicas e respeitar o ritual e a tradição maçônica, sempre com uma "
+    "linguagem cordial, simples e motivadora.\n\n"
+    "O bot não substitui o contato humano ou as formalidades do Templo, mas "
+    "atua como um facilitador e lembrete amigo.\n\n"
+    "Para mais informações, consulte a documentação completa ou fale com o "
+    "administrador do seu grupo."
+)
+
+TEXTO_TUTORIAIS_INICIAL = (
+    "📚 *TUTORIAIS*\n\n"
+    "Aqui você encontrará guias detalhados para as principais funções do Bode Andarilho."
+    "\n\n*(Conteúdo dos tutoriais a ser adicionado posteriormente.)*"
+)
+
+TEXTO_GLOSSARIO_INICIAL = (
+    "📖 *GLOSSÁRIO*\n\n"
+    "Termos técnicos do bot e do Telegram para facilitar sua compreensão."
+)
+
+TEXTO_FAQ_INICIAL = (
+    "❓ *PERGUNTAS FREQUENTES*\n\n"
+    "Dúvidas comuns organizadas por nível de acesso."
+)
+
+
+# ============================================
+# GAMIFICAÇÃO
+# ============================================
+
+TEXTO_CONQUISTAS_MEMBRO_INICIAL = (
+    "🏆 *MINHAS CONQUISTAS DE ANDARILHO*\n\n"
+    "Sua jornada de visitação é reconhecida! Veja seus títulos honoríficos:"
+)
+
+TEXTO_CONQUISTAS_SECRETARIO_INICIAL = (
+    "✨ *MEUS MARCOS DE SECRETÁRIO*\n\n"
+    "Seu empenho na organização de eventos é celebrado! Veja seus marcos de reconhecimento:"
+)
+
+TEXTO_CELEBRACAO_MENSAL = (
+    "🎉 *CELEBRAÇÃO FRATERNA - MÊS DE {mes_referencia}!* 🎉\n\n"
+    "Queridos irmãos, com alegria compartilhamos os frutos da nossa união no último mês!\n\n"
+    "Em *{mes_referencia}*, o Bode Andarilho registrou um total de *{total_visitas} visitas* "
+    "a sessões em *{total_lojas_diferentes} lojas diferentes*!\n\n"
+    "Cada presença fortalece a nossa corrente e enriquece a nossa jornada.\n"
+    "Que a chama da visitação continue acesa!\n\n"
+    "#BodeAndarilho #FraternidadeEmAção"
+)

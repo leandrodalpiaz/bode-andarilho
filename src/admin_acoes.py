@@ -542,8 +542,12 @@ async def ver_todos_membros(update: Update, context: ContextTypes.DEFAULT_TYPE):
         nome = membro.get("Nome", "Sem nome")
         nivel = membro.get("Nivel", "1")
         cargo = membro.get("Cargo", "")
-        loja = membro.get("Loja", "")
         nivel_texto = {"1": "👤", "2": "🔰", "3": "⚜️"}.get(str(nivel), "👤")
+
+        try:
+            tid = int(float(membro.get("Telegram ID")))
+        except Exception:
+            continue
         
         if cargo:
             texto_botao = f"{nivel_texto} {nome} - {cargo}"
@@ -554,7 +558,12 @@ async def ver_todos_membros(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if len(texto_botao) > 30:
             texto_botao = texto_botao[:27] + "..."
         
-        botoes.append([InlineKeyboardButton(texto_botao, callback_data=f"editar_membro_{membro['Telegram ID']}")])
+        botoes.append([
+            InlineKeyboardButton(
+                texto_botao,
+                callback_data=f"editar_membro_selecionar|{tid}",
+            )
+        ])
     
     # Botões de navegação
     botoes_nav = []
@@ -792,7 +801,17 @@ async def receber_novo_valor_membro(update: Update, context: ContextTypes.DEFAUL
 
 async def cancelar_edicao_membro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cancela o processo de edição."""
-    await update.message.reply_text("Edição cancelada.")
+    if update.callback_query:
+        await update.callback_query.answer()
+        await _enviar_ou_editar_mensagem(
+            context,
+            update.effective_user.id,
+            TIPO_RESULTADO,
+            "Edição cancelada.",
+        )
+    elif update.message:
+        await update.message.reply_text("Edição cancelada.")
+
     context.user_data.pop("editando_membro_id", None)
     context.user_data.pop("editando_membro_dados", None)
     context.user_data.pop("editando_campo", None)
@@ -940,7 +959,10 @@ rebaixar_handler = ConversationHandler(
 )
 
 editar_membro_handler = ConversationHandler(
-    entry_points=[CallbackQueryHandler(editar_membro_inicio, pattern="^admin_editar_membro$")],
+    entry_points=[
+        CallbackQueryHandler(editar_membro_inicio, pattern="^admin_editar_membro$"),
+        CallbackQueryHandler(selecionar_membro_para_editar, pattern=r"^editar_membro_selecionar\|"),
+    ],
     states={
         SELECIONAR_MEMBRO: [CallbackQueryHandler(selecionar_membro_para_editar, pattern="^(editar_membro_selecionar|cancelar_edicao)")],
         SELECIONAR_CAMPO: [CallbackQueryHandler(selecionar_campo_membro, pattern="^(editar_campo_membro|cancelar_edicao)")],

@@ -21,6 +21,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from src.sheets import buscar_membro
+from src.ajuda.conquistas import calcular_conquistas_membro
 from src.bot import (
     navegar_para,
     _enviar_ou_editar_mensagem,
@@ -110,6 +111,13 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"*Venerável Mestre:* {vm}\n"
         f"*Nível de acesso:* {nivel_texto}\n"
     )
+
+    conquistas = await calcular_conquistas_membro(user_id)
+    if conquistas:
+        texto += "\n*🏆 Minhas Conquistas:*\n"
+        texto += "\n".join(conquistas)
+    else:
+        texto += "\n_Você ainda não possui títulos de Andarilho._"
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("✏️ Editar perfil", callback_data="editar_perfil")],

@@ -50,6 +50,7 @@ from src.eventos import (
     _eh_vm,
 )
 from src.permissoes import get_nivel
+from src.ajuda.dicas import enviar_dica_contextual
 
 from src.bot import (
     navegar_para,
@@ -134,8 +135,9 @@ async def exibir_menu_secretario(update: Update, context: ContextTypes.DEFAULT_T
         [InlineKeyboardButton("👥 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
         [InlineKeyboardButton("🏛️ Minhas lojas", callback_data="menu_lojas")],
         [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
-        [InlineKeyboardButton("� Ver eventos cancelados", callback_data="listar_eventos_cancelados")],
-        [InlineKeyboardButton("�🔙 Voltar ao menu", callback_data="menu_principal")],
+        [InlineKeyboardButton("🏆 Meus Marcos de Secretário", callback_data="mostrar_marcos_secretario")],
+        [InlineKeyboardButton("🔄 Ver eventos cancelados", callback_data="listar_eventos_cancelados")],
+        [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
     ])
 
     await navegar_para(
@@ -144,6 +146,7 @@ async def exibir_menu_secretario(update: Update, context: ContextTypes.DEFAULT_T
         "📋 *Bem-vindo à Área do Secretário*\n\nO que deseja fazer?",
         teclado
     )
+    await enviar_dica_contextual(update, context, "area_secretario_lojas")
 
 
 # ============================================
@@ -701,7 +704,17 @@ async def receber_novo_valor_evento(update: Update, context: ContextTypes.DEFAUL
 
 async def cancelar_edicao_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cancela o processo de edição."""
-    await update.message.reply_text("Edição cancelada.")
+    if update.callback_query:
+        await update.callback_query.answer()
+        await _enviar_ou_editar_mensagem(
+            context,
+            update.effective_user.id,
+            TIPO_RESULTADO,
+            "Edição cancelada.",
+        )
+    elif update.message:
+        await update.message.reply_text("Edição cancelada.")
+
     context.user_data.pop("editando_campo_evento", None)
     context.user_data.pop("evento_gerenciado_id", None)
     context.user_data.pop("evento_gerenciado_dados", None)
@@ -933,7 +946,7 @@ async def listar_eventos_cancelados(update: Update, context: ContextTypes.DEFAUL
         )
         return
 
-    eventos_cancelados = _eventos_ordenados(eventos_filtrados, reverse=True)  # Mais recentes primeiro
+    eventos_cancelados = list(reversed(_eventos_ordenados(eventos_filtrados)))  # Mais recentes primeiro
     botoes = []
     for ev in eventos_cancelados[:20]:
         id_evento = normalizar_id_evento(ev)

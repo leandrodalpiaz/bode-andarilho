@@ -49,6 +49,7 @@ def menu_principal_teclado(nivel: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton("📅 Ver Sessões Agendadas", callback_data="ver_eventos")],
         [InlineKeyboardButton("✅ Minhas Visitações", callback_data="minhas_confirmacoes")],
         [InlineKeyboardButton("👤 Meu Perfil / Dados", callback_data="meu_cadastro")],
+        [InlineKeyboardButton("❓ Ajuda & Orientações", callback_data="menu_ajuda")],
     ]
 
     # Secretários (Nível 2) e Admins (Nível 3)

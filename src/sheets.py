@@ -5,6 +5,7 @@ import os
 import json
 import uuid
 import time
+import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -34,6 +35,8 @@ else:
     raise ValueError("Variável de ambiente GOOGLE_CREDENTIALS não definida.")
 
 spreadsheet = gc.open("Bode Andarilho")
+
+logger = logging.getLogger(__name__)
 
 
 # =========================
@@ -849,3 +852,113 @@ def _with_timeout(func, timeout=2.0, default=None):
     except (asyncio.TimeoutError, Exception) as e:
         print(f"Timeout ou erro em {func.__name__}: {e}")
         return default
+
+
+def get_all_rows(sheet_name: str) -> List[Dict[str, Any]]:
+    """Retorna todas as linhas da aba em formato de registros."""
+    try:
+        ws = spreadsheet.worksheet(sheet_name)
+        return ws.get_all_records()
+    except Exception as e:
+        logger.error("Erro ao buscar linhas da aba %s: %s", sheet_name, e)
+        return []
+
+
+async def buscar_confirmacoes_membro(user_id: int) -> List[Dict[str, Any]]:
+    """Busca todas as confirmações do membro pelo Telegram ID."""
+    try:
+        target = _norm_intlike(user_id)
+        if not target:
+            return []
+
+        confirmacoes = get_all_rows("Confirmações")
+        return [
+            conf
+            for conf in confirmacoes
+            if _norm_intlike(conf.get("Telegram ID")) == target
+        ]
+    except Exception as e:
+        logger.error("Erro ao buscar confirmações do membro %s: %s", user_id, e)
+        return []
+
+
+async def buscar_eventos_por_secretario(user_id: int) -> List[Dict[str, Any]]:
+    """Busca eventos cadastrados por um secretário/admin."""
+    try:
+        target = _norm_intlike(user_id)
+        if not target:
+            return []
+
+        eventos = get_all_rows("Eventos")
+        return [
+            evento
+            for evento in eventos
+            if _norm_intlike(evento.get("Telegram ID do secretário")) == target
+        ]
+    except Exception as e:
+        logger.error("Erro ao buscar eventos do secretário %s: %s", user_id, e)
+        return []
+
+
+def _parse_data_generica(data_str: str) -> Optional[datetime]:
+    if not data_str:
+        return None
+
+    texto = str(data_str).strip()
+    formatos = (
+        "%d/%m/%Y",
+        "%d/%m/%Y %H:%M:%S",
+        "%Y-%m-%d",
+        "%Y-%m-%d %H:%M:%S",
+    )
+    for fmt in formatos:
+        try:
+            return datetime.strptime(texto, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+async def buscar_confirmacoes_no_periodo(data_inicio_str: str, data_fim_str: str) -> List[Dict[str, Any]]:
+    """Busca confirmações no intervalo de datas (inclusive)."""
+    try:
+        data_inicio = datetime.strptime(data_inicio_str, "%d/%m/%Y")
+        data_fim = datetime.strptime(data_fim_str, "%d/%m/%Y")
+
+        confirmacoes = get_all_rows("Confirmações")
+        filtradas = []
+
+        for conf in confirmacoes:
+            data_raw = str(conf.get("Data e hora", "")).split(" ")[0]
+            data_conf = _parse_data_generica(data_raw)
+            if not data_conf:
+                continue
+            if data_inicio <= data_conf <= data_fim:
+                filtradas.append(conf)
+
+        return filtradas
+    except Exception as e:
+        logger.error("Erro ao buscar confirmações no período %s - %s: %s", data_inicio_str, data_fim_str, e)
+        return []
+
+
+async def buscar_eventos_no_periodo(data_inicio_str: str, data_fim_str: str) -> List[Dict[str, Any]]:
+    """Busca eventos no intervalo de datas (inclusive)."""
+    try:
+        data_inicio = datetime.strptime(data_inicio_str, "%d/%m/%Y")
+        data_fim = datetime.strptime(data_fim_str, "%d/%m/%Y")
+
+        eventos = get_all_rows("Eventos")
+        filtrados = []
+
+        for evento in eventos:
+            data_evento = _parse_data_generica(evento.get("Data do evento", ""))
+            if not data_evento:
+                continue
+            if data_inicio <= data_evento <= data_fim:
+                filtrados.append(evento)
+
+        return filtrados
+    except Exception as e:
+        logger.error("Erro ao buscar eventos no período %s - %s: %s", data_inicio_str, data_fim_str, e)
+        return []

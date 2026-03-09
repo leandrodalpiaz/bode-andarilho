@@ -77,6 +77,8 @@ from src.admin_acoes import (
     rebaixar_handler,
     editar_membro_handler,
     ver_todos_membros,
+    membros_pagina_anterior,
+    membros_pagina_proxima,
     menu_notificacoes,
     notificacoes_ativar,
     notificacoes_desativar,
@@ -112,6 +114,10 @@ from src.lojas import (
     confirmar_exclusao_loja,
     executar_exclusao_loja,
 )
+
+# Ajuda contextual e gamificação
+from src.ajuda.menus import ajuda_handlers
+from src.ajuda.conquistas import mostrar_marcos_secretario, mostrar_conquistas_membro
 
 # Utilitários
 from src.sheets import buscar_membro
@@ -272,7 +278,19 @@ def register_handlers(app: Application) -> None:
             await update.message.reply_text("OK")
     app.add_handler(CommandHandler("ping", ping))
 
-    # ===== 3. CALLBACKS ESPECÍFICOS DE EVENTOS =====
+    # ===== 3. CALLBACKS DA CENTRAL DE AJUDA =====
+    for handler in ajuda_handlers:
+        app.add_handler(handler)
+
+    # ===== 4. CALLBACKS DE GAMIFICAÇÃO =====
+    app.add_handler(CallbackQueryHandler(
+        mostrar_marcos_secretario, pattern=r"^mostrar_marcos_secretario$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        mostrar_conquistas_membro, pattern=r"^mostrar_conquistas_membro$"
+    ))
+
+    # ===== 5. CALLBACKS ESPECÍFICOS DE EVENTOS =====
     app.add_handler(CallbackQueryHandler(
         mostrar_eventos, pattern=r"^(ver_eventos|mostrar_eventos|eventos|voltar_eventos)$"
     ))
@@ -292,7 +310,7 @@ def register_handlers(app: Application) -> None:
         calendario_atual, pattern=r"^calendario_atual$"
     ))
 
-    # ===== 4. CALLBACKS DE CONFIRMAÇÕES =====
+    # ===== 6. CALLBACKS DE CONFIRMAÇÕES =====
     app.add_handler(CallbackQueryHandler(
         minhas_confirmacoes, pattern=r"^minhas_confirmacoes$"
     ))
@@ -309,7 +327,7 @@ def register_handlers(app: Application) -> None:
         detalhes_historico, pattern=r"^detalhes_historico\|"
     ))
 
-    # ===== 5. CALLBACKS DE AÇÕES EM EVENTOS =====
+    # ===== 7. CALLBACKS DE AÇÕES EM EVENTOS =====
     app.add_handler(CallbackQueryHandler(
         ver_confirmados, pattern=r"^ver_confirmados\|"
     ))
@@ -324,7 +342,7 @@ def register_handlers(app: Application) -> None:
         fechar_mensagem, pattern=r"^fechar_mensagem$"
     ))
 
-    # ===== 6. CALLBACKS DA ÁREA DO SECRETÁRIO =====
+    # ===== 8. CALLBACKS DA ÁREA DO SECRETÁRIO =====
     app.add_handler(CallbackQueryHandler(
         meus_eventos, pattern=r"^meus_eventos$"
     ))
@@ -359,9 +377,15 @@ def register_handlers(app: Application) -> None:
         executar_refazer_evento, pattern=r"^executar_refazer\|"
     ))
 
-    # ===== 7. CALLBACKS ADMINISTRATIVOS =====
+    # ===== 9. CALLBACKS ADMINISTRATIVOS =====
     app.add_handler(CallbackQueryHandler(
         ver_todos_membros, pattern=r"^admin_ver_membros$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        membros_pagina_anterior, pattern=r"^membros_page_prev$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        membros_pagina_proxima, pattern=r"^membros_page_next$"
     ))
     app.add_handler(CallbackQueryHandler(
         menu_notificacoes, pattern=r"^menu_notificacoes$"
@@ -373,7 +397,7 @@ def register_handlers(app: Application) -> None:
         notificacoes_desativar, pattern=r"^notificacoes_desativar$"
     ))
 
-    # ===== 8. CALLBACKS DE LOJAS =====
+    # ===== 10. CALLBACKS DE LOJAS =====
     app.add_handler(CallbackQueryHandler(menu_lojas, pattern=r"^menu_lojas$"))
     app.add_handler(CallbackQueryHandler(listar_lojas_handler, pattern=r"^loja_listar$"))
     # Handlers para exclusão de lojas (adicionados)
@@ -381,10 +405,10 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(confirmar_exclusao_loja, pattern=r"^excluir_loja_\d+$"))
     app.add_handler(CallbackQueryHandler(executar_exclusao_loja, pattern=r"^excluir_loja_confirmar$"))
 
-    # ===== 8. HANDLER PARA NOVOS MEMBROS NO GRUPO =====
+    # ===== 11. HANDLER PARA NOVOS MEMBROS NO GRUPO =====
     app.add_handler(ChatMemberHandler(novo_membro_grupo_handler))
 
-    # ===== 9. HANDLER DA PALAVRA "BODE" =====
+    # ===== 12. HANDLER DA PALAVRA "BODE" =====
     app.add_handler(
         MessageHandler(
             filters.Regex(r"^(?i:bode)[.!?]*$") & filters.ChatType.GROUPS,
@@ -392,10 +416,10 @@ def register_handlers(app: Application) -> None:
         )
     )
 
-    # ===== 10. HANDLER GENÉRICO DE BOTÕES (CATCH-ALL) =====
+    # ===== 13. HANDLER GENÉRICO DE BOTÕES (CATCH-ALL) =====
     app.add_handler(CallbackQueryHandler(botao_handler))
 
-    # ===== 11. HANDLERS DE MENSAGENS EM GRUPO =====
+    # ===== 14. HANDLERS DE MENSAGENS EM GRUPO =====
     app.add_handler(MessageHandler(
         filters.ChatType.GROUPS & filters.TEXT & ~filters.COMMAND,
         mensagem_grupo_handler
