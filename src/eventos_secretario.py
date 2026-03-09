@@ -792,6 +792,25 @@ async def visualizar_confirmados(update: Update, context: ContextTypes.DEFAULT_T
     # DEBUG: log how many confirmations were found
     logger.debug(f"confirmacoes para evento {id_evento}: {len(confirmacoes)}")
     
+    # eliminar duplicatas (por Telegram ID ou combinação de campos identificadores)
+    vistos = set()
+    unicos = []
+    for c in confirmacoes:
+        tid = str(c.get("Telegram ID") or c.get("telegram_id") or "").strip()
+        if tid:
+            chave = tid
+        else:
+            # fallback: use campos que identificam o membro, não a loja inteira
+            nome = str(c.get("Nome", "")).strip()
+            grau = str(c.get("Grau", "")).strip()
+            cargo = str(c.get("Cargo", "")).strip()
+            chave = nome + "|" + grau + "|" + cargo
+        if chave and chave not in vistos:
+            vistos.add(chave)
+            unicos.append(c)
+    confirmacoes = unicos
+    logger.debug(f"confirmacoes únicas para evento {id_evento}: {len(confirmacoes)}")
+
     # Processar dados
     nome_loja = str(evento.get("Nome da loja", "") or "").strip()
     numero = str(evento.get("Número da loja", "") or "").strip()
@@ -810,8 +829,10 @@ async def visualizar_confirmados(update: Update, context: ContextTypes.DEFAULT_T
         # Contar ágape
         if "sim" in agape_raw or "confirmada" in agape_raw or "gratuito" in agape_raw or "pago" in agape_raw:
             com_agape += 1
+            agape_flag = "Com ágape"
         else:
             sem_agape += 1
+            agape_flag = "Sem ágape"
         
         # Montar informações do membro
         tid = c.get("Telegram ID") or c.get("telegram_id")
@@ -825,40 +846,22 @@ async def visualizar_confirmados(update: Update, context: ContextTypes.DEFAULT_T
         if membro:
             nome = membro.get("Nome", "Desconhecido")
             grau = membro.get("Grau", "")
-            cargo = membro.get("Cargo", "")
             loja = membro.get("Loja", "")
             numero_loja = membro.get("Número da loja", "")
             oriente = membro.get("Oriente", "")
-            potencia = membro.get("Potência", "")
-            vm = " (VM)" if _eh_vm(membro) else ""
+            vm = "VM" if _eh_vm(membro) else ""
         else:
             nome = c.get("Nome", "Desconhecido")
             grau = c.get("Grau", "")
-            cargo = c.get("Cargo", "")
             loja = c.get("Loja", "")
             numero_loja = c.get("Número da loja", "")
             oriente = c.get("Oriente", "")
-            potencia = c.get("Potência", "")
             vm = ""
         
-        # Formatar tipo de ágape
-        if "gratuito" in agape_raw:
-            tipo_agape = "Ágape: Gratuito 🎁"
-        elif "pago" in agape_raw:
-            tipo_agape = "Ágape: Pago (dividido) 💰"
-        elif "sim" in agape_raw or "confirmada" in agape_raw:
-            tipo_agape = "Ágape: Sim 🍽"
-        else:
-            tipo_agape = "Sem ágape ❌"
-        
-        # Montar linha detalhada
         numero_fmt_membro = f" {numero_loja}" if numero_loja else ""
+        # linha simples para ficha padrão
         linha = (
-            f"👤 *{nome}{vm}*\n"
-            f"  🔺 {grau}\n"
-            f"  📍 {loja}{numero_fmt_membro} - {oriente}\n"
-            f"  ⚜️ {potencia}\n"
-            f"  {tipo_agape}\n"
+            f"{vm} | {grau} | {nome} | {loja}{numero_fmt_membro} - {oriente} | {agape_flag}"
         )
         linhas_detalhadas.append(linha)
     
