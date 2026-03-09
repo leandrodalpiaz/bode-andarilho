@@ -649,6 +649,10 @@ async def confirmar_loja_callback(update: Update, context: ContextTypes.DEFAULT_
 
 async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe e valida a data do evento."""
+    try:
+        await update.message.delete()
+    except:
+        pass
     data_text = _norm_text(update.message.text)
     dt = _parse_data_ddmmyyyy(data_text)
     if not dt:
@@ -685,6 +689,10 @@ async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe e valida o horário."""
+    try:
+        await update.message.delete()
+    except:
+        pass
     hora = _parse_hora(update.message.text)
     if not hora:
         await _enviar_ou_editar_mensagem(
@@ -721,6 +729,10 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o nome da loja - chamado tanto do fluxo manual quanto da confirmação de loja."""
+    try:
+        await update.message.delete()
+    except:
+        pass
     nome = _truncate(update.message.text)
     if not nome:
         await _enviar_ou_editar_mensagem(
@@ -745,6 +757,10 @@ async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o número da loja - etapa intermediária entre NOME_LOJA e ORIENTE."""
+    try:
+        await update.message.delete()
+    except:
+        pass
     numero = _norm_text(update.message.text)
     numero = _truncate(numero, 30)
     if not numero:
@@ -776,6 +792,10 @@ async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o oriente."""
+    try:
+        await update.message.delete()
+    except:
+        pass
     oriente = _truncate(update.message.text)
     if not oriente:
         await _enviar_ou_editar_mensagem(
@@ -839,6 +859,10 @@ async def receber_grau_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def receber_tipo_sessao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o tipo de sessão."""
+    try:
+        await update.message.delete()
+    except:
+        pass
     val = _truncate(update.message.text)
     context.user_data["novo_evento_tipo_sessao"] = val
     
@@ -865,6 +889,10 @@ async def receber_tipo_sessao(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o rito."""
+    try:
+        await update.message.delete()
+    except:
+        pass
     val = _truncate(update.message.text)
     context.user_data["novo_evento_rito"] = val
     
@@ -891,6 +919,10 @@ async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe a potência."""
+    try:
+        await update.message.delete()
+    except:
+        pass
     val = _truncate(update.message.text)
     context.user_data["novo_evento_potencia"] = val
     
@@ -1076,6 +1108,10 @@ async def receber_observacoes_texto(update: Update, context: ContextTypes.DEFAUL
 
 async def receber_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o endereço e exibe tela de confirmação."""
+    try:
+        await update.message.delete()
+    except:
+        pass
     val = _truncate(update.message.text, 400)
     if len(val) < 3:
         await _enviar_ou_editar_mensagem(

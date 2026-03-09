@@ -85,6 +85,9 @@ def menu_principal_teclado(nivel: str) -> InlineKeyboardMarkup:
     if nivel == "3":
         botoes.append([InlineKeyboardButton("⚙️ Área do Administrador", callback_data="area_admin")])
 
+    # Botão para limpar histórico (disponível para todos)
+    botoes.append([InlineKeyboardButton("🗑️ Limpar histórico", callback_data="limpar_historico")])
+
     return InlineKeyboardMarkup(botoes)
 
 
@@ -377,6 +380,42 @@ async def voltar_ao_menu_principal(update: Update, context: ContextTypes.DEFAULT
     )
 
 
+async def limpar_historico(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Deleta mensagens antigas do conversa para limpar poluição."""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    
+    # Calcula IDs de mensagens recentes (últimas ~100)
+    # Telegram não fornece API para listar mensagens, então deletamos por ID
+    # Deletar do usuário é uma abordagem fallback: tentar deletar >X mensagens anteriores
+    deletadas = 0
+    
+    if hasattr(context.bot, 'get_chat_history'):
+        try:
+            # Iterate backwards from current message
+            msg_id = update.callback_query.message.message_id
+            for i in range(1, 100):
+                try:
+                    await context.bot.delete_message(
+                        chat_id=user_id, 
+                        message_id=msg_id - i
+                    )
+                    deletadas += 1
+                except Exception:
+                    # Mensagem já deletada ou não tem permissão
+                    pass
+        except Exception as e:
+            logger.debug(f"Erro ao limpar histórico: {e}")
+    
+    await _enviar_ou_editar_mensagem(
+        context, user_id, TIPO_RESULTADO,
+        f"🧹 Limpeza concluída! ({deletadas} mensagens removidas)",
+        limpar_conteudo=True
+    )
+
+
 # ============================================
 # HANDLER DO COMANDO /start
 # ============================================
@@ -480,6 +519,10 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Voltar ao menu principal (incluindo retorno de detalhes de evento antigo)
     if data == "menu_principal":
         await voltar_ao_menu_principal(update, context)
+    
+    # Limpar histórico
+    elif data == "limpar_historico":
+        await limpar_historico(update, context)
     
     # Eventos
     elif data == "ver_eventos" or data == "voltar_eventos":
