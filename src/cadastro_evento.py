@@ -697,17 +697,8 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["novo_evento_horario"] = hora
     
-    # Se já tem oriente da loja, pula direto para grau
-    if "novo_evento_oriente" in context.user_data:
-        await navegar_para(
-            update, context,
-            "Cadastro de Evento",
-            "🔺 *Grau mínimo* (Aprendiz, Companheiro, Mestre)",
-            _teclado_graus(),
-            limpar_conteudo=True
-        )
-        return GRAU
-    else:
+    # Se já tem nome da loja pré-carregada (veio de loja cadastrada), pula para oriente
+    if "novo_evento_nome_loja" in context.user_data:
         await navegar_para(
             update, context,
             "Cadastro de Evento",
@@ -716,10 +707,20 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
             limpar_conteudo=True
         )
         return ORIENTE
+    else:
+        # Fluxo manual: pergunta o nome da loja
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento",
+            "🏛 *Nome da loja*",
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
+        )
+        return NOME_LOJA
 
 
 async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recebe o nome da loja."""
+    """Recebe o nome da loja - chamado tanto do fluxo manual quanto da confirmação de loja."""
     nome = _truncate(update.message.text)
     if not nome:
         await _enviar_ou_editar_mensagem(
@@ -743,7 +744,7 @@ async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recebe o número da loja."""
+    """Recebe o número da loja - etapa intermediária entre NOME_LOJA e ORIENTE."""
     numero = _norm_text(update.message.text)
     numero = _truncate(numero, 30)
     if not numero:
@@ -751,14 +752,26 @@ async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     context.user_data["novo_evento_numero_loja"] = numero
     
-    await navegar_para(
-        update, context,
-        "Cadastro de Evento",
-        "📍 *Oriente*",
-        _teclado_voltar_cancelar(),
-        limpar_conteudo=True
-    )
-    return ORIENTE
+    # Se já tem oriente pré-carregada (veio de loja cadastrada), pula para grau
+    if "novo_evento_oriente" in context.user_data:
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento",
+            "🔺 *Grau mínimo* (Aprendiz, Companheiro, Mestre)",
+            _teclado_graus(),
+            limpar_conteudo=True
+        )
+        return GRAU
+    else:
+        # Continua com pergunta do oriente
+        await navegar_para(
+            update, context,
+            "Cadastro de Evento",
+            "📍 *Oriente*",
+            _teclado_voltar_cancelar(),
+            limpar_conteudo=True
+        )
+        return ORIENTE
 
 
 async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
