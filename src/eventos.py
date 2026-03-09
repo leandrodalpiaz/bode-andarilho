@@ -265,24 +265,24 @@ def _filtrar_por_periodo(eventos: List[dict], token: str) -> Tuple[str, List[dic
 
     if token == TOKEN_SEMANA_ATUAL:
         ini, fim = _data_range_semana(hoje)
-        titulo = "Eventos — Esta semana"
+        titulo = "Sessões — Esta semana"
     elif token == TOKEN_PROXIMA_SEMANA:
         ini0, fim0 = _data_range_semana(hoje)
         ini = ini0 + timedelta(days=7)
         fim = fim0 + timedelta(days=7)
-        titulo = "Eventos — Próxima semana"
+        titulo = "Sessões — Próxima semana"
     elif token == TOKEN_MES_ATUAL:
         ini = date(hoje.year, hoje.month, 1)
         fim = _ultimo_dia_mes(hoje.year, hoje.month)
-        titulo = "Eventos — Este mês"
+        titulo = "Sessões — Este mês"
     elif token == TOKEN_PROXIMOS_MESES:
         ini = hoje
         ini_mes_atual = date(hoje.year, hoje.month, 1)
         limite_inicio = _add_months(ini_mes_atual, MESES_PROXIMOS_QTD)
         fim = _ultimo_dia_mes(limite_inicio.year, limite_inicio.month)
-        titulo = "Eventos — Próximos meses"
+        titulo = "Sessões — Próximos meses"
     else:
-        return "Eventos", []
+        return "Sessões", []
 
     filtrados = []
     for ev in eventos:
@@ -298,7 +298,7 @@ def _filtrar_por_periodo(eventos: List[dict], token: str) -> Tuple[str, List[dic
 
 def _filtrar_por_grau(eventos: List[dict], grau_nome: str) -> Tuple[str, List[dict]]:
     alvo = normalizar_grau_nome(grau_nome)
-    titulo = f"Eventos — Grau — {alvo}"
+    titulo = f"Sessões — Grau — {alvo}"
 
     filtrados = []
     for ev in eventos:
@@ -365,7 +365,7 @@ async def notificar_secretario(context: ContextTypes.DEFAULT_TYPE, evento: dict,
     texto = (
         f"📢 *NOVA CONFIRMAÇÃO*\n\n"
         f"👤 *Irmão:* {nome_membro}\n"
-        f"📅 *Evento:* {data} - {nome_loja}{numero_fmt}\n"
+        f"📅 *Sessão:* {data} - {nome_loja}{numero_fmt}\n"
         f"🍽 *Ágape:* {tipo_agape} ({desc_agape})\n"
     )
 
@@ -432,8 +432,8 @@ def gerar_calendario_mes(ano: int, mes: int, eventos: List[dict]) -> str:
 
     linhas.append("```")
     linhas.append("")
-    linhas.append(f"Legenda: ● Dias com evento")
-    linhas.append(f"Total de eventos no mês: {len(dias_com_evento)}")
+    linhas.append(f"Legenda: ● Dias com sessão")
+    linhas.append(f"Total de sessões no mês: {len(dias_com_evento)}")
 
     return "\n".join(linhas)
 
@@ -455,8 +455,8 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await navegar_para(
         update, context,
-        "Ver Eventos",
-        "📅 *Escolha como deseja visualizar os eventos:*",
+        "Ver Sessões",
+        "📅 *Como deseja visualizar as sessões?*",
         teclado
     )
 
@@ -502,13 +502,13 @@ async def mostrar_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE)
             InlineKeyboardButton("📅 Mês atual", callback_data="calendario_atual"),
             InlineKeyboardButton("Próximo ▶️", callback_data=f"calendario|{ano_prox}|{mes_prox}")
         ],
-        [InlineKeyboardButton("📋 Ver eventos do mês", callback_data=f"data|{TOKEN_MES_ATUAL}")],
+        [InlineKeyboardButton("📋 Ver sessões do mês", callback_data=f"data|{TOKEN_MES_ATUAL}")],
         [InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")],
     ]
 
     await navegar_para(
         update, context,
-        f"Ver Eventos > Calendário",
+        f"Ver Sessões > Calendário",
         calendario,
         InlineKeyboardMarkup(botoes)
     )
@@ -532,8 +532,8 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         ])
         await navegar_para(
             update, context,
-            "Ver Eventos > Por Grau",
-            "🔺 *Escolha o grau:*",
+            "Ver Sessões > Por Grau",
+            "🔺 *Selecione o grau:*",
             teclado
         )
         return
@@ -546,7 +546,7 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         if not filtrados:
             await _enviar_ou_editar_mensagem(
                 context, update.effective_user.id, TIPO_RESULTADO,
-                f"*{titulo}*\n\nNão existem sessões disponíveis para este filtro no momento.",
+                f"*{titulo}*\n\nNão há sessões agendadas para este período.",
                 InlineKeyboardMarkup([[
                     InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")
                 ]])
@@ -566,8 +566,8 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
 
         await navegar_para(
             update, context,
-            f"Ver Eventos > {titulo}",
-            f"*{titulo}*\n\nSelecione um evento:",
+            f"Ver Sessões > {titulo}",
+            f"*{titulo}*\n\nSelecione uma sessão:",
             InlineKeyboardMarkup(botoes)
         )
 
@@ -588,7 +588,7 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
         if not filtrados:
             await _enviar_ou_editar_mensagem(
                 context, update.effective_user.id, TIPO_RESULTADO,
-                f"*{titulo}*\n\nNão existem sessões disponíveis para este grau no momento.",
+                f"*{titulo}*\n\nNão há sessões para este grau no momento.",
                 InlineKeyboardMarkup([[
                     InlineKeyboardButton("🔙 Voltar", callback_data=f"data|{TOKEN_POR_GRAU_MENU}")
                 ]])
@@ -608,8 +608,8 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
 
         await navegar_para(
             update, context,
-            f"Ver Eventos > Por Grau > {grau}",
-            f"*{titulo}*\n\nSelecione um evento:",
+            f"Ver Sessões > Por Grau > {grau}",
+            f"*{titulo}*\n\nSelecione uma sessão:",
             InlineKeyboardMarkup(botoes)
         )
 
@@ -629,7 +629,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     if not evento:
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "Evento não encontrado ou não está mais ativo.",
+            "Sessão não encontrada ou não está mais ativa.",
             limpar_conteudo=True
         )
         return
@@ -710,7 +710,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
 
     await navegar_para(
         update, context,
-        f"Ver Eventos > {nome}",
+        f"Ver Sessões > {nome}",
         texto,
         InlineKeyboardMarkup(botoes)
     )
@@ -748,7 +748,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     if not evento:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Evento não encontrado ou não está mais ativo.",
+            "Sessão não encontrada ou não está mais ativa.",
             limpar_conteudo=True
         )
         return ConversationHandler.END
@@ -762,7 +762,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         teclado = InlineKeyboardMarkup([[InlineKeyboardButton("📝 Fazer cadastro", callback_data="iniciar_cadastro")]])
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Olá! Antes de confirmar sua presença, preciso fazer seu cadastro.",
+            "Irmão, antes de confirmar sua presença, preciso registrar seu cadastro.",
             teclado,
             limpar_conteudo=True
         )
@@ -772,7 +772,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     if buscar_confirmacao(id_evento, user_id):
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Você já confirmou presença para este evento.",
+            "Você já confirmou presença para esta sessão.",
             InlineKeyboardMarkup([[
                 InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")
             ]]),
@@ -780,7 +780,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         )
         return ConversationHandler.END
 
-    participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não selecionada"
+    participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não"
     desc_agape = {
         "gratuito": "Gratuito",
         "pago": "Pago"
@@ -828,11 +828,11 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         # Mensagem combinada para secretário
         resposta = (
             f"✅ *Presença confirmada, irmão {membro.get('Nome', '')}!*\n\n"
-            f"Resumo da confirmação:\n"
+            f"Resumo:\n"
             f"📅 {data} — {nome_loja}{numero_fmt}\n"
             f"🕕 Horário: {horario}\n"
             f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
-            "Sua confirmação é muito importante! Ela nos ajuda a organizar tudo com carinho, evitando desperdícios e custos desnecessários.\n\n"
+            "Sua presença é muito importante para fortalecermos os laços fraternos.\n\n"
             f"📢 *Nova confirmação registrada*"
         )
         
@@ -849,21 +849,21 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         if tem_agape:
             resposta = (
                 f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
-                f"Resumo da confirmação:\n"
+                f"Resumo:\n"
                 f"📅 {data} — {nome_loja}{numero_fmt}\n"
                 f"🕕 Horário: {horario}\n"
                 f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
-                "Sua confirmação é muito importante! Ela nos ajuda a organizar tudo com carinho, evitando desperdícios e custos desnecessários.\n\n"
-                "Fraterno abraço!"
+                "Sua presença é muito importante para fortalecermos os laços fraternos.\n\n"
+                "Até lá!"
             )
         else:
             resposta = (
                 f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
-                f"Resumo da confirmação:\n"
+                f"Resumo:\n"
                 f"📅 {data} — {nome_loja}{numero_fmt}\n"
                 f"🕕 Horário: {horario}\n"
                 f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
-                "Fraterno abraço!"
+                "Até lá!"
             )
 
         teclado = InlineKeyboardMarkup([
@@ -898,7 +898,7 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
     if not evento:
         await context.bot.send_message(
             chat_id=user_id,
-            text="Evento não encontrado. Tente confirmar novamente."
+            text="Sessão não encontrada. Tente confirmar novamente."
         )
         return
 
@@ -909,11 +909,11 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
     if buscar_confirmacao(id_evento, user_id):
         await context.bot.send_message(
             chat_id=user_id,
-            text="Você já estava confirmado para este evento."
+            text="Você já estava confirmado para esta sessão."
         )
         return
 
-    participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não selecionada"
+    participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não"
     desc_agape = {
         "gratuito": "Gratuito",
         "pago": "Pago"
@@ -949,21 +949,21 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
     if tem_agape:
         resposta = (
             f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
-            f"Resumo da confirmação:\n"
+            f"Resumo:\n"
             f"📅 {data} — {nome_loja}{numero_fmt}\n"
             f"🕕 Horário: {horario}\n"
             f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
-            "Sua confirmação é muito importante! Ela nos ajuda a organizar tudo com carinho, evitando desperdícios e custos desnecessários.\n\n"
-            "Fraterno abraço!"
+            "Sua presença é muito importante para fortalecermos os laços fraternos.\n\n"
+            "Até lá!"
         )
     else:
         resposta = (
             f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
-            f"Resumo da confirmação:\n"
+            f"Resumo:\n"
             f"📅 {data} — {nome_loja}{numero_fmt}\n"
             f"🕕 Horário: {horario}\n"
             f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
-            "Fraterno abraço!"
+            "Até lá!"
         )
 
     await context.bot.send_message(
@@ -1009,7 +1009,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # No privado: edita a mensagem com confirmação
                 await _enviar_ou_editar_mensagem(
                     context, user_id, TIPO_RESULTADO,
-                    "❌ *Presença cancelada*\n\nSe mudar de ideia, basta confirmar novamente.",
+                    "❌ *Presença cancelada*\n\nSe mudar de ideia, sua confirmação será bem-vinda.",
                     InlineKeyboardMarkup([
                         [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
                     ]),
@@ -1019,7 +1019,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await _enviar_ou_editar_mensagem(
                 context, user_id, TIPO_RESULTADO,
-                "Não foi possível cancelar. Você não estava confirmado para este evento.",
+                "Não foi possível cancelar. Você não estava confirmado para esta sessão.",
                 limpar_conteudo=True
             )
         return
@@ -1051,7 +1051,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if cancelar_confirmacao(id_evento, user_id):
             await _enviar_ou_editar_mensagem(
                 context, user_id, TIPO_RESULTADO,
-                "❌ *Presença cancelada*\n\nSe mudar de ideia, basta confirmar novamente.",
+                "❌ *Presença cancelada*\n\nSe mudar de ideia, sua confirmação será bem-vinda.",
                 InlineKeyboardMarkup([
                     [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
                 ]),
@@ -1060,7 +1060,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await _enviar_ou_editar_mensagem(
                 context, user_id, TIPO_RESULTADO,
-                "Não foi possível cancelar. Você não estava confirmado para este evento.",
+                "Não foi possível cancelar. Você não estava confirmado para esta sessão.",
                 InlineKeyboardMarkup([
                     [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
                 ]),
@@ -1150,14 +1150,14 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def minhas_confirmacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📅 Próximos eventos", callback_data="minhas_confirmacoes_futuro")],
+        [InlineKeyboardButton("📅 Próximas sessões", callback_data="minhas_confirmacoes_futuro")],
         [InlineKeyboardButton("📜 Histórico", callback_data="minhas_confirmacoes_historico")],
         [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
     ])
 
     await navegar_para(
         update, context,
-        "Minhas Confirmações",
+        "Minhas Presenças",
         "📌 *Suas confirmações*\n\nEscolha o que deseja ver:",
         teclado
     )
@@ -1185,7 +1185,7 @@ async def minhas_confirmacoes_futuro(update: Update, context: ContextTypes.DEFAU
     if not confirmados:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "📅 *Próximos eventos*\n\nVocê não possui confirmações em eventos futuros.",
+            "📅 *Próximas sessões*\n\nVocê não possui confirmações para as próximas sessões.",
             InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔙 Voltar", callback_data="minhas_confirmacoes")
             ]]),
@@ -1203,8 +1203,8 @@ async def minhas_confirmacoes_futuro(update: Update, context: ContextTypes.DEFAU
 
     await navegar_para(
         update, context,
-        "Minhas Confirmações > Próximos",
-        "📅 *Próximos eventos*\n\nSelecione para ver detalhes:",
+        "Minhas Presenças > Próximas",
+        "📅 *Próximas sessões*\n\nSelecione para ver detalhes:",
         InlineKeyboardMarkup(botoes)
     )
 
@@ -1231,7 +1231,7 @@ async def minhas_confirmacoes_historico(update: Update, context: ContextTypes.DE
     if not confirmados:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "📜 *Histórico*\n\nVocê ainda não participou de nenhum evento.",
+            "📜 *Histórico*\n\nVocê ainda não participou de nenhuma sessão.",
             InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔙 Voltar", callback_data="minhas_confirmacoes")
             ]]),
@@ -1249,8 +1249,8 @@ async def minhas_confirmacoes_historico(update: Update, context: ContextTypes.DE
 
     await navegar_para(
         update, context,
-        "Minhas Confirmações > Histórico",
-        "📜 *Histórico*\n\nEventos que você participou:",
+        "Minhas Presenças > Histórico",
+        "📜 *Histórico*\n\nSessões que você participou:",
         InlineKeyboardMarkup(botoes)
     )
 
@@ -1266,7 +1266,7 @@ async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not evento:
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "Evento não encontrado.",
+            "Sessão não encontrada.",
             limpar_conteudo=True
         )
         return
@@ -1302,7 +1302,7 @@ async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await navegar_para(
         update, context,
-        f"Minhas Confirmações > {nome}",
+        f"Minhas Presenças > {nome}",
         texto,
         teclado
     )
@@ -1319,7 +1319,7 @@ async def detalhes_historico(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not evento:
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "Evento não encontrado.",
+            "Sessão não encontrada.",
             limpar_conteudo=True
         )
         return
@@ -1346,7 +1346,7 @@ async def detalhes_historico(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"🕕 {hora}\n"
         f"📍 {oriente}\n"
         f"⚜️ {potencia}{agape_info}\n\n"
-        "_Este evento já aconteceu._"
+        "_Esta sessão já aconteceu._"
     )
 
     teclado = InlineKeyboardMarkup([

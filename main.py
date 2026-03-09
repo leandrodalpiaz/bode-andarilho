@@ -95,6 +95,11 @@ from src.eventos_secretario import (
     executar_cancelamento,
     resumo_confirmados,
     copiar_lista_confirmados,
+    ver_confirmados_secretario,
+    visualizar_confirmados,
+    listar_eventos_cancelados,
+    confirmar_refazer_evento,
+    executar_refazer_evento,
     exibir_menu_secretario,
 )
 
@@ -309,6 +314,9 @@ def register_handlers(app: Application) -> None:
         ver_confirmados, pattern=r"^ver_confirmados\|"
     ))
     app.add_handler(CallbackQueryHandler(
+        cancelar_presenca, pattern=r"^confirma_cancelar\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
         cancelar_presenca, pattern=r"^cancelar\|"
     ))
     # Handler para fechar a lista de confirmados
@@ -319,6 +327,12 @@ def register_handlers(app: Application) -> None:
     # ===== 6. CALLBACKS DA ÁREA DO SECRETÁRIO =====
     app.add_handler(CallbackQueryHandler(
         meus_eventos, pattern=r"^meus_eventos$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        ver_confirmados_secretario, pattern=r"^ver_confirmados_secretario$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        visualizar_confirmados, pattern=r"^visualizar_confirmados\|"
     ))
     app.add_handler(CallbackQueryHandler(
         menu_gerenciar_evento, pattern=r"^gerenciar_evento\|"
@@ -334,6 +348,15 @@ def register_handlers(app: Application) -> None:
     ))
     app.add_handler(CallbackQueryHandler(
         copiar_lista_confirmados, pattern=r"^copiar_lista\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        listar_eventos_cancelados, pattern=r"^listar_eventos_cancelados$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        confirmar_refazer_evento, pattern=r"^confirmar_refazer\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        executar_refazer_evento, pattern=r"^executar_refazer\|"
     ))
 
     # ===== 7. CALLBACKS ADMINISTRATIVOS =====

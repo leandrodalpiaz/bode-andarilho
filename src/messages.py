@@ -1,17 +1,10 @@
-# src/messages.py
 # ============================================
 # BODE ANDARILHO - CONSTANTES DE MENSAGENS
 # ============================================
 # 
-# Este arquivo centraliza todas as mensagens textuais do bot
-# para facilitar a manutenção e futuras traduções.
-# 
-# As mensagens são organizadas por categoria:
-# - Boas-vindas e cadastro
-# - Eventos e confirmações
-# - Áreas restritas
-# - Lembretes
-# - Erros
+# Este arquivo centraliza todas as mensagens textuais do bot.
+# O tom é fraterno, comedido e utiliza terminologia maçónica
+# para fortalecer os laços entre os obreiros.
 # 
 # ============================================
 
@@ -20,94 +13,125 @@
 # ============================================
 
 BOAS_VINDAS = (
-    "Salve, irmão! 🐐\n\n"
-    "Bem-vindo ao *Bode Andarilho*, o bot de confirmação de presenças para eventos maçônicos.\n\n"
-    "Antes de começar, preciso de alguns dados seus. Não se preocupe, é rápido!"
+    "Saudações Fraternas, meu Irmão! 📜\n\n"
+    "Bem-vindo ao *Bode Andarilho*. Sou o seu auxílio no fortalecimento da "
+    "visitação e na organização das nossas agendas em Loja.\n\n"
+    "Para que possamos caminhar juntos, peço que realize um breve cadastro. "
+    "É um processo simples para que as Colunas o reconheçam."
 )
 
 BOAS_VINDAS_RETORNO = (
-    "Salve, irmão {nome}! 🐐\n\n"
-    "Que bom ter você de volta. O que deseja fazer?"
+    "Saudações, Ir.·. {nome}! 🤝\n\n"
+    "É uma alegria tê-lo novamente entre nós. Como posso auxiliar em seu "
+    "trabalho ou em sua jornada de visitação hoje?"
 )
 
-MENU_PRINCIPAL = "Escolha uma opção abaixo:"
+MENU_PRINCIPAL = "Por favor, selecione a oficina ou a ação desejada no menu abaixo:"
 
-CADASTRO_CONCLUIDO = "✅ *Cadastro realizado com sucesso!*\n\nUse /start para acessar o menu principal."
-CADASTRO_CANCELADO = "Cadastro cancelado. Você pode iniciar novamente com /start."
+CADASTRO_CONCLUIDO = (
+    "✅ *Cadastro realizado a contento!*\n\n"
+    "Os seus dados foram registados. Agora, use /start para aceder ao "
+    "Painel do Obreiro e ver as sessões disponíveis."
+)
+
+CADASTRO_CANCELADO = (
+    "Cadastro interrompido. Quando desejar retomar o seu lugar em nossa "
+    "oficina virtual, basta digitar /start."
+)
 
 
 # ============================================
 # EVENTOS E CONFIRMAÇÕES
 # ============================================
 
-EVENTO_CADASTRADO = "✅ Evento cadastrado e publicado no grupo."
-EVENTO_CANCELADO = "✅ Evento cancelado com sucesso.\nTodas as confirmações foram removidas."
-EVENTO_NAO_ENCONTRADO = "Evento não encontrado ou não está mais ativo."
-SEM_EVENTOS = "Não existem sessões disponíveis para este filtro no momento."
+EVENTO_CADASTRADO = "✅ A sessão foi devidamente agendada e anunciada ao Quadro."
 
-PRESENCA_CONFIRMADA = "✅ Presença confirmada, irmão {nome}!"
-PRESENCA_CANCELADA = "❌ Presença cancelada.\n\nSe mudar de ideia, basta confirmar novamente."
-JA_CONFIRMOU = "Você já confirmou presença para este evento."
-NAO_CONFIRMOU = "Não foi possível cancelar. Você não estava confirmado para este evento."
+EVENTO_CANCELADO = (
+    "✅ Sessão cancelada com sucesso.\n"
+    "As confirmações de presença foram removidas e os irmãos serão notificados."
+)
+
+EVENTO_NAO_ENCONTRADO = "A sessão solicitada não foi encontrada ou já se encontra encerrada."
+
+SEM_EVENTOS = "Não há sessões agendadas que correspondam aos critérios neste momento."
+
+PRESENCA_CONFIRMADA = (
+    "✅ Presença confirmada, Ir.·. {nome}!\n"
+    "Que a sua visita contribua para o brilho dos nossos trabalhos."
+)
+
+PRESENCA_CANCELADA = (
+    "❌ A sua presença foi removida da lista.\n\n"
+    "Caso os seus planos mudem e possa estar connosco, a sua confirmação será bem-vinda."
+)
+
+JA_CONFIRMOU = "Identificámos que já confirmou presença para este trabalho."
+
+NAO_CONFIRMOU = "Não encontramos registo da sua confirmação para esta sessão."
 
 
 # ============================================
 # ÁREAS RESTRITAS
 # ============================================
 
-ACESSO_NEGADO = "⛔ Você não tem permissão para acessar esta área."
-APENAS_ADMIN = "Apenas administradores podem realizar esta operação."
-APENAS_SECRETARIO = "Apenas secretários e administradores podem acessar esta função."
+ACESSO_NEGADO = "⛔ Acesso restrito. Este grau de permissão não foi concedido ao seu perfil."
+
+APENAS_ADMIN = "Esta operação é exclusiva para os Administradores do sistema."
+
+APENAS_SECRETARIO = (
+    "Função reservada aos Irmãos Secretários ou Administradores para garantir "
+    "a ordem dos trabalhos."
+)
 
 
 # ============================================
 # LEMBRETES
 # ============================================
 
-LEMBRETE_TITULO = "🐐 *Lembrete de evento — Bode Andarilho*"
+LEMBRETE_TITULO = "🐐 *Lembrete de Visitação — Bode Andarilho*"
+
 LEMBRETE_CORPO = (
-    "Olá, irmão {nome}! Você confirmou presença no seguinte evento:\n\n"
-    "📅 Data: {data}\n"
-    "🏛️ Loja: {loja}\n"
-    "🕐 Horário: {horario}\n"
-    "📍 Local: {local}\n"
-    "🔷 Grau mínimo: {grau}\n"
-    "👔 Traje: {traje}\n"
-    "🍽️ Ágape: {agape}\n\n"
-    "Até amanhã! 🤝"
+    "Saudações, Ir.·. {nome}! Amanhã teremos um encontro em Loja:\n\n"
+    "🏛️ *Loja:* {loja}\n"
+    "📅 *Data:* {data}\n"
+    "🕐 *Horário:* {horario}\n"
+    "📍 *Local:* {local}\n"
+    "🔷 *Grau Mínimo:* {grau}\n"
+    "👔 *Traje:* {traje}\n"
+    "🍽️ *Ágape:* {agape}\n\n"
+    "A sua presença fortalecerá a nossa egrégora! 🤝"
 )
 
-LEMBRETE_MEIO_DIA_TITULO = "🕛 *MEIO DIA EM PONTO!*"
+LEMBRETE_MEIO_DIA_TITULO = "🕛 *MEIO-DIA EM PONTO!*"
+
 LEMBRETE_MEIO_DIA_CORPO = (
-    "Irmão {nome}, hoje tem sessão!\n\n"
-    "🏛 Loja {loja}{numero}\n"
+    "Ir.·. {nome}, o sol está no seu zénite. Hoje é dia de trabalho!\n\n"
+    "🏛 *Loja {loja} nº {numero}*\n"
     "📍 {local}\n"
     "🕕 {horario}\n\n"
-    "Até logo mais! 🤝"
+    "Encontramo-nos em breve no Templo! 🤝"
 )
 
-LEMBRETE_SECRETARIO_TITULO = "📋 *ALERTA PARA SECRETÁRIO*"
+LEMBRETE_SECRETARIO_TITULO = "📋 *CIRCULAR AO SECRETÁRIO*"
+
 LEMBRETE_SECRETARIO_CORPO = (
-    "Olá, irmão {nome}! Você é o secretário responsável pelo seguinte evento:\n\n"
-    "📅 Data: {data}\n"
-    "🏛️ Loja: {loja}\n"
-    "🕐 Horário: {horario}\n"
-    "📍 Local: {local}\n"
-    "🔷 Grau mínimo: {grau}\n"
-    "👔 Traje: {traje}\n"
-    "🍽️ Ágape: {agape}\n\n"
-    "Confirmações até o momento: {num_confirmados}\n\n"
-    "Prepare-se para a sessão! 🤝"
+    "Ir.·. {nome}, recordamos que é o responsável pela organização deste evento:\n\n"
+    "🏛️ *Loja:* {loja}\n"
+    "📅 *Data:* {data}\n"
+    "🕐 *Horário:* {horario}\n"
+    "👔 *Traje:* {traje}\n"
+    "👥 *Confirmados:* {num_confirmados}\n\n"
+    "Tudo pronto para uma sessão Justa e Perfeita? 🤝"
 )
 
-LEMBRETE_SECRETARIO_MEIO_DIA_TITULO = "🕛 *ALERTA SECRETÁRIO - MEIO DIA!*"
+LEMBRETE_SECRETARIO_MEIO_DIA_TITULO = "🕛 *ALERTA AO SECRETÁRIO - MEIO-DIA*"
+
 LEMBRETE_SECRETARIO_MEIO_DIA_CORPO = (
-    "Irmão {nome}, hoje é o dia da sessão que você organiza!\n\n"
-    "🏛 Loja {loja}{numero}\n"
-    "📍 {local}\n"
-    "🕕 {horario}\n\n"
-    "Confirmações: {num_confirmados}\n\n"
-    "Até logo mais! 🤝"
+    "Ir.·. {nome}, hoje realizaremos a sessão sob a sua organização!\n\n"
+    "🏛 *Loja {loja} nº {numero}*\n"
+    "👥 *Total de Irmãos Confirmados:* {num_confirmados}\n"
+    "🕕 *Início:* {horario}\n\n"
+    "Bom trabalho na secretaria! 🤝"
 )
 
 
@@ -116,10 +140,10 @@ LEMBRETE_SECRETARIO_MEIO_DIA_CORPO = (
 # ============================================
 
 NOTIFICACAO_NOVA_CONFIRMACAO = (
-    "📢 *NOVA CONFIRMAÇÃO*\n\n"
+    "📢 *A COLUNA AUMENTA*\n\n"
     "👤 *Irmão:* {nome}\n"
-    "📅 *Evento:* {data} - {loja}\n"
-    "🍽 *Ágape:* {agape}\n"
+    "📅 *Sessão:* {data} - {loja}\n"
+    "🍽 *Participação no Ágape:* {agape}\n"
 )
 
 
@@ -127,6 +151,8 @@ NOTIFICACAO_NOVA_CONFIRMACAO = (
 # ERROS
 # ============================================
 
-ERRO_GENERICO = "❌ Ocorreu um erro. Tente novamente mais tarde."
-ERRO_DADOS_NAO_ENCONTRADOS = "Erro: dados não encontrados. Tente novamente."
-ERRO_PERMISSAO = "⛔ Você não tem permissão para realizar esta operação."
+ERRO_GENERICO = "❌ Houve um percalço técnico. Por favor, tente novamente em instantes."
+
+ERRO_DADOS_NAO_ENCONTRADOS = "Erro: Não foi possível localizar as informações. Tente reiniciar a operação."
+
+ERRO_PERMISSAO = "⛔ Não possui as credenciais necessárias para esta ação."

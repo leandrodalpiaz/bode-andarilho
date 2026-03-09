@@ -169,7 +169,8 @@ def _resumo_cadastro(context: ContextTypes.DEFAULT_TYPE) -> str:
         f"🔨 *Venerável Mestre:* {vm}\n"
         f"🏛 *Loja:* {loja}{numero_fmt}\n"
         f"📍 *Oriente:* {oriente}\n"
-        f"⚜️ *Potência:* {potencia}\n"
+        f"⚜️ *Potência:* {potencia}\n\n"
+        "_Seus dados serão mantidos em absoluto sigilo._"
     )
 
 
@@ -190,7 +191,7 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.effective_chat and update.effective_chat.type in ("group", "supergroup"):
             if update.message:
                 await update.message.reply_text(
-                    "🔒 Para seu cadastro, fale comigo no privado.\n\n"
+                    "🔒 Para realizar seu cadastro, fale comigo no privado.\n\n"
                     "Clique aqui: @BodeAndarilhoBot e envie /start"
                 )
             return
@@ -203,7 +204,8 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         texto = (
             "👤 *Cadastro*\n\n"
             "Aqui você pode iniciar ou editar seu cadastro.\n"
-            "Se estiver tudo certo, volte ao menu principal."
+            "Se estiver tudo certo, volte ao menu principal.\n\n"
+            "_Lembre-se: suas informações estão sob a proteção do sigilo maçônico._"
         )
 
         if update.callback_query:
@@ -482,7 +484,7 @@ async def confirmar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await navegar_para(
             update, context,
             "Cadastro Concluído",
-            "✅ *Cadastro realizado com sucesso!*\n\nUse o menu acima para continuar.",
+            "✅ *Cadastro realizado com sucesso!*\n\nSeus dados estão registrados sob a proteção do sigilo maçônico.\nUse o menu acima para continuar.",
             InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")
             ]])
@@ -561,7 +563,7 @@ async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await navegar_para(
                 update, context,
                 "Cadastro",
-                "Cadastro cancelado. Você pode iniciar novamente com /start.",
+                "Operação cancelada.",
                 InlineKeyboardMarkup([[
                     InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")
                 ]])

@@ -1,18 +1,15 @@
-# src/editar_perfil.py
 # ============================================
-# BODE ANDARILHO - EDIÇÃO DO PRÓPRIO PERFIL
+# BODE ANDARILHO - EDIÇÃO DE DADOS DO OBREIRO
 # ============================================
 # 
-# Este módulo permite que o membro edite seu próprio cadastro.
-# Diferente da edição feita por admin/secretário, aqui o usuário
-# só pode alterar seus próprios dados e não pode modificar o nível.
+# Este módulo permite que o Irmão realize ajustes em seu
+# próprio traçado (cadastro), garantindo a exatidão das
+# informações para a recepção nas Lojas.
 # 
 # Funcionalidades:
-# - Seleção de campo para editar (nome, data nasc, grau, loja, etc.)
-# - Validação dos novos valores
-# - Atualização na planilha
-# 
-# Utiliza um ConversationHandler para gerenciar o fluxo de edição.
+# - Ajuste de dados (Nome, Grau, Loja, etc.)
+# - Validação fraterna dos valores inseridos
+# - Atualização segura e acobertada na base de dados
 # 
 # ============================================
 
@@ -32,11 +29,8 @@ from telegram.ext import (
 )
 
 from src.sheets import buscar_membro, atualizar_membro
-from src.permissoes import get_nivel
-
 from src.bot import (
     navegar_para,
-    voltar_ao_menu_principal,
     _enviar_ou_editar_mensagem,
     TIPO_RESULTADO
 )
@@ -44,222 +38,151 @@ from src.bot import (
 logger = logging.getLogger(__name__)
 
 # ============================================
-# CONSTANTES E CONFIGURAÇÕES
+# CONFIGURAÇÕES DE ESTADO
 # ============================================
 
-# Estados da conversação
 SELECIONAR_CAMPO, NOVO_VALOR = range(2)
 
-# Mapeamento de campos que o próprio usuário pode editar
+# Mapeamento de colunas para termos maçônicos e amigáveis
 CAMPOS_EDITAVEIS_PERFIL = {
-    "nome": {"nome": "Nome completo", "chave": "Nome"},
-    "data_nasc": {"nome": "Data de nascimento (DD/MM/AAAA)", "chave": "Data de nascimento"},
-    "grau": {"nome": "Grau", "chave": "Grau"},
-    "loja": {"nome": "Nome da loja", "chave": "Loja"},
-    "numero_loja": {"nome": "Número da loja", "chave": "Número da loja"},
+    "nome": {"nome": "Nome Civil", "chave": "Nome"},
+    "data_nasc": {"nome": "Data de Nascimento", "chave": "Data de nascimento"},
+    "grau": {"nome": "Grau atual", "chave": "Grau"},
+    "loja": {"nome": "Augusta e Respeitável Loja", "chave": "Loja"},
+    "numero_loja": {"nome": "Número da Loja", "chave": "Número da loja"},
     "oriente": {"nome": "Oriente", "chave": "Oriente"},
     "potencia": {"nome": "Potência", "chave": "Potência"},
     "veneravel_mestre": {"nome": "Venerável Mestre (Sim/Não)", "chave": "Venerável Mestre"},
 }
 
-
 # ============================================
-# FUNÇÕES AUXILIARES
-# ============================================
-
-async def _safe_edit(query, text: str, **kwargs):
-    """Edita mensagem ignorando erro 'Message not modified'."""
-    try:
-        await query.edit_message_text(text, **kwargs)
-    except Exception as e:
-        if "Message is not modified" not in str(e):
-            raise
-
-
-# ============================================
-# INÍCIO DA EDIÇÃO
+# INÍCIO DO AJUSTE DE CADASTRO
 # ============================================
 
 async def editar_perfil_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Inicia o processo de edição do próprio perfil.
-    
-    Fluxo:
-    1. Verifica se usuário tem cadastro
-    2. Exibe lista de campos editáveis com valores atuais
-    3. Usuário seleciona qual campo deseja alterar
+    Inicia o ajuste dos dados do Irmão.
     """
-    query = update.callback_query
     user_id = update.effective_user.id
-    
     membro = buscar_membro(user_id)
+    
     if not membro:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Você ainda não possui cadastro. Use /start para iniciar."
+            "Saudações, Irmão. Identificamos que ainda não possuís cadastro. Por favor, utilize o comando /start para iniciar nossa caminhada."
         )
         return ConversationHandler.END
 
-    # Guarda os dados do membro no context
     context.user_data["perfil_dados"] = membro
 
-    # Cria botões para os campos editáveis
     botoes = []
     for campo_id, campo_info in CAMPOS_EDITAVEIS_PERFIL.items():
-        valor_atual = membro.get(campo_info["chave"], "")
-        if valor_atual is None:
-            valor_atual = ""
+        valor_atual = membro.get(campo_info["chave"], "Não informado")
         botoes.append([
             InlineKeyboardButton(
-                f"✏️ {campo_info['nome']}: {str(valor_atual)[:30]}",
+                f"📝 {campo_info['nome']}: {str(valor_atual)[:25]}",
                 callback_data=f"editar_campo_perfil|{campo_id}"
             )
         ])
 
-    botoes.append([InlineKeyboardButton("🔙 Cancelar", callback_data="menu_principal")])
+    botoes.append([InlineKeyboardButton("🔙 Retornar ao Menu", callback_data="menu_principal")])
     teclado = InlineKeyboardMarkup(botoes)
 
     await navegar_para(
         update, context,
-        "Editar Perfil",
-        f"*Editando seu perfil*\n\nSelecione o campo que deseja alterar:",
+        "Ajustar Cadastro",
+        "Estimado Irmão, selecione qual informação de seu cadastro desejas retificar para que nossos registros permaneçam exatos:",
         teclado
     )
     return SELECIONAR_CAMPO
 
-
 # ============================================
-# SELEÇÃO DE CAMPO
+# SELEÇÃO DO CAMPO A RETIFICAR
 # ============================================
 
 async def selecionar_campo_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Usuário selecionou um campo para editar.
-    
-    Fluxo:
-    1. Identifica o campo escolhido
-    2. Mostra valor atual e solicita novo valor
-    3. Aguarda entrada do usuário
+    Prepara o bot para receber a nova informação.
     """
     query = update.callback_query
-    data = query.data
-    
-    if data == "cancelar":
-        await _enviar_ou_editar_mensagem(
-            context, update.effective_user.id, TIPO_RESULTADO,
-            "Edição cancelada."
-        )
-        return ConversationHandler.END
-
-    campo_id = data.split("|")[1]
+    campo_id = query.data.split("|")[1]
     campo_info = CAMPOS_EDITAVEIS_PERFIL.get(campo_id)
 
     if not campo_info:
-        await _enviar_ou_editar_mensagem(
-            context, update.effective_user.id, TIPO_RESULTADO,
-            "Campo inválido."
-        )
         return ConversationHandler.END
 
     context.user_data["editando_campo_perfil"] = campo_id
     membro = context.user_data.get("perfil_dados", {})
-    valor_atual = membro.get(campo_info["chave"], "")
+    valor_atual = membro.get(campo_info["chave"], "Vazio")
 
     await navegar_para(
         update, context,
-        f"Editar Perfil > {campo_info['nome']}",
-        f"✏️ *Editando {campo_info['nome']}*\n\n"
-        f"Valor atual: {valor_atual}\n\n"
-        f"Digite o novo valor (ou /cancelar para desistir):",
+        f"Retificar {campo_info['nome']}",
+        f"✏️ *Retificação de {campo_info['nome']}*\n\n"
+        f"Informação atual: `{valor_atual}`\n\n"
+        f"Por favor, escreva o novo dado abaixo (ou utilize /cancelar para manter como está):",
         None
     )
     return NOVO_VALOR
 
-
 # ============================================
-# RECEBIMENTO DO NOVO VALOR
+# PROCESSAMENTO DA NOVA INFORMAÇÃO
 # ============================================
 
 async def receber_novo_valor_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Recebe o novo valor digitado pelo usuário e atualiza o perfil.
-    
-    Fluxo:
-    1. Recebe o texto digitado
-    2. Valida o campo (se necessário)
-    3. Atualiza na planilha
-    4. Confirma sucesso ou erro
+    Recebe o novo dado e o mantém acoberto no sistema.
     """
     novo_valor = update.message.text.strip()
     campo_id = context.user_data.get("editando_campo_perfil")
-    
-    if not campo_id:
-        await update.message.reply_text("Erro: dados não encontrados. Tente novamente.")
-        return ConversationHandler.END
-
     campo_info = CAMPOS_EDITAVEIS_PERFIL.get(campo_id)
-    membro = context.user_data.get("perfil_dados")
     
-    if not campo_info or not membro:
-        await update.message.reply_text("Erro: dados do perfil não encontrados.")
+    if not campo_info:
         return ConversationHandler.END
 
-    # Validações específicas por campo
+    # Validação simples para Venerável Mestre
     if campo_id == "veneravel_mestre":
-        if novo_valor.lower() not in ["sim", "não", "s", "n", "yes", "no"]:
-            await update.message.reply_text(
-                "❌ Valor inválido. Digite 'Sim' ou 'Não'."
-            )
+        if novo_valor.lower() not in ["sim", "não", "s", "n"]:
+            await update.message.reply_text("Irmão, para este campo, por favor responda apenas com 'Sim' ou 'Não'.")
             return NOVO_VALOR
 
-    # Atualiza o dicionário do membro
-    membro[campo_info["chave"]] = novo_valor
-
-    # Salva na planilha (atualiza apenas o campo alterado)
     user_id = update.effective_user.id
     sucesso = atualizar_membro(user_id, {campo_info["chave"]: novo_valor}, preservar_nivel=True)
 
     if sucesso:
         await update.message.reply_text(
-            f"✅ {campo_info['nome']} atualizado com sucesso!\n\n"
-            f"Use o menu acima para continuar."
+            f"✅ Justo e Perfeito! O campo *{campo_info['nome']}* foi atualizado e permanece acoberto em nossos registros.\n\n"
+            f"Utilize o menu acima para navegar."
         )
     else:
-        await update.message.reply_text(
-            "❌ Erro ao atualizar o campo. Tente novamente mais tarde."
-        )
+        await update.message.reply_text("Houve um percalço ao atualizar seus dados. Por favor, tente novamente em alguns instantes.")
 
-    # Limpa dados da sessão
+    # Limpeza de sessão
     context.user_data.pop("editando_campo_perfil", None)
     context.user_data.pop("perfil_dados", None)
 
     return ConversationHandler.END
 
-
 # ============================================
-# CANCELAMENTO
+# CANCELAMENTO FRATERNO
 # ============================================
 
 async def cancelar_edicao_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Cancela o processo de edição.
-    Pode ser chamado via comando /cancelar ou callback.
+    Interrompe o processo de edição.
     """
-    if update.message:
-        await update.message.reply_text("Edição cancelada.")
-    elif update.callback_query:
-        await _enviar_ou_editar_mensagem(
-            context, update.effective_user.id, TIPO_RESULTADO,
-            "Edição cancelada."
-        )
+    msg = "A retificação foi interrompida. Seus dados permanecem inalterados e acobertos."
     
-    context.user_data.pop("editando_campo_perfil", None)
-    context.user_data.pop("perfil_dados", None)
+    if update.message:
+        await update.message.reply_text(msg)
+    elif update.callback_query:
+        await _enviar_ou_editar_mensagem(context, update.effective_user.id, TIPO_RESULTADO, msg)
+    
+    context.user_data.clear()
     return ConversationHandler.END
 
-
 # ============================================
-# CONVERSATION HANDLER
+# HANDLER DE CONVERSAÇÃO
 # ============================================
 
 editar_perfil_handler = ConversationHandler(
