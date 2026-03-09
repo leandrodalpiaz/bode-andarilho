@@ -778,7 +778,7 @@ async def visualizar_confirmados(update: Update, context: ContextTypes.DEFAULT_T
     
     # Verificar permissão (secretário que criou ou admin)
     criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
-    from src.sheets import get_nivel
+    from src.permissoes import get_nivel
     nivel = get_nivel(user_id)
     
     if str(user_id) != criador_id and nivel != "3":
@@ -789,6 +789,8 @@ async def visualizar_confirmados(update: Update, context: ContextTypes.DEFAULT_T
     
     # Buscar confirmações
     confirmacoes = listar_confirmacoes_por_evento(id_evento) or []
+    # DEBUG: log how many confirmations were found
+    logger.debug(f"confirmacoes para evento {id_evento}: {len(confirmacoes)}")
     
     # Processar dados
     nome_loja = str(evento.get("Nome da loja", "") or "").strip()
