@@ -43,7 +43,8 @@ from src.permissoes import get_nivel
 from src.bot import (
     navegar_para,
     _enviar_ou_editar_mensagem,
-    TIPO_RESULTADO
+    TIPO_RESULTADO,
+    criar_estrutura_inicial
 )
 
 logger = logging.getLogger(__name__)
@@ -326,6 +327,12 @@ async def confirmar_promover(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if atualizar_nivel_membro(telegram_id, "2"):
         atualizar_membro(telegram_id, {"Cargo": "Secretário"}, preservar_nivel=True)
+        
+        # Atualiza o menu do usuário promovido para refletir a mudança de nível
+        membro_promovido = buscar_membro(telegram_id)
+        if membro_promovido:
+            await criar_estrutura_inicial(context, telegram_id, membro_promovido)
+        
         await navegar_para(
             update, context,
             "Admin > Promover Secretário",
@@ -465,6 +472,12 @@ async def confirmar_rebaixar(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if atualizar_nivel_membro(telegram_id, "1"):
         atualizar_membro(telegram_id, {"Cargo": ""}, preservar_nivel=True)
+        
+        # Atualiza o menu do usuário rebaixado para refletir a mudança de nível
+        membro_rebaixado = buscar_membro(telegram_id)
+        if membro_rebaixado:
+            await criar_estrutura_inicial(context, telegram_id, membro_rebaixado)
+        
         await navegar_para(
             update, context,
             "Admin > Rebaixar Secretário",
@@ -757,6 +770,12 @@ async def receber_novo_valor_membro(update: Update, context: ContextTypes.DEFAUL
     sucesso = atualizar_membro(telegram_id, {campo_info["chave"]: novo_valor}, preservar_nivel=(campo_id != "nivel"))
 
     if sucesso:
+        # Se o campo editado foi o nível, atualiza o menu do usuário afetado
+        if campo_id == "nivel":
+            membro_editado = buscar_membro(telegram_id)
+            if membro_editado:
+                await criar_estrutura_inicial(context, telegram_id, membro_editado)
+        
         await update.message.reply_text(
             f"✅ {campo_info['nome']} atualizado com sucesso!\n\n"
             f"Use o menu acima para continuar."
