@@ -679,6 +679,12 @@ def cancelar_todas_confirmacoes(id_evento: str) -> bool:
 # =========================
 # Funções para Lojas (pré-cadastro)
 # =========================
+def _ensure_lojas_oriente(ws: gspread.Worksheet) -> None:
+    headers = _headers(ws)
+    if "Oriente" not in headers:
+        ws.update_cell(1, len(headers) + 1, "Oriente")
+
+
 def listar_lojas(telegram_id: int) -> List[Dict[str, Any]]:
     """
     Retorna lista de lojas cadastradas por um secretário.
@@ -688,6 +694,7 @@ def listar_lojas(telegram_id: int) -> List[Dict[str, Any]]:
         # Verifica se a aba existe
         try:
             ws = spreadsheet.worksheet("Lojas")
+            _ensure_lojas_oriente(ws)
         except gspread.WorksheetNotFound:
             # Cria a aba com cabeçalhos
             ws = spreadsheet.add_worksheet(title="Lojas", rows=100, cols=20)
@@ -714,6 +721,7 @@ def cadastrar_loja(telegram_id: int, dados: Dict[str, Any]) -> bool:
         # Verifica se a aba existe
         try:
             ws = spreadsheet.worksheet("Lojas")
+            _ensure_lojas_oriente(ws)
         except gspread.WorksheetNotFound:
             ws = spreadsheet.add_worksheet(title="Lojas", rows=100, cols=20)
             cabecalhos = ["Telegram ID", "Nome da Loja", "Número", "Oriente", "Rito", "Potência", "Endereço", "Data Cadastro"]
@@ -721,19 +729,18 @@ def cadastrar_loja(telegram_id: int, dados: Dict[str, Any]) -> bool:
 
         data_cadastro = datetime.now().strftime("%d/%m/%Y %H:%M")
 
-        valores = [
-            str(telegram_id),
-            dados.get("nome", ""),
-            dados.get("numero", ""),
-            dados.get("oriente", ""),
-            dados.get("rito", ""),
-            dados.get("potencia", ""),
-            dados.get("endereco", ""),
-            data_cadastro
-        ]
+        valores = {
+            "Telegram ID": str(telegram_id),
+            "Nome da Loja": dados.get("nome", ""),
+            "Número": dados.get("numero", ""),
+            "Oriente": dados.get("oriente", ""),
+            "Rito": dados.get("rito", ""),
+            "Potência": dados.get("potencia", ""),
+            "Endereço": dados.get("endereco", ""),
+            "Data Cadastro": data_cadastro,
+        }
 
-        ws.append_row(valores, value_input_option="USER_ENTERED")
-        return True
+        return _append_row_by_headers(ws, valores)
     except Exception as e:
         print(f"Erro ao cadastrar loja: {e}")
         return False

@@ -705,16 +705,16 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["novo_evento_horario"] = hora
     
-    # Se já tem nome da loja pré-carregada (veio de loja cadastrada), pula para oriente
+    # Se já tem nome da loja pré-carregada (veio de loja cadastrada), pula para grau
     if "novo_evento_nome_loja" in context.user_data:
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "📍 *Oriente*",
-            _teclado_voltar_cancelar(),
+            "🔺 *Grau mínimo*",
+            _teclado_graus(),
             limpar_conteudo=True
         )
-        return ORIENTE
+        return GRAU
     else:
         # Fluxo manual: pergunta o nome da loja
         await navegar_para(
