@@ -522,8 +522,8 @@ def registrar_confirmacao(dados: dict) -> bool:
         if not id_evento or not telegram_id:
             return False
 
-        # evita duplicidade
-        if buscar_confirmacao(id_evento, int(float(telegram_id))):
+        # FORCE: bypass cache to avoid race conditions na confirmação
+        if buscar_confirmacao(id_evento, int(float(telegram_id)), usar_cache=False):
             return False
 
         values: Dict[str, Any] = {}
@@ -549,6 +549,12 @@ def registrar_confirmacao(dados: dict) -> bool:
             put("Venerável Mestre", dados.get("veneravel_mestre") or dados.get("Venerável Mestre") or dados.get("vm"))
 
         ok = _append_row_by_headers(ws, values)
+        
+        # Invalidar cache se registro foi bem-sucedido
+        if ok:
+            cache_key = (id_evento, int(float(telegram_id)))
+            _cache_confirmacoes.pop(cache_key, None)
+        
         return ok
 
     except Exception as e:
@@ -556,12 +562,12 @@ def registrar_confirmacao(dados: dict) -> bool:
         return False
 
 
-def buscar_confirmacao(id_evento: str, telegram_id: int) -> Optional[dict]:
+def buscar_confirmacao(id_evento: str, telegram_id: int, usar_cache: bool = True) -> Optional[dict]:
     """Verifica se um usuário já confirmou em determinado evento. Otimizado com cache e findall()."""
     cache_key = (id_evento, telegram_id)
     
-    # Verificar cache
-    if cache_key in _cache_confirmacoes:
+    # Verificar cache (apenas se usar_cache=True)
+    if usar_cache and cache_key in _cache_confirmacoes:
         cached, timestamp = _cache_confirmacoes[cache_key]
         if time.time() - timestamp < _ttl_confirmacoes:
             return cached
