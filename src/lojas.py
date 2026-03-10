@@ -63,6 +63,42 @@ async def _safe_answer(query, text: str | None = None):
             raise
 
 
+async def _finalizar_mensagem_cadastro(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    texto: str,
+    teclado: InlineKeyboardMarkup,
+):
+    """Finaliza o fluxo no mesmo card de processamento; fallback para nova mensagem."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+
+    try:
+        if query and query.message:
+            await query.edit_message_text(
+                text=texto,
+                parse_mode="Markdown",
+                reply_markup=teclado,
+            )
+            logger.info("Cadastro loja: mensagem final entregue por edicao do card de processamento (user_id=%s)", user_id)
+            return
+    except BadRequest as e:
+        msg = str(e)
+        if "Message is not modified" in msg:
+            return
+        logger.warning("Falha ao editar card final de cadastro de loja: %s", msg)
+    except Exception as e:
+        logger.warning("Falha inesperada ao editar card final de cadastro de loja: %s", e)
+
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=texto,
+        parse_mode="Markdown",
+        reply_markup=teclado,
+    )
+    logger.info("Cadastro loja: mensagem final entregue por envio de novo card (user_id=%s)", user_id)
+
+
 # ============================================
 # MENU PRINCIPAL DE LOJAS
 # ============================================
@@ -468,13 +504,13 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
     if not dados:
         logger.error(f"Erro: dados não encontrados para usuário {user_id}")
         await asyncio.sleep(0.5)
-        await navegar_para(
-            update, context,
-            "Cadastro de Loja",
+        await _finalizar_mensagem_cadastro(
+            update,
+            context,
             "❌ *Erro: dados não encontrados.*\n\nTente novamente.",
-            InlineKeyboardMarkup([[
-                InlineKeyboardButton("🏛️ Voltar ao menu de lojas", callback_data="menu_lojas")
-            ]])
+            InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🏛️ Voltar ao menu de lojas", callback_data="menu_lojas")]]
+            ),
         )
         return ConversationHandler.END
 
@@ -500,12 +536,7 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
             InlineKeyboardButton("🏛️ Voltar ao menu de lojas", callback_data="menu_lojas")
         ]])
 
-    await navegar_para(
-        update, context,
-        "Cadastro de Loja",
-        texto,
-        teclado
-    )
+    await _finalizar_mensagem_cadastro(update, context, texto, teclado)
 
     context.user_data.pop("nova_loja", None)
     return ConversationHandler.END
