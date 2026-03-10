@@ -110,6 +110,15 @@ def _formatar_resumo_evento(evento: dict) -> str:
     return f"🏛 {nome}{numero_fmt}\n📅 {data_txt} {hora}"
 
 
+def _confirmacao_com_agape(agape_valor: str) -> bool:
+    """Identifica confirmações com ágape em diferentes formatos legados."""
+    texto = str(agape_valor or "").lower()
+    if "sem ágape" in texto or "sem agape" in texto:
+        return False
+    marcadores = ("com ágape", "com agape", "confirmada", "gratuito", "pago", "sim")
+    return any(marcador in texto for marcador in marcadores)
+
+
 # ============================================
 # FUNÇÃO PRINCIPAL DO MENU SECRETÁRIO
 # ============================================
@@ -314,7 +323,7 @@ async def resumo_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     for c in confirmacoes:
         agape = str(c.get("Ágape", "") or "").lower()
-        if "com ágape" in agape or "confirmada" in agape:
+        if _confirmacao_com_agape(agape):
             com_agape += 1
         else:
             sem_agape += 1
@@ -340,7 +349,7 @@ async def resumo_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE)
             grau = c.get("Grau", "")
             vm = ""
 
-        tipo_agape = "Com ágape" if "com ágape" in agape else "Sem ágape"
+        tipo_agape = "Com ágape" if _confirmacao_com_agape(agape) else "Sem ágape"
         lista_detalhada.append(f"• {vm}{nome} - {grau} ({tipo_agape})")
 
     nome_loja = evento.get("Nome da loja", "")
@@ -444,7 +453,7 @@ async def copiar_lista_confirmados(update: Update, context: ContextTypes.DEFAULT
             vm = ""
 
         agape_texto = str(c.get("Ágape", "") or "").lower()
-        if "com ágape" in agape_texto or "confirmada" in agape_texto:
+        if _confirmacao_com_agape(agape_texto):
             com_agape.append(f"• {vm}{nome} - {grau}")
         else:
             sem_agape.append(f"• {vm}{nome} - {grau}")
@@ -840,7 +849,7 @@ async def visualizar_confirmados(update: Update, context: ContextTypes.DEFAULT_T
         agape_raw = str(c.get("Ágape", "") or "").lower()
         
         # Contar ágape
-        if "sim" in agape_raw or "confirmada" in agape_raw or "gratuito" in agape_raw or "pago" in agape_raw:
+        if _confirmacao_com_agape(agape_raw):
             com_agape += 1
             agape_flag = "Com ágape"
         else:

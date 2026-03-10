@@ -145,6 +145,20 @@ def _parse_hora(texto: str) -> Optional[str]:
     return f"{hh:02d}:{mm:02d}"
 
 
+def _tipo_agape_evento(texto_agape: str) -> str:
+    """Detecta o tipo de ágape salvo no evento."""
+    texto = _norm_text(texto_agape).lower()
+    if "pago" in texto or "dividido" in texto:
+        return "pago"
+    if "gratuito" in texto:
+        return "gratuito"
+    if "com ágape" in texto or "com agape" in texto:
+        return "com"
+    if texto in ("sim", "s"):
+        return "com"
+    return "sem"
+
+
 def _dia_semana_ingles(dt: datetime) -> str:
     """Retorna o dia da semana em inglês."""
     return dt.strftime("%A")
@@ -390,14 +404,25 @@ def _teclado_confirmacao(tem_duplicado: bool) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(linhas)
 
 
-def _teclado_pos_publicacao(id_evento: str) -> InlineKeyboardMarkup:
+def _teclado_pos_publicacao(id_evento: str, agape_evento: str) -> InlineKeyboardMarkup:
     """Teclado para mensagem publicada no grupo."""
-    return InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_evento}|sem")],
-            [InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{id_evento}")],
-        ]
-    )
+    tipo_agape = _tipo_agape_evento(agape_evento)
+    linhas = []
+
+    if tipo_agape == "gratuito":
+        linhas.append([InlineKeyboardButton("🍽 Participar com ágape (gratuito)", callback_data=f"confirmar|{id_evento}|gratuito")])
+        linhas.append([InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento}|sem")])
+    elif tipo_agape == "pago":
+        linhas.append([InlineKeyboardButton("🍽 Participar com ágape (pago)", callback_data=f"confirmar|{id_evento}|pago")])
+        linhas.append([InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento}|sem")])
+    elif tipo_agape == "com":
+        linhas.append([InlineKeyboardButton("🍽 Participar com ágape", callback_data=f"confirmar|{id_evento}|com")])
+        linhas.append([InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento}|sem")])
+    else:
+        linhas.append([InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_evento}|sem")])
+
+    linhas.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{id_evento}")])
+    return InlineKeyboardMarkup(linhas)
 
 
 # ============================================
@@ -1246,7 +1271,7 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
             chat_id=grupo_id_int,
             text=texto_grupo,
             parse_mode="Markdown",
-            reply_markup=_teclado_pos_publicacao(id_evento),
+            reply_markup=_teclado_pos_publicacao(id_evento, evento.get("Ágape", "")),
         )
     except Exception as e:
         await _enviar_ou_editar_mensagem(

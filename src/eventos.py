@@ -52,6 +52,12 @@ logger = logging.getLogger(__name__)
 MAX_EVENTOS_LISTA = 40
 MESES_PROXIMOS_QTD = 6
 
+MENSAGEM_CONFIRMACAO_AGAPE = (
+    "Sua confirmação é muito importante! Ela nos ajuda a organizar tudo com carinho, "
+    "evitando desperdícios e custos desnecessários.\n\n"
+    "Fraterno abraço!"
+)
+
 # Tokens de filtro
 TOKEN_SEMANA_ATUAL = "semana_atual"
 TOKEN_PROXIMA_SEMANA = "proxima_semana"
@@ -102,7 +108,37 @@ def extrair_tipo_agape(texto_agape: str) -> str:
         return "pago"
     if "gratuito" in texto:
         return "gratuito"
+    if "com ágape" in texto or "com agape" in texto:
+        return "com"
+    if texto.strip() in ("sim", "s"):
+        return "com"
     return "sem"
+
+
+def _teclado_confirmacao_evento(id_evento: str, agape_evento: str) -> List[List[InlineKeyboardButton]]:
+    """Monta botões de confirmação conforme tipo de ágape da sessão."""
+    id_cod = _encode_cb(id_evento)
+    tipo_agape = extrair_tipo_agape(agape_evento)
+
+    if tipo_agape == "gratuito":
+        return [
+            [InlineKeyboardButton("🍽 Participar com ágape (gratuito)", callback_data=f"confirmar|{id_cod}|gratuito")],
+            [InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_cod}|sem")],
+        ]
+
+    if tipo_agape == "pago":
+        return [
+            [InlineKeyboardButton("🍽 Participar com ágape (pago)", callback_data=f"confirmar|{id_cod}|pago")],
+            [InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_cod}|sem")],
+        ]
+
+    if tipo_agape == "com":
+        return [
+            [InlineKeyboardButton("🍽 Participar com ágape", callback_data=f"confirmar|{id_cod}|com")],
+            [InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_cod}|sem")],
+        ]
+
+    return [[InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_cod}|sem")]]
 
 
 def normalizar_grau_nome(valor: str) -> str:
@@ -686,21 +722,12 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
 
     user_id = update.effective_user.id
     ja_confirmou = buscar_confirmacao(id_evento, user_id)
-    tipo_agape = extrair_tipo_agape(agape)
-
     botoes = []
 
     if ja_confirmou:
         botoes.append([InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")])
     else:
-        if tipo_agape == "gratuito":
-            botoes.append([InlineKeyboardButton("🍽 Com ágape (gratuito)", callback_data=f"confirmar|{_encode_cb(id_evento)}|gratuito")])
-            botoes.append([InlineKeyboardButton("🚫 Sem ágape", callback_data=f"confirmar|{_encode_cb(id_evento)}|sem")])
-        elif tipo_agape == "pago":
-            botoes.append([InlineKeyboardButton("🍽 Com ágape (pago)", callback_data=f"confirmar|{_encode_cb(id_evento)}|pago")])
-            botoes.append([InlineKeyboardButton("🚫 Sem ágape", callback_data=f"confirmar|{_encode_cb(id_evento)}|sem")])
-        else:
-            botoes.append([InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{_encode_cb(id_evento)}|sem")])
+        botoes.extend(_teclado_confirmacao_evento(id_evento, agape))
 
     botoes.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")])
     
@@ -779,12 +806,16 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             ]]),
             limpar_conteudo=True
         )
+        if update.effective_chat.type in ["group", "supergroup"]:
+            await query.answer("Você já confirmou. Verifique seu privado.")
         return ConversationHandler.END
 
     participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não"
+    confirmou_com_agape = tipo_agape != "sem"
     desc_agape = {
         "gratuito": "Gratuito",
-        "pago": "Pago"
+        "pago": "Pago",
+        "com": "Não informado",
     }.get(tipo_agape, "Não aplicável")
 
     dados_confirmacao = {
@@ -821,9 +852,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     horario = str(evento.get("Hora", "") or "").strip()
     numero_fmt = f" {numero_loja}" if numero_loja else ""
 
-    # Verificar se o evento tem ágape
-    agape_evento = str(evento.get("Ágape", "") or "").strip()
-    tem_agape = extrair_tipo_agape(agape_evento) != "sem"
+    bloco_importancia = f"{MENSAGEM_CONFIRMACAO_AGAPE}\n\n" if confirmou_com_agape else ""
 
     if eh_secretario:
         # Mensagem combinada para secretário
@@ -833,7 +862,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             f"📅 {data} — {nome_loja}{numero_fmt}\n"
             f"🕕 Horário: {horario}\n"
             f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
-            "Sua presença é muito importante para fortalecermos os laços fraternos.\n\n"
+            f"{bloco_importancia}"
             f"📢 *Nova confirmação registrada*"
         )
         
@@ -847,14 +876,14 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         ])
     else:
         # Mensagem normal para usuário comum
-        if tem_agape:
+        if confirmou_com_agape:
             resposta = (
                 f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
                 f"Resumo:\n"
                 f"📅 {data} — {nome_loja}{numero_fmt}\n"
                 f"🕕 Horário: {horario}\n"
                 f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
-                "Sua presença é muito importante para fortalecermos os laços fraternos.\n\n"
+                f"{MENSAGEM_CONFIRMACAO_AGAPE}\n\n"
                 "Até lá!"
             )
         else:
@@ -911,14 +940,20 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
     if buscar_confirmacao(id_evento, user_id):
         await context.bot.send_message(
             chat_id=user_id,
-            text="Você já estava confirmado para esta sessão."
+            text="Você já estava confirmado para esta sessão.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")],
+                [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")],
+            ])
         )
         return
 
     participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não"
+    confirmou_com_agape = tipo_agape != "sem"
     desc_agape = {
         "gratuito": "Gratuito",
-        "pago": "Pago"
+        "pago": "Pago",
+        "com": "Não informado",
     }.get(tipo_agape, "Não aplicável")
 
     dados_confirmacao = {
@@ -944,18 +979,14 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
     horario = str(evento.get("Hora", "") or "").strip()
     numero_fmt = f" {numero_loja}" if numero_loja else ""
 
-    # Verificar se o evento tem ágape
-    agape_evento = str(evento.get("Ágape", "") or "").strip()
-    tem_agape = extrair_tipo_agape(agape_evento) != "sem"
-
-    if tem_agape:
+    if confirmou_com_agape:
         resposta = (
             f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
             f"Resumo:\n"
             f"📅 {data} — {nome_loja}{numero_fmt}\n"
             f"🕕 Horário: {horario}\n"
             f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
-            "Sua presença é muito importante para fortalecermos os laços fraternos.\n\n"
+            f"{MENSAGEM_CONFIRMACAO_AGAPE}\n\n"
             "Até lá!"
         )
     else:
@@ -972,6 +1003,10 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
         chat_id=user_id,
         text=resposta,
         parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")],
+            [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")],
+        ])
     )
     await enviar_dica_contextual(update, context, "confirmacao_presenca")
 
@@ -1134,7 +1169,8 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if ja_confirmou:
         botoes.append([InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")])
     else:
-        botoes.append([InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{_encode_cb(id_evento)}|sem")])
+        agape_evento = str((evento or {}).get("Ágape", "") or "")
+        botoes.extend(_teclado_confirmacao_evento(id_evento, agape_evento))
 
     botoes.append([InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")])
 
