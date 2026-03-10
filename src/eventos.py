@@ -141,6 +141,17 @@ def _teclado_confirmacao_evento(id_evento: str, agape_evento: str) -> List[List[
     return [[InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_cod}|sem")]]
 
 
+def _texto_participacao_agape(tipo_agape: str) -> str:
+    """Retorna texto humano para a escolha de participação no ágape."""
+    if tipo_agape == "gratuito":
+        return "Participação com ágape (gratuito) foi selecionada."
+    if tipo_agape == "pago":
+        return "Participação com ágape (pago) foi selecionada."
+    if tipo_agape == "com":
+        return "Participação com ágape foi selecionada."
+    return "Participação sem ágape foi selecionada."
+
+
 def normalizar_grau_nome(valor: str) -> str:
     v = (valor or "").strip().lower()
 
@@ -370,7 +381,7 @@ def _linha_botao_evento(ev: dict) -> str:
 # FUNÇÃO PARA NOTIFICAR SECRETÁRIO
 # ============================================
 
-async def notificar_secretario(context: ContextTypes.DEFAULT_TYPE, evento: dict, membro: dict, tipo_agape: str, desc_agape: str):
+async def notificar_secretario(context: ContextTypes.DEFAULT_TYPE, evento: dict, membro: dict, tipo_agape: str):
     """
     Notifica o secretário que criou o evento sobre uma nova confirmação de presença.
     
@@ -398,12 +409,13 @@ async def notificar_secretario(context: ContextTypes.DEFAULT_TYPE, evento: dict,
     numero_fmt = f" {numero}" if numero else ""
     data = evento.get("Data do evento", "")
     nome_membro = membro.get("Nome", "")
+    texto_participacao = _texto_participacao_agape(tipo_agape)
 
     texto = (
         f"📢 *NOVA CONFIRMAÇÃO*\n\n"
         f"👤 *Irmão:* {nome_membro}\n"
         f"📅 *Sessão:* {data} - {nome_loja}{numero_fmt}\n"
-        f"🍽 *Ágape:* {tipo_agape} ({desc_agape})\n"
+        f"🍽 {texto_participacao}\n"
     )
 
     id_evento = normalizar_id_evento(evento)
@@ -815,8 +827,9 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     desc_agape = {
         "gratuito": "Gratuito",
         "pago": "Pago",
-        "com": "Não informado",
+        "com": "Com ágape",
     }.get(tipo_agape, "Não aplicável")
+    texto_participacao = _texto_participacao_agape(tipo_agape)
 
     dados_confirmacao = {
         "id_evento": id_evento,
@@ -844,7 +857,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
 
     # Notificar secretário apenas se não for o próprio usuário
     if not eh_secretario:
-        await notificar_secretario(context, evento, membro, participacao_agape, desc_agape)
+        await notificar_secretario(context, evento, membro, tipo_agape)
 
     data = str(evento.get("Data do evento", "") or "").strip()
     nome_loja = str(evento.get("Nome da loja", "") or "").strip()
@@ -861,7 +874,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             f"Resumo:\n"
             f"📅 {data} — {nome_loja}{numero_fmt}\n"
             f"🕕 Horário: {horario}\n"
-            f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
+            f"🍽 {texto_participacao}\n\n"
             f"{bloco_importancia}"
             f"📢 *Nova confirmação registrada*"
         )
@@ -882,7 +895,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
                 f"Resumo:\n"
                 f"📅 {data} — {nome_loja}{numero_fmt}\n"
                 f"🕕 Horário: {horario}\n"
-                f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
+                f"🍽 {texto_participacao}\n\n"
                 f"{MENSAGEM_CONFIRMACAO_AGAPE}\n\n"
                 "Até lá!"
             )
@@ -892,7 +905,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
                 f"Resumo:\n"
                 f"📅 {data} — {nome_loja}{numero_fmt}\n"
                 f"🕕 Horário: {horario}\n"
-                f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
+                f"🍽 {texto_participacao}\n\n"
                 "Até lá!"
             )
 
@@ -953,8 +966,9 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
     desc_agape = {
         "gratuito": "Gratuito",
         "pago": "Pago",
-        "com": "Não informado",
+        "com": "Com ágape",
     }.get(tipo_agape, "Não aplicável")
+    texto_participacao = _texto_participacao_agape(tipo_agape)
 
     dados_confirmacao = {
         "id_evento": id_evento,
@@ -971,7 +985,7 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
     }
     registrar_confirmacao(dados_confirmacao)
 
-    await notificar_secretario(context, evento, membro, participacao_agape, desc_agape)
+    await notificar_secretario(context, evento, membro, tipo_agape)
 
     data = str(evento.get("Data do evento", "") or "").strip()
     nome_loja = str(evento.get("Nome da loja", "") or "").strip()
@@ -985,7 +999,7 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
             f"Resumo:\n"
             f"📅 {data} — {nome_loja}{numero_fmt}\n"
             f"🕕 Horário: {horario}\n"
-            f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
+            f"🍽 {texto_participacao}\n\n"
             f"{MENSAGEM_CONFIRMACAO_AGAPE}\n\n"
             "Até lá!"
         )
@@ -995,7 +1009,7 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
             f"Resumo:\n"
             f"📅 {data} — {nome_loja}{numero_fmt}\n"
             f"🕕 Horário: {horario}\n"
-            f"🍽 Participação: {participacao_agape} ({desc_agape})\n\n"
+            f"🍽 {texto_participacao}\n\n"
             "Até lá!"
         )
 
