@@ -31,6 +31,10 @@ _cache_membros: Dict[int, tuple] = {}   # telegram_id -> (dados, timestamp)
 _ttl_membros = 600                       # 10 minutos
 _cache_confirmacoes: Dict[tuple, tuple] = {}  # (id_evento, telegram_id) -> (dados, timestamp)
 _ttl_confirmacoes = 300                  # 5 minutos
+_cache_eventos: Dict[bool, tuple] = {}   # include_inativos -> (dados, timestamp)
+_ttl_eventos = 30                        # 30 segundos
+_cache_lojas: Dict[int, tuple] = {}      # telegram_id -> (dados, timestamp)
+_ttl_lojas = 300                         # 5 minutos
 
 
 # =========================
@@ -145,6 +149,14 @@ _TABLE_TO_MAP: Dict[str, tuple] = {
     "confirmacoes":  (_CONFIRMACOES_SHEETS_TO_DB, _CONFIRMACOES_DB_TO_SHEETS),
     "lojas":         (_LOJAS_SHEETS_TO_DB,      _LOJAS_DB_TO_SHEETS),
 }
+
+
+def _safe_cache_int(value: Any) -> int:
+    """Converte para inteiro de forma segura para uso em chaves de cache."""
+    try:
+        return int(float(_norm_intlike(value)))
+    except Exception:
+        return 0
 
 
 # =========================
@@ -423,27 +435,24 @@ def listar_eventos(include_inativos: bool = False) -> List[dict]:
     Lista eventos. Por padrão retorna apenas status 'ativo' (ou vazio => ativo).
     Filtro case-insensitive pois alguns registros podem ter "ativo" e outros "Ativo".
     """
+    cache_key = bool(include_inativos)
+    if cache_key in _cache_eventos:
+        cached, timestamp = _cache_eventos[cache_key]
+        if time.time() - timestamp < _ttl_eventos:
+            return cached
+
     try:
         query = supabase.table("eventos").select("*")
 
         if not include_inativos:
-            # ilike para comparação case-insensitive
-            query = query.ilike("status", "ativo")
+            # Consulta única: ativos + status nulo/vazio (retrocompatível)
+            query = query.or_("status.ilike.ativo,status.is.null,status.eq.")
 
         resp = query.execute()
         rows = resp.data or []
-
-        if not include_inativos:
-            # Incluir também registros com status NULL/vazio (retrocompatível)
-            resp_null = (
-                supabase.table("eventos")
-                .select("*")
-                .is_("status", "null")
-                .execute()
-            )
-            rows += resp_null.data or []
-
-        return [_row_to_sheets("eventos", row) for row in rows]
+        result = [_row_to_sheets("eventos", row) for row in rows]
+        _cache_eventos[cache_key] = (result, time.time())
+        return result
 
     except Exception as e:
         logger.error("Erro ao listar eventos: %s", e)
@@ -469,6 +478,7 @@ def cadastrar_evento(evento: dict) -> Optional[str]:
                 row[k] = ""
 
         supabase.table("eventos").insert(row).execute()
+        _cache_eventos.clear()
         return id_evento
 
     except Exception as e:
@@ -512,6 +522,7 @@ def atualizar_evento(indice: int, evento: dict) -> bool:
                 row[k] = ""
 
         supabase.table("eventos").update(row).eq("id_evento", id_evento).execute()
+        _cache_eventos.clear()
         return True
 
     except Exception as e:
@@ -664,14 +675,26 @@ def cancelar_todas_confirmacoes(id_evento: str) -> bool:
 
 def listar_lojas(telegram_id: int) -> List[Dict[str, Any]]:
     """Retorna lista de lojas cadastradas por um secretário."""
+    cache_key = _safe_cache_int(telegram_id)
+    if cache_key in _cache_lojas:
+        cached, timestamp = _cache_lojas[cache_key]
+        if time.time() - timestamp < _ttl_lojas:
+            return cached
+
     try:
+        target = _norm_intlike(telegram_id)
+        if not target:
+            return []
+
         resp = (
             supabase.table("lojas")
             .select("*")
-            .eq("telegram_id", str(telegram_id))
+            .eq("telegram_id", target)
             .execute()
         )
-        return [_row_to_sheets("lojas", row) for row in (resp.data or [])]
+        result = [_row_to_sheets("lojas", row) for row in (resp.data or [])]
+        _cache_lojas[cache_key] = (result, time.time())
+        return result
 
     except Exception as e:
         logger.error("Erro ao listar lojas: %s", e)
@@ -695,6 +718,8 @@ def cadastrar_loja(telegram_id: int, dados: Dict[str, Any]) -> bool:
         }
 
         supabase.table("lojas").insert(row).execute()
+        cache_key = _safe_cache_int(telegram_id)
+        _cache_lojas.pop(cache_key, None)
         return True
 
     except Exception as e:
@@ -733,6 +758,8 @@ def excluir_loja(telegram_id: int, loja: dict) -> bool:
             # Encontrou — apaga pelo id BIGSERIAL
             row_id = row.get("id")
             supabase.table("lojas").delete().eq("id", row_id).execute()
+            cache_key = _safe_cache_int(telegram_id)
+            _cache_lojas.pop(cache_key, None)
             return True
 
         return False
