@@ -1,4 +1,4 @@
-# ============================================
+﻿# ============================================
 # BODE ANDARILHO - EDIÇÃO DE DADOS DO OBREIRO
 # ============================================
 # 
@@ -28,7 +28,7 @@ from telegram.ext import (
     filters,
 )
 
-from src.sheets import buscar_membro, atualizar_membro
+from src.sheets_supabase import buscar_membro, atualizar_membro
 from src.bot import (
     navegar_para,
     _enviar_ou_editar_mensagem,

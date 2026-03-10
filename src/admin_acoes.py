@@ -1,4 +1,4 @@
-# src/admin_acoes.py
+﻿# src/admin_acoes.py
 # ============================================
 # BODE ANDARILHO - AÇÕES ADMINISTRATIVAS
 # ============================================
@@ -29,7 +29,7 @@ from telegram.ext import (
     filters,
 )
 
-from src.sheets import (
+from src.sheets_supabase import (
     listar_membros,
     atualizar_membro,
     buscar_membro,

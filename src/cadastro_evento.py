@@ -34,7 +34,7 @@ from telegram.ext import (
     filters,
 )
 
-from src.sheets import cadastrar_evento, listar_eventos, listar_lojas
+from src.sheets_supabase import cadastrar_evento, listar_eventos, listar_lojas
 from src.ajuda.dicas import enviar_dica_contextual
 from src.permissoes import get_nivel
 from src.bot import (

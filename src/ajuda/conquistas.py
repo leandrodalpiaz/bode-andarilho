@@ -1,4 +1,4 @@
-from datetime import datetime
+﻿from datetime import datetime
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
@@ -8,7 +8,7 @@ from src.messages import (
 	TEXTO_CONQUISTAS_MEMBRO_INICIAL,
 	TEXTO_CONQUISTAS_SECRETARIO_INICIAL,
 )
-from src.sheets import buscar_confirmacoes_membro, buscar_eventos_por_secretario
+from src.sheets_supabase import buscar_confirmacoes_membro, buscar_eventos_por_secretario
 
 
 TITULOS_HONORIFICOS = {

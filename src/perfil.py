@@ -1,4 +1,4 @@
-# ============================================
+﻿# ============================================
 # BODE ANDARILHO - PERFIL DO USUÁRIO
 # ============================================
 # 
@@ -20,7 +20,7 @@ from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-from src.sheets import buscar_membro
+from src.sheets_supabase import buscar_membro
 from src.ajuda.conquistas import calcular_conquistas_membro
 from src.bot import (
     navegar_para,

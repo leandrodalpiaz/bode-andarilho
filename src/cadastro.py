@@ -1,4 +1,4 @@
-# src/cadastro.py
+﻿# src/cadastro.py
 # ============================================
 # BODE ANDARILHO - CADASTRO DE MEMBROS
 # ============================================
@@ -34,7 +34,7 @@ from telegram.ext import (
     filters,
 )
 
-from src.sheets import buscar_membro, cadastrar_membro
+from src.sheets_supabase import buscar_membro, cadastrar_membro
 from src.bot import (
     navegar_para,
     _enviar_ou_editar_mensagem,

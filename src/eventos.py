@@ -1,4 +1,4 @@
-# src/eventos.py
+﻿# src/eventos.py
 # ============================================
 # BODE ANDARILHO - GERENCIAMENTO DE EVENTOS
 # ============================================
@@ -25,7 +25,7 @@ from typing import Optional, Tuple, List, Dict, Any
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler, CommandHandler
 
-from src.sheets import (
+from src.sheets_supabase import (
     listar_eventos,
     buscar_membro,
     registrar_confirmacao,

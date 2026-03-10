@@ -1,4 +1,4 @@
-# src/permissoes.py
+﻿# src/permissoes.py
 # ============================================
 # BODE ANDARILHO - GERENCIAMENTO DE PERMISSÕES
 # ============================================
@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from src.sheets import buscar_membro
+from src.sheets_supabase import buscar_membro
 
 
 def get_nivel(user_id: int) -> str:

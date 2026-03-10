@@ -1,4 +1,4 @@
-# ============================================
+﻿# ============================================
 # BODE ANDARILHO - GERENCIADOR DE MENUS E NAVEGAÇÃO
 # ============================================
 # 
@@ -21,7 +21,7 @@ from typing import Dict, Optional
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from src.sheets import buscar_membro
+from src.sheets_supabase import buscar_membro
 from src.permissoes import get_nivel
 
 logger = logging.getLogger(__name__)

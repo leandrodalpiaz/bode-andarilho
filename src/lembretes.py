@@ -1,4 +1,4 @@
-# src/lembretes.py
+﻿# src/lembretes.py
 # ============================================
 # BODE ANDARILHO - SISTEMA DE LEMBRETES AUTOMÁTICOS
 # ============================================
@@ -20,7 +20,7 @@ import logging
 from os import getenv
 
 from telegram import Bot
-from src.sheets import (
+from src.sheets_supabase import (
     listar_eventos,
     listar_confirmacoes_por_evento,
     buscar_membro,

@@ -1,4 +1,4 @@
-# main.py
+﻿# main.py
 # ============================================
 # BODE ANDARILHO - PONTO DE ENTRADA PRINCIPAL
 # ============================================
@@ -120,7 +120,7 @@ from src.ajuda.menus import ajuda_handlers
 from src.ajuda.conquistas import mostrar_marcos_secretario, mostrar_conquistas_membro
 
 # Utilitários
-from src.sheets import buscar_membro
+from src.sheets_supabase import buscar_membro
 from src.permissoes import get_nivel
 
 # ============================================

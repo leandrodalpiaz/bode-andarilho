@@ -1,4 +1,4 @@
-# src/eventos_secretario.py
+﻿# src/eventos_secretario.py
 # ============================================
 # BODE ANDARILHO - ÁREA DO SECRETÁRIO
 # ============================================
@@ -31,7 +31,7 @@ from telegram.ext import (
     CommandHandler,
 )
 
-from src.sheets import (
+from src.sheets_supabase import (
     listar_eventos,
     buscar_membro,
     listar_confirmacoes_por_evento,

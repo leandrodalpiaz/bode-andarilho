@@ -1,4 +1,4 @@
-# src/lojas.py
+﻿# src/lojas.py
 # ============================================
 # BODE ANDARILHO - GERENCIAMENTO DE LOJAS (UX MELHORADO)
 # ============================================
@@ -19,7 +19,7 @@ from telegram.ext import (
     filters,
 )
 
-from src.sheets import listar_lojas, cadastrar_loja, excluir_loja
+from src.sheets_supabase import listar_lojas, cadastrar_loja, excluir_loja
 from src.permissoes import get_nivel
 
 from src.bot import (
