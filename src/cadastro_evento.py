@@ -1222,21 +1222,23 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
     traje = _escape_md(evento.get("Traje obrigatório", ""))
     agape = _escape_md(evento.get("Ágape", ""))
     endereco = _escape_md(evento.get("Endereço da sessão", ""))
+    observacao = _escape_md(evento.get("Observações", "")) or "-"
 
     texto_grupo = (
-        "*🐐 NOVA SESSÃO DISPONÍVEL PARA VISITAS!*\n\n"
-        f"🏛 *LOJA {nome}{numero_fmt}*\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"📍 Oriente: {oriente}\n"
-        f"⚜️ Potência: {potencia}\n"
-        f"📅 Data: {data_txt}\n"
-        f"🕕 Horário: {hora_txt}\n"
-        f"🕯 Tipo: {tipo}\n"
-        f"📜 Rito: {rito}\n"
-        f"🔺 Grau mínimo: {grau}\n"
-        f"👔 Traje: {traje}\n"
-        f"🍽 Ágape: {agape}\n"
-        f"📍 Endereço: {endereco}\n"
+        "*NOVA SESSÃO!*\n\n"
+        f"*{data_txt}*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"*{grau}*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"_{nome}{numero_fmt}_\n"
+        f"_{oriente} - {potencia}_\n\n"
+        f"Horário: {hora_txt}\n"
+        f"Tipo: {tipo}\n"
+        f"Rito: {rito}\n"
+        f"Traje: {traje}\n"
+        f"Ágape: {agape}\n"
+        f"Endereço: {endereco}\n"
+        f"Observação: {observacao}"
     )
 
     try:
