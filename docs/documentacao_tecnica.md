@@ -112,7 +112,6 @@ bode_andarilho/
 ├── Procfile                   # worker: python main.py
 ├── requirements.txt           # Dependências Python
 ├── runtime.txt                # python-3.12.0
-├── credentials.json           # (mantido localmente; não usado em produção)
 ├── docs/
 │   └── documentacao_tecnica.md  # Este arquivo
 └── src/
@@ -128,7 +127,7 @@ bode_andarilho/
     ├── perfil.py              # Exibição de perfil, conquistas, marcos
     ├── permissoes.py          # Sistema de níveis de acesso
     ├── scheduler.py           # Inicialização e jobs do APScheduler
-    ├── sheets.py              # Módulo legado (Google Sheets) - mantido como referência
+
     ├── sheets_supabase.py     # Módulo ativo - acesso ao Supabase (PostgreSQL)
     ├── admin_acoes.py         # Painel admin (promover/rebaixar/editar membros)
     └── ajuda/
@@ -586,7 +585,7 @@ Os seguintes módulos tiveram apenas seus imports atualizados (de `sheets` para 
 
 **Arquivo adicionado:** `src/sheets_supabase.py`
 
-**Arquivo mantido (legado):** `src/sheets.py` — sem uso ativo, mantido como referência histórica
+**Arquivo removido (legado):** `src/sheets.py` — removido após confirmação de que nenhum módulo o importava
 
 ---
 
