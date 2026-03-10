@@ -203,7 +203,7 @@ async def criar_estrutura_inicial(context, user_id: int, membro: dict) -> bool:
     # Resultado Inicial
     await _enviar_ou_editar_mensagem(
         context, user_id, TIPO_RESULTADO,
-        "Escolha uma ação no painel acima para iniciarmos os trabalhos."
+        "A conversa seguira entre colunas. Escolha uma acao no painel acima."
     )
     
     return True

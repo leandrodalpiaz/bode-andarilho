@@ -244,7 +244,7 @@ async def novo_membro_grupo_handler(update: Update, context):
             text=(
                 f"Salve, {nome}! 🐐\n\n"
                 "Bem-vindo ao grupo do Bode Andarilho.\n"
-                "Para acessar o menu e confirmar presenças, digite *bode* no grupo."
+                "Para acessar o menu e confirmar presencas, digite *bode*, *menu* ou *painel* no grupo."
             ),
             parse_mode="Markdown"
         )
@@ -411,7 +411,7 @@ def register_handlers(app: Application) -> None:
     # ===== 12. HANDLER DA PALAVRA "BODE" =====
     app.add_handler(
         MessageHandler(
-            filters.Regex(r"^(?i:bode)[.!?]*$") & filters.ChatType.GROUPS,
+            filters.Regex(r"^(?i:(bode|menu|painel))[.!?]*$") & filters.ChatType.GROUPS,
             bode_grupo_handler
         )
     )
