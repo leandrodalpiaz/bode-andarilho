@@ -43,6 +43,17 @@ from src.messages import (
 logger = logging.getLogger(__name__)
 
 
+def _parse_telegram_id(valor) -> int | None:
+    """Normaliza Telegram ID aceitando formatos legados como '12345.0'."""
+    try:
+        s = str(valor or "").strip()
+        if not s:
+            return None
+        return int(float(s))
+    except (TypeError, ValueError):
+        return None
+
+
 def _parse_data_evento(texto_data: str):
     """Aceita datas em DD/MM/YYYY e formato legado DD/MM."""
     texto_data = str(texto_data or "").strip()
@@ -141,9 +152,9 @@ async def enviar_lembretes_24h(bot: Bot):
                 print(f"Erro ao enviar lembrete 24h para {telegram_id}: {e}")
 
         # Envia lembrete para o secretário
-        secretario_id = evento.get("Telegram ID do secretário", "")
+        secretario_id = _parse_telegram_id(evento.get("Telegram ID do secretário", ""))
         if secretario_id:
-            secretario = buscar_membro(int(secretario_id))
+            secretario = buscar_membro(secretario_id)
             if secretario:
                 nome_secretario = secretario.get("Nome", "")
                 num_confirmados = len(confirmados)
@@ -165,13 +176,15 @@ async def enviar_lembretes_24h(bot: Bot):
 
                 try:
                     await bot.send_message(
-                        chat_id=int(secretario_id),
+                        chat_id=secretario_id,
                         text=texto_secretario,
                         parse_mode="Markdown"
                     )
                     print(f"Lembrete 24h enviado para secretário {nome_secretario} ({secretario_id})")
                 except Exception as e:
                     print(f"Erro ao enviar lembrete 24h para secretário {secretario_id}: {e}")
+        elif evento.get("Telegram ID do secretário", ""):
+            logger.warning("Telegram ID do secretário inválido em lembrete 24h: %r", evento.get("Telegram ID do secretário", ""))
 
 
 # ============================================
@@ -238,9 +251,9 @@ async def enviar_lembretes_meio_dia(bot: Bot):
                 print(f"Erro ao enviar lembrete meio-dia para {telegram_id}: {e}")
 
         # Envia lembrete para o secretário
-        secretario_id = evento.get("Telegram ID do secretário", "")
+        secretario_id = _parse_telegram_id(evento.get("Telegram ID do secretário", ""))
         if secretario_id:
-            secretario = buscar_membro(int(secretario_id))
+            secretario = buscar_membro(secretario_id)
             if secretario:
                 nome_secretario = secretario.get("Nome", "")
                 num_confirmados = len(confirmados)
@@ -259,13 +272,15 @@ async def enviar_lembretes_meio_dia(bot: Bot):
 
                 try:
                     await bot.send_message(
-                        chat_id=int(secretario_id),
+                        chat_id=secretario_id,
                         text=texto_secretario,
                         parse_mode="Markdown"
                     )
                     print(f"Lembrete meio-dia enviado para secretário {nome_secretario} ({secretario_id})")
                 except Exception as e:
                     print(f"Erro ao enviar lembrete meio-dia para secretário {secretario_id}: {e}")
+        elif evento.get("Telegram ID do secretário", ""):
+            logger.warning("Telegram ID do secretário inválido em lembrete meio-dia: %r", evento.get("Telegram ID do secretário", ""))
 
 
 async def enviar_celebracao_mensal(bot: Bot):

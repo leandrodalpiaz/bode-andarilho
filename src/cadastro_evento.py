@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import os
 import re
-import uuid
 import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -1217,14 +1216,24 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
         )
         return
 
-    # Extrai ID do evento
+    # Extrai ID do evento e aborta publicação se a persistência falhar.
     id_evento = ""
     if isinstance(resultado, str):
         id_evento = resultado
     elif isinstance(resultado, dict):
         id_evento = _norm_text(resultado.get("ID Evento") or resultado.get("id_evento") or "")
+
     if not id_evento:
-        id_evento = str(uuid.uuid4())
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "❌ Falha ao salvar o evento na base de dados. A publicação no grupo foi cancelada para evitar inconsistências.",
+            InlineKeyboardMarkup([[
+                InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")
+            ]]),
+            limpar_conteudo=True
+        )
+        _limpar_contexto_evento(context)
+        return
 
     # 2) Publica no grupo
     grupo_id = _norm_text(context.user_data.get("novo_evento_telegram_id_grupo", GRUPO_PRINCIPAL_ID))

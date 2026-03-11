@@ -140,6 +140,7 @@ RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 PORT = int(os.getenv("PORT", "10000"))
 WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", "/telegram/webhook")
 DROP_PENDING_UPDATES_ON_BOOT = os.getenv("DROP_PENDING_UPDATES_ON_BOOT", "false")
+WEBHOOK_MAX_CONNECTIONS = int(os.getenv("WEBHOOK_MAX_CONNECTIONS", "20"))
 
 
 def _require_env(name: str, value: Optional[str]) -> str:
@@ -555,6 +556,7 @@ async def main():
     logger.info("PORT: %s", PORT)
     logger.info("WEBHOOK_URL: %s", webhook_url)
     logger.info("DROP_PENDING_UPDATES_ON_BOOT: %s", drop_pending_updates)
+    logger.info("WEBHOOK_MAX_CONNECTIONS: %s", WEBHOOK_MAX_CONNECTIONS)
 
     telegram_app = Application.builder().token(token).build()
     register_handlers(telegram_app)
@@ -566,7 +568,7 @@ async def main():
         url=webhook_url,
         allowed_updates=Update.ALL_TYPES,
         drop_pending_updates=drop_pending_updates,
-        max_connections=1,
+        max_connections=WEBHOOK_MAX_CONNECTIONS,
     )
 
     info = await telegram_app.bot.get_webhook_info()
