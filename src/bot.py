@@ -19,6 +19,7 @@ import time
 from typing import Dict, Optional
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from src.sheets_supabase import buscar_membro
@@ -74,6 +75,23 @@ def _gerar_hash_conteudo(texto: str, teclado) -> str:
     teclado_str = str(teclado.to_dict()) if teclado else ""
     conteudo = f"{texto}|{teclado_str}"
     return hashlib.md5(conteudo.encode()).hexdigest()
+
+
+async def _responder_callback_seguro(query, texto: Optional[str] = None):
+    """Responde callback sem falhar quando a query já expirou no Telegram."""
+    if not query:
+        return
+    try:
+        if texto is None:
+            await query.answer()
+        else:
+            await query.answer(texto)
+    except BadRequest as e:
+        msg = str(e).lower()
+        if "query is too old" in msg or "query id is invalid" in msg:
+            logger.debug("Callback expirado ignorado: %s", e)
+            return
+        logger.warning("Falha ao responder callback: %s", e)
 
 
 async def _verificar_mensagem_existe(context, user_id: int, message_id: int) -> bool:
@@ -250,7 +268,7 @@ async def voltar_ao_menu_principal(update: Update, context: ContextTypes.DEFAULT
 async def limpar_historico(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Remove mensagens antigas para manter a limpeza e a ordem do chat."""
     query = update.callback_query
-    await query.answer("Limpando registros...")
+    await _responder_callback_seguro(query, "Limpando registros...")
     
     user_id = update.effective_user.id
     deletadas = 0
@@ -290,6 +308,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     telegram_id = update.effective_user.id
+    payload_start = ""
+    if getattr(context, "args", None):
+        payload_start = str(context.args[0] or "").strip().lower()
+
+    veio_do_grupo = payload_start in {"cadastro", "grupo", "start"}
     membro = buscar_membro(telegram_id)
 
     if membro:
@@ -297,6 +320,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await criar_estrutura_inicial(context, telegram_id, membro)
     else:
         from src.cadastro import cadastro_start as iniciar_cadastro
+        if veio_do_grupo:
+            context.user_data["origem_grupo_cadastro"] = True
         await iniciar_cadastro(update, context)
 
 
@@ -310,7 +335,7 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     data = query.data or ""
-    await query.answer()
+    await _responder_callback_seguro(query)
 
     # Callbacks geridos por fluxos específicos (ConversationHandlers)
     if data in {"admin_promover", "admin_rebaixar", "editar_perfil", "admin_editar_membro"}:

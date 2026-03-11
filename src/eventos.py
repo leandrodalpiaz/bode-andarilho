@@ -23,6 +23,7 @@ from datetime import datetime, date, timedelta
 from typing import Optional, Tuple, List, Dict, Any
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest, Forbidden
 from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler, CommandHandler
 
 from src.sheets_supabase import (
@@ -44,6 +45,31 @@ from src.bot import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _link_privado_bot(context: ContextTypes.DEFAULT_TYPE, start_param: str = "start") -> str:
+    """Monta link para abrir o chat privado do bot."""
+    username = (getattr(context.bot, "username", None) or "BodeAndarilhoBot").lstrip("@")
+    if start_param:
+        return f"https://t.me/{username}?start={start_param}"
+    return f"https://t.me/{username}"
+
+
+async def _responder_callback_seguro(query, texto: Optional[str] = None, show_alert: bool = False):
+    """Responde callback sem interromper o fluxo quando a query já expirou."""
+    if not query:
+        return
+    try:
+        if texto is None:
+            await query.answer()
+        else:
+            await query.answer(texto, show_alert=show_alert)
+    except BadRequest as e:
+        msg = str(e).lower()
+        if "query is too old" in msg or "query id is invalid" in msg:
+            logger.debug("Callback expirado ignorado: %s", e)
+            return
+        logger.warning("Falha ao responder callback: %s", e)
 
 # ============================================
 # CONSTANTES E CONFIGURAÇÕES
@@ -800,12 +826,30 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             "tipo_agape": tipo_agape
         }
         teclado = InlineKeyboardMarkup([[InlineKeyboardButton("📝 Fazer cadastro", callback_data="iniciar_cadastro")]])
-        await _enviar_ou_editar_mensagem(
+        sucesso_privado = await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "Irmão, antes de confirmar sua presença, preciso registrar seu cadastro.",
             teclado,
             limpar_conteudo=True
         )
+
+        if not sucesso_privado and update.effective_chat.type in ["group", "supergroup"]:
+            link_privado = _link_privado_bot(context, "cadastro")
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=(
+                    "📩 Não consegui te chamar no privado para iniciar o cadastro.\n\n"
+                    "Toque no botão abaixo, abra meu chat e envie /start."
+                ),
+                reply_markup=InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("📩 Abrir privado do bot", url=link_privado)]]
+                ),
+            )
+            await _responder_callback_seguro(
+                query,
+                "Abra o privado do bot para concluir o cadastro.",
+                show_alert=True,
+            )
         return ConversationHandler.END
 
     # Verificar confirmação existente (agora cacheada)
@@ -819,7 +863,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             limpar_conteudo=True
         )
         if update.effective_chat.type in ["group", "supergroup"]:
-            await query.answer("Você já confirmou. Verifique seu privado.")
+            await _responder_callback_seguro(query, "Você já confirmou. Verifique seu privado.")
         return ConversationHandler.END
 
     participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não"
@@ -923,7 +967,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     await enviar_dica_contextual(update, context, "confirmacao_presenca")
 
     if update.effective_chat.type in ["group", "supergroup"]:
-        await query.answer("✅ Presença confirmada! Verifique seu privado.")
+        await _responder_callback_seguro(query, "✅ Presença confirmada! Verifique seu privado.")
 
     return ConversationHandler.END
 
@@ -1090,13 +1134,31 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("✅ Sim, cancelar", callback_data=f"confirma_cancelar|{_encode_cb(id_evento)}"),
                 InlineKeyboardButton("🔙 Não, voltar", callback_data=f"evento|{_encode_cb(id_evento)}")
             ]])
-            await context.bot.send_message(
-                chat_id=user_id,
-                text="*Confirmar cancelamento da sua presença?*",
-                parse_mode="Markdown",
-                reply_markup=teclado
-            )
-            await query.answer("📨 Instruções enviadas no privado.")
+            try:
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text="*Confirmar cancelamento da sua presença?*",
+                    parse_mode="Markdown",
+                    reply_markup=teclado
+                )
+                await _responder_callback_seguro(query, "📨 Instruções enviadas no privado.")
+            except Forbidden:
+                link_privado = _link_privado_bot(context, "start")
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text=(
+                        "📩 Não consegui enviar a confirmação de cancelamento no privado.\n\n"
+                        "Abra meu chat pelo botão abaixo e envie /start."
+                    ),
+                    reply_markup=InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("📩 Abrir privado do bot", url=link_privado)]]
+                    ),
+                )
+                await _responder_callback_seguro(
+                    query,
+                    "Abra o privado do bot para concluir o cancelamento.",
+                    show_alert=True,
+                )
             return
 
         # Se estiver no privado, já pode cancelar direto

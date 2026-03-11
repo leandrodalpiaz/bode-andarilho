@@ -29,7 +29,7 @@ from starlette.routing import Route
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse, Response
 
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -139,6 +139,7 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 PORT = int(os.getenv("PORT", "10000"))
 WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", "/telegram/webhook")
+DROP_PENDING_UPDATES_ON_BOOT = os.getenv("DROP_PENDING_UPDATES_ON_BOOT", "false")
 
 
 def _require_env(name: str, value: Optional[str]) -> str:
@@ -153,6 +154,21 @@ def _join_url(base: str, path: str) -> str:
     base = base.rstrip("/")
     path = path if path.startswith("/") else f"/{path}"
     return f"{base}{path}"
+
+
+def _link_privado_bot(bot_username: Optional[str], start_param: str = "start") -> str:
+    """Monta link seguro para abrir o chat privado do bot com deep link opcional."""
+    username = (bot_username or "BodeAndarilhoBot").lstrip("@")
+    if start_param:
+        return f"https://t.me/{username}?start={start_param}"
+    return f"https://t.me/{username}"
+
+
+def _env_bool(value: Optional[str], default: bool = False) -> bool:
+    """Converte string de ambiente para bool com fallback seguro."""
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 # ============================================
@@ -170,30 +186,28 @@ async def bode_grupo_handler(update: Update, context):
 
     user_id = update.effective_user.id
     membro = buscar_membro(user_id)
+    link_privado = _link_privado_bot(getattr(context.bot, "username", None), "cadastro")
+    teclado_privado = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("📩 Abrir privado do bot", url=link_privado)]]
+    )
 
     if membro:
         from src.bot import criar_estrutura_inicial
-        await criar_estrutura_inicial(context, user_id, membro)
-    else:
-        # Enviar mensagem no privado para iniciar cadastro
-        try:
-            await context.bot.send_message(
-                chat_id=user_id,
-                text=(
-                    "🐐 *Bode Andarilho*\n\n"
-                    "Bem-vindo! Você ainda não está cadastrado.\n"
-                    "Vamos começar seu cadastro?\n\n"
-                    "Envie /start para prosseguir."
-                ),
-                parse_mode="Markdown"
+        sucesso = await criar_estrutura_inicial(context, user_id, membro)
+        if not sucesso and update.message:
+            await update.message.reply_text(
+                "📩 Não consegui te chamar no privado agora.\n\n"
+                "Toque no botão abaixo para abrir o chat comigo e enviar /start.",
+                reply_markup=teclado_privado,
             )
-        except Exception as e:
-            print(f"Erro ao enviar mensagem no privado para {user_id}: {e}")
-            # Fallback: responde no grupo
-            if update.message:
-                await update.message.reply_text(
-                    "📩 Não consegui enviar mensagem no privado. Verifique se você iniciou uma conversa comigo primeiro."
-                )
+        return
+
+    if update.message:
+        await update.message.reply_text(
+            "🧾 Para concluir seu cadastro, preciso falar com você no privado.\n\n"
+            "Toque no botão abaixo e envie /start.",
+            reply_markup=teclado_privado,
+        )
 
 
 async def mensagem_grupo_handler(update: Update, context):
@@ -467,11 +481,13 @@ async def main():
     render_url = _require_env("RENDER_EXTERNAL_URL", RENDER_URL)
 
     webhook_url = _join_url(render_url, WEBHOOK_PATH)
+    drop_pending_updates = _env_bool(DROP_PENDING_UPDATES_ON_BOOT, default=False)
 
     logger.info("TOKEN carregado: %s", "SIM" if token else "NAO")
     logger.info("RENDER_URL: %s", render_url)
     logger.info("PORT: %s", PORT)
     logger.info("WEBHOOK_URL: %s", webhook_url)
+    logger.info("DROP_PENDING_UPDATES_ON_BOOT: %s", drop_pending_updates)
 
     telegram_app = Application.builder().token(token).build()
     register_handlers(telegram_app)
@@ -479,12 +495,10 @@ async def main():
     await telegram_app.initialize()
     await telegram_app.start()
 
-    await telegram_app.bot.delete_webhook(drop_pending_updates=True)
-    await asyncio.sleep(0.5)
     await telegram_app.bot.set_webhook(
         url=webhook_url,
         allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=True,
+        drop_pending_updates=drop_pending_updates,
         max_connections=1,
     )
 

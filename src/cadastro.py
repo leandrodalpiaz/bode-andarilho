@@ -200,13 +200,22 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         telegram_id = update.effective_user.id
         membro = buscar_membro(telegram_id)
         cadastrado = bool(membro)
+        origem_grupo = bool(context.user_data.pop("origem_grupo_cadastro", False))
 
-        texto = (
-            "👤 *Cadastro*\n\n"
-            "Aqui você pode iniciar ou editar seu cadastro.\n"
-            "Se estiver tudo certo, volte ao menu principal.\n\n"
-            "_Lembre-se: suas informações estão sob a proteção do sigilo maçônico._"
-        )
+        if not cadastrado and origem_grupo:
+            texto = (
+                "🐐 *Seja bem-vindo ao Bode Andarilho!*\n\n"
+                "Para seguir no sistema, primeiro vamos fazer seu cadastro.\n"
+                "Toque em *Iniciar cadastro* e eu te guiarei passo a passo.\n\n"
+                "_Suas informações estão sob a proteção do sigilo maçônico._"
+            )
+        else:
+            texto = (
+                "👤 *Cadastro*\n\n"
+                "Aqui você pode iniciar ou editar seu cadastro.\n"
+                "Se estiver tudo certo, volte ao menu principal.\n\n"
+                "_Lembre-se: suas informações estão sob a proteção do sigilo maçônico._"
+            )
 
         if update.callback_query:
             await update.callback_query.edit_message_text(
