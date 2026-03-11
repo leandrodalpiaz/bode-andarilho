@@ -8,6 +8,7 @@ from src.lembretes import (
     enviar_lembretes_24h,
     enviar_lembretes_meio_dia,
 )
+from src.eventos import flush_notificacoes_secretario_adiadas
 
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,11 @@ async def job_lembretes_meio_dia(app: Application):
 async def job_celebracao_mensal(app: Application):
     """Roda no primeiro dia de cada mês às 09:00."""
     await enviar_celebracao_mensal(app.bot)
+
+
+async def job_flush_notificacoes_secretario(app: Application):
+    """Consolida e envia notificações acumuladas do período silencioso."""
+    await flush_notificacoes_secretario_adiadas(app.bot)
 
 
 async def iniciar_scheduler(app: Application):
@@ -64,7 +70,16 @@ async def iniciar_scheduler(app: Application):
         id="job_celebracao_mensal",
         replace_existing=True,
     )
+    scheduler.add_job(
+        job_flush_notificacoes_secretario,
+        "cron",
+        hour=7,
+        minute=0,
+        args=[app],
+        id="job_flush_notificacoes_secretario",
+        replace_existing=True,
+    )
 
     scheduler.start()
     _scheduler = scheduler
-    logger.info("Scheduler iniciado com jobs de lembretes e celebração mensal.")
+    logger.info("Scheduler iniciado com jobs de lembretes, celebração mensal e flush de notificações do secretário.")

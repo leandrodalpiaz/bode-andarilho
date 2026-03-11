@@ -35,8 +35,19 @@ from src.sheets_supabase import (
     buscar_confirmacao,
     listar_confirmacoes_por_evento,
     get_notificacao_status,
+    listar_notificacoes_secretario_pendentes,
+    listar_secretarios_com_notificacoes_pendentes,
+    registrar_notificacao_secretario_pendente,
+    remover_notificacoes_secretario_pendentes,
 )
 from src.ajuda.dicas import enviar_dica_contextual
+from src.messages import (
+    EVENTO_NAO_ENCONTRADO,
+    JA_CONFIRMOU,
+    NAO_CONFIRMOU,
+    NOTIFICACAO_NOVA_CONFIRMACAO,
+    PRESENCA_CANCELADA,
+)
 
 from src.bot import (
     navegar_para,
@@ -46,6 +57,10 @@ from src.bot import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+_HORA_SILENCIO_INICIO = 22
+_HORA_SILENCIO_FIM = 7
 
 
 def _link_privado_bot(context: ContextTypes.DEFAULT_TYPE, start_param: str = "start") -> str:
@@ -71,6 +86,58 @@ async def _responder_callback_seguro(query, texto: Optional[str] = None, show_al
             logger.debug("Callback expirado ignorado: %s", e)
             return
         logger.warning("Falha ao responder callback: %s", e)
+
+
+def _em_horario_silencioso_secretario(dt: Optional[datetime] = None) -> bool:
+    agora = dt or datetime.now()
+    hora = agora.hour
+    return hora >= _HORA_SILENCIO_INICIO or hora < _HORA_SILENCIO_FIM
+
+
+def _texto_resumo_notificacoes_pendentes(itens: List[Dict[str, str]]) -> str:
+    total = len(itens)
+    linhas = []
+    for i, item in enumerate(itens[:20], start=1):
+        linhas.append(
+            f"{i}. {item.get('nome', 'Irmão')} | {item.get('data', '')} - {item.get('loja', '')} | {item.get('agape', '')}"
+        )
+
+    if total > 20:
+        linhas.append(f"... e mais {total - 20} confirmação(ões).")
+
+    corpo = "\n".join(linhas) if linhas else "Sem detalhes disponíveis."
+    return (
+        "📨 *Resumo de confirmações no período de silêncio*\n\n"
+        f"Total acumulado: *{total}*\n"
+        "Período: 22:00 às 07:00\n\n"
+        f"{corpo}"
+    )
+
+
+async def _flush_notificacoes_secretario_ids(bot, secretario_ids: List[int]) -> None:
+    if not secretario_ids:
+        return
+
+    for sid in secretario_ids:
+        itens = await asyncio.to_thread(listar_notificacoes_secretario_pendentes, sid)
+        if not itens:
+            continue
+        try:
+            await bot.send_message(
+                chat_id=sid,
+                text=_texto_resumo_notificacoes_pendentes(itens),
+                parse_mode="Markdown",
+            )
+            await asyncio.to_thread(remover_notificacoes_secretario_pendentes, sid)
+            logger.info("Resumo de confirmações pendentes enviado ao secretário %s (%s itens)", sid, len(itens))
+        except Exception as e:
+            logger.error("Erro ao enviar resumo pendente ao secretário %s: %s", sid, e)
+
+
+async def flush_notificacoes_secretario_adiadas(bot) -> None:
+    """Envia resumos únicos das confirmações acumuladas no período de silêncio."""
+    secretario_ids = await asyncio.to_thread(listar_secretarios_com_notificacoes_pendentes)
+    await _flush_notificacoes_secretario_ids(bot, secretario_ids)
 
 
 async def _auto_delete_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, delay: int = 15):
@@ -447,12 +514,30 @@ async def notificar_secretario(context: ContextTypes.DEFAULT_TYPE, evento: dict,
     nome_membro = membro.get("Nome", "")
     texto_participacao = _texto_participacao_agape(tipo_agape)
 
-    texto = (
-        f"📢 *NOVA CONFIRMAÇÃO*\n\n"
-        f"👤 *Irmão:* {nome_membro}\n"
-        f"📅 *Sessão:* {data} - {nome_loja}{numero_fmt}\n"
-        f"🍽 {texto_participacao}\n"
+    texto = NOTIFICACAO_NOVA_CONFIRMACAO.format(
+        nome=nome_membro,
+        data=data,
+        loja=f"{nome_loja}{numero_fmt}",
+        agape=texto_participacao,
     )
+
+    item_pendente = {
+        "nome": nome_membro,
+        "data": str(data or ""),
+        "loja": f"{nome_loja}{numero_fmt}",
+        "agape": texto_participacao,
+    }
+
+    if _em_horario_silencioso_secretario():
+        ok = await asyncio.to_thread(registrar_notificacao_secretario_pendente, secretario_id, item_pendente)
+        if ok:
+            logger.info("Notificação do secretário %s persistida por horário de silêncio.", secretario_id)
+        else:
+            logger.warning("Falha ao persistir notificação pendente do secretário %s.", secretario_id)
+        return
+
+    # Ao sair da janela de silêncio, dispara primeiro um resumo consolidado, se existir.
+    await _flush_notificacoes_secretario_ids(context.bot, [secretario_id])
 
     id_evento = normalizar_id_evento(evento)
     teclado = InlineKeyboardMarkup([
@@ -824,7 +909,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     if not evento:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Sessão não encontrada ou não está mais ativa.",
+            EVENTO_NAO_ENCONTRADO,
             limpar_conteudo=True
         )
         return ConversationHandler.END
@@ -866,7 +951,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     if buscar_confirmacao(id_evento, user_id):
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Você já confirmou presença para esta sessão.",
+            JA_CONFIRMOU,
             InlineKeyboardMarkup([[
                 InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")
             ]]),
@@ -1115,7 +1200,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # No privado: edita a mensagem com confirmação
                 await _enviar_ou_editar_mensagem(
                     context, user_id, TIPO_RESULTADO,
-                    "❌ *Presença cancelada*\n\nSe mudar de ideia, sua confirmação será bem-vinda.",
+                    PRESENCA_CANCELADA,
                     InlineKeyboardMarkup([
                         [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
                     ]),
@@ -1125,7 +1210,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await _enviar_ou_editar_mensagem(
                 context, user_id, TIPO_RESULTADO,
-                "Não foi possível cancelar. Você não estava confirmado para esta sessão.",
+                NAO_CONFIRMOU,
                 limpar_conteudo=True
             )
         return
@@ -1175,7 +1260,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if cancelar_confirmacao(id_evento, user_id):
             await _enviar_ou_editar_mensagem(
                 context, user_id, TIPO_RESULTADO,
-                "❌ *Presença cancelada*\n\nSe mudar de ideia, sua confirmação será bem-vinda.",
+                PRESENCA_CANCELADA,
                 InlineKeyboardMarkup([
                     [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
                 ]),
@@ -1184,7 +1269,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await _enviar_ou_editar_mensagem(
                 context, user_id, TIPO_RESULTADO,
-                "Não foi possível cancelar. Você não estava confirmado para esta sessão.",
+                NAO_CONFIRMOU,
                 InlineKeyboardMarkup([
                     [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
                 ]),

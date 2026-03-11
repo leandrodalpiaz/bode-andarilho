@@ -22,6 +22,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
+from src.messages import ACESSO_NEGADO, APENAS_ADMIN, APENAS_SECRETARIO
 from src.sheets_supabase import buscar_membro
 from src.permissoes import get_nivel
 
@@ -301,7 +302,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ponto de entrada: verifica se o Ir.·. está regular no sistema."""
     if update.effective_chat and update.effective_chat.type in ["group", "supergroup"]:
         await update.message.reply_text(
-            "🔒 *Acesso Restrito!*\n\nPara interagir com o Bode Andarilho, "
+            f"{ACESSO_NEGADO}\n\nPara interagir com o Bode Andarilho, "
             "por favor, procure-me em ambiente privado.\n\n"
             "Toque aqui: @BodeAndarilhoBot e envie /start"
         )
@@ -354,7 +355,7 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "area_secretario" and nivel not in ["2", "3"]:
         await _enviar_ou_editar_mensagem(
             context, telegram_id, TIPO_RESULTADO,
-            "⛔ Este Oriente está restrito aos Secretários da Loja.",
+            APENAS_SECRETARIO,
             limpar_conteudo=True
         )
         return
@@ -362,7 +363,7 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "area_admin" and nivel != "3":
         await _enviar_ou_editar_mensagem(
             context, telegram_id, TIPO_RESULTADO,
-            "⛔ Função exclusiva para os Administradores do sistema.",
+            APENAS_ADMIN,
             limpar_conteudo=True
         )
         return

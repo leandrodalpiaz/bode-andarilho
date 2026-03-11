@@ -34,6 +34,7 @@ from telegram.ext import (
     filters,
 )
 
+from src.messages import CADASTRO_CANCELADO, CADASTRO_CONCLUIDO, ERRO_GENERICO
 from src.sheets_supabase import buscar_membro, cadastrar_membro
 from src.bot import (
     navegar_para,
@@ -234,7 +235,7 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Erro em cadastro_start: {e}\n{traceback.format_exc()}")
         if update.message:
-            await update.message.reply_text("❌ Ocorreu um erro. Tente novamente em instantes.")
+            await update.message.reply_text(ERRO_GENERICO)
         return ConversationHandler.END
 
 
@@ -493,7 +494,7 @@ async def confirmar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await navegar_para(
             update, context,
             "Cadastro Concluído",
-            "✅ *Cadastro realizado com sucesso!*\n\nSeus dados estão registrados sob a proteção do sigilo maçônico.\nUse o menu acima para continuar.",
+            CADASTRO_CONCLUIDO,
             InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")
             ]])
@@ -504,7 +505,7 @@ async def confirmar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.error(f"Erro em confirmar_cadastro: {e}\n{traceback.format_exc()}")
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "❌ Ocorreu um erro ao salvar seus dados. Tente novamente mais tarde."
+            ERRO_GENERICO
         )
         return ConversationHandler.END
 
@@ -578,7 +579,7 @@ async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ]])
             )
         elif update.message:
-            await update.message.reply_text("Cadastro cancelado. Você pode iniciar novamente com /start.")
+            await update.message.reply_text(CADASTRO_CANCELADO)
     except Exception as e:
         logger.error(f"Erro em cancelar_cadastro: {e}\n{traceback.format_exc()}")
 

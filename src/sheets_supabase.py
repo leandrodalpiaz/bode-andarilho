@@ -803,6 +803,102 @@ def set_notificacao_status(telegram_id: int, ativo: bool) -> bool:
 
 
 # =========================
+# Notificações pendentes do secretário (persistência)
+# =========================
+
+def registrar_notificacao_secretario_pendente(secretario_id: int, item: Dict[str, str]) -> bool:
+    """Persiste notificação pendente para envio consolidado fora da janela de silêncio."""
+    try:
+        sid = _norm_intlike(secretario_id)
+        if not sid:
+            return False
+
+        row = {
+            "secretario_id": sid,
+            "nome": _norm_text(item.get("nome")),
+            "data_sessao": _norm_text(item.get("data")),
+            "loja": _norm_text(item.get("loja")),
+            "agape": _norm_text(item.get("agape")),
+            "criado_em": datetime.now().isoformat(timespec="seconds"),
+        }
+        supabase.table("notificacoes_secretario_pendentes").insert(row).execute()
+        return True
+    except Exception as e:
+        logger.error("Erro ao registrar notificação pendente do secretário: %s", e)
+        return False
+
+
+def listar_notificacoes_secretario_pendentes(secretario_id: int) -> List[Dict[str, str]]:
+    """Lista notificações pendentes de um secretário, da mais antiga para a mais nova."""
+    try:
+        sid = _norm_intlike(secretario_id)
+        if not sid:
+            return []
+
+        resp = (
+            supabase.table("notificacoes_secretario_pendentes")
+            .select("id,secretario_id,nome,data_sessao,loja,agape,criado_em")
+            .eq("secretario_id", sid)
+            .order("id")
+            .execute()
+        )
+
+        out: List[Dict[str, str]] = []
+        for row in (resp.data or []):
+            out.append(
+                {
+                    "id": str(row.get("id", "")),
+                    "secretario_id": _norm_text(row.get("secretario_id")),
+                    "nome": _norm_text(row.get("nome")),
+                    "data": _norm_text(row.get("data_sessao")),
+                    "loja": _norm_text(row.get("loja")),
+                    "agape": _norm_text(row.get("agape")),
+                    "criado_em": _norm_text(row.get("criado_em")),
+                }
+            )
+        return out
+    except Exception as e:
+        logger.error("Erro ao listar notificações pendentes do secretário: %s", e)
+        return []
+
+
+def listar_secretarios_com_notificacoes_pendentes() -> List[int]:
+    """Retorna IDs de secretários que possuem notificações pendentes."""
+    try:
+        resp = supabase.table("notificacoes_secretario_pendentes").select("secretario_id").execute()
+        secretarios: List[int] = []
+        vistos = set()
+        for row in (resp.data or []):
+            sid = _safe_cache_int(row.get("secretario_id"))
+            if sid and sid not in vistos:
+                vistos.add(sid)
+                secretarios.append(sid)
+        return secretarios
+    except Exception as e:
+        logger.error("Erro ao listar secretários com notificações pendentes: %s", e)
+        return []
+
+
+def remover_notificacoes_secretario_pendentes(secretario_id: int) -> bool:
+    """Remove todas as notificações pendentes de um secretário após envio consolidado."""
+    try:
+        sid = _norm_intlike(secretario_id)
+        if not sid:
+            return False
+
+        (
+            supabase.table("notificacoes_secretario_pendentes")
+            .delete()
+            .eq("secretario_id", sid)
+            .execute()
+        )
+        return True
+    except Exception as e:
+        logger.error("Erro ao remover notificações pendentes do secretário: %s", e)
+        return False
+
+
+# =========================
 # Utilitários e funções assíncronas
 # =========================
 

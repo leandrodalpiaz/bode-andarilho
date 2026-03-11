@@ -226,7 +226,7 @@ SUPABASE_KEY=sb_secret_sua_chave_aqui
 
 ## 5. Estrutura do Banco de Dados (Supabase)
 
-O banco de dados utiliza **Supabase (PostgreSQL)** com 4 tabelas:
+O banco de dados utiliza **Supabase (PostgreSQL)** com 5 tabelas:
 
 ### 5.1 Tabela `membros`
 
@@ -288,6 +288,20 @@ O banco de dados utiliza **Supabase (PostgreSQL)** com 4 tabelas:
 **Índice:** `telegram_id`
 
 ### 5.5 Observações sobre o schema
+
+### 5.6 Tabela `notificacoes_secretario_pendentes`
+
+| Coluna (DB) | Tipo | Descrição |
+|---|---|---|
+| id | BIGSERIAL (PK) | Identificador da pendência |
+| secretario_id | BIGINT | Telegram ID do secretário |
+| nome | TEXT | Nome do irmão que confirmou |
+| data_sessao | TEXT | Data da sessão |
+| loja | TEXT | Loja da sessão |
+| agape | TEXT | Opção de participação no ágape |
+| criado_em | TIMESTAMPTZ | Data/hora de criação da pendência |
+
+Essa tabela é usada para consolidar notificações de confirmação durante a janela de silêncio (22:00–07:00), com envio em lote fora da janela.
 
 Os nomes das colunas no banco seguem o padrão `snake_case` sem acentos (ex: `telegram_id`, `nome_loja`, `potencia`). O módulo `sheets_supabase.py` realiza o mapeamento bidirecional automaticamente, expondo os dados com os nomes originais para todos os outros módulos do sistema, garantindo compatibilidade sem necessidade de alterações no restante do código.
 
@@ -455,7 +469,7 @@ Para recriar o ambiente completo do zero:
 2. Conectar ao repositório no GitHub
 3. Configurar todas as variáveis de ambiente (seção 4.1)
 4. Definir o processo como `worker: python main.py` (Procfile)
-5. Criar o projeto no Supabase e executar o SQL de criação das tabelas disponível em `docs/supabase_schema.sql`
+5. Criar o projeto no Supabase e executar o SQL de criação das tabelas (incluindo `docs/supabase_notificacoes_secretario.sql` para pendências do secretário)
 6. Migrar os dados existentes executando os INSERTs de seed disponíveis em `docs/supabase_seed.sql`
 7. Criar um bot no BotFather e adicionar ao grupo principal como administrador
 8. Fazer deploy; o bot configurará o webhook automaticamente ao iniciar
