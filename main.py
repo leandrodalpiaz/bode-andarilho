@@ -120,7 +120,7 @@ from src.ajuda.menus import ajuda_handlers
 from src.ajuda.conquistas import mostrar_marcos_secretario, mostrar_conquistas_membro
 
 # Utilitários
-from src.sheets_supabase import buscar_membro
+from src.sheets_supabase import buscar_membro, atualizar_status_membro, membro_esta_ativo
 from src.permissoes import get_nivel
 
 # ============================================
@@ -298,12 +298,28 @@ async def novo_membro_grupo_handler(update: Update, context):
             return
 
         chat_member = update.chat_member
-        if chat_member.new_chat_member.status not in ("member", "administrator", "creator"):
-            return  # Não é entrada
+        novo_status = chat_member.new_chat_member.status
+        antigo_status = chat_member.old_chat_member.status
 
         user = chat_member.new_chat_member.user
         if user.is_bot:
             return  # Ignorar bots
+
+        if novo_status in ("left", "kicked"):
+            membro = buscar_membro(user.id)
+            if membro and membro_esta_ativo(membro):
+                atualizar_status_membro(user.id, "Inativo")
+                logger.info("Cadastro marcado como inativo apos saida do grupo: %s", user.id)
+            return
+
+        if novo_status not in ("member", "administrator", "creator"):
+            return  # Não é entrada
+
+        if antigo_status in ("left", "kicked"):
+            membro = buscar_membro(user.id)
+            if membro and not membro_esta_ativo(membro):
+                atualizar_status_membro(user.id, "Pendente validacao")
+                logger.info("Cadastro marcado como pendente de validacao no retorno ao grupo: %s", user.id)
 
         chat = update.effective_chat
         if chat.type not in ("group", "supergroup"):

@@ -23,7 +23,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from src.messages import ACESSO_NEGADO, APENAS_ADMIN, APENAS_SECRETARIO
-from src.sheets_supabase import buscar_membro
+from src.sheets_supabase import buscar_membro, membro_esta_ativo
 from src.permissoes import get_nivel
 
 logger = logging.getLogger(__name__)
@@ -316,11 +316,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     veio_do_grupo = payload_start in {"cadastro", "grupo", "start"}
     membro = buscar_membro(telegram_id)
 
-    if membro:
+    if membro and membro_esta_ativo(membro):
         await _limpar_mensagens_anteriores(context, telegram_id)
         await criar_estrutura_inicial(context, telegram_id, membro)
     else:
         from src.cadastro import cadastro_start as iniciar_cadastro
+        if membro and not membro_esta_ativo(membro):
+            context.user_data["forcar_revalidacao_cadastro"] = True
         if veio_do_grupo:
             context.user_data["origem_grupo_cadastro"] = True
         await iniciar_cadastro(update, context)

@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from src.sheets_supabase import buscar_membro
+from src.sheets_supabase import buscar_membro, membro_esta_ativo
 
 
 def get_nivel(user_id: int) -> str:
@@ -45,6 +45,10 @@ def get_nivel(user_id: int) -> str:
     
     # Se não encontrou, retorna nível comum
     if not membro:
+        return "1"
+
+    # Cadastro inativo/pendente não mantém permissões administrativas.
+    if not membro_esta_ativo(membro):
         return "1"
     
     # Obtém o nível da planilha (padrão "1" se não existir)

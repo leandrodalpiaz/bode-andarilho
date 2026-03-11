@@ -92,8 +92,15 @@ def _teclado_confirmar() -> InlineKeyboardMarkup:
     )
 
 
-def _teclado_inicio(cadastrado: bool) -> InlineKeyboardMarkup:
+def _teclado_inicio(cadastrado: bool, revalidacao: bool = False) -> InlineKeyboardMarkup:
     """Cria teclado da tela inicial de cadastro."""
+    if revalidacao:
+        return InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("🔄 Revalidar cadastro", callback_data="editar_cadastro")],
+                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
+            ]
+        )
     if cadastrado:
         return InlineKeyboardMarkup(
             [
@@ -202,8 +209,16 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         membro = buscar_membro(telegram_id)
         cadastrado = bool(membro)
         origem_grupo = bool(context.user_data.pop("origem_grupo_cadastro", False))
+        forcar_revalidacao = bool(context.user_data.pop("forcar_revalidacao_cadastro", False))
 
-        if not cadastrado and origem_grupo:
+        if forcar_revalidacao and cadastrado:
+            texto = (
+                "🔄 *Revalidacao de cadastro necessaria*\n\n"
+                "Identificamos que seu cadastro estava inativo por saida do grupo.\n"
+                "Para voltar ao uso normal, atualize seus dados agora.\n\n"
+                "_Isso garante informacoes atuais para administracao e secretaria._"
+            )
+        elif not cadastrado and origem_grupo:
             texto = (
                 "🐐 *Seja bem-vindo ao Bode Andarilho!*\n\n"
                 "Para seguir no sistema, primeiro vamos fazer seu cadastro.\n"
@@ -222,13 +237,13 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.callback_query.edit_message_text(
                 texto,
                 parse_mode="Markdown",
-                reply_markup=_teclado_inicio(cadastrado)
+                reply_markup=_teclado_inicio(cadastrado, forcar_revalidacao)
             )
         elif update.message:
             await update.message.reply_text(
                 texto,
                 parse_mode="Markdown",
-                reply_markup=_teclado_inicio(cadastrado)
+                reply_markup=_teclado_inicio(cadastrado, forcar_revalidacao)
             )
         return ConversationHandler.END
         

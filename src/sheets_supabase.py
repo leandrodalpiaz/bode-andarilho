@@ -70,6 +70,7 @@ _MEMBROS_SHEETS_TO_DB: Dict[str, str] = {
     "Número da loja":     "numero_loja",
     "Venerável Mestre":   "veneravel_mestre",
     "Notificações":       "notificacoes",
+    "Status":             "status",
 }
 _MEMBROS_DB_TO_SHEETS: Dict[str, str] = {v: k for k, v in _MEMBROS_SHEETS_TO_DB.items()}
 
@@ -211,6 +212,14 @@ def _norm_status(value: Any) -> str:
     return v if v else "ativo"
 
 
+def membro_esta_ativo(membro: Optional[Dict[str, Any]]) -> bool:
+    """Retorna True quando o cadastro do membro está ativo."""
+    if not membro:
+        return False
+    status = _norm_status(membro.get("Status") or membro.get("status"))
+    return status == "ativo"
+
+
 def gerar_id_evento() -> str:
     """Gera um ID único e estável para o evento."""
     return uuid.uuid4().hex  # 32 chars
@@ -256,10 +265,14 @@ def _sheets_to_row(table: str, data: dict) -> dict:
 # Funções para Membros
 # =========================
 
-def listar_membros() -> List[Dict[str, Any]]:
-    """Retorna lista de todos os membros cadastrados."""
+def listar_membros(include_inativos: bool = False) -> List[Dict[str, Any]]:
+    """Retorna membros cadastrados; por padrão, somente cadastros ativos."""
     try:
-        resp = supabase.table("membros").select("*").execute()
+        query = supabase.table("membros").select("*")
+        if not include_inativos:
+            # Retrocompatibilidade: status vazio/nulo também conta como ativo.
+            query = query.or_("status.ilike.ativo,status.is.null,status.eq.")
+        resp = query.execute()
         return [_row_to_sheets("membros", row) for row in (resp.data or [])]
     except Exception as e:
         logger.error("Erro ao listar membros: %s", e)
@@ -314,7 +327,9 @@ def cadastrar_membro(dados: dict) -> bool:
         # Se existe: atualiza (preserva Nivel)
         existente = buscar_membro(int(float(telegram_id)))
         if existente is not None:
-            return atualizar_membro(int(float(telegram_id)), dados, preservar_nivel=True)
+            dados_revalidacao = dict(dados)
+            dados_revalidacao["Status"] = "Ativo"
+            return atualizar_membro(int(float(telegram_id)), dados_revalidacao, preservar_nivel=True)
 
         # Monta registro para inserção
         row: Dict[str, Any] = {
@@ -333,6 +348,7 @@ def cadastrar_membro(dados: dict) -> bool:
                 dados.get("Venerável Mestre") or dados.get("veneravel_mestre") or dados.get("vm")
             ),
             "nivel": _norm_intlike(dados.get("Nivel")) or "1",
+            "status": "Ativo",
         }
 
         supabase.table("membros").insert(row).execute()
@@ -378,6 +394,7 @@ def atualizar_membro(telegram_id: int, dados_atualizados: dict, preservar_nivel:
             "vm":             "Venerável Mestre",
             "veneravel_mestre": "Venerável Mestre",
             "notificacoes":   "Notificações",
+            "status":         "Status",
         }
 
         for k, v in dados_atualizados.items():
@@ -424,6 +441,12 @@ def atualizar_nivel_membro(telegram_id: int, novo_nivel: str) -> bool:
     except Exception as e:
         logger.error("Erro ao atualizar nível: %s", e)
         return False
+
+
+def atualizar_status_membro(telegram_id: int, novo_status: str) -> bool:
+    """Atualiza o status do cadastro do membro preservando seu nível."""
+    status = _norm_text(novo_status) or "Ativo"
+    return atualizar_membro(telegram_id, {"Status": status}, preservar_nivel=True)
 
 
 # =========================
