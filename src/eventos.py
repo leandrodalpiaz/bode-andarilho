@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import urllib.parse
 import calendar
@@ -70,6 +71,15 @@ async def _responder_callback_seguro(query, texto: Optional[str] = None, show_al
             logger.debug("Callback expirado ignorado: %s", e)
             return
         logger.warning("Falha ao responder callback: %s", e)
+
+
+async def _auto_delete_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, delay: int = 15):
+    """Autoapaga mensagem enviada no grupo, sem impactar o fluxo principal."""
+    await asyncio.sleep(max(1, int(delay)))
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception as e:
+        logger.debug("Nao foi possivel autoapagar mensagem %s no chat %s: %s", message_id, chat_id, e)
 
 # ============================================
 # CONSTANTES E CONFIGURAÇÕES
@@ -1251,12 +1261,24 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     botoes.append([InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")])
 
     # COMPORTAMENTO ORIGINAL: SEMPRE envia nova mensagem
-    await context.bot.send_message(
+    msg = await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=texto,
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(botoes),
     )
+
+    # No grupo, a lista completa é temporária para evitar poluição visual.
+    # O resumo é independente e permanece visível.
+    if update.effective_chat and update.effective_chat.type in ("group", "supergroup"):
+        asyncio.create_task(
+            _auto_delete_message(
+                context,
+                update.effective_chat.id,
+                msg.message_id,
+                delay=15,
+            )
+        )
 
 
 # ============================================

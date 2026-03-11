@@ -171,6 +171,18 @@ def _env_bool(value: Optional[str], default: bool = False) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+async def _auto_delete_mensagens_grupo(context, chat_id: int, message_ids: list[int], delay: int = 15) -> None:
+    """Apaga mensagens temporárias no grupo sem falhar o fluxo principal."""
+    await asyncio.sleep(max(1, int(delay)))
+    for msg_id in message_ids:
+        if not msg_id:
+            continue
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+        except Exception as e:
+            logger.debug("Nao foi possivel autoapagar mensagem %s no chat %s: %s", msg_id, chat_id, e)
+
+
 # ============================================
 # HANDLERS DE GRUPO
 # ============================================
@@ -240,6 +252,37 @@ async def mensagem_grupo_handler(update: Update, context):
             await update.message.reply_text(
                 "📩 Use o bot no privado para cadastro e menus."
             )
+            return
+
+        # Fallback para comandos não suportados no grupo.
+        if text.startswith("/"):
+            link_privado = _link_privado_bot(getattr(context.bot, "username", None), "start")
+            teclado_privado = InlineKeyboardMarkup(
+                [[InlineKeyboardButton("📩 Abrir privado do bot", url=link_privado)]]
+            )
+            resposta = await update.message.reply_text(
+                "🛠️ Não reconheci esse comando no grupo.\n\n"
+                "Aqui eu respondo apenas:\n"
+                "• bode\n"
+                "• /bode\n"
+                "• menu\n"
+                "• /menu\n"
+                "• painel\n"
+                "• /painel\n\n"
+                "Para cadastro e funções completas, fale comigo no privado.",
+                reply_markup=teclado_privado,
+            )
+
+            # Limpa comando + aviso para manter o grupo organizado.
+            asyncio.create_task(
+                _auto_delete_mensagens_grupo(
+                    context,
+                    chat.id,
+                    [update.message.message_id, resposta.message_id],
+                    delay=15,
+                )
+            )
+            return
     except Exception as e:
         logger.warning("Erro em mensagem_grupo_handler: %s", e, exc_info=True)
 
