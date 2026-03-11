@@ -135,6 +135,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+GRUPO_PRINCIPAL_ID = os.getenv("GRUPO_PRINCIPAL_ID", "-1003721338228").strip()
+
+
+def _eh_grupo_principal(chat_id: Optional[int]) -> bool:
+    """Retorna True quando o update pertence ao grupo principal monitorado."""
+    if chat_id is None:
+        return False
+    return str(chat_id).strip() == GRUPO_PRINCIPAL_ID
+
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 PORT = int(os.getenv("PORT", "10000"))
@@ -298,6 +307,14 @@ async def novo_membro_grupo_handler(update: Update, context):
             return
 
         chat_member = update.chat_member
+        chat = update.effective_chat
+        if not chat or chat.type not in ("group", "supergroup"):
+            return
+
+        # Evita marcar cadastro como inativo por eventos de outros grupos.
+        if not _eh_grupo_principal(chat.id):
+            return
+
         novo_status = chat_member.new_chat_member.status
         antigo_status = chat_member.old_chat_member.status
 
@@ -305,7 +322,7 @@ async def novo_membro_grupo_handler(update: Update, context):
         if user.is_bot:
             return  # Ignorar bots
 
-        if novo_status in ("left", "kicked"):
+        if antigo_status in ("member", "administrator", "creator") and novo_status in ("left", "kicked"):
             membro = buscar_membro(user.id)
             if membro and membro_esta_ativo(membro):
                 atualizar_status_membro(user.id, "Inativo")
@@ -320,10 +337,6 @@ async def novo_membro_grupo_handler(update: Update, context):
             if membro and not membro_esta_ativo(membro):
                 atualizar_status_membro(user.id, "Pendente validacao")
                 logger.info("Cadastro marcado como pendente de validacao no retorno ao grupo: %s", user.id)
-
-        chat = update.effective_chat
-        if chat.type not in ("group", "supergroup"):
-            return
 
         # Enviar mensagem de boas-vindas no grupo
         nome = user.first_name or "irmão"
