@@ -458,6 +458,25 @@ def atualizar_status_membro(telegram_id: int, novo_status: str) -> bool:
     return atualizar_membro(telegram_id, {"Status": status}, preservar_nivel=True)
 
 
+def excluir_membro(telegram_id: int) -> bool:
+    """Exclui fisicamente um membro pelo Telegram ID (fallback para bases sem coluna status)."""
+    try:
+        tid = _norm_intlike(telegram_id)
+        if not tid:
+            return False
+
+        supabase.table("membros").delete().eq("telegram_id", tid).execute()
+
+        # Invalidar cache
+        _cache_membros.pop(telegram_id, None)
+        _cache_membros.pop(int(float(tid)), None)
+        return True
+
+    except Exception as e:
+        logger.error("Erro ao excluir membro: %s", e)
+        return False
+
+
 # =========================
 # Funções para Eventos
 # =========================

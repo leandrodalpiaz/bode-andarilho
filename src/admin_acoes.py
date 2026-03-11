@@ -34,6 +34,7 @@ from src.sheets_supabase import (
     atualizar_membro,
     buscar_membro,
     atualizar_nivel_membro,
+    excluir_membro,
     get_notificacao_status,
     set_notificacao_status,
     listar_eventos,
@@ -779,7 +780,8 @@ async def selecionar_campo_membro(update: Update, context: ContextTypes.DEFAULT_
             "Admin > Editar > Excluir",
             (
                 f"⚠️ *Confirma a exclusão de {nome}?*\n\n"
-                "A exclusão é lógica: o cadastro será marcado como *Inativo* e sairá das listagens ativas."
+                "A exclusão é lógica: o cadastro será marcado como *Inativo*.\n"
+                "Se a base não suportar esse campo, o cadastro será removido da tabela."
             ),
             teclado
         )
@@ -848,10 +850,17 @@ async def selecionar_campo_membro(update: Update, context: ContextTypes.DEFAULT_
                 "✅ Membro excluído com sucesso (status alterado para Inativo)."
             )
         else:
-            await _enviar_ou_editar_mensagem(
-                context, update.effective_user.id, TIPO_RESULTADO,
-                "❌ Não foi possível excluir o membro no momento."
-            )
+            sucesso_fallback = excluir_membro(telegram_id)
+            if sucesso_fallback:
+                await _enviar_ou_editar_mensagem(
+                    context, update.effective_user.id, TIPO_RESULTADO,
+                    "✅ Membro excluído com sucesso (remoção direta aplicada por compatibilidade do banco)."
+                )
+            else:
+                await _enviar_ou_editar_mensagem(
+                    context, update.effective_user.id, TIPO_RESULTADO,
+                    "❌ Não foi possível excluir o membro no momento."
+                )
 
         context.user_data.pop("editando_membro_id", None)
         context.user_data.pop("editando_membro_dados", None)
