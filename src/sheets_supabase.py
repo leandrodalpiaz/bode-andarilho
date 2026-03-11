@@ -268,12 +268,21 @@ def _sheets_to_row(table: str, data: dict) -> dict:
 def listar_membros(include_inativos: bool = False) -> List[Dict[str, Any]]:
     """Retorna membros cadastrados; por padrão, somente cadastros ativos."""
     try:
-        query = supabase.table("membros").select("*")
-        if not include_inativos:
-            # Retrocompatibilidade: status vazio/nulo também conta como ativo.
-            query = query.or_("status.ilike.ativo,status.is.null,status.eq.")
-        resp = query.execute()
-        return [_row_to_sheets("membros", row) for row in (resp.data or [])]
+        # Evita filtrar por coluna `status` no SQL para compatibilidade com bases
+        # antigas que ainda não possuem essa coluna.
+        resp = supabase.table("membros").select("*").execute()
+        membros = [_row_to_sheets("membros", row) for row in (resp.data or [])]
+
+        if include_inativos:
+            return membros
+
+        filtrados: List[Dict[str, Any]] = []
+        for membro in membros:
+            status = _norm_status(membro.get("Status") or membro.get("status"))
+            if status == "ativo":
+                filtrados.append(membro)
+
+        return filtrados
     except Exception as e:
         logger.error("Erro ao listar membros: %s", e)
         return []
