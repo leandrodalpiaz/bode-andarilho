@@ -184,6 +184,13 @@ async def bode_grupo_handler(update: Update, context):
     if update.effective_chat.type not in ("group", "supergroup"):
         return
 
+    logger.info(
+        "bode_grupo_handler acionado: chat_id=%s user_id=%s texto=%r",
+        update.effective_chat.id if update.effective_chat else None,
+        update.effective_user.id if update.effective_user else None,
+        (update.message.text if update.message else None),
+    )
+
     user_id = update.effective_user.id
     membro = buscar_membro(user_id)
     link_privado = _link_privado_bot(getattr(context.bot, "username", None), "cadastro")
@@ -221,6 +228,13 @@ async def mensagem_grupo_handler(update: Update, context):
             return
 
         text = (update.message.text or "").strip().lower()
+
+        logger.info(
+            "mensagem_grupo_handler: chat_id=%s user_id=%s texto=%r",
+            chat.id,
+            update.effective_user.id if update.effective_user else None,
+            text,
+        )
 
         if text in ("/start", "/cadastro"):
             await update.message.reply_text(
@@ -423,10 +437,20 @@ def register_handlers(app: Application) -> None:
     app.add_handler(ChatMemberHandler(novo_membro_grupo_handler))
 
     # ===== 12. HANDLER DA PALAVRA "BODE" =====
+    # Aceita palavra simples, comando com barra e comando com menção ao bot.
     app.add_handler(
         MessageHandler(
-            filters.Regex(r"^(?i:(bode|menu|painel))[.!?]*$") & filters.ChatType.GROUPS,
-            bode_grupo_handler
+            filters.ChatType.GROUPS
+            & filters.TEXT
+            & filters.Regex(r"^(?i:/?(bode|menu|painel)(?:@[a-z0-9_]+)?)[.!?]*$"),
+            bode_grupo_handler,
+        )
+    )
+    app.add_handler(
+        CommandHandler(
+            ["bode", "menu", "painel"],
+            bode_grupo_handler,
+            filters=filters.ChatType.GROUPS,
         )
     )
 
