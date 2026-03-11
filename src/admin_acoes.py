@@ -704,6 +704,12 @@ async def selecionar_membro_para_editar(update: Update, context: ContextTypes.DE
             callback_data=f"editar_campo_membro|{campo_id}"
         )])
 
+    if nivel_usuario == "3":
+        botoes.append([InlineKeyboardButton(
+            "🗑️ Excluir membro",
+            callback_data=f"excluir_membro|{telegram_id}"
+        )])
+
     botoes.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_edicao")])
     teclado = InlineKeyboardMarkup(botoes)
 
@@ -729,6 +735,127 @@ async def selecionar_campo_membro(update: Update, context: ContextTypes.DEFAULT_
             context, update.effective_user.id, TIPO_RESULTADO,
             "Operação cancelada."
         )
+        return ConversationHandler.END
+
+    if data.startswith("excluir_membro|"):
+        if get_nivel(update.effective_user.id) != "3":
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "⛔ Apenas administradores podem excluir membros."
+            )
+            return ConversationHandler.END
+
+        try:
+            telegram_id = int(data.split("|")[1])
+        except Exception:
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "Erro ao processar exclusão."
+            )
+            return ConversationHandler.END
+
+        if telegram_id == update.effective_user.id:
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "⛔ Regra de segurança: não é permitido excluir o próprio administrador."
+            )
+            return SELECIONAR_CAMPO
+
+        membro = buscar_membro(telegram_id)
+        if not membro:
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "Membro não encontrado para exclusão."
+            )
+            return ConversationHandler.END
+
+        nome = membro.get("Nome") or "este membro"
+        teclado = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Confirmar exclusão", callback_data=f"confirmar_excluir_membro|{telegram_id}")],
+            [InlineKeyboardButton("↩️ Voltar", callback_data=f"cancelar_excluir_membro|{telegram_id}")],
+        ])
+        await navegar_para(
+            update, context,
+            "Admin > Editar > Excluir",
+            (
+                f"⚠️ *Confirma a exclusão de {nome}?*\n\n"
+                "A exclusão é lógica: o cadastro será marcado como *Inativo* e sairá das listagens ativas."
+            ),
+            teclado
+        )
+        return SELECIONAR_CAMPO
+
+    if data.startswith("cancelar_excluir_membro|"):
+        membro = context.user_data.get("editando_membro_dados", {})
+        nome = membro.get("Nome") or "Membro"
+        nivel_usuario = get_nivel(update.effective_user.id)
+        telegram_id = context.user_data.get("editando_membro_id")
+
+        botoes = []
+        for campo_id, campo_info in CAMPOS_EDITAVEIS.items():
+            if int(nivel_usuario) < int(campo_info["nivel_minimo"]):
+                continue
+            valor_atual = membro.get(campo_info["chave"], "")
+            botoes.append([InlineKeyboardButton(
+                f"✏️ {campo_info['nome']}: {str(valor_atual)[:30]}",
+                callback_data=f"editar_campo_membro|{campo_id}"
+            )])
+
+        if nivel_usuario == "3" and telegram_id:
+            botoes.append([InlineKeyboardButton(
+                "🗑️ Excluir membro",
+                callback_data=f"excluir_membro|{telegram_id}"
+            )])
+
+        botoes.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_edicao")])
+
+        await navegar_para(
+            update, context,
+            f"Admin > Editar > {nome}",
+            f"Editando *{nome}*\n\nSelecione o campo que deseja alterar:",
+            InlineKeyboardMarkup(botoes)
+        )
+        return SELECIONAR_CAMPO
+
+    if data.startswith("confirmar_excluir_membro|"):
+        if get_nivel(update.effective_user.id) != "3":
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "⛔ Apenas administradores podem excluir membros."
+            )
+            return ConversationHandler.END
+
+        try:
+            telegram_id = int(data.split("|")[1])
+        except Exception:
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "Erro ao confirmar exclusão."
+            )
+            return ConversationHandler.END
+
+        if telegram_id == update.effective_user.id:
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "⛔ Regra de segurança: não é permitido excluir o próprio administrador."
+            )
+            return SELECIONAR_CAMPO
+
+        sucesso = atualizar_membro(telegram_id, {"Status": "Inativo"}, preservar_nivel=True)
+        if sucesso:
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "✅ Membro excluído com sucesso (status alterado para Inativo)."
+            )
+        else:
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "❌ Não foi possível excluir o membro no momento."
+            )
+
+        context.user_data.pop("editando_membro_id", None)
+        context.user_data.pop("editando_membro_dados", None)
+        context.user_data.pop("editando_campo", None)
         return ConversationHandler.END
 
     campo_id = data.split("|")[1]
@@ -965,7 +1092,12 @@ editar_membro_handler = ConversationHandler(
     ],
     states={
         SELECIONAR_MEMBRO: [CallbackQueryHandler(selecionar_membro_para_editar, pattern="^(editar_membro_selecionar|cancelar_edicao)")],
-        SELECIONAR_CAMPO: [CallbackQueryHandler(selecionar_campo_membro, pattern="^(editar_campo_membro|cancelar_edicao)")],
+        SELECIONAR_CAMPO: [
+            CallbackQueryHandler(
+                selecionar_campo_membro,
+                pattern="^(editar_campo_membro|cancelar_edicao|excluir_membro|confirmar_excluir_membro|cancelar_excluir_membro)",
+            )
+        ],
         NOVO_VALOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_novo_valor_membro)],
     },
     fallbacks=[

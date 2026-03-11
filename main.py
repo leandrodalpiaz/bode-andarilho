@@ -120,7 +120,7 @@ from src.ajuda.menus import ajuda_handlers
 from src.ajuda.conquistas import mostrar_marcos_secretario, mostrar_conquistas_membro
 
 # Utilitários
-from src.sheets_supabase import buscar_membro, atualizar_status_membro, membro_esta_ativo
+from src.sheets_supabase import buscar_membro
 from src.permissoes import get_nivel
 
 # ============================================
@@ -134,15 +134,6 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
-
-GRUPO_PRINCIPAL_ID = os.getenv("GRUPO_PRINCIPAL_ID", "-1003721338228").strip()
-
-
-def _eh_grupo_principal(chat_id: Optional[int]) -> bool:
-    """Retorna True quando o update pertence ao grupo principal monitorado."""
-    if chat_id is None:
-        return False
-    return str(chat_id).strip() == GRUPO_PRINCIPAL_ID
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
@@ -311,10 +302,6 @@ async def novo_membro_grupo_handler(update: Update, context):
         if not chat or chat.type not in ("group", "supergroup"):
             return
 
-        # Evita marcar cadastro como inativo por eventos de outros grupos.
-        if not _eh_grupo_principal(chat.id):
-            return
-
         novo_status = chat_member.new_chat_member.status
         antigo_status = chat_member.old_chat_member.status
 
@@ -322,21 +309,12 @@ async def novo_membro_grupo_handler(update: Update, context):
         if user.is_bot:
             return  # Ignorar bots
 
-        if antigo_status in ("member", "administrator", "creator") and novo_status in ("left", "kicked"):
-            membro = buscar_membro(user.id)
-            if membro and membro_esta_ativo(membro):
-                atualizar_status_membro(user.id, "Inativo")
-                logger.info("Cadastro marcado como inativo apos saida do grupo: %s", user.id)
-            return
-
         if novo_status not in ("member", "administrator", "creator"):
             return  # Não é entrada
 
-        if antigo_status in ("left", "kicked"):
-            membro = buscar_membro(user.id)
-            if membro and not membro_esta_ativo(membro):
-                atualizar_status_membro(user.id, "Pendente validacao")
-                logger.info("Cadastro marcado como pendente de validacao no retorno ao grupo: %s", user.id)
+        # Sem automação de status: só envia boas-vindas quando ocorre entrada real.
+        if antigo_status in ("member", "administrator", "creator"):
+            return
 
         # Enviar mensagem de boas-vindas no grupo
         nome = user.first_name or "irmão"
