@@ -34,8 +34,6 @@ from src.messages import (
     LEMBRETE_MEIO_DIA_CORPO,
     LEMBRETE_SECRETARIO_TITULO,
     LEMBRETE_SECRETARIO_CORPO,
-    LEMBRETE_SECRETARIO_MEIO_DIA_TITULO,
-    LEMBRETE_SECRETARIO_MEIO_DIA_CORPO,
     TEXTO_CELEBRACAO_MENSAL,
 )
 
@@ -259,14 +257,13 @@ async def enviar_lembretes_meio_dia(bot: Bot):
                 num_confirmados = len(confirmados)
                 
                 texto_secretario = (
-                    f"{LEMBRETE_SECRETARIO_MEIO_DIA_TITULO}\n\n"
-                    + LEMBRETE_SECRETARIO_MEIO_DIA_CORPO.format(
+                    f"{LEMBRETE_MEIO_DIA_TITULO}\n\n"
+                    + LEMBRETE_MEIO_DIA_CORPO.format(
                         nome=nome_secretario,
                         loja=nome_loja,
                         numero=numero_fmt,
                         local=local,
                         horario=horario,
-                        num_confirmados=num_confirmados,
                     )
                 )
 

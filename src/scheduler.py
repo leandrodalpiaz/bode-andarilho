@@ -40,7 +40,7 @@ async def iniciar_scheduler(app: Application):
         logger.info("Scheduler já estava ativo; mantendo instância atual.")
         return
 
-    scheduler = AsyncIOScheduler()
+    scheduler = AsyncIOScheduler(timezone="America/Sao_Paulo")
 
     scheduler.add_job(
         job_lembretes_24h,

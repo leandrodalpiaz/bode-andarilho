@@ -124,17 +124,6 @@ LEMBRETE_SECRETARIO_CORPO = (
     "Tudo pronto para uma sessão Justa e Perfeita? 🤝"
 )
 
-LEMBRETE_SECRETARIO_MEIO_DIA_TITULO = "🕛 *ALERTA AO SECRETÁRIO - MEIO-DIA*"
-
-LEMBRETE_SECRETARIO_MEIO_DIA_CORPO = (
-    "Ir.·. {nome}, hoje realizaremos a sessão sob a sua organização!\n\n"
-    "🏛 *Loja {loja} nº {numero}*\n"
-    "👥 *Total de Irmãos Confirmados:* {num_confirmados}\n"
-    "🕕 *Início:* {horario}\n\n"
-    "Bom trabalho na secretaria! 🤝"
-)
-
-
 # ============================================
 # NOTIFICAÇÕES
 # ============================================
