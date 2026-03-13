@@ -126,7 +126,7 @@ from src.ajuda.menus import ajuda_handlers
 from src.ajuda.conquistas import mostrar_marcos_secretario, mostrar_conquistas_membro
 
 # Utilitários
-from src.sheets_supabase import buscar_membro, membro_esta_ativo
+from src.sheets_supabase import buscar_membro, membro_esta_ativo, atualizar_status_membro
 from src.permissoes import get_nivel
 
 # ============================================
@@ -147,6 +147,9 @@ PORT = int(os.getenv("PORT", "10000"))
 WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", "/telegram/webhook")
 DROP_PENDING_UPDATES_ON_BOOT = os.getenv("DROP_PENDING_UPDATES_ON_BOOT", "false")
 WEBHOOK_MAX_CONNECTIONS = int(os.getenv("WEBHOOK_MAX_CONNECTIONS", "20"))
+# ID do grupo principal (obrigatório para verificação de presença no grupo)
+GRUPO_PRINCIPAL_ID_STR = os.getenv("GRUPO_PRINCIPAL_ID", "")
+GRUPO_TELEGRAM_ID: Optional[int] = int(GRUPO_PRINCIPAL_ID_STR) if GRUPO_PRINCIPAL_ID_STR.lstrip("-").isdigit() else None
 
 
 def _require_env(name: str, value: Optional[str]) -> str:
@@ -322,8 +325,13 @@ async def mensagem_grupo_handler(update: Update, context):
 
 async def novo_membro_grupo_handler(update: Update, context):
     """
-    Handler para quando um novo membro entra no grupo.
-    Envia mensagem de boas-vindas no grupo orientando a usar 'bode'.
+    Detecta entradas e saídas do grupo.
+
+    Saída  → marca cadastro como inativo no Supabase.
+    Entrada → tenta enviar convite de cadastro no privado do novo membro.
+              Se o privado não estiver disponível, envia fallback mínimo
+              no grupo (auto-apagado em 30 s) com deep link.
+              Se já cadastrado e ativo, envia boas-vindas de retorno no privado.
     """
     try:
         if not update.chat_member:
@@ -339,26 +347,92 @@ async def novo_membro_grupo_handler(update: Update, context):
 
         user = chat_member.new_chat_member.user
         if user.is_bot:
-            return  # Ignorar bots
+            return
 
+        # ── SAÍDA DO GRUPO ──────────────────────────────────────────────────
+        if novo_status in ("left", "kicked") and antigo_status in (
+            "member", "administrator", "creator"
+        ):
+            atualizar_status_membro(user.id, "inativo")
+            logger.info(
+                "Membro %s saiu/foi removido do grupo %s — cadastro marcado como inativo.",
+                user.id, chat.id,
+            )
+            return
+
+        # ── ENTRADA NO GRUPO ────────────────────────────────────────────────
         if novo_status not in ("member", "administrator", "creator"):
-            return  # Não é entrada
+            return
 
-        # Sem automação de status: só envia boas-vindas quando ocorre entrada real.
+        # Promoção/rebaixamento interno (já estava no grupo): ignorar.
         if antigo_status in ("member", "administrator", "creator"):
             return
 
-        # Enviar mensagem de boas-vindas no grupo
-        nome = user.first_name or "irmão"
-        await context.bot.send_message(
-            chat_id=chat.id,
-            text=(
-                f"Salve, {nome}! 🐐\n\n"
-                "Bem-vindo ao grupo do Bode Andarilho.\n"
-                "Para acessar o menu e confirmar presencas, digite *bode*, *menu* ou *painel* no grupo."
-            ),
-            parse_mode="Markdown"
+        nome = user.first_name or "Irmão"
+        membro = buscar_membro(user.id)
+        cadastro_ativo = bool(membro and membro_esta_ativo(membro))
+
+        username_bot = (getattr(context.bot, "username", None) or "BodeAndarilhoBot").lstrip("@")
+        link_privado = f"https://t.me/{username_bot}?start=cadastro"
+
+        if cadastro_ativo:
+            # Reativa o cadastro caso tenha sido marcado inativo numa saída anterior
+            atualizar_status_membro(user.id, "Ativo")
+            texto_retorno = (
+                f"Saudações, Ir.·. {membro.get('Nome', nome)}! 🤝\n\n"
+                "Bem-vindo de volta ao grupo. Seu cadastro está ativo.\n"
+                "Digite *bode* no grupo ou use /start aqui para acessar o painel."
+            )
+            try:
+                await context.bot.send_message(
+                    chat_id=user.id,
+                    text=texto_retorno,
+                    parse_mode="Markdown",
+                )
+                logger.info("Boas-vindas de retorno no privado para user_id=%s.", user.id)
+            except Exception:
+                logger.debug("Privado indisponível para retorno user_id=%s — nenhuma ação.", user.id)
+            return
+
+        # Novo membro: tentar enviar convite de cadastro diretamente no privado
+        texto_onboarding = (
+            f"Salve, {nome}! 🐐\n\n"
+            "Bem-vindo ao *Bode Andarilho*.\n\n"
+            "Para acessar as sessões e confirmar presenças, complete o seu "
+            "cadastro. É rápido e seus dados ficam protegidos aqui no privado.\n\n"
+            "Toque no botão abaixo para começar:"
         )
+        teclado_onboarding = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🧾 Fazer meu cadastro", callback_data="iniciar_cadastro")]]
+        )
+        try:
+            await context.bot.send_message(
+                chat_id=user.id,
+                text=texto_onboarding,
+                parse_mode="Markdown",
+                reply_markup=teclado_onboarding,
+            )
+            logger.info("Convite de cadastro enviado no privado para user_id=%s.", user.id)
+            return
+        except Exception as e_priv:
+            logger.info(
+                "Privado indisponível para user_id=%s (%s). Usando fallback no grupo.",
+                user.id, e_priv,
+            )
+
+        # Fallback: mensagem mínima no grupo com deep link (auto-apagada em 30 s)
+        teclado_deep = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🧾 Fazer meu cadastro", url=link_privado)]]
+        )
+        msg = await context.bot.send_message(
+            chat_id=chat.id,
+            text=f"Salve, {nome}! 🐐 Para se cadastrar, toque no botão abaixo.",
+            reply_markup=teclado_deep,
+        )
+        asyncio.create_task(
+            _auto_delete_mensagens_grupo(context, chat.id, [msg.message_id], delay=30)
+        )
+
     except Exception as e:
         logger.warning("Erro em novo_membro_grupo_handler: %s", e, exc_info=True)
 

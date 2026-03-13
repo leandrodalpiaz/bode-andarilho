@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import hashlib
+import os
 import time
 from typing import Dict, Optional
 
@@ -26,11 +27,31 @@ from src.messages import APENAS_ADMIN, APENAS_SECRETARIO
 from src.sheets_supabase import buscar_membro, membro_esta_ativo
 from src.permissoes import get_nivel
 
-logger = logging.getLogger(__name__)
+# ID do grupo principal lido em runtime (var definida no main e aqui como fallback de ambiente)
+_GRUPO_TELEGRAM_ID_STR = os.getenv("GRUPO_PRINCIPAL_ID", "")
+_GRUPO_TELEGRAM_ID: Optional[int] = (
+    int(_GRUPO_TELEGRAM_ID_STR) if _GRUPO_TELEGRAM_ID_STR.lstrip("-").isdigit() else None
+)
 
-# ============================================
-# CACHE E CONTROLE DE ESTADO
-# ============================================
+
+async def _verificar_membro_no_grupo(context, user_id: int) -> bool:
+    """
+    Verifica via getChatMember se o usuário ainda é membro ativo do grupo configurado.
+    Retorna True se:
+      - GRUPO_TELEGRAM_ID não estiver configurado (verificação desativada).
+      - O status retornado pelo Telegram for member/administrator/creator.
+    Retorna False se o usuário saiu (left) ou foi banido (kicked).
+    """
+    if not _GRUPO_TELEGRAM_ID:
+        return True  # Verificação desativada enquanto a variável não estiver configurada
+    try:
+        member = await context.bot.get_chat_member(_GRUPO_TELEGRAM_ID, user_id)
+        return member.status in ("member", "administrator", "creator")
+    except Exception as e:
+        logger.warning("getChatMember falhou para user_id=%s: %s", user_id, e)
+        return True  # Em caso de erro de API, não bloqueia o usuário por precaução
+
+
 _last_check_times = {} 
 estado_mensagens: Dict[int, dict] = {}
 
@@ -202,7 +223,28 @@ async def _limpar_mensagens_anteriores(context, user_id: int, tipos: list = None
 # ============================================
 
 async def criar_estrutura_inicial(context, user_id: int, membro: dict) -> bool:
-    """Inicia a egrégora do bot enviando o menu permanente e contexto inicial."""
+    """Inicia a egrégora do bot enviando o menu permanente e contexto inicial.
+
+    Antes de exibir qualquer menu, verifica se o membro ainda está presente
+    no grupo configurado (GRUPO_TELEGRAM_ID). Se não estiver, nega o acesso
+    e orienta a retornar ao grupo.
+    """
+    # ── Verificação de presença no grupo ─────────────────────────────────────────
+    esta_no_grupo = await _verificar_membro_no_grupo(context, user_id)
+    if not esta_no_grupo:
+        await _enviar_ou_editar_mensagem(
+            context,
+            user_id,
+            TIPO_RESULTADO,
+            (
+                "⛔ *Acesso suspenso.*\n\n"
+                "O acesso ao painel requer participação ativa no grupo do Bode Andarilho.\n"
+                "Volte ao grupo e tente novamente."
+            ),
+            limpar_conteudo=True,
+        )
+        return False
+
     nivel = get_nivel(user_id)
     
     # Menu Fixo (Portal de Entrada)
