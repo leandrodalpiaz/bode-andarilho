@@ -47,7 +47,13 @@ from telegram.ext import (
 from src.cadastro import cadastro_handler, cadastro_start
 
 # Menus e navegação principal
-from src.bot import botao_handler, menu_principal_teclado, start
+from src.bot import (
+    botao_handler,
+    menu_principal_teclado,
+    start,
+    _enviar_ou_editar_mensagem,
+    TIPO_RESULTADO,
+)
 
 # Eventos (visualização, confirmação, etc.)
 from src.eventos import (
@@ -120,7 +126,7 @@ from src.ajuda.menus import ajuda_handlers
 from src.ajuda.conquistas import mostrar_marcos_secretario, mostrar_conquistas_membro
 
 # Utilitários
-from src.sheets_supabase import buscar_membro
+from src.sheets_supabase import buscar_membro, membro_esta_ativo
 from src.permissoes import get_nivel
 
 # ============================================
@@ -191,8 +197,9 @@ async def _auto_delete_mensagens_grupo(context, chat_id: int, message_ids: list[
 async def bode_grupo_handler(update: Update, context):
     """
     Captura a palavra 'bode' em grupos e redireciona para o privado.
-    - Se cadastrado: envia/edita menu no privado
-    - Se não cadastrado: inicia cadastro no privado
+    - Se cadastrado e ativo: envia/edita menu no privado
+    - Se novo/inativo: envia onboarding no privado com botão de iniciar cadastro
+    - Só envia fallback no grupo quando o privado falhar
     """
     if update.effective_chat.type not in ("group", "supergroup"):
         return
@@ -206,27 +213,52 @@ async def bode_grupo_handler(update: Update, context):
 
     user_id = update.effective_user.id
     membro = buscar_membro(user_id)
+    cadastro_ativo = bool(membro and membro_esta_ativo(membro))
+
     link_privado = _link_privado_bot(getattr(context.bot, "username", None), "cadastro")
     teclado_privado = InlineKeyboardMarkup(
         [[InlineKeyboardButton("📩 Abrir privado do bot", url=link_privado)]]
     )
 
-    if membro:
+    if cadastro_ativo:
         from src.bot import criar_estrutura_inicial
         sucesso = await criar_estrutura_inicial(context, user_id, membro)
-        if not sucesso and update.message:
-            await update.message.reply_text(
-                "📩 Não consegui te chamar no privado agora.\n\n"
-                "Toque no botão abaixo para abrir o chat comigo e enviar /start.",
-                reply_markup=teclado_privado,
-            )
-        return
+        if sucesso:
+            logger.info("Fluxo bode no grupo: menu aberto no privado para user_id=%s", user_id)
+            return
+    else:
+        texto_onboarding = (
+            "👋 *Bem-vindo ao Bode Andarilho!*\n\n"
+            "Para começar de forma simples e segura, toque em *Iniciar cadastro* no privado."
+        )
+        teclado_cadastro = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🧾 Iniciar cadastro", callback_data="iniciar_cadastro")]]
+        )
+        sucesso = await _enviar_ou_editar_mensagem(
+            context,
+            user_id,
+            TIPO_RESULTADO,
+            texto_onboarding,
+            teclado_cadastro,
+            limpar_conteudo=True,
+        )
+        if sucesso:
+            logger.info("Fluxo bode no grupo: onboarding enviado no privado para user_id=%s", user_id)
+            return
 
+    logger.info("Fluxo bode no grupo: fallback no grupo para user_id=%s", user_id)
     if update.message:
-        await update.message.reply_text(
-            "🧾 Para concluir seu cadastro, preciso falar com você no privado.\n\n"
-            "Toque no botão abaixo e envie /start.",
+        resposta = await update.message.reply_text(
+            "📩 Para continuar, abra meu privado pelo botão abaixo.",
             reply_markup=teclado_privado,
+        )
+        asyncio.create_task(
+            _auto_delete_mensagens_grupo(
+                context,
+                update.effective_chat.id,
+                [resposta.message_id],
+                delay=15,
+            )
         )
 
 

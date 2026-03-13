@@ -22,7 +22,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
-from src.messages import ACESSO_NEGADO, APENAS_ADMIN, APENAS_SECRETARIO
+from src.messages import APENAS_ADMIN, APENAS_SECRETARIO
 from src.sheets_supabase import buscar_membro, membro_esta_ativo
 from src.permissoes import get_nivel
 
@@ -301,10 +301,14 @@ async def limpar_historico(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ponto de entrada: verifica se o Ir.·. está regular no sistema."""
     if update.effective_chat and update.effective_chat.type in ["group", "supergroup"]:
+        username = (getattr(context.bot, "username", None) or "BodeAndarilhoBot").lstrip("@")
+        link_privado = f"https://t.me/{username}?start=cadastro"
         await update.message.reply_text(
-            f"{ACESSO_NEGADO}\n\nPara interagir com o Bode Andarilho, "
-            "por favor, procure-me em ambiente privado.\n\n"
-            "Toque aqui: @BodeAndarilhoBot e envie /start"
+            "📩 Para continuar, fale comigo no privado.\n\n"
+            "Toque no botão abaixo para começar.",
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🚀 Abrir privado do bot", url=link_privado)]]
+            ),
         )
         return
 
