@@ -120,7 +120,7 @@ def _parse_data_ddmmyyyy(texto: str) -> Optional[datetime]:
 
 
 def _escape_md(s: str) -> str:
-    for ch in ("_", "*", "`", "["):
+    for ch in r"\_*[]()~`>#+-=|{}.!":
         s = (s or "").replace(ch, f"\\{ch}")
     return s
 

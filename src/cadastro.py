@@ -284,7 +284,7 @@ async def _navegar_etapa(
         context,
         "Cadastro",
         _texto_etapa(estado, retomada=retomada),
-        _teclado_nav(estado),
+        _teclado_nav(estado - 1),
     )
     return estado
 
@@ -693,7 +693,6 @@ def _dados_para_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Di
         "oriente": context.user_data.get("cadastro_oriente", ""),
         "potencia": context.user_data.get("cadastro_potencia", ""),
         "telegram_id": update.effective_user.id,
-        "cargo": "",
         "veneravel_mestre": context.user_data.get("cadastro_vm", ""),
     }
 
@@ -731,15 +730,6 @@ async def _finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE
     if pos:
         context.user_data["pos_cadastro"] = pos
 
-    # Executa ação pós-cadastro se existir
-    if pos and isinstance(pos, dict) and pos.get("acao") == "confirmar":
-        try:
-            from src.eventos import iniciar_confirmacao_presenca_pos_cadastro
-            await iniciar_confirmacao_presenca_pos_cadastro(update, context, pos)
-            context.user_data.pop("pos_cadastro", None)
-        except Exception as e:
-            logger.error(f"Erro no pos_cadastro: {e}\n{traceback.format_exc()}")
-
     await navegar_para(
         update,
         context,
@@ -749,6 +739,16 @@ async def _finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE
             [[InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")]]
         ),
     )
+
+    # Executa ação pós-cadastro se existir (após a confirmação para não sobrescrevê-la)
+    if pos and isinstance(pos, dict) and pos.get("acao") == "confirmar":
+        try:
+            from src.eventos import iniciar_confirmacao_presenca_pos_cadastro
+            await iniciar_confirmacao_presenca_pos_cadastro(update, context, pos)
+            context.user_data.pop("pos_cadastro", None)
+        except Exception as e:
+            logger.error(f"Erro no pos_cadastro: {e}\n{traceback.format_exc()}")
+
     return ConversationHandler.END
 
 
