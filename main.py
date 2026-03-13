@@ -29,7 +29,18 @@ from starlette.routing import Route
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse, Response
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+
+from src.miniapp import (
+    get_cadastro_membro,
+    get_cadastro_evento,
+    get_cadastro_loja,
+    api_cadastro_membro,
+    api_cadastro_evento,
+    api_cadastro_loja,
+    api_listar_lojas,
+    WEBAPP_URL_MEMBRO,
+)
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -234,9 +245,11 @@ async def bode_grupo_handler(update: Update, context):
             "👋 *Bem-vindo ao Bode Andarilho!*\n\n"
             "Para começar de forma simples e segura, toque em *Iniciar cadastro* no privado."
         )
-        teclado_cadastro = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("🧾 Iniciar cadastro", callback_data="iniciar_cadastro")]]
-        )
+        if WEBAPP_URL_MEMBRO:
+            btn_cadastro = InlineKeyboardButton("🧾 Iniciar cadastro", web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO))
+        else:
+            btn_cadastro = InlineKeyboardButton("🧾 Iniciar cadastro", callback_data="iniciar_cadastro")
+        teclado_cadastro = InlineKeyboardMarkup([[btn_cadastro]])
         sucesso = await _enviar_ou_editar_mensagem(
             context,
             user_id,
@@ -402,9 +415,11 @@ async def novo_membro_grupo_handler(update: Update, context):
             "cadastro. É rápido e seus dados ficam protegidos aqui no privado.\n\n"
             "Toque no botão abaixo para começar:"
         )
-        teclado_onboarding = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("🧾 Fazer meu cadastro", callback_data="iniciar_cadastro")]]
-        )
+        if WEBAPP_URL_MEMBRO:
+            btn_onboarding = InlineKeyboardButton("🧾 Fazer meu cadastro", web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO))
+        else:
+            btn_onboarding = InlineKeyboardButton("🧾 Fazer meu cadastro", callback_data="iniciar_cadastro")
+        teclado_onboarding = InlineKeyboardMarkup([[btn_onboarding]])
         try:
             await context.bot.send_message(
                 chat_id=user.id,
@@ -710,8 +725,17 @@ async def main():
             Route("/", root, methods=["GET"]),
             Route("/health", health, methods=["GET"]),
             Route(WEBHOOK_PATH, webhook, methods=["POST"]),
+            Route("/webapp/cadastro_membro", get_cadastro_membro, methods=["GET"]),
+            Route("/webapp/cadastro_evento", get_cadastro_evento, methods=["GET"]),
+            Route("/webapp/cadastro_loja", get_cadastro_loja, methods=["GET"]),
+            Route("/api/cadastro_membro", api_cadastro_membro, methods=["POST"]),
+            Route("/api/cadastro_evento", api_cadastro_evento, methods=["POST"]),
+            Route("/api/cadastro_loja", api_cadastro_loja, methods=["POST"]),
+            Route("/api/lojas", api_listar_lojas, methods=["POST"]),
         ]
     )
+    starlette_app.state.telegram_app = telegram_app
+    starlette_app.state.bot_token = token
 
     import uvicorn
 

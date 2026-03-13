@@ -8,7 +8,9 @@ from __future__ import annotations
 import logging
 import asyncio
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+
+from src.miniapp import WEBAPP_URL_LOJA  # noqa: E402
 from telegram.error import BadRequest
 from telegram.ext import (
     ContextTypes,
@@ -342,6 +344,17 @@ async def cadastrar_loja_inicio(update: Update, context: ContextTypes.DEFAULT_TY
         return ConversationHandler.END
 
     context.user_data["nova_loja"] = {}
+
+    # Mini App: se URL configurada, abre formulário web e encerra conversa
+    if WEBAPP_URL_LOJA:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "🏙️ *Cadastrar nova loja*\n\nToque no botão abaixo para preencher o formulário:",
+            InlineKeyboardMarkup(
+                [[InlineKeyboardButton("📋 Abrir formulário", web_app=WebAppInfo(url=WEBAPP_URL_LOJA))]]
+            ),
+        )
+        return ConversationHandler.END
 
     await navegar_para(
         update, context,

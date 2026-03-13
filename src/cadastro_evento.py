@@ -23,7 +23,9 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+
+from src.miniapp import WEBAPP_URL_EVENTO  # noqa: E402
 from telegram.ext import (
     ContextTypes,
     ConversationHandler,
@@ -459,7 +461,18 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Privado: define grupo principal automaticamente
     context.user_data["novo_evento_telegram_id_grupo"] = GRUPO_PRINCIPAL_ID
 
-    # Limpa restos de cadastro anterior
+    # Mini App: se URL configurada, abre formulário web e encerra conversa
+    if WEBAPP_URL_EVENTO:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "📅 *Cadastrar nova sessão*\n\nToque no botão abaixo para preencher o formulário:",
+            InlineKeyboardMarkup(
+                [[InlineKeyboardButton("📋 Abrir formulário", web_app=WebAppInfo(url=WEBAPP_URL_EVENTO))]]
+            ),
+            limpar_conteudo=True,
+        )
+        return ConversationHandler.END
+
     for k in list(context.user_data.keys()):
         if k.startswith("novo_evento_") and k not in ("novo_evento_telegram_id_grupo", "novo_evento_telegram_id_secretario"):
             context.user_data.pop(k, None)

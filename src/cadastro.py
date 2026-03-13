@@ -25,7 +25,9 @@ import unicodedata
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
+
+from src.miniapp import WEBAPP_URL_MEMBRO  # noqa: E402
 from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
@@ -228,9 +230,13 @@ def _teclado_inicio(
                 [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
             ]
         )
+    if WEBAPP_URL_MEMBRO:
+        btn_iniciar = InlineKeyboardButton("🧾 Iniciar cadastro", web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO))
+    else:
+        btn_iniciar = InlineKeyboardButton("🧾 Iniciar cadastro", callback_data="iniciar_cadastro")
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("🧾 Iniciar cadastro", callback_data="iniciar_cadastro")],
+            [btn_iniciar],
             [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
         ]
     )
