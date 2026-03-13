@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 import re
 import traceback
+import unicodedata
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -62,6 +63,113 @@ GRAUS_OPCOES = [
 VM_SIM = "Sim"
 VM_NAO = "Não"
 
+CADASTRO_ETAPAS = (
+    "cadastro_nome",
+    "cadastro_data_nasc",
+    "cadastro_grau",
+    "cadastro_vm",
+    "cadastro_loja",
+    "cadastro_numero_loja",
+    "cadastro_oriente",
+    "cadastro_potencia",
+)
+
+
+def _normalizar_texto(texto: str) -> str:
+    """Normaliza texto para comparações tolerantes a acentos e caixa."""
+    base = (texto or "").strip().lower()
+    decomposed = unicodedata.normalize("NFKD", base)
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+
+
+def _campo_preenchido(context: ContextTypes.DEFAULT_TYPE, chave: str) -> bool:
+    return bool((context.user_data.get(chave) or "").strip())
+
+
+def _cadastro_parcial_em_andamento(context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Indica se existe algum dado parcial de cadastro no contexto."""
+    return any(_campo_preenchido(context, chave) for chave in CADASTRO_ETAPAS)
+
+
+def _estado_pendente_cadastro(context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Retorna o próximo estado pendente para completar o cadastro."""
+    if not _campo_preenchido(context, "cadastro_nome"):
+        return NOME
+    if not _campo_preenchido(context, "cadastro_data_nasc"):
+        return DATA_NASC
+    if not _campo_preenchido(context, "cadastro_grau"):
+        return GRAU
+    if not _campo_preenchido(context, "cadastro_vm"):
+        return VM
+    if not _campo_preenchido(context, "cadastro_loja"):
+        return LOJA
+    if not _campo_preenchido(context, "cadastro_numero_loja"):
+        return NUMERO_LOJA
+    if not _campo_preenchido(context, "cadastro_oriente"):
+        return ORIENTE
+    if not _campo_preenchido(context, "cadastro_potencia"):
+        return POTENCIA
+    return CONFIRMAR
+
+
+def _texto_etapa(estado: int, retomada: bool = False) -> str:
+    """Texto guia para cada etapa, com linguagem de passo a passo."""
+    prefixo = "▶️ *Retomando cadastro*\n\n" if retomada else ""
+    textos = {
+        NOME: "🧭 *Passo 1/8*\nEnvie seu *nome completo*.",
+        DATA_NASC: "🧭 *Passo 2/8*\nEnvie sua *data de nascimento* no formato DD/MM/AAAA.\nEx.: 25/03/1988",
+        GRAU: "🧭 *Passo 3/8*\nSelecione seu *grau*.",
+        VM: "🧭 *Passo 4/8*\nVocê é *Venerável Mestre*?",
+        LOJA: "🧭 *Passo 5/8*\nInforme o *nome da sua loja*.",
+        NUMERO_LOJA: "🧭 *Passo 6/8*\nInforme o *número da sua loja* (somente números).\nEx.: 12 ou 0",
+        ORIENTE: "🧭 *Passo 7/8*\nInforme seu *Oriente*.",
+        POTENCIA: "🧭 *Passo 8/8*\nInforme sua *Potência*.",
+    }
+    return f"{prefixo}{textos.get(estado, 'Envie a informação solicitada:')}"
+
+
+async def _responder_callback_seguro(query) -> None:
+    """Responde callback sem quebrar o fluxo quando a query expirou."""
+    if not query:
+        return
+    try:
+        await query.answer()
+    except Exception as e:
+        msg = str(e).lower()
+        if "query is too old" in msg or "query id is invalid" in msg:
+            logger.debug("Callback expirado no cadastro (ignorado): %s", e)
+            return
+        logger.warning("Falha ao responder callback no cadastro: %s", e)
+
+
+def _interpretar_grau_por_texto(texto: str) -> Optional[str]:
+    """Converte texto livre de grau para opção válida."""
+    normalizado = _normalizar_texto(texto)
+    aliases = {
+        "aprendiz": "Aprendiz",
+        "companheiro": "Companheiro",
+        "mestre": "Mestre",
+        "mestre instalado": "Mestre Instalado",
+        "mi": "Mestre Instalado",
+    }
+    if normalizado in aliases:
+        return aliases[normalizado]
+
+    for grau in GRAUS_OPCOES:
+        if _normalizar_texto(grau) == normalizado:
+            return grau
+    return None
+
+
+def _interpretar_vm_por_texto(texto: str) -> Optional[str]:
+    """Converte texto livre em Sim/Não para Venerável Mestre."""
+    normalizado = _normalizar_texto(texto)
+    if normalizado in {"sim", "s", "sou", "yes", "y"}:
+        return VM_SIM
+    if normalizado in {"nao", "n", "não", "no"}:
+        return VM_NAO
+    return None
+
 
 # ============================================
 # FUNÇÕES AUXILIARES DE INTERFACE
@@ -92,7 +200,11 @@ def _teclado_confirmar() -> InlineKeyboardMarkup:
     )
 
 
-def _teclado_inicio(cadastrado: bool, revalidacao: bool = False) -> InlineKeyboardMarkup:
+def _teclado_inicio(
+    cadastrado: bool,
+    revalidacao: bool = False,
+    cadastro_parcial: bool = False,
+) -> InlineKeyboardMarkup:
     """Cria teclado da tela inicial de cadastro."""
     if revalidacao:
         return InlineKeyboardMarkup(
@@ -105,6 +217,14 @@ def _teclado_inicio(cadastrado: bool, revalidacao: bool = False) -> InlineKeyboa
         return InlineKeyboardMarkup(
             [
                 [InlineKeyboardButton("✏️ Editar meu cadastro", callback_data="editar_cadastro")],
+                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
+            ]
+        )
+    if cadastro_parcial:
+        return InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("▶️ Continuar cadastro", callback_data="continuar_cadastro")],
+                [InlineKeyboardButton("🔁 Recomeçar cadastro", callback_data="iniciar_cadastro")],
                 [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
             ]
         )
@@ -134,6 +254,33 @@ def _teclado_vm() -> InlineKeyboardMarkup:
             [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")],
         ]
     )
+
+
+async def _navegar_etapa(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    estado: int,
+    retomada: bool = False,
+) -> int:
+    """Exibe a etapa solicitada com teclado e instruções apropriadas."""
+    if estado == GRAU:
+        await navegar_para(update, context, "Cadastro", _texto_etapa(GRAU, retomada=retomada), _teclado_grau())
+        return GRAU
+    if estado == VM:
+        await navegar_para(update, context, "Cadastro", _texto_etapa(VM, retomada=retomada), _teclado_vm())
+        return VM
+    if estado == CONFIRMAR:
+        await _mostrar_confirmacao(update, context)
+        return CONFIRMAR
+
+    await navegar_para(
+        update,
+        context,
+        "Cadastro",
+        _texto_etapa(estado, retomada=retomada),
+        _teclado_nav(estado),
+    )
+    return estado
 
 
 def _validar_data_nasc(texto: str) -> bool:
@@ -210,6 +357,7 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cadastrado = bool(membro)
         origem_grupo = bool(context.user_data.pop("origem_grupo_cadastro", False))
         forcar_revalidacao = bool(context.user_data.pop("forcar_revalidacao_cadastro", False))
+        cadastro_parcial = (not cadastrado) and _cadastro_parcial_em_andamento(context)
 
         if forcar_revalidacao and cadastrado:
             texto = (
@@ -217,6 +365,13 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Identificamos que seu cadastro estava inativo por saida do grupo.\n"
                 "Para voltar ao uso normal, atualize seus dados agora.\n\n"
                 "_Isso garante informacoes atuais para administracao e secretaria._"
+            )
+        elif cadastro_parcial:
+            texto = (
+                "🧾 *Cadastro em andamento*\n\n"
+                "Identifiquei dados já preenchidos do seu cadastro.\n"
+                "Você pode continuar de onde parou ou recomeçar do início.\n\n"
+                "_O processo tem 8 passos rápidos e você pode usar Voltar/Cancelar a qualquer momento._"
             )
         elif not cadastrado and origem_grupo:
             texto = (
@@ -229,21 +384,23 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             texto = (
                 "👤 *Cadastro*\n\n"
                 "Aqui você pode iniciar ou editar seu cadastro.\n"
-                "Se estiver tudo certo, volte ao menu principal.\n\n"
+                "O fluxo é guiado em *8 passos* com exemplos em cada etapa.\n\n"
                 "_Lembre-se: suas informações estão sob a proteção do sigilo maçônico._"
             )
+
+        teclado_inicio = _teclado_inicio(cadastrado, forcar_revalidacao, cadastro_parcial)
 
         if update.callback_query:
             await update.callback_query.edit_message_text(
                 texto,
                 parse_mode="Markdown",
-                reply_markup=_teclado_inicio(cadastrado, forcar_revalidacao)
+                reply_markup=teclado_inicio
             )
         elif update.message:
             await update.message.reply_text(
                 texto,
                 parse_mode="Markdown",
-                reply_markup=_teclado_inicio(cadastrado, forcar_revalidacao)
+                reply_markup=teclado_inicio
             )
         return ConversationHandler.END
         
@@ -261,7 +418,7 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def iniciar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia um novo cadastro."""
     query = update.callback_query
-    await query.answer()
+    await _responder_callback_seguro(query)
 
     # Preserva pos_cadastro (confirmação pendente)
     pos = context.user_data.get("pos_cadastro")
@@ -270,18 +427,31 @@ async def iniciar_cadastro_callback(update: Update, context: ContextTypes.DEFAUL
         context.user_data["pos_cadastro"] = pos
 
     await navegar_para(
-        update, context,
+        update,
+        context,
         "Cadastro",
-        "Envie seu *nome completo*:",
-        _teclado_nav(NOME)
+        "🧾 *Novo cadastro iniciado*\n\n"
+        "Vamos concluir em 8 passos rápidos.\n"
+        "Use *Voltar* para corrigir qualquer dado e *Cancelar* se quiser sair.\n\n"
+        f"{_texto_etapa(NOME)}",
+        _teclado_nav(NOME),
     )
     return NOME
+
+
+async def continuar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Retoma cadastro parcial do ponto em que o usuário parou."""
+    query = update.callback_query
+    await _responder_callback_seguro(query)
+
+    estado = _estado_pendente_cadastro(context)
+    return await _navegar_etapa(update, context, estado, retomada=True)
 
 
 async def editar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia edição de cadastro existente."""
     query = update.callback_query
-    await query.answer()
+    await _responder_callback_seguro(query)
 
     telegram_id = update.effective_user.id
     membro = buscar_membro(telegram_id)
@@ -313,7 +483,9 @@ async def editar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT
     await navegar_para(
         update, context,
         "Editar Cadastro",
-        "✏️ *Editar cadastro*\n\nVamos passar pelos campos novamente.\nComece enviando seu *nome completo*:",
+        "✏️ *Revalidar cadastro*\n\n"
+        "Vamos revisar seus dados em 8 passos para garantir que tudo esteja atualizado.\n\n"
+        f"{_texto_etapa(NOME)}",
         _teclado_nav(NOME)
     )
     return NOME
@@ -327,24 +499,30 @@ async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe e valida o nome."""
     nome = (update.message.text or "").strip()
     if len(nome) < 3:
-        await update.message.reply_text("❌ Nome muito curto. Envie seu *nome completo*:", parse_mode="Markdown")
+        await update.message.reply_text(
+            "❌ Nome muito curto.\n"
+            "Envie seu *nome completo* (com pelo menos 3 caracteres).",
+            parse_mode="Markdown",
+        )
         return NOME
 
     context.user_data["cadastro_nome"] = nome
-    await navegar_para(update, context, "Cadastro", "Envie sua *data de nascimento* (DD/MM/AAAA):", _teclado_nav(DATA_NASC))
-    return DATA_NASC
+    return await _navegar_etapa(update, context, DATA_NASC)
 
 
 async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe e valida a data de nascimento."""
     texto = (update.message.text or "").strip()
     if not _validar_data_nasc(texto):
-        await update.message.reply_text("❌ Data inválida. Envie no formato *DD/MM/AAAA*:", parse_mode="Markdown")
+        await update.message.reply_text(
+            "❌ Data inválida.\n"
+            "Envie no formato *DD/MM/AAAA* (ex.: 25/03/1988).",
+            parse_mode="Markdown",
+        )
         return DATA_NASC
 
     context.user_data["cadastro_data_nasc"] = texto
-    await navegar_para(update, context, "Cadastro", "Selecione seu *grau*:", _teclado_grau())
-    return GRAU
+    return await _navegar_etapa(update, context, GRAU)
 
 
 async def receber_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -355,25 +533,18 @@ async def receber_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return LOJA
 
     context.user_data["cadastro_loja"] = loja
-    await navegar_para(
-        update, context,
-        "Cadastro",
-        "Informe o *número da sua loja* (somente números, ou 0):",
-        _teclado_nav(NUMERO_LOJA)
-    )
-    return NUMERO_LOJA
+    return await _navegar_etapa(update, context, NUMERO_LOJA)
 
 
 async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o número da loja."""
     numero = (update.message.text or "").strip()
     if not _validar_numero_loja(numero):
-        await update.message.reply_text("❌ Número inválido. Envie somente números (ex: 0, 12, 345):")
+        await update.message.reply_text("❌ Número inválido. Envie somente números (ex.: 0, 12, 345).")
         return NUMERO_LOJA
 
     context.user_data["cadastro_numero_loja"] = numero
-    await navegar_para(update, context, "Cadastro", "Informe seu *Oriente*:", _teclado_nav(ORIENTE))
-    return ORIENTE
+    return await _navegar_etapa(update, context, ORIENTE)
 
 
 async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -384,8 +555,7 @@ async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ORIENTE
 
     context.user_data["cadastro_oriente"] = oriente
-    await navegar_para(update, context, "Cadastro", "Informe sua *Potência*:", _teclado_nav(POTENCIA))
-    return POTENCIA
+    return await _navegar_etapa(update, context, POTENCIA)
 
 
 async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -396,18 +566,52 @@ async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return POTENCIA
 
     context.user_data["cadastro_potencia"] = potencia
-    await _mostrar_confirmacao(update, context)
-    return CONFIRMAR
+    return await _navegar_etapa(update, context, CONFIRMAR)
 
 
 # ============================================
 # SETTERS (BOTÕES)
 # ============================================
 
+async def receber_grau_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Aceita grau digitado em texto livre como alternativa aos botões."""
+    grau = _interpretar_grau_por_texto(update.message.text or "")
+    if not grau:
+        await navegar_para(
+            update,
+            context,
+            "Cadastro",
+            "Não reconheci esse grau.\n\n"
+            "Selecione nos botões abaixo ou digite exatamente:"
+            " *Aprendiz*, *Companheiro*, *Mestre* ou *Mestre Instalado*.",
+            _teclado_grau(),
+        )
+        return GRAU
+
+    context.user_data["cadastro_grau"] = grau
+    return await _navegar_etapa(update, context, VM)
+
+
+async def receber_vm_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Aceita Sim/Não em texto livre para Venerável Mestre."""
+    vm = _interpretar_vm_por_texto(update.message.text or "")
+    if vm is None:
+        await navegar_para(
+            update,
+            context,
+            "Cadastro",
+            "Resposta inválida. Selecione *Sim* ou *Não* nos botões abaixo.",
+            _teclado_vm(),
+        )
+        return VM
+
+    context.user_data["cadastro_vm"] = vm
+    return await _navegar_etapa(update, context, LOJA)
+
 async def set_grau_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Define o grau selecionado via botão."""
     query = update.callback_query
-    await query.answer()
+    await _responder_callback_seguro(query)
 
     try:
         _, grau = query.data.split("|", 1)
@@ -428,14 +632,13 @@ async def set_grau_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return GRAU
 
     context.user_data["cadastro_grau"] = grau
-    await navegar_para(update, context, "Cadastro", "Você é *Venerável Mestre*?", _teclado_vm())
-    return VM
+    return await _navegar_etapa(update, context, VM)
 
 
 async def set_vm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Define se é Venerável Mestre via botão."""
     query = update.callback_query
-    await query.answer()
+    await _responder_callback_seguro(query)
 
     try:
         _, vm = query.data.split("|", 1)
@@ -456,8 +659,7 @@ async def set_vm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return VM
 
     context.user_data["cadastro_vm"] = vm
-    await navegar_para(update, context, "Cadastro", "Informe o *nome da sua loja*:", _teclado_nav(LOJA))
-    return LOJA
+    return await _navegar_etapa(update, context, LOJA)
 
 
 # ============================================
@@ -466,55 +668,105 @@ async def set_vm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def _mostrar_confirmacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Exibe tela de confirmação com resumo dos dados."""
-    texto = _resumo_cadastro(context)
+    texto = (
+        "✅ *Revisão final*\n"
+        "Confira os dados abaixo. Se estiver tudo certo, confirme o cadastro.\n\n"
+        f"{_resumo_cadastro(context)}"
+    )
     await navegar_para(update, context, "Confirmar Cadastro", texto, _teclado_confirmar())
+
+
+def _dados_para_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Any]:
+    """Monta payload final do cadastro para persistência."""
+    return {
+        "nome": context.user_data.get("cadastro_nome", ""),
+        "data_nasc": context.user_data.get("cadastro_data_nasc", ""),
+        "grau": context.user_data.get("cadastro_grau", ""),
+        "loja": context.user_data.get("cadastro_loja", ""),
+        "numero_loja": context.user_data.get("cadastro_numero_loja", ""),
+        "oriente": context.user_data.get("cadastro_oriente", ""),
+        "potencia": context.user_data.get("cadastro_potencia", ""),
+        "telegram_id": update.effective_user.id,
+        "cargo": "",
+        "veneravel_mestre": context.user_data.get("cadastro_vm", ""),
+    }
+
+
+async def _finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Valida pendências e persiste cadastro com tratamento de falha."""
+    estado_pendente = _estado_pendente_cadastro(context)
+    if estado_pendente != CONFIRMAR:
+        await _enviar_ou_editar_mensagem(
+            context,
+            update.effective_user.id,
+            TIPO_RESULTADO,
+            "⚠️ Ainda faltam alguns dados antes da conclusão."
+            " Vou te levar para a próxima etapa pendente.",
+        )
+        return await _navegar_etapa(update, context, estado_pendente, retomada=True)
+
+    dados_membro = _dados_para_salvar(update, context)
+    salvo = cadastrar_membro(dados_membro)
+    if not salvo:
+        logger.error("Falha ao persistir cadastro do usuário %s", update.effective_user.id)
+        await _enviar_ou_editar_mensagem(
+            context,
+            update.effective_user.id,
+            TIPO_RESULTADO,
+            "❌ Não consegui salvar seu cadastro agora.\n"
+            "Tente confirmar novamente em instantes.",
+            _teclado_confirmar(),
+        )
+        return CONFIRMAR
+
+    # Preserva pos_cadastro
+    pos = context.user_data.get("pos_cadastro")
+    context.user_data.clear()
+    if pos:
+        context.user_data["pos_cadastro"] = pos
+
+    # Executa ação pós-cadastro se existir
+    if pos and isinstance(pos, dict) and pos.get("acao") == "confirmar":
+        try:
+            from src.eventos import iniciar_confirmacao_presenca_pos_cadastro
+            await iniciar_confirmacao_presenca_pos_cadastro(update, context, pos)
+            context.user_data.pop("pos_cadastro", None)
+        except Exception as e:
+            logger.error(f"Erro no pos_cadastro: {e}\n{traceback.format_exc()}")
+
+    await navegar_para(
+        update,
+        context,
+        "Cadastro Concluído",
+        CADASTRO_CONCLUIDO,
+        InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")]]
+        ),
+    )
+    return ConversationHandler.END
+
+
+async def receber_confirmacao_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Permite confirmar por texto em vez de botão para reduzir atrito."""
+    texto = _normalizar_texto(update.message.text or "")
+    if texto in {"confirmar", "confirmo", "ok", "sim"}:
+        return await _finalizar_cadastro(update, context)
+
+    await update.message.reply_text(
+        "Para concluir, toque em *✅ Confirmar cadastro* ou digite *confirmar*.",
+        parse_mode="Markdown",
+    )
+    await _mostrar_confirmacao(update, context)
+    return CONFIRMAR
 
 
 async def confirmar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Confirma e salva o cadastro."""
     query = update.callback_query
-    await query.answer()
+    await _responder_callback_seguro(query)
 
     try:
-        dados_membro: Dict[str, Any] = {
-            "nome": context.user_data.get("cadastro_nome", ""),
-            "data_nasc": context.user_data.get("cadastro_data_nasc", ""),
-            "grau": context.user_data.get("cadastro_grau", ""),
-            "loja": context.user_data.get("cadastro_loja", ""),
-            "numero_loja": context.user_data.get("cadastro_numero_loja", ""),
-            "oriente": context.user_data.get("cadastro_oriente", ""),
-            "potencia": context.user_data.get("cadastro_potencia", ""),
-            "telegram_id": update.effective_user.id,
-            "cargo": "",
-            "veneravel_mestre": context.user_data.get("cadastro_vm", ""),
-        }
-
-        cadastrar_membro(dados_membro)
-
-        # Preserva pos_cadastro
-        pos = context.user_data.get("pos_cadastro")
-        context.user_data.clear()
-        if pos:
-            context.user_data["pos_cadastro"] = pos
-
-        # Executa ação pós-cadastro se existir
-        if pos and isinstance(pos, dict) and pos.get("acao") == "confirmar":
-            try:
-                from src.eventos import iniciar_confirmacao_presenca_pos_cadastro
-                await iniciar_confirmacao_presenca_pos_cadastro(update, context, pos)
-                context.user_data.pop("pos_cadastro", None)
-            except Exception as e:
-                logger.error(f"Erro no pos_cadastro: {e}\n{traceback.format_exc()}")
-
-        await navegar_para(
-            update, context,
-            "Cadastro Concluído",
-            CADASTRO_CONCLUIDO,
-            InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")
-            ]])
-        )
-        return ConversationHandler.END
+        return await _finalizar_cadastro(update, context)
 
     except Exception as e:
         logger.error(f"Erro em confirmar_cadastro: {e}\n{traceback.format_exc()}")
@@ -532,7 +784,7 @@ async def confirmar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def navegacao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Processa comandos de navegação (voltar/cancelar)."""
     query = update.callback_query
-    await query.answer()
+    await _responder_callback_seguro(query)
 
     data = query.data or ""
 
@@ -547,35 +799,7 @@ async def navegacao_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
             estado = NOME
 
         estado = max(NOME, min(CONFIRMAR, estado))
-        
-        # Reapresenta a pergunta do estado correspondente
-        if estado == GRAU:
-            await _enviar_ou_editar_mensagem(
-                context, update.effective_user.id, TIPO_RESULTADO,
-                "Selecione seu *grau*:",
-                _teclado_grau()
-            )
-        elif estado == VM:
-            await _enviar_ou_editar_mensagem(
-                context, update.effective_user.id, TIPO_RESULTADO,
-                "Você é *Venerável Mestre*?",
-                _teclado_vm()
-            )
-        else:
-            textos = {
-                NOME: "Envie seu *nome completo*:",
-                DATA_NASC: "Envie sua *data de nascimento* (DD/MM/AAAA):",
-                LOJA: "Informe o *nome da sua loja*:",
-                NUMERO_LOJA: "Informe o *número da sua loja* (somente números, ou 0):",
-                ORIENTE: "Informe seu *Oriente*:",
-                POTENCIA: "Informe sua *Potência*:",
-            }
-            await _enviar_ou_editar_mensagem(
-                context, update.effective_user.id, TIPO_RESULTADO,
-                textos.get(estado, "Envie a informação:"),
-                _teclado_nav(estado)
-            )
-        return estado
+        return await _navegar_etapa(update, context, estado)
 
     return NOME
 
@@ -584,7 +808,7 @@ async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cancela o processo de cadastro."""
     try:
         if update.callback_query:
-            await update.callback_query.answer()
+            await _responder_callback_seguro(update.callback_query)
             await navegar_para(
                 update, context,
                 "Cadastro",
@@ -614,6 +838,7 @@ async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
 cadastro_handler = ConversationHandler(
     entry_points=[
         CallbackQueryHandler(iniciar_cadastro_callback, pattern=r"^iniciar_cadastro$"),
+        CallbackQueryHandler(continuar_cadastro_callback, pattern=r"^continuar_cadastro$"),
         CallbackQueryHandler(editar_cadastro_callback, pattern=r"^editar_cadastro$"),
     ],
     states={
@@ -627,10 +852,12 @@ cadastro_handler = ConversationHandler(
         ],
         GRAU: [
             CallbackQueryHandler(set_grau_callback, pattern=r"^set_grau\|"),
+            MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_grau_texto),
             CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
         ],
         VM: [
             CallbackQueryHandler(set_vm_callback, pattern=r"^set_vm\|"),
+            MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_vm_texto),
             CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
         ],
         LOJA: [
@@ -651,6 +878,7 @@ cadastro_handler = ConversationHandler(
         ],
         CONFIRMAR: [
             CallbackQueryHandler(confirmar_cadastro, pattern=r"^confirmar_cadastro$"),
+            MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_confirmacao_texto),
             CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
         ],
     },
