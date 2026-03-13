@@ -280,6 +280,11 @@ def montar_texto_publicacao_evento(evento: dict) -> str:
     numero_fmt = f" {numero}" if numero and numero != "0" else ""
     data_txt = _escape_md(evento.get("Data do evento", ""))
     hora_txt = _escape_md(evento.get("Hora", ""))
+    dia_semana_raw = str(evento.get("Dia da semana", "") or "").strip()
+    dia_semana_fmt = ""
+    if dia_semana_raw:
+        dia_traduzido = traduzir_dia_abreviado(dia_semana_raw)
+        dia_semana_fmt = _escape_md(dia_traduzido.split("-")[0].strip().lower())
     oriente = _escape_md(evento.get("Oriente", ""))
     potencia = _escape_md(evento.get("Potência", ""))
     grau = _escape_md(evento.get("Grau", ""))
@@ -293,30 +298,32 @@ def montar_texto_publicacao_evento(evento: dict) -> str:
     observacao = _escape_md(evento.get("Observações", "")) or "-"
     status = str(evento.get("Status", "") or "").strip().lower()
 
-    cabecalho = "*NOVA SESSÃO!*"
+    cabecalho = "NOVA SESSÃO"
     if aviso:
-        cabecalho = f"⚠️ *ALTERAÇÃO:* {_escape_md(aviso)}\n\n" + cabecalho
+        cabecalho = f"ALTERAÇÃO: {_escape_md(aviso)}\n\n" + cabecalho
+
+    data_hora = f"{data_txt} ({dia_semana_fmt}) • {hora_txt}" if dia_semana_fmt else f"{data_txt} • {hora_txt}"
 
     texto = (
         f"{cabecalho}\n\n"
-        f"*{data_txt}*\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"*{grau}*\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"_{nome}{numero_fmt}_\n"
-        f"_{oriente} - {potencia}_\n\n"
-        f"Horário: {hora_txt}\n"
+        f"{data_hora}\n"
+        f"Grau: {grau}\n\n"
+        "LOJA\n"
+        f"{nome}{numero_fmt}\n"
+        f"{oriente} - {potencia}\n\n"
+        "SESSÃO\n"
         f"Tipo: {tipo}\n"
         f"Rito: {rito}\n"
         f"Traje: {traje}\n"
-        f"Ágape: {agape}\n"
-        f"Observação: {observacao}"
+        f"Ágape: {agape}\n\n"
+        "OBSERVAÇÃO\n"
+        f"{observacao}\n\n"
     )
 
     if url_local:
-        texto += f"\nLink do local: [Abrir no mapa]({url_local})"
+        texto += f"Local: [Abrir no mapa]({url_local})"
     else:
-        texto += f"\nEndereço: {endereco}"
+        texto += f"Local: {endereco}"
 
     if status == "cancelado":
         texto += "\n\n⛔ *STATUS:* CANCELADO"

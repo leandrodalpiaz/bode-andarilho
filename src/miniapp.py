@@ -888,24 +888,41 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
     try:
         bot = request.app.state.telegram_app.bot
 
+        dia_semana_pt = {
+            "Monday": "segunda",
+          "Tuesday": "terça",
+            "Wednesday": "quarta",
+            "Thursday": "quinta",
+            "Friday": "sexta",
+          "Saturday": "sábado",
+            "Sunday": "domingo",
+        }.get(dia_semana, "")
+
+        data_hora = f"{_escape_md(data_str)} ({_escape_md(dia_semana_pt)}) • {_escape_md(horario)}" if dia_semana_pt else f"{_escape_md(data_str)} • {_escape_md(horario)}"
         nome_esc   = _escape_md(nome_loja)
         num_fmt    = f" {_escape_md(numero_loja)}" if numero_loja and numero_loja != "0" else ""
+        endereco_raw = (endereco or "").strip()
+        endereco_url = endereco_raw if endereco_raw.startswith(("http://", "https://")) else ""
         texto_grupo = (
-            "*NOVA SESSÃO!*\n\n"
-            f"*{_escape_md(data_str)}*\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"*{_escape_md(grau)}*\n"
-            "━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"_{nome_esc}{num_fmt}_\n"
-            f"_{_escape_md(oriente)} - {_escape_md(potencia)}_\n\n"
-            f"Horário: {_escape_md(horario)}\n"
+            "NOVA SESSÃO\n\n"
+            f"{data_hora}\n"
+            f"Grau: {_escape_md(grau)}\n\n"
+            "LOJA\n"
+            f"{nome_esc}{num_fmt}\n"
+            f"{_escape_md(oriente)} - {_escape_md(potencia)}\n\n"
+            "SESSÃO\n"
             f"Tipo: {_escape_md(tipo_sessao)}\n"
             f"Rito: {_escape_md(rito)}\n"
             f"Traje: {_escape_md(traje)}\n"
-            f"Ágape: {_escape_md(agape)}\n"
-            f"Endereço: {_escape_md(endereco)}\n"
-            f"Observação: {_escape_md(observacoes) or '-'}"
+            f"Ágape: {_escape_md(agape)}\n\n"
+            "OBSERVAÇÃO\n"
+            f"{_escape_md(observacoes) or '-'}\n\n"
         )
+
+        if endereco_url:
+            texto_grupo += f"Local: [Abrir no mapa]({endereco_url})"
+        else:
+            texto_grupo += f"Local: {_escape_md(endereco)}"
 
         try:
             grupo_id_int = int(_GRUPO_PRINCIPAL_ID)
