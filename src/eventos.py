@@ -58,6 +58,10 @@ from src.bot import (
 
 logger = logging.getLogger(__name__)
 
+# Fallback em memória para instalações que ainda não possuem a coluna
+# `grupo_mensagem_id` em `eventos`.
+_CACHE_POST_EVENTO_GRUPO: Dict[str, Tuple[int, int]] = {}
+
 
 _HORA_SILENCIO_INICIO = 22
 _HORA_SILENCIO_FIM = 7
@@ -147,6 +151,13 @@ async def _auto_delete_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int,
         await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
     except Exception as e:
         logger.debug("Nao foi possivel autoapagar mensagem %s no chat %s: %s", message_id, chat_id, e)
+
+
+def registrar_post_evento_grupo(id_evento: str, chat_id: int, message_id: int) -> None:
+    """Registra em memória o post do evento no grupo (fallback sem coluna persistida)."""
+    if not id_evento:
+        return
+    _CACHE_POST_EVENTO_GRUPO[id_evento] = (int(chat_id), int(message_id))
 
 # ============================================
 # CONSTANTES E CONFIGURAÇÕES
@@ -242,6 +253,117 @@ def _teclado_confirmacao_evento(id_evento: str, agape_evento: str) -> List[List[
         ]
 
     return [[InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_cod}|sem")]]
+
+
+def _escape_md(value: Any) -> str:
+    """Escapa caracteres especiais de Markdown usado nas mensagens do grupo."""
+    s = "" if value is None else str(value)
+    for ch in ("_", "*", "`", "["):
+        s = s.replace(ch, f"\\{ch}")
+    return s
+
+
+def _normalizar_url_local(value: Any) -> str:
+    """Retorna URL do local quando válida para abrir no Telegram."""
+    raw = "" if value is None else str(value).strip()
+    if raw.startswith(("http://", "https://")):
+        return raw
+    return ""
+
+
+def montar_texto_publicacao_evento(evento: dict) -> str:
+    """Monta o texto principal do card de evento publicado no grupo."""
+    nome = _escape_md(evento.get("Nome da loja", ""))
+    numero = _escape_md(evento.get("Número da loja", ""))
+    numero_fmt = f" {numero}" if numero and numero != "0" else ""
+    data_txt = _escape_md(evento.get("Data do evento", ""))
+    hora_txt = _escape_md(evento.get("Hora", ""))
+    oriente = _escape_md(evento.get("Oriente", ""))
+    potencia = _escape_md(evento.get("Potência", ""))
+    grau = _escape_md(evento.get("Grau", ""))
+    tipo = _escape_md(evento.get("Tipo de sessão", ""))
+    rito = _escape_md(evento.get("Rito", ""))
+    traje = _escape_md(evento.get("Traje obrigatório", ""))
+    agape = _escape_md(evento.get("Ágape", ""))
+    endereco_raw = "" if evento.get("Endereço da sessão") is None else str(evento.get("Endereço da sessão")).strip()
+    endereco = _escape_md(endereco_raw)
+    url_local = _normalizar_url_local(endereco_raw)
+    observacao = _escape_md(evento.get("Observações", "")) or "-"
+    status = str(evento.get("Status", "") or "").strip().lower()
+
+    texto = (
+        "*NOVA SESSÃO!*\n\n"
+        f"*{data_txt}*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"*{grau}*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"_{nome}{numero_fmt}_\n"
+        f"_{oriente} - {potencia}_\n\n"
+        f"Horário: {hora_txt}\n"
+        f"Tipo: {tipo}\n"
+        f"Rito: {rito}\n"
+        f"Traje: {traje}\n"
+        f"Ágape: {agape}\n"
+        f"Observação: {observacao}"
+    )
+
+    if url_local:
+        texto += f"\nLink do local: [Abrir no mapa]({url_local})"
+    else:
+        texto += f"\nEndereço: {endereco}"
+
+    if status == "cancelado":
+        texto += "\n\n⛔ *STATUS:* CANCELADO"
+    return texto
+
+
+def montar_teclado_publicacao_evento(evento: dict) -> Optional[InlineKeyboardMarkup]:
+    """Monta teclado do card publicado no grupo conforme status atual."""
+    status = str(evento.get("Status", "") or "").strip().lower()
+    if status == "cancelado":
+        return None
+
+    id_evento = normalizar_id_evento(evento)
+    agape = str(evento.get("Ágape", "") or "")
+    endereco_raw = "" if evento.get("Endereço da sessão") is None else str(evento.get("Endereço da sessão")).strip()
+    url_local = _normalizar_url_local(endereco_raw)
+    linhas = _teclado_confirmacao_evento(id_evento, agape)
+    linhas.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")])
+    if url_local:
+        linhas.append([InlineKeyboardButton("📍 Abrir no mapa", url=url_local)])
+    return InlineKeyboardMarkup(linhas)
+
+
+async def sincronizar_resumo_evento_grupo(context: ContextTypes.DEFAULT_TYPE, evento: dict) -> bool:
+    """Atualiza o card original do evento no grupo após edição de dados/status."""
+    id_evento = normalizar_id_evento(evento)
+    grupo_id = _tid_to_int(evento.get("Telegram ID do grupo") or evento.get("grupo_telegram_id"))
+    msg_id = _tid_to_int(evento.get("Telegram Message ID do grupo") or evento.get("grupo_mensagem_id"))
+
+    # Fallback para ambientes sem persistência do message_id no banco.
+    if (not grupo_id or not msg_id) and id_evento in _CACHE_POST_EVENTO_GRUPO:
+        grupo_id, msg_id = _CACHE_POST_EVENTO_GRUPO[id_evento]
+
+    if not grupo_id or not msg_id:
+        return False
+
+    try:
+        await context.bot.edit_message_text(
+            chat_id=grupo_id,
+            message_id=msg_id,
+            text=montar_texto_publicacao_evento(evento),
+            parse_mode="Markdown",
+            reply_markup=montar_teclado_publicacao_evento(evento),
+        )
+        return True
+    except BadRequest as e:
+        if "message is not modified" in str(e).lower():
+            return True
+        logger.warning("Falha ao sincronizar card do evento no grupo (id_evento=%s): %s", id_evento, e)
+        return False
+    except Exception as e:
+        logger.warning("Erro ao sincronizar card do evento no grupo (id_evento=%s): %s", id_evento, e)
+        return False
 
 
 def _texto_participacao_agape(tipo_agape: str) -> str:

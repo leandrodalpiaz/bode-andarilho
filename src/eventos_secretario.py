@@ -48,6 +48,7 @@ from src.eventos import (
     parse_data_evento,
     traduzir_dia,
     _eh_vm,
+    sincronizar_resumo_evento_grupo,
 )
 from src.permissoes import get_nivel
 from src.ajuda.dicas import enviar_dica_contextual
@@ -582,6 +583,7 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
     
     if sucesso:
         cancelar_todas_confirmacoes(id_evento)
+        await sincronizar_resumo_evento_grupo(context, evento)
         await navegar_para(
             update, context,
             "Área do Secretário",
@@ -697,6 +699,7 @@ async def receber_novo_valor_evento(update: Update, context: ContextTypes.DEFAUL
     sucesso = atualizar_evento(0, evento)
 
     if sucesso:
+        await sincronizar_resumo_evento_grupo(context, evento)
         await update.message.reply_text(
             f"✅ {campo_info['nome']} atualizado com sucesso!\n\n"
             f"Use o menu acima para continuar."
@@ -1061,6 +1064,7 @@ async def executar_refazer_evento(update: Update, context: ContextTypes.DEFAULT_
     sucesso = atualizar_evento(0, evento)
     
     if sucesso:
+        await sincronizar_resumo_evento_grupo(context, evento)
         await navegar_para(
             update, context,
             "Área do Secretário",

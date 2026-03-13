@@ -35,7 +35,12 @@ from telegram.ext import (
     filters,
 )
 
-from src.sheets_supabase import cadastrar_evento, listar_eventos, listar_lojas
+from src.sheets_supabase import cadastrar_evento, listar_eventos, listar_lojas, atualizar_evento
+from src.eventos import (
+    montar_texto_publicacao_evento,
+    montar_teclado_publicacao_evento,
+    registrar_post_evento_grupo,
+)
 from src.ajuda.dicas import enviar_dica_contextual
 from src.permissoes import get_nivel
 from src.bot import (
@@ -1255,45 +1260,15 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
     except Exception:
         grupo_id_int = int(GRUPO_PRINCIPAL_ID)
 
-    # Escapa caracteres especiais para Markdown
-    nome = _escape_md(evento.get("Nome da loja", ""))
-    numero = _escape_md(evento.get("Número da loja", ""))
-    numero_fmt = f" {numero}" if numero and numero != "0" else ""
-    data_txt = _escape_md(evento.get("Data do evento", ""))
-    hora_txt = _escape_md(evento.get("Hora", ""))
-    oriente = _escape_md(evento.get("Oriente", ""))
-    potencia = _escape_md(evento.get("Potência", ""))
-    grau = _escape_md(evento.get("Grau", ""))
-    tipo = _escape_md(evento.get("Tipo de sessão", ""))
-    rito = _escape_md(evento.get("Rito", ""))
-    traje = _escape_md(evento.get("Traje obrigatório", ""))
-    agape = _escape_md(evento.get("Ágape", ""))
-    endereco = _escape_md(evento.get("Endereço da sessão", ""))
-    observacao = _escape_md(evento.get("Observações", "")) or "-"
-
-    texto_grupo = (
-        "*NOVA SESSÃO!*\n\n"
-        f"*{data_txt}*\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"*{grau}*\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"_{nome}{numero_fmt}_\n"
-        f"_{oriente} - {potencia}_\n\n"
-        f"Horário: {hora_txt}\n"
-        f"Tipo: {tipo}\n"
-        f"Rito: {rito}\n"
-        f"Traje: {traje}\n"
-        f"Ágape: {agape}\n"
-        f"Endereço: {endereco}\n"
-        f"Observação: {observacao}"
-    )
+    evento["ID Evento"] = id_evento
+    texto_grupo = montar_texto_publicacao_evento(evento)
 
     try:
-        await context.bot.send_message(
+        msg_publicada = await context.bot.send_message(
             chat_id=grupo_id_int,
             text=texto_grupo,
             parse_mode="Markdown",
-            reply_markup=_teclado_pos_publicacao(id_evento, evento.get("Ágape", "")),
+            reply_markup=montar_teclado_publicacao_evento(evento),
         )
     except Exception as e:
         await _enviar_ou_editar_mensagem(
@@ -1303,6 +1278,16 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
         )
         _limpar_contexto_evento(context)
         return
+
+    # 2.1) Persiste o ID da mensagem no grupo para permitir sincronização futura.
+    registrar_post_evento_grupo(id_evento, grupo_id_int, msg_publicada.message_id)
+
+    evento_sync = {
+        "ID Evento": id_evento,
+        "Telegram Message ID do grupo": str(msg_publicada.message_id),
+    }
+    if not atualizar_evento(0, evento_sync):
+        logger.warning("Evento %s publicado, mas não foi possível salvar Telegram Message ID do grupo.", id_evento)
 
     # 3) Confirma no privado
     msg = "✅ Evento cadastrado e publicado no grupo."

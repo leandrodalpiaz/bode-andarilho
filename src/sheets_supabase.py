@@ -90,6 +90,7 @@ _EVENTOS_SHEETS_TO_DB: Dict[str, str] = {
     "Ágape":                        "agape",
     "Observações":                  "observacoes",
     "Telegram ID do grupo":         "grupo_telegram_id",
+    "Telegram Message ID do grupo": "grupo_mensagem_id",
     "Telegram ID do secretário":    "secretario_telegram_id",
     "Status":                       "status",
     "Endereço da sessão":           "endereco",
@@ -560,7 +561,15 @@ def cadastrar_evento(evento: dict) -> Optional[str]:
             if row[k] is None:
                 row[k] = ""
 
-        supabase.table("eventos").insert(row).execute()
+        try:
+            supabase.table("eventos").insert(row).execute()
+        except Exception as e_ins:
+            # Compatibilidade com bases antigas sem a coluna de message_id do post no grupo.
+            if _coluna_ausente(e_ins, "grupo_mensagem_id"):
+                row.pop("grupo_mensagem_id", None)
+                supabase.table("eventos").insert(row).execute()
+            else:
+                raise
         _cache_eventos.clear()
         return id_evento
 
@@ -604,7 +613,16 @@ def atualizar_evento(indice: int, evento: dict) -> bool:
             if row[k] is None:
                 row[k] = ""
 
-        supabase.table("eventos").update(row).eq("id_evento", id_evento).execute()
+        try:
+            supabase.table("eventos").update(row).eq("id_evento", id_evento).execute()
+        except Exception as e_upd:
+            # Compatibilidade com bases antigas sem a coluna de message_id do post no grupo.
+            if _coluna_ausente(e_upd, "grupo_mensagem_id"):
+                row.pop("grupo_mensagem_id", None)
+                if row:
+                    supabase.table("eventos").update(row).eq("id_evento", id_evento).execute()
+            else:
+                raise
         _cache_eventos.clear()
         return True
 
