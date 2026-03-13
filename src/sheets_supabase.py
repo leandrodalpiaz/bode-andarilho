@@ -322,6 +322,15 @@ def buscar_membro(telegram_id: int) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _coluna_ausente(exc: Exception, coluna: str) -> bool:
+    """
+    Retorna True quando a exceção indica que a coluna `coluna` não existe
+    na tabela (PostgREST PGRST204 - schema cache miss).
+    """
+    txt = str(exc)
+    return "PGRST204" in txt and coluna in txt
+
+
 def cadastrar_membro(dados: dict) -> bool:
     """
     Insere novo membro.
@@ -360,7 +369,18 @@ def cadastrar_membro(dados: dict) -> bool:
             "status": "Ativo",
         }
 
-        supabase.table("membros").insert(row).execute()
+        try:
+            supabase.table("membros").insert(row).execute()
+        except Exception as e_ins:
+            if _coluna_ausente(e_ins, "status"):
+                logger.warning(
+                    "Coluna 'status' ausente em 'membros' — INSERT sem ela. "
+                    "Adicione-a: ALTER TABLE membros ADD COLUMN status TEXT DEFAULT 'Ativo';"
+                )
+                row.pop("status", None)
+                supabase.table("membros").insert(row).execute()
+            else:
+                raise
 
         # Invalidar cache
         _cache_membros.pop(int(float(telegram_id)), None)
@@ -420,7 +440,19 @@ def atualizar_membro(telegram_id: int, dados_atualizados: dict, preservar_nivel:
         if preservar_nivel:
             update["nivel"] = nivel_atual
 
-        supabase.table("membros").update(update).eq("telegram_id", tid).execute()
+        try:
+            supabase.table("membros").update(update).eq("telegram_id", tid).execute()
+        except Exception as e_upd:
+            if _coluna_ausente(e_upd, "status"):
+                logger.warning(
+                    "Coluna 'status' ausente em 'membros' — UPDATE sem ela. "
+                    "Adicione-a: ALTER TABLE membros ADD COLUMN status TEXT DEFAULT 'Ativo';"
+                )
+                update.pop("status", None)
+                if update:  # só executa se ainda houver outros campos
+                    supabase.table("membros").update(update).eq("telegram_id", tid).execute()
+            else:
+                raise
 
         # Invalidar cache
         _cache_membros.pop(telegram_id, None)
