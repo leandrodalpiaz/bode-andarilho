@@ -34,6 +34,7 @@ from src.sheets_supabase import (
     cancelar_confirmacao,
     buscar_confirmacao,
     listar_confirmacoes_por_evento,
+    atualizar_evento,
     get_notificacao_status,
     listar_notificacoes_secretario_pendentes,
     listar_secretarios_com_notificacoes_pendentes,
@@ -340,12 +341,41 @@ async def sincronizar_resumo_evento_grupo(context: ContextTypes.DEFAULT_TYPE, ev
     grupo_id = _tid_to_int(evento.get("Telegram ID do grupo") or evento.get("grupo_telegram_id"))
     msg_id = _tid_to_int(evento.get("Telegram Message ID do grupo") or evento.get("grupo_mensagem_id"))
 
+    async def _publicar_novo_card() -> bool:
+        """Fallback para eventos legados sem message_id: publica novo card e persiste ID."""
+        if not grupo_id:
+            logger.warning("Não foi possível sincronizar card do evento %s: grupo_id ausente.", id_evento)
+            return False
+        try:
+            nova_msg = await context.bot.send_message(
+                chat_id=grupo_id,
+                text=montar_texto_publicacao_evento(evento),
+                parse_mode="Markdown",
+                reply_markup=montar_teclado_publicacao_evento(evento),
+            )
+            registrar_post_evento_grupo(id_evento, grupo_id, nova_msg.message_id)
+
+            # Persiste para futuras sincronizações após restart.
+            atualizado = atualizar_evento(0, {
+                "ID Evento": id_evento,
+                "Telegram Message ID do grupo": str(nova_msg.message_id),
+            })
+            if not atualizado:
+                logger.warning(
+                    "Card novo do evento %s foi publicado, mas não foi possível persistir message_id.",
+                    id_evento,
+                )
+            return True
+        except Exception as e:
+            logger.warning("Falha ao publicar card fallback do evento %s no grupo: %s", id_evento, e)
+            return False
+
     # Fallback para ambientes sem persistência do message_id no banco.
     if (not grupo_id or not msg_id) and id_evento in _CACHE_POST_EVENTO_GRUPO:
         grupo_id, msg_id = _CACHE_POST_EVENTO_GRUPO[id_evento]
 
     if not grupo_id or not msg_id:
-        return False
+        return await _publicar_novo_card()
 
     try:
         await context.bot.edit_message_text(
@@ -359,6 +389,9 @@ async def sincronizar_resumo_evento_grupo(context: ContextTypes.DEFAULT_TYPE, ev
     except BadRequest as e:
         if "message is not modified" in str(e).lower():
             return True
+        # Se o post original não existe mais, publica um novo e reancora o evento.
+        if "message to edit not found" in str(e).lower():
+            return await _publicar_novo_card()
         logger.warning("Falha ao sincronizar card do evento no grupo (id_evento=%s): %s", id_evento, e)
         return False
     except Exception as e:
