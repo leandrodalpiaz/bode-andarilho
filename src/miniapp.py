@@ -741,12 +741,12 @@ async def api_cadastro_membro(request: Request) -> JSONResponse:
         bot = request.app.state.telegram_app.bot
         nome_esc = _escape_md(nome)
         if ja_existe:
-            msg = f"✅ *Cadastro atualizado!*\n\nSaudações, Ir.·. {nome_esc}. Seus dados foram atualizados."
+            msg = f"✅ *Cadastro atualizado\\!*\n\nSaudações, Ir\\.·\\. {nome_esc}\\. Seus dados foram atualizados\\."
         else:
             msg = (
                 f"✅ *Cadastro realizado a contento\\!*\n\n"
-                f"Bem\\-vindo ao Bode Andarilho, Ir.·. {nome_esc}\\!\n"
-                f"Use /start para acessar o Painel do Obreiro."
+                f"Bem\\-vindo ao Bode Andarilho, Ir\\.·\\. {nome_esc}\\!\n"
+                f"Use /start para acessar o Painel do Obreiro\\."
             )
         await bot.send_message(chat_id=telegram_id, text=msg, parse_mode="MarkdownV2")
     except Exception as e:
