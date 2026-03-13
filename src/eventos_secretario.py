@@ -22,6 +22,7 @@ from datetime import datetime
 from typing import Optional
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import Forbidden
 from telegram.ext import (
     ContextTypes,
     ConversationHandler,
@@ -118,6 +119,100 @@ def _confirmacao_com_agape(agape_valor: str) -> bool:
         return False
     marcadores = ("com ágape", "com agape", "confirmada", "gratuito", "pago", "sim")
     return any(marcador in texto for marcador in marcadores)
+
+
+async def _notificar_confirmados_evento(
+    context: ContextTypes.DEFAULT_TYPE,
+    evento: dict,
+    id_evento: str,
+    motivo: str,
+    editor_id: Optional[int] = None,
+    campo_nome: str = "",
+    novo_valor: str = "",
+    confirmacoes: Optional[list] = None,
+) -> None:
+    """Notifica no privado os irmãos que já confirmaram presença no evento."""
+    confirmacoes = confirmacoes if confirmacoes is not None else (listar_confirmacoes_por_evento(id_evento) or [])
+    if not confirmacoes:
+        return
+
+    nome_loja = str(evento.get("Nome da loja", "") or "").strip()
+    numero = str(evento.get("Número da loja", "") or "").strip()
+    numero_fmt = f" {numero}" if numero else ""
+    data_txt = str(evento.get("Data do evento", "") or "").strip()
+    hora = str(evento.get("Hora", "") or "").strip()
+
+    teclado = None
+
+    if motivo == "cancelamento":
+        texto = (
+            "⛔ *SESSÃO CANCELADA*\n\n"
+            "A sessão que você havia confirmado foi cancelada pelo secretário.\n\n"
+            f"🏛 {nome_loja}{numero_fmt}\n"
+            f"📅 {data_txt}\n"
+            f"🕕 {hora}\n\n"
+            "Sua confirmação foi removida automaticamente."
+        )
+        teclado = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
+        ])
+    elif motivo == "refazer":
+        texto = (
+            "🔄 *SESSÃO REABERTA*\n\n"
+            "A sessão foi reativada e está novamente disponível para confirmações.\n\n"
+            f"🏛 {nome_loja}{numero_fmt}\n"
+            f"📅 {data_txt}\n"
+            f"🕕 {hora}\n\n"
+            "Se desejar participar, confirme novamente no bot."
+        )
+        teclado = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔎 Ver sessão", callback_data=f"evento|{_encode_cb(id_evento)}")],
+            [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")],
+        ])
+    else:
+        detalhe = ""
+        if campo_nome:
+            detalhe = f"Campo alterado: *{campo_nome}*\nNovo valor: *{novo_valor or '-'}*\n\n"
+        texto = (
+            "⚠️ *ATUALIZAÇÃO NA SESSÃO*\n\n"
+            "A sessão que você confirmou teve alteração de informações.\n\n"
+            f"🏛 {nome_loja}{numero_fmt}\n"
+            f"📅 {data_txt}\n"
+            f"🕕 {hora}\n\n"
+            f"{detalhe}"
+            "Confira os detalhes atualizados no bot."
+        )
+        teclado = InlineKeyboardMarkup([
+            [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")],
+            [InlineKeyboardButton("🔎 Ver sessão", callback_data=f"evento|{_encode_cb(id_evento)}")],
+            [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")],
+        ])
+
+    enviados = 0
+    for c in confirmacoes:
+        raw_tid = c.get("Telegram ID", c.get("telegram_id", ""))
+        try:
+            tid = int(float(str(raw_tid).strip()))
+        except Exception:
+            continue
+
+        if editor_id and tid == int(editor_id):
+            continue
+
+        try:
+            await context.bot.send_message(
+                chat_id=tid,
+                text=texto,
+                parse_mode="Markdown",
+                reply_markup=teclado,
+            )
+            enviados += 1
+        except Forbidden:
+            logger.info("Não foi possível notificar %s no privado (bloqueado/iniciou sem chat).", tid)
+        except Exception as e:
+            logger.warning("Falha ao notificar %s sobre atualização do evento %s: %s", tid, id_evento, e)
+
+    logger.info("Notificações privadas enviadas para %s confirmado(s) do evento %s (motivo=%s).", enviados, id_evento, motivo)
 
 
 # ============================================
@@ -582,8 +677,18 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
     sucesso = atualizar_evento(0, evento)
     
     if sucesso:
+        evento["_aviso_resumo"] = "horário alterado ou evento cancelado"
+        confirmacoes_antes = listar_confirmacoes_por_evento(id_evento) or []
         cancelar_todas_confirmacoes(id_evento)
         await sincronizar_resumo_evento_grupo(context, evento)
+        await _notificar_confirmados_evento(
+            context,
+            evento,
+            id_evento,
+            motivo="cancelamento",
+            editor_id=user_id,
+            confirmacoes=confirmacoes_antes,
+        )
         await navegar_para(
             update, context,
             "Área do Secretário",
@@ -699,7 +804,17 @@ async def receber_novo_valor_evento(update: Update, context: ContextTypes.DEFAUL
     sucesso = atualizar_evento(0, evento)
 
     if sucesso:
+        evento["_aviso_resumo"] = "horário alterado ou evento cancelado"
         await sincronizar_resumo_evento_grupo(context, evento)
+        await _notificar_confirmados_evento(
+            context,
+            evento,
+            id_evento,
+            motivo="edicao",
+            editor_id=update.effective_user.id,
+            campo_nome=campo_info["nome"],
+            novo_valor=novo_valor,
+        )
         await update.message.reply_text(
             f"✅ {campo_info['nome']} atualizado com sucesso!\n\n"
             f"Use o menu acima para continuar."
@@ -1064,7 +1179,9 @@ async def executar_refazer_evento(update: Update, context: ContextTypes.DEFAULT_
     sucesso = atualizar_evento(0, evento)
     
     if sucesso:
+        evento["_aviso_resumo"] = "horário alterado ou evento cancelado"
         await sincronizar_resumo_evento_grupo(context, evento)
+        await _notificar_confirmados_evento(context, evento, id_evento, motivo="refazer", editor_id=user_id)
         await navegar_para(
             update, context,
             "Área do Secretário",

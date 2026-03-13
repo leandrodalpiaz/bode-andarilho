@@ -274,6 +274,7 @@ def _normalizar_url_local(value: Any) -> str:
 
 def montar_texto_publicacao_evento(evento: dict) -> str:
     """Monta o texto principal do card de evento publicado no grupo."""
+    aviso = str(evento.get("_aviso_resumo") or "").strip()
     nome = _escape_md(evento.get("Nome da loja", ""))
     numero = _escape_md(evento.get("Número da loja", ""))
     numero_fmt = f" {numero}" if numero and numero != "0" else ""
@@ -292,8 +293,12 @@ def montar_texto_publicacao_evento(evento: dict) -> str:
     observacao = _escape_md(evento.get("Observações", "")) or "-"
     status = str(evento.get("Status", "") or "").strip().lower()
 
+    cabecalho = "*NOVA SESSÃO!*"
+    if aviso:
+        cabecalho = f"⚠️ *ALTERAÇÃO:* {_escape_md(aviso)}\n\n" + cabecalho
+
     texto = (
-        "*NOVA SESSÃO!*\n\n"
+        f"{cabecalho}\n\n"
         f"*{data_txt}*\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n"
         f"*{grau}*\n"
