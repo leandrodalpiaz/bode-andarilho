@@ -32,7 +32,7 @@ import os
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from urllib.parse import unquote
+from urllib.parse import parse_qsl, unquote
 
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
@@ -75,11 +75,9 @@ def verify_telegram_webapp_data(init_data: str, bot_token: str) -> Optional[dict
     if not init_data or not bot_token:
         return None
     try:
-        params: Dict[str, str] = {}
-        for pair in init_data.split("&"):
-            if "=" in pair:
-                k, v = pair.split("=", 1)
-                params[k] = v
+        # parse_qsl URL-decodifica os valores automaticamente — obrigatório para
+        # que o data_check_string bata com o que o Telegram assinou.
+        params: Dict[str, str] = dict(parse_qsl(init_data, strict_parsing=False))
 
         hash_value = params.pop("hash", "")
         if not hash_value:
@@ -102,8 +100,8 @@ def verify_telegram_webapp_data(init_data: str, bot_token: str) -> Optional[dict
             logger.warning("Assinatura initData inválida.")
             return None
 
-        user_json = unquote(params.get("user", "{}"))
-        return json.loads(user_json)
+        # parse_qsl já decodificou o valor de "user"; só precisa fazer o parse JSON
+        return json.loads(params.get("user", "{}"))
 
     except Exception as e:
         logger.warning("Erro na verificação initData: %s", e)
