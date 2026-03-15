@@ -48,6 +48,20 @@ from src.messages import (
     NAO_CONFIRMOU,
     NOTIFICACAO_NOVA_CONFIRMACAO,
     PRESENCA_CANCELADA,
+    MENSAGEM_CONFIRMACAO_AGAPE,
+    CONFIRMACAO_SEM_CADASTRO,
+    CONFIRMACAO_FALLBACK_GRUPO_CADASTRO,
+    CONFIRMACAO_CALLBACK_ABRIR_PRIVADO_CADASTRO,
+    CONFIRMACAO_SESSAO_NAO_ENCONTRADA,
+    CONFIRMACAO_JA_CONFIRMADO_POS_CADASTRO,
+    CONFIRMACAO_SECRETARIO_TMPL,
+    CONFIRMACAO_COM_AGAPE_TMPL,
+    CONFIRMACAO_SEM_AGAPE_TMPL,
+    CANCELAR_PRESENCA_SUCESSO_GRUPO,
+    CANCELAR_PRESENCA_CONFIRMAR,
+    CANCELAR_PRESENCA_FALLBACK_GRUPO,
+    CANCELAR_PRESENCA_CALLBACK_ABRIR_PRIVADO,
+    CANCELAR_PRESENCA_CALLBACK_INSTRUCOES,
 )
 
 from src.bot import (
@@ -166,12 +180,6 @@ def registrar_post_evento_grupo(id_evento: str, chat_id: int, message_id: int) -
 
 MAX_EVENTOS_LISTA = 40
 MESES_PROXIMOS_QTD = 6
-
-MENSAGEM_CONFIRMACAO_AGAPE = (
-    "Sua confirmação é muito importante! Ela nos ajuda a organizar tudo com carinho, "
-    "evitando desperdícios e custos desnecessários.\n\n"
-    "Fraterno abraço!"
-)
 
 # Tokens de filtro
 TOKEN_SEMANA_ATUAL = "semana_atual"
@@ -1090,7 +1098,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         teclado = InlineKeyboardMarkup([[InlineKeyboardButton("📝 Fazer cadastro", callback_data="iniciar_cadastro")]])
         sucesso_privado = await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Irmão, antes de confirmar sua presença, preciso registrar seu cadastro.",
+            CONFIRMACAO_SEM_CADASTRO,
             teclado,
             limpar_conteudo=True
         )
@@ -1099,17 +1107,14 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             link_privado = _link_privado_bot(context, "cadastro")
             await context.bot.send_message(
                 chat_id=update.effective_chat.id,
-                text=(
-                    "📩 Não consegui te chamar no privado para iniciar o cadastro.\n\n"
-                    "Toque no botão abaixo, abra meu chat e envie /start."
-                ),
+                text=CONFIRMACAO_FALLBACK_GRUPO_CADASTRO,
                 reply_markup=InlineKeyboardMarkup(
                     [[InlineKeyboardButton("📩 Abrir privado do bot", url=link_privado)]]
                 ),
             )
             await _responder_callback_seguro(
                 query,
-                "Abra o privado do bot para concluir o cadastro.",
+                CONFIRMACAO_CALLBACK_ABRIR_PRIVADO_CADASTRO,
                 show_alert=True,
             )
         return ConversationHandler.END
@@ -1175,14 +1180,14 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
 
     if eh_secretario:
         # Mensagem combinada para secretário
-        resposta = (
-            f"✅ *Presença confirmada, irmão {membro.get('Nome', '')}!*\n\n"
-            f"Resumo:\n"
-            f"📅 {data} — {nome_loja}{numero_fmt}\n"
-            f"🕕 Horário: {horario}\n"
-            f"🍽 {texto_participacao}\n\n"
-            f"{bloco_importancia}"
-            f"📢 *Nova confirmação registrada*"
+        resposta = CONFIRMACAO_SECRETARIO_TMPL.format(
+            nome=membro.get('Nome', ''),
+            data=data,
+            loja=nome_loja,
+            numero_fmt=numero_fmt,
+            horario=horario,
+            participacao=texto_participacao,
+            bloco_importancia=bloco_importancia,
         )
         
         teclado = InlineKeyboardMarkup([
@@ -1196,23 +1201,23 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     else:
         # Mensagem normal para usuário comum
         if confirmou_com_agape:
-            resposta = (
-                f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
-                f"Resumo:\n"
-                f"📅 {data} — {nome_loja}{numero_fmt}\n"
-                f"🕕 Horário: {horario}\n"
-                f"🍽 {texto_participacao}\n\n"
-                f"{MENSAGEM_CONFIRMACAO_AGAPE}\n\n"
-                "Até lá!"
+            resposta = CONFIRMACAO_COM_AGAPE_TMPL.format(
+                nome=membro.get('Nome', ''),
+                data=data,
+                loja=nome_loja,
+                numero_fmt=numero_fmt,
+                horario=horario,
+                participacao=texto_participacao,
+                msg_agape=MENSAGEM_CONFIRMACAO_AGAPE,
             )
         else:
-            resposta = (
-                f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
-                f"Resumo:\n"
-                f"📅 {data} — {nome_loja}{numero_fmt}\n"
-                f"🕕 Horário: {horario}\n"
-                f"🍽 {texto_participacao}\n\n"
-                "Até lá!"
+            resposta = CONFIRMACAO_SEM_AGAPE_TMPL.format(
+                nome=membro.get('Nome', ''),
+                data=data,
+                loja=nome_loja,
+                numero_fmt=numero_fmt,
+                horario=horario,
+                participacao=texto_participacao,
             )
 
         teclado = InlineKeyboardMarkup([
@@ -1248,7 +1253,7 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
     if not evento:
         await context.bot.send_message(
             chat_id=user_id,
-            text="Sessão não encontrada. Tente confirmar novamente."
+            text=CONFIRMACAO_SESSAO_NAO_ENCONTRADA
         )
         return
 
@@ -1259,7 +1264,7 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
     if buscar_confirmacao(id_evento, user_id):
         await context.bot.send_message(
             chat_id=user_id,
-            text="Você já estava confirmado para esta sessão.",
+            text=CONFIRMACAO_JA_CONFIRMADO_POS_CADASTRO,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")],
                 [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")],
@@ -1300,23 +1305,23 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
     numero_fmt = f" {numero_loja}" if numero_loja else ""
 
     if confirmou_com_agape:
-        resposta = (
-            f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
-            f"Resumo:\n"
-            f"📅 {data} — {nome_loja}{numero_fmt}\n"
-            f"🕕 Horário: {horario}\n"
-            f"🍽 {texto_participacao}\n\n"
-            f"{MENSAGEM_CONFIRMACAO_AGAPE}\n\n"
-            "Até lá!"
+        resposta = CONFIRMACAO_COM_AGAPE_TMPL.format(
+            nome=membro.get('Nome', ''),
+            data=data,
+            loja=nome_loja,
+            numero_fmt=numero_fmt,
+            horario=horario,
+            participacao=texto_participacao,
+            msg_agape=MENSAGEM_CONFIRMACAO_AGAPE,
         )
     else:
-        resposta = (
-            f"✅ Presença confirmada, irmão {membro.get('Nome', '')}!\n\n"
-            f"Resumo:\n"
-            f"📅 {data} — {nome_loja}{numero_fmt}\n"
-            f"🕕 Horário: {horario}\n"
-            f"🍽 {texto_participacao}\n\n"
-            "Até lá!"
+        resposta = CONFIRMACAO_SEM_AGAPE_TMPL.format(
+            nome=membro.get('Nome', ''),
+            data=data,
+            loja=nome_loja,
+            numero_fmt=numero_fmt,
+            horario=horario,
+            participacao=texto_participacao,
         )
 
     await context.bot.send_message(
@@ -1360,7 +1365,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # Envia mensagem de confirmação no grupo
                 await context.bot.send_message(
                     chat_id=update.effective_chat.id,
-                    text="✅ *Presença cancelada com sucesso!*",
+                    text=CANCELAR_PRESENCA_SUCESSO_GRUPO,
                     parse_mode="Markdown"
                 )
             else:
@@ -1399,26 +1404,23 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await context.bot.send_message(
                     chat_id=user_id,
-                    text="*Confirmar cancelamento da sua presença?*",
+                    text=CANCELAR_PRESENCA_CONFIRMAR,
                     parse_mode="Markdown",
                     reply_markup=teclado
                 )
-                await _responder_callback_seguro(query, "📨 Instruções enviadas no privado.")
+                await _responder_callback_seguro(query, CANCELAR_PRESENCA_CALLBACK_INSTRUCOES)
             except Forbidden:
                 link_privado = _link_privado_bot(context, "start")
                 await context.bot.send_message(
                     chat_id=update.effective_chat.id,
-                    text=(
-                        "📩 Não consegui enviar a confirmação de cancelamento no privado.\n\n"
-                        "Abra meu chat pelo botão abaixo e envie /start."
-                    ),
+                    text=CANCELAR_PRESENCA_FALLBACK_GRUPO,
                     reply_markup=InlineKeyboardMarkup(
                         [[InlineKeyboardButton("📩 Abrir privado do bot", url=link_privado)]]
                     ),
                 )
                 await _responder_callback_seguro(
                     query,
-                    "Abra o privado do bot para concluir o cancelamento.",
+                    CANCELAR_PRESENCA_CALLBACK_ABRIR_PRIVADO,
                     show_alert=True,
                 )
             return

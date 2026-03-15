@@ -236,3 +236,338 @@ TEXTO_CELEBRACAO_MENSAL = (
     "Que a chama da visitação continue acesa!\n\n"
     "#BodeAndarilho #FraternidadeEmAção"
 )
+
+
+# ============================================
+# CADASTRO — FLUXO
+# ============================================
+# Mensagens do ConversationHandler de cadastro (src/cadastro.py)
+
+# [CONTEXTO] Ao usar /cadastro em grupo; orienta para o privado
+# [CANAL] Grupo (mensagem direta)
+CADASTRO_REDIRECIONAR_PRIVADO = (
+    "🔒 Para realizar seu cadastro, fale comigo no privado.\n\n"
+    "Clique aqui: @BodeAndarilhoBot e envie /start"
+)
+
+# [CONTEXTO] Cadastro estava inativo após saída do grupo; solicita revalidação
+# [CANAL] Privado
+CADASTRO_REVALIDACAO_NECESSARIA = (
+    "🔄 *Revalidacao de cadastro necessaria*\n\n"
+    "Identificamos que seu cadastro estava inativo por saida do grupo.\n"
+    "Para voltar ao uso normal, atualize seus dados agora.\n\n"
+    "_Isso garante informacoes atuais para administracao e secretaria._"
+)
+
+# [CONTEXTO] Membro possui dados parcialmente preenchidos; pode continuar ou recomeçar
+# [CANAL] Privado
+CADASTRO_PARCIAL_EM_ANDAMENTO = (
+    "🧾 *Cadastro em andamento*\n\n"
+    "Identifiquei dados já preenchidos do seu cadastro.\n"
+    "Você pode continuar de onde parou ou recomeçar do início.\n\n"
+    "_O processo tem 8 passos rápidos e você pode usar Voltar/Cancelar a qualquer momento._"
+)
+
+# [CONTEXTO] Novo membro vindo do grupo sem cadastro prévio
+# [CANAL] Privado
+CADASTRO_BOAS_VINDAS_GRUPO = (
+    "🐐 *Seja bem-vindo ao Bode Andarilho!*\n\n"
+    "Para seguir no sistema, primeiro vamos fazer seu cadastro.\n"
+    "Toque em *Iniciar cadastro* e eu te guiarei passo a passo.\n\n"
+    "_Suas informações estão sob a proteção do sigilo maçônico._"
+)
+
+# [CONTEXTO] Tela inicial padrão de cadastro
+# [CANAL] Privado
+CADASTRO_INICIO_PADRAO = (
+    "👤 *Cadastro*\n\n"
+    "Aqui você pode iniciar ou editar seu cadastro.\n"
+    "O fluxo é guiado em *8 passos* com exemplos em cada etapa.\n\n"
+    "_Lembre-se: suas informações estão sob a proteção do sigilo maçônico._"
+)
+
+# [CONTEXTO] Início do fluxo de novo cadastro (passo 1); {etapa_nome} = _texto_etapa(NOME)
+# [CANAL] Privado
+CADASTRO_NOVO_INTRO_TMPL = (
+    "🧾 *Novo cadastro iniciado*\n\n"
+    "Vamos concluir em 8 passos rápidos.\n"
+    "Use *Voltar* para corrigir qualquer dado e *Cancelar* se quiser sair.\n\n"
+    "{etapa_nome}"
+)
+
+# [CONTEXTO] Início do fluxo de revalidação de cadastro (passo 1); {etapa_nome} = _texto_etapa(NOME)
+# [CANAL] Privado
+CADASTRO_REVALIDAR_INTRO_TMPL = (
+    "✏️ *Revalidar cadastro*\n\n"
+    "Vamos revisar seus dados em 8 passos para garantir que tudo esteja atualizado.\n\n"
+    "{etapa_nome}"
+)
+
+# [CONTEXTO] Erro quando nome tem menos de 3 caracteres
+# [CANAL] Privado
+CADASTRO_ERRO_NOME_CURTO = (
+    "❌ Nome muito curto.\n"
+    "Envie seu *nome completo* (com pelo menos 3 caracteres)."
+)
+
+# [CONTEXTO] Erro de data de nascimento em formato inválido
+# [CANAL] Privado
+CADASTRO_ERRO_DATA_NASC = (
+    "❌ Data inválida.\n"
+    "Envie no formato *DD/MM/AAAA* (ex.: 25/03/1988)."
+)
+
+# [CONTEXTO] Erro quando nome de loja está em branco
+# [CANAL] Privado
+CADASTRO_ERRO_LOJA = "❌ Informe o *nome da sua loja*:"
+
+# [CONTEXTO] Erro quando número de loja não é inteiro
+# [CANAL] Privado
+CADASTRO_ERRO_NUMERO_LOJA = "❌ Número inválido. Envie somente números (ex.: 0, 12, 345)."
+
+# [CONTEXTO] Erro quando oriente está em branco
+# [CANAL] Privado
+CADASTRO_ERRO_ORIENTE = "❌ Informe seu *Oriente*:"
+
+# [CONTEXTO] Erro quando potência está em branco
+# [CANAL] Privado
+CADASTRO_ERRO_POTENCIA = "❌ Informe sua *Potência*:"
+
+# [CONTEXTO] Grau digitado por texto não reconhecido; reexibe botões
+# [CANAL] Privado
+CADASTRO_ERRO_GRAU_TEXTO = (
+    "Não reconheci esse grau.\n\n"
+    "Selecione nos botões abaixo ou digite exatamente:"
+    " *Aprendiz*, *Companheiro*, *Mestre* ou *Mestre Instalado*."
+)
+
+# [CONTEXTO] Resposta de VM por texto inválida (não é Sim/Não)
+# [CANAL] Privado
+CADASTRO_ERRO_VM_TEXTO = "Resposta inválida. Selecione *Sim* ou *Não* nos botões abaixo."
+
+# [CONTEXTO] Callback de grau retornou dados inválidos (erro interno)
+# [CANAL] Privado
+CADASTRO_ERRO_GRAU_INVALIDO = "❌ Opção inválida. Selecione seu grau novamente:"
+
+# [CONTEXTO] Grau selecionado via botão não é uma opção reconhecida
+# [CANAL] Privado
+CADASTRO_ERRO_GRAU_SELECIONE = "❌ Opção inválida. Selecione seu grau:"
+
+# [CONTEXTO] Callback de VM retornou dados inválidos
+# [CANAL] Privado
+CADASTRO_ERRO_VM_INVALIDO = "❌ Opção inválida. Você é Venerável Mestre?"
+
+# [CONTEXTO] Tela de revisão final antes de confirmar; {resumo} = _resumo_cadastro(context)
+# [CANAL] Privado
+CADASTRO_REVISAO_FINAL_TMPL = (
+    "✅ *Revisão final*\n"
+    "Confira os dados abaixo. Se estiver tudo certo, confirme o cadastro.\n\n"
+    "{resumo}"
+)
+
+# [CONTEXTO] Ainda há campos obrigatórios não preenchidos; redireciona para etapa pendente
+# [CANAL] Privado
+CADASTRO_DADOS_PENDENTES = (
+    "⚠️ Ainda faltam alguns dados antes da conclusão."
+    " Vou te levar para a próxima etapa pendente."
+)
+
+# [CONTEXTO] Falha ao salvar o cadastro no banco de dados
+# [CANAL] Privado
+CADASTRO_FALHA_SALVAR = (
+    "❌ Não consegui salvar seu cadastro agora.\n"
+    "Tente confirmar novamente em instantes."
+)
+
+# [CONTEXTO] Prompt exibido quando confirmação é feita por texto em vez de botão
+# [CANAL] Privado
+CADASTRO_PROMPT_CONFIRMAR = (
+    "Para concluir, toque em *✅ Confirmar cadastro* ou digite *confirmar*."
+)
+
+# [CONTEXTO] Fluxo de cadastro cancelado via botão "Cancelar"
+# [CANAL] Privado
+CADASTRO_OPERACAO_CANCELADA = "Operação cancelada."
+
+
+# ============================================
+# CONFIRMAÇÃO DE PRESENÇA — TEMPLATES
+# ============================================
+# Mensagens de confirmação/cancelamento (src/eventos.py)
+
+# [CONTEXTO] Usuário sem cadastro tenta confirmar presença
+# [CANAL] Privado
+CONFIRMACAO_SEM_CADASTRO = "Irmão, antes de confirmar sua presença, preciso registrar seu cadastro."
+
+# [CONTEXTO] Privado indisponível ao redirecionar para cadastro; fallback no grupo
+# [CANAL] Grupo
+CONFIRMACAO_FALLBACK_GRUPO_CADASTRO = (
+    "📩 Não consegui te chamar no privado para iniciar o cadastro.\n\n"
+    "Toque no botão abaixo, abra meu chat e envie /start."
+)
+
+# [CONTEXTO] Toast/alert ao redirecionar para privado para completar cadastro
+# [CANAL] Privado (toast)
+CONFIRMACAO_CALLBACK_ABRIR_PRIVADO_CADASTRO = "Abra o privado do bot para concluir o cadastro."
+
+# [CONTEXTO] Evento não encontrado ao tentar confirmar depois do cadastro
+# [CANAL] Privado
+CONFIRMACAO_SESSAO_NAO_ENCONTRADA = "Sessão não encontrada. Tente confirmar novamente."
+
+# [CONTEXTO] Membro já confirmado; exibido no fluxo pós-cadastro
+# [CANAL] Privado
+CONFIRMACAO_JA_CONFIRMADO_POS_CADASTRO = "Você já estava confirmado para esta sessão."
+
+# [CONTEXTO] Resposta ao secretário que confirma presença no próprio evento;
+#            {nome},{data},{loja},{numero_fmt},{horario},{participacao},{bloco_importancia}
+# [CANAL] Privado
+CONFIRMACAO_SECRETARIO_TMPL = (
+    "✅ *Presença confirmada, irmão {nome}!*\n\n"
+    "Resumo:\n"
+    "📅 {data} — {loja}{numero_fmt}\n"
+    "🕕 Horário: {horario}\n"
+    "🍽 {participacao}\n\n"
+    "{bloco_importancia}"
+    "📢 *Nova confirmação registrada*"
+)
+
+# [CONTEXTO] Confirmação de presença para membro com ágape;
+#            {nome},{data},{loja},{numero_fmt},{horario},{participacao},{msg_agape}
+# [CANAL] Privado
+CONFIRMACAO_COM_AGAPE_TMPL = (
+    "✅ Presença confirmada, irmão {nome}!\n\n"
+    "Resumo:\n"
+    "📅 {data} — {loja}{numero_fmt}\n"
+    "🕕 Horário: {horario}\n"
+    "🍽 {participacao}\n\n"
+    "{msg_agape}\n\n"
+    "Até lá!"
+)
+
+# [CONTEXTO] Confirmação de presença para membro sem ágape;
+#            {nome},{data},{loja},{numero_fmt},{horario},{participacao}
+# [CANAL] Privado
+CONFIRMACAO_SEM_AGAPE_TMPL = (
+    "✅ Presença confirmada, irmão {nome}!\n\n"
+    "Resumo:\n"
+    "📅 {data} — {loja}{numero_fmt}\n"
+    "🕕 Horário: {horario}\n"
+    "🍽 {participacao}\n\n"
+    "Até lá!"
+)
+
+# [CONTEXTO] Mensagem sobre importância da confirmação de ágape (incluída na confirmação)
+# [CANAL] Privado
+MENSAGEM_CONFIRMACAO_AGAPE = (
+    "Sua confirmação é muito importante! Ela nos ajuda a organizar tudo com carinho, "
+    "evitando desperdícios e custos desnecessários.\n\n"
+    "Fraterno abraço!"
+)
+
+# [CONTEXTO] Sucesso ao cancelar presença (enviado no grupo)
+# [CANAL] Grupo
+CANCELAR_PRESENCA_SUCESSO_GRUPO = "✅ *Presença cancelada com sucesso!*"
+
+# [CONTEXTO] Pergunta de confirmação antes de cancelar presença (enviada no privado)
+# [CANAL] Privado
+CANCELAR_PRESENCA_CONFIRMAR = "*Confirmar cancelamento da sua presença?*"
+
+# [CONTEXTO] Privado indisponível para cancelamento; fallback no grupo
+# [CANAL] Grupo
+CANCELAR_PRESENCA_FALLBACK_GRUPO = (
+    "📩 Não consegui enviar a confirmação de cancelamento no privado.\n\n"
+    "Abra meu chat pelo botão abaixo e envie /start."
+)
+
+# [CONTEXTO] Toast/alert ao redirecionar para privado para confirmar cancelamento
+# [CANAL] Privado (toast)
+CANCELAR_PRESENCA_CALLBACK_ABRIR_PRIVADO = "Abra o privado do bot para concluir o cancelamento."
+
+# [CONTEXTO] Toast/alert confirmando envio das instruções de cancelamento no privado
+# [CANAL] Grupo (toast)
+CANCELAR_PRESENCA_CALLBACK_INSTRUCOES = "📨 Instruções enviadas no privado."
+
+
+# ============================================
+# EDIÇÃO DE EVENTOS (SECRETÁRIO)
+# ============================================
+# Mensagens do fluxo de edição (src/eventos_secretario.py)
+
+# [CONTEXTO] Dados de edição ausentes do contexto (user_data limpo)
+# [CANAL] Privado
+EDICAO_EVENTO_DADOS_NAO_ENCONTRADOS = "Erro: dados não encontrados. Tente novamente."
+
+# [CONTEXTO] Dados do evento ausentes do contexto (user_data limpo)
+# [CANAL] Privado
+EDICAO_EVENTO_CONTEXTO_PERDIDO = "Erro: dados do evento não encontrados."
+
+# [CONTEXTO] Campo do evento atualizado com sucesso; {campo_nome} = nome legível do campo
+# [CANAL] Privado
+EDICAO_EVENTO_SUCESSO_TMPL = "✅ {campo_nome} atualizado com sucesso!\n\nUse o menu acima para continuar."
+
+# [CONTEXTO] Falha ao atualizar o campo no banco de dados
+# [CANAL] Privado
+EDICAO_EVENTO_FALHA = "❌ Erro ao atualizar o campo. Tente novamente mais tarde."
+
+# [CONTEXTO] Fluxo de edição de evento cancelado
+# [CANAL] Privado
+EDICAO_EVENTO_CANCELADA = "Edição cancelada."
+
+
+# ============================================
+# MENSAGENS DE GRUPO E ONBOARDING
+# ============================================
+# Mensagens exibidas em grupos e no onboarding de novos membros (main.py)
+
+# [CONTEXTO] Enviado no privado a membro sem cadastro que usou "bode" no grupo
+# [CANAL] Privado
+GRUPO_ONBOARDING_SEM_CADASTRO = (
+    "👋 *Bem-vindo ao Bode Andarilho!*\n\n"
+    "Para começar de forma simples e segura, toque em *Iniciar cadastro* no privado."
+)
+
+# [CONTEXTO] Fallback no grupo quando privado indisponível; botão com link para privado
+# [CANAL] Grupo
+GRUPO_FALLBACK_ABRIR_PRIVADO = "📩 Para continuar, abra meu privado pelo botão abaixo."
+
+# [CONTEXTO] Resposta no grupo para /start ou /cadastro
+# [CANAL] Grupo
+GRUPO_COMANDO_PRIVADO = "📩 Use o bot no privado para cadastro e menus."
+
+# [CONTEXTO] Resposta no grupo para comandos não reconhecidos (auto-apagada em 15 s)
+# [CANAL] Grupo
+GRUPO_COMANDO_NAO_RECONHECIDO = (
+    "🛠️ Não reconheci esse comando no grupo.\n\n"
+    "Aqui eu respondo apenas:\n"
+    "• bode\n"
+    "• /bode\n"
+    "• menu\n"
+    "• /menu\n"
+    "• painel\n"
+    "• /painel\n\n"
+    "Para cadastro e funções completas, fale comigo no privado."
+)
+
+# [CONTEXTO] Boas-vindas de retorno enviado no privado ao membro com cadastro ativo;
+#            {nome} = membro.get('Nome', nome)
+# [CANAL] Privado
+GRUPO_BOAS_VINDAS_RETORNO_TMPL = (
+    "Saudações, Ir.·. {nome}! 🤝\n\n"
+    "Bem-vindo de volta ao grupo. Seu cadastro está ativo.\n"
+    "Digite *bode* no grupo ou use /start aqui para acessar o painel."
+)
+
+# [CONTEXTO] Onboarding enviado no privado ao novo membro que entrou no grupo; {nome}
+# [CANAL] Privado
+GRUPO_ONBOARDING_NOVO_MEMBRO_TMPL = (
+    "Salve, {nome}! 🐐\n\n"
+    "Bem-vindo ao *Bode Andarilho*.\n\n"
+    "Para acessar as sessões e confirmar presenças, complete o seu "
+    "cadastro. É rápido e seus dados ficam protegidos aqui no privado.\n\n"
+    "Toque no botão abaixo para começar:"
+)
+
+# [CONTEXTO] Fallback mínimo no grupo quando privado indisponível para novo membro;
+#            {nome} (auto-apagada em 30 s)
+# [CANAL] Grupo
+GRUPO_FALLBACK_NOVO_MEMBRO_TMPL = "Salve, {nome}! 🐐 Para se cadastrar, toque no botão abaixo."

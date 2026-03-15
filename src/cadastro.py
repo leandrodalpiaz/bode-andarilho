@@ -37,7 +37,34 @@ from telegram.ext import (
     filters,
 )
 
-from src.messages import CADASTRO_CANCELADO, CADASTRO_CONCLUIDO, ERRO_GENERICO
+from src.messages import (
+    CADASTRO_CANCELADO,
+    CADASTRO_CONCLUIDO,
+    ERRO_GENERICO,
+    CADASTRO_REDIRECIONAR_PRIVADO,
+    CADASTRO_REVALIDACAO_NECESSARIA,
+    CADASTRO_PARCIAL_EM_ANDAMENTO,
+    CADASTRO_BOAS_VINDAS_GRUPO,
+    CADASTRO_INICIO_PADRAO,
+    CADASTRO_NOVO_INTRO_TMPL,
+    CADASTRO_REVALIDAR_INTRO_TMPL,
+    CADASTRO_ERRO_NOME_CURTO,
+    CADASTRO_ERRO_DATA_NASC,
+    CADASTRO_ERRO_LOJA,
+    CADASTRO_ERRO_NUMERO_LOJA,
+    CADASTRO_ERRO_ORIENTE,
+    CADASTRO_ERRO_POTENCIA,
+    CADASTRO_ERRO_GRAU_TEXTO,
+    CADASTRO_ERRO_VM_TEXTO,
+    CADASTRO_ERRO_GRAU_INVALIDO,
+    CADASTRO_ERRO_GRAU_SELECIONE,
+    CADASTRO_ERRO_VM_INVALIDO,
+    CADASTRO_REVISAO_FINAL_TMPL,
+    CADASTRO_DADOS_PENDENTES,
+    CADASTRO_FALHA_SALVAR,
+    CADASTRO_PROMPT_CONFIRMAR,
+    CADASTRO_OPERACAO_CANCELADA,
+)
 from src.sheets_supabase import buscar_membro, cadastrar_membro
 from src.bot import (
     navegar_para,
@@ -352,8 +379,7 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.effective_chat and update.effective_chat.type in ("group", "supergroup"):
             if update.message:
                 await update.message.reply_text(
-                    "🔒 Para realizar seu cadastro, fale comigo no privado.\n\n"
-                    "Clique aqui: @BodeAndarilhoBot e envie /start"
+                    CADASTRO_REDIRECIONAR_PRIVADO
                 )
             return
 
@@ -366,33 +392,13 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cadastro_parcial = (not cadastrado) and _cadastro_parcial_em_andamento(context)
 
         if forcar_revalidacao and cadastrado:
-            texto = (
-                "🔄 *Revalidacao de cadastro necessaria*\n\n"
-                "Identificamos que seu cadastro estava inativo por saida do grupo.\n"
-                "Para voltar ao uso normal, atualize seus dados agora.\n\n"
-                "_Isso garante informacoes atuais para administracao e secretaria._"
-            )
+            texto = CADASTRO_REVALIDACAO_NECESSARIA
         elif cadastro_parcial:
-            texto = (
-                "🧾 *Cadastro em andamento*\n\n"
-                "Identifiquei dados já preenchidos do seu cadastro.\n"
-                "Você pode continuar de onde parou ou recomeçar do início.\n\n"
-                "_O processo tem 8 passos rápidos e você pode usar Voltar/Cancelar a qualquer momento._"
-            )
+            texto = CADASTRO_PARCIAL_EM_ANDAMENTO
         elif not cadastrado and origem_grupo:
-            texto = (
-                "🐐 *Seja bem-vindo ao Bode Andarilho!*\n\n"
-                "Para seguir no sistema, primeiro vamos fazer seu cadastro.\n"
-                "Toque em *Iniciar cadastro* e eu te guiarei passo a passo.\n\n"
-                "_Suas informações estão sob a proteção do sigilo maçônico._"
-            )
+            texto = CADASTRO_BOAS_VINDAS_GRUPO
         else:
-            texto = (
-                "👤 *Cadastro*\n\n"
-                "Aqui você pode iniciar ou editar seu cadastro.\n"
-                "O fluxo é guiado em *8 passos* com exemplos em cada etapa.\n\n"
-                "_Lembre-se: suas informações estão sob a proteção do sigilo maçônico._"
-            )
+            texto = CADASTRO_INICIO_PADRAO
 
         teclado_inicio = _teclado_inicio(cadastrado, forcar_revalidacao, cadastro_parcial)
 
@@ -436,10 +442,7 @@ async def iniciar_cadastro_callback(update: Update, context: ContextTypes.DEFAUL
         update,
         context,
         "Cadastro",
-        "🧾 *Novo cadastro iniciado*\n\n"
-        "Vamos concluir em 8 passos rápidos.\n"
-        "Use *Voltar* para corrigir qualquer dado e *Cancelar* se quiser sair.\n\n"
-        f"{_texto_etapa(NOME)}",
+        CADASTRO_NOVO_INTRO_TMPL.format(etapa_nome=_texto_etapa(NOME)),
         _teclado_nav(NOME),
     )
     return NOME
@@ -489,9 +492,7 @@ async def editar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT
     await navegar_para(
         update, context,
         "Editar Cadastro",
-        "✏️ *Revalidar cadastro*\n\n"
-        "Vamos revisar seus dados em 8 passos para garantir que tudo esteja atualizado.\n\n"
-        f"{_texto_etapa(NOME)}",
+        CADASTRO_REVALIDAR_INTRO_TMPL.format(etapa_nome=_texto_etapa(NOME)),
         _teclado_nav(NOME)
     )
     return NOME
@@ -506,8 +507,7 @@ async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nome = (update.message.text or "").strip()
     if len(nome) < 3:
         await update.message.reply_text(
-            "❌ Nome muito curto.\n"
-            "Envie seu *nome completo* (com pelo menos 3 caracteres).",
+            CADASTRO_ERRO_NOME_CURTO,
             parse_mode="Markdown",
         )
         return NOME
@@ -521,8 +521,7 @@ async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = (update.message.text or "").strip()
     if not _validar_data_nasc(texto):
         await update.message.reply_text(
-            "❌ Data inválida.\n"
-            "Envie no formato *DD/MM/AAAA* (ex.: 25/03/1988).",
+            CADASTRO_ERRO_DATA_NASC,
             parse_mode="Markdown",
         )
         return DATA_NASC
@@ -535,7 +534,7 @@ async def receber_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o nome da loja."""
     loja = (update.message.text or "").strip()
     if len(loja) < 2:
-        await update.message.reply_text("❌ Informe o *nome da sua loja*:", parse_mode="Markdown")
+        await update.message.reply_text(CADASTRO_ERRO_LOJA, parse_mode="Markdown")
         return LOJA
 
     context.user_data["cadastro_loja"] = loja
@@ -546,7 +545,7 @@ async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Recebe o número da loja."""
     numero = (update.message.text or "").strip()
     if not _validar_numero_loja(numero):
-        await update.message.reply_text("❌ Número inválido. Envie somente números (ex.: 0, 12, 345).")
+        await update.message.reply_text(CADASTRO_ERRO_NUMERO_LOJA)
         return NUMERO_LOJA
 
     context.user_data["cadastro_numero_loja"] = numero
@@ -557,7 +556,7 @@ async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o oriente."""
     oriente = (update.message.text or "").strip()
     if len(oriente) < 2:
-        await update.message.reply_text("❌ Informe seu *Oriente*:", parse_mode="Markdown")
+        await update.message.reply_text(CADASTRO_ERRO_ORIENTE, parse_mode="Markdown")
         return ORIENTE
 
     context.user_data["cadastro_oriente"] = oriente
@@ -568,7 +567,7 @@ async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe a potência."""
     potencia = (update.message.text or "").strip()
     if len(potencia) < 2:
-        await update.message.reply_text("❌ Informe sua *Potência*:", parse_mode="Markdown")
+        await update.message.reply_text(CADASTRO_ERRO_POTENCIA, parse_mode="Markdown")
         return POTENCIA
 
     context.user_data["cadastro_potencia"] = potencia
@@ -587,9 +586,7 @@ async def receber_grau_texto(update: Update, context: ContextTypes.DEFAULT_TYPE)
             update,
             context,
             "Cadastro",
-            "Não reconheci esse grau.\n\n"
-            "Selecione nos botões abaixo ou digite exatamente:"
-            " *Aprendiz*, *Companheiro*, *Mestre* ou *Mestre Instalado*.",
+            CADASTRO_ERRO_GRAU_TEXTO,
             _teclado_grau(),
         )
         return GRAU
@@ -606,7 +603,7 @@ async def receber_vm_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update,
             context,
             "Cadastro",
-            "Resposta inválida. Selecione *Sim* ou *Não* nos botões abaixo.",
+            CADASTRO_ERRO_VM_TEXTO,
             _teclado_vm(),
         )
         return VM
@@ -624,7 +621,7 @@ async def set_grau_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "❌ Opção inválida. Selecione seu grau novamente:",
+            CADASTRO_ERRO_GRAU_INVALIDO,
             _teclado_grau()
         )
         return GRAU
@@ -632,7 +629,7 @@ async def set_grau_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if grau not in GRAUS_OPCOES:
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "❌ Opção inválida. Selecione seu grau:",
+            CADASTRO_ERRO_GRAU_SELECIONE,
             _teclado_grau()
         )
         return GRAU
@@ -651,7 +648,7 @@ async def set_vm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "❌ Opção inválida. Você é Venerável Mestre?",
+            CADASTRO_ERRO_VM_INVALIDO,
             _teclado_vm()
         )
         return VM
@@ -659,7 +656,7 @@ async def set_vm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if vm not in (VM_SIM, VM_NAO):
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "❌ Opção inválida. Você é Venerável Mestre?",
+            CADASTRO_ERRO_VM_INVALIDO,
             _teclado_vm()
         )
         return VM
@@ -674,11 +671,7 @@ async def set_vm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def _mostrar_confirmacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Exibe tela de confirmação com resumo dos dados."""
-    texto = (
-        "✅ *Revisão final*\n"
-        "Confira os dados abaixo. Se estiver tudo certo, confirme o cadastro.\n\n"
-        f"{_resumo_cadastro(context)}"
-    )
+    texto = CADASTRO_REVISAO_FINAL_TMPL.format(resumo=_resumo_cadastro(context))
     await navegar_para(update, context, "Confirmar Cadastro", texto, _teclado_confirmar())
 
 
@@ -705,8 +698,7 @@ async def _finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE
             context,
             update.effective_user.id,
             TIPO_RESULTADO,
-            "⚠️ Ainda faltam alguns dados antes da conclusão."
-            " Vou te levar para a próxima etapa pendente.",
+            CADASTRO_DADOS_PENDENTES,
         )
         return await _navegar_etapa(update, context, estado_pendente, retomada=True)
 
@@ -718,8 +710,7 @@ async def _finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE
             context,
             update.effective_user.id,
             TIPO_RESULTADO,
-            "❌ Não consegui salvar seu cadastro agora.\n"
-            "Tente confirmar novamente em instantes.",
+            CADASTRO_FALHA_SALVAR,
             _teclado_confirmar(),
         )
         return CONFIRMAR
@@ -759,7 +750,7 @@ async def receber_confirmacao_texto(update: Update, context: ContextTypes.DEFAUL
         return await _finalizar_cadastro(update, context)
 
     await update.message.reply_text(
-        "Para concluir, toque em *✅ Confirmar cadastro* ou digite *confirmar*.",
+        CADASTRO_PROMPT_CONFIRMAR,
         parse_mode="Markdown",
     )
     await _mostrar_confirmacao(update, context)
@@ -818,7 +809,7 @@ async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await navegar_para(
                 update, context,
                 "Cadastro",
-                "Operação cancelada.",
+                CADASTRO_OPERACAO_CANCELADA,
                 InlineKeyboardMarkup([[
                     InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")
                 ]])

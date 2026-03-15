@@ -60,6 +60,13 @@ from src.bot import (
     _enviar_ou_editar_mensagem,
     TIPO_RESULTADO
 )
+from src.messages import (
+    EDICAO_EVENTO_DADOS_NAO_ENCONTRADOS,
+    EDICAO_EVENTO_CONTEXTO_PERDIDO,
+    EDICAO_EVENTO_SUCESSO_TMPL,
+    EDICAO_EVENTO_FALHA,
+    EDICAO_EVENTO_CANCELADA,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -788,14 +795,14 @@ async def receber_novo_valor_evento(update: Update, context: ContextTypes.DEFAUL
     campo_id = context.user_data.get("editando_campo_evento")
     
     if not campo_id:
-        await update.message.reply_text("Erro: dados não encontrados. Tente novamente.")
+        await update.message.reply_text(EDICAO_EVENTO_DADOS_NAO_ENCONTRADOS)
         return ConversationHandler.END
 
     campo_info = CAMPOS_EVENTO_EDITAVEIS.get(campo_id)
     evento = context.user_data.get("evento_gerenciado_dados")
     
     if not campo_info or not evento:
-        await update.message.reply_text("Erro: dados do evento não encontrados.")
+        await update.message.reply_text(EDICAO_EVENTO_CONTEXTO_PERDIDO)
         return ConversationHandler.END
 
     evento[campo_info["chave"]] = novo_valor
@@ -816,11 +823,10 @@ async def receber_novo_valor_evento(update: Update, context: ContextTypes.DEFAUL
             novo_valor=novo_valor,
         )
         await update.message.reply_text(
-            f"✅ {campo_info['nome']} atualizado com sucesso!\n\n"
-            f"Use o menu acima para continuar."
+            EDICAO_EVENTO_SUCESSO_TMPL.format(campo_nome=campo_info['nome'])
         )
     else:
-        await update.message.reply_text("❌ Erro ao atualizar o campo. Tente novamente mais tarde.")
+        await update.message.reply_text(EDICAO_EVENTO_FALHA)
 
     context.user_data.pop("editando_campo_evento", None)
     context.user_data.pop("evento_gerenciado_id", None)
@@ -837,10 +843,10 @@ async def cancelar_edicao_evento(update: Update, context: ContextTypes.DEFAULT_T
             context,
             update.effective_user.id,
             TIPO_RESULTADO,
-            "Edição cancelada.",
+            EDICAO_EVENTO_CANCELADA,
         )
     elif update.message:
-        await update.message.reply_text("Edição cancelada.")
+        await update.message.reply_text(EDICAO_EVENTO_CANCELADA)
 
     context.user_data.pop("editando_campo_evento", None)
     context.user_data.pop("evento_gerenciado_id", None)

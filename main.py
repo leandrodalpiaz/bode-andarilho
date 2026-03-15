@@ -139,6 +139,15 @@ from src.ajuda.conquistas import mostrar_marcos_secretario, mostrar_conquistas_m
 # Utilitários
 from src.sheets_supabase import buscar_membro, membro_esta_ativo, atualizar_status_membro
 from src.permissoes import get_nivel
+from src.messages import (
+    GRUPO_ONBOARDING_SEM_CADASTRO,
+    GRUPO_FALLBACK_ABRIR_PRIVADO,
+    GRUPO_COMANDO_PRIVADO,
+    GRUPO_COMANDO_NAO_RECONHECIDO,
+    GRUPO_BOAS_VINDAS_RETORNO_TMPL,
+    GRUPO_ONBOARDING_NOVO_MEMBRO_TMPL,
+    GRUPO_FALLBACK_NOVO_MEMBRO_TMPL,
+)
 
 # ============================================
 # CONFIGURAÇÃO INICIAL
@@ -241,10 +250,7 @@ async def bode_grupo_handler(update: Update, context):
             logger.info("Fluxo bode no grupo: menu aberto no privado para user_id=%s", user_id)
             return
     else:
-        texto_onboarding = (
-            "👋 *Bem-vindo ao Bode Andarilho!*\n\n"
-            "Para começar de forma simples e segura, toque em *Iniciar cadastro* no privado."
-        )
+        texto_onboarding = GRUPO_ONBOARDING_SEM_CADASTRO
         if WEBAPP_URL_MEMBRO:
             btn_cadastro = InlineKeyboardButton("🧾 Iniciar cadastro", web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO))
         else:
@@ -265,7 +271,7 @@ async def bode_grupo_handler(update: Update, context):
     logger.info("Fluxo bode no grupo: fallback no grupo para user_id=%s", user_id)
     if update.message:
         resposta = await update.message.reply_text(
-            "📩 Para continuar, abra meu privado pelo botão abaixo.",
+            GRUPO_FALLBACK_ABRIR_PRIVADO,
             reply_markup=teclado_privado,
         )
         asyncio.create_task(
@@ -299,7 +305,7 @@ async def mensagem_grupo_handler(update: Update, context):
 
         if text in ("/start", "/cadastro"):
             await update.message.reply_text(
-                "📩 Use o bot no privado para cadastro e menus."
+                GRUPO_COMANDO_PRIVADO
             )
             return
 
@@ -310,15 +316,7 @@ async def mensagem_grupo_handler(update: Update, context):
                 [[InlineKeyboardButton("📩 Abrir privado do bot", url=link_privado)]]
             )
             resposta = await update.message.reply_text(
-                "🛠️ Não reconheci esse comando no grupo.\n\n"
-                "Aqui eu respondo apenas:\n"
-                "• bode\n"
-                "• /bode\n"
-                "• menu\n"
-                "• /menu\n"
-                "• painel\n"
-                "• /painel\n\n"
-                "Para cadastro e funções completas, fale comigo no privado.",
+                GRUPO_COMANDO_NAO_RECONHECIDO,
                 reply_markup=teclado_privado,
             )
 
@@ -391,11 +389,7 @@ async def novo_membro_grupo_handler(update: Update, context):
         if cadastro_ativo:
             # Reativa o cadastro caso tenha sido marcado inativo numa saída anterior
             atualizar_status_membro(user.id, "Ativo")
-            texto_retorno = (
-                f"Saudações, Ir.·. {membro.get('Nome', nome)}! 🤝\n\n"
-                "Bem-vindo de volta ao grupo. Seu cadastro está ativo.\n"
-                "Digite *bode* no grupo ou use /start aqui para acessar o painel."
-            )
+            texto_retorno = GRUPO_BOAS_VINDAS_RETORNO_TMPL.format(nome=membro.get('Nome', nome))
             try:
                 await context.bot.send_message(
                     chat_id=user.id,
@@ -408,13 +402,7 @@ async def novo_membro_grupo_handler(update: Update, context):
             return
 
         # Novo membro: tentar enviar convite de cadastro diretamente no privado
-        texto_onboarding = (
-            f"Salve, {nome}! 🐐\n\n"
-            "Bem-vindo ao *Bode Andarilho*.\n\n"
-            "Para acessar as sessões e confirmar presenças, complete o seu "
-            "cadastro. É rápido e seus dados ficam protegidos aqui no privado.\n\n"
-            "Toque no botão abaixo para começar:"
-        )
+        texto_onboarding = GRUPO_ONBOARDING_NOVO_MEMBRO_TMPL.format(nome=nome)
         if WEBAPP_URL_MEMBRO:
             btn_onboarding = InlineKeyboardButton("🧾 Fazer meu cadastro", web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO))
         else:
@@ -441,7 +429,7 @@ async def novo_membro_grupo_handler(update: Update, context):
         )
         msg = await context.bot.send_message(
             chat_id=chat.id,
-            text=f"Salve, {nome}! 🐐 Para se cadastrar, toque no botão abaixo.",
+            text=GRUPO_FALLBACK_NOVO_MEMBRO_TMPL.format(nome=nome),
             reply_markup=teclado_deep,
         )
         asyncio.create_task(
