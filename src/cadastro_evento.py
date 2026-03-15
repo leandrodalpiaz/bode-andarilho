@@ -471,9 +471,10 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "📅 *Cadastrar nova sessão*\n\nToque no botão abaixo para preencher o formulário:",
-            InlineKeyboardMarkup(
-                [[InlineKeyboardButton("📋 Abrir formulário", web_app=WebAppInfo(url=WEBAPP_URL_EVENTO))]]
-            ),
+            InlineKeyboardMarkup([
+                [InlineKeyboardButton("📋 Abrir formulário", web_app=WebAppInfo(url=WEBAPP_URL_EVENTO))],
+                [InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")],
+            ]),
             limpar_conteudo=True,
         )
         return ConversationHandler.END
