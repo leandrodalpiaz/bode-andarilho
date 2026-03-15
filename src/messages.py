@@ -124,6 +124,17 @@ LEMBRETE_SECRETARIO_CORPO = (
     "Tudo pronto para uma sessão Justa e Perfeita? 🤝"
 )
 
+LEMBRETE_SECRETARIO_MEIO_DIA_TITULO = "🕛 *MEIO-DIA EM PONTO — CIRCULAR AO SECRETÁRIO*"
+
+LEMBRETE_SECRETARIO_MEIO_DIA_CORPO = (
+    "Ir.·. {nome}, hoje é dia da sessão que V.·. organiza!\n\n"
+    "🏛 *Loja {loja} nº {numero}*\n"
+    "📍 {local}\n"
+    "🕕 {horario}\n\n"
+    "👥 *Confirmados até agora: {num_confirmados}*\n\n"
+    "Tudo pronto para uma sessão Justa e Perfeita? 🤝"
+)
+
 # ============================================
 # NOTIFICAÇÕES
 # ============================================
