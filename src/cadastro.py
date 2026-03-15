@@ -311,7 +311,7 @@ async def _navegar_etapa(
         context,
         "Cadastro",
         _texto_etapa(estado, retomada=retomada),
-        _teclado_nav(estado - 1),
+        _teclado_nav(max(NOME, estado - 1)),
     )
     return estado
 
