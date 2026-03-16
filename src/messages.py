@@ -99,7 +99,7 @@ LEMBRETE_CORPO = (
     "🔷 *Grau Mínimo:* {grau}\n"
     "👔 *Traje:* {traje}\n"
     "🍽️ *Ágape:* {agape}\n\n"
-    "A sua presença fortalecerá a nossa egrégora! 🤝"
+    "A sua presença fortalecerá a nossa Ordem! 🤝"
 )
 
 LEMBRETE_MEIO_DIA_TITULO = "🕛 *MEIO-DIA EM PONTO!*"
@@ -327,11 +327,11 @@ CADASTRO_ERRO_NUMERO_LOJA = "❌ Número inválido. Envie somente números (ex.:
 
 # [CONTEXTO] Erro quando oriente está em branco
 # [CANAL] Privado
-CADASTRO_ERRO_ORIENTE = "❌ Informe seu *Oriente*:"
+CADASTRO_ERRO_ORIENTE = "❌ Informe o *Oriente*:"
 
 # [CONTEXTO] Erro quando potência está em branco
 # [CANAL] Privado
-CADASTRO_ERRO_POTENCIA = "❌ Informe sua *Potência*:"
+CADASTRO_ERRO_POTENCIA = "❌ Informe a *Potência*:"
 
 # [CONTEXTO] Grau digitado por texto não reconhecido; reexibe botões
 # [CANAL] Privado
