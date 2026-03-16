@@ -36,6 +36,12 @@ _ttl_eventos = 30                        # 30 segundos
 _cache_lojas: Dict[int, tuple] = {}      # telegram_id -> (dados, timestamp)
 _ttl_lojas = 300                         # 5 minutos
 
+# Fallback para notificações pendentes do secretário quando a tabela
+# dedicada ainda não foi criada no Supabase.
+_notif_secretario_pendentes_em_memoria: Dict[int, List[Dict[str, str]]] = {}
+_notif_secretario_pendentes_tabela_indisponivel = False
+_notif_secretario_pendentes_alertado = False
+
 
 # =========================
 # Configuração do Supabase
@@ -49,6 +55,69 @@ if not _SUPABASE_URL or not _SUPABASE_KEY:
 supabase: Client = create_client(_SUPABASE_URL, _SUPABASE_KEY)
 
 logger = logging.getLogger(__name__)
+
+
+def _erro_tabela_notif_secretario_pendentes(exc: Exception) -> bool:
+    """Detecta erro de tabela ausente para notificações pendentes do secretário."""
+    msg = str(exc or "")
+    return (
+        "notificacoes_secretario_pendentes" in msg
+        and ("PGRST205" in msg or "Could not find the table" in msg)
+    )
+
+
+def _marcar_tabela_notif_secretario_pendentes_indisponivel(exc: Exception) -> None:
+    """Marca tabela como indisponível e registra aviso único no log."""
+    global _notif_secretario_pendentes_tabela_indisponivel
+    global _notif_secretario_pendentes_alertado
+
+    _notif_secretario_pendentes_tabela_indisponivel = True
+    if not _notif_secretario_pendentes_alertado:
+        logger.warning(
+            "Tabela 'notificacoes_secretario_pendentes' indisponível no Supabase. "
+            "Usando fallback em memória até a tabela ser criada. Erro original: %s",
+            exc,
+        )
+        _notif_secretario_pendentes_alertado = True
+
+
+def _mem_registrar_notificacao_secretario_pendente(secretario_id: int, item: Dict[str, str]) -> bool:
+    sid = _norm_intlike(secretario_id)
+    if not sid:
+        return False
+
+    lista = _notif_secretario_pendentes_em_memoria.setdefault(sid, [])
+    lista.append(
+        {
+            "id": str(len(lista) + 1),
+            "secretario_id": str(sid),
+            "nome": _norm_text(item.get("nome")),
+            "data": _norm_text(item.get("data")),
+            "loja": _norm_text(item.get("loja")),
+            "agape": _norm_text(item.get("agape")),
+            "criado_em": datetime.now().isoformat(timespec="seconds"),
+        }
+    )
+    return True
+
+
+def _mem_listar_notificacoes_secretario_pendentes(secretario_id: int) -> List[Dict[str, str]]:
+    sid = _norm_intlike(secretario_id)
+    if not sid:
+        return []
+    return list(_notif_secretario_pendentes_em_memoria.get(sid, []))
+
+
+def _mem_listar_secretarios_com_notificacoes_pendentes() -> List[int]:
+    return [sid for sid, itens in _notif_secretario_pendentes_em_memoria.items() if itens]
+
+
+def _mem_remover_notificacoes_secretario_pendentes(secretario_id: int) -> bool:
+    sid = _norm_intlike(secretario_id)
+    if not sid:
+        return False
+    _notif_secretario_pendentes_em_memoria.pop(sid, None)
+    return True
 
 
 # =========================
@@ -909,6 +978,9 @@ def set_notificacao_status(telegram_id: int, ativo: bool) -> bool:
 
 def registrar_notificacao_secretario_pendente(secretario_id: int, item: Dict[str, str]) -> bool:
     """Persiste notificação pendente para envio consolidado fora da janela de silêncio."""
+    if _notif_secretario_pendentes_tabela_indisponivel:
+        return _mem_registrar_notificacao_secretario_pendente(secretario_id, item)
+
     try:
         sid = _norm_intlike(secretario_id)
         if not sid:
@@ -925,12 +997,18 @@ def registrar_notificacao_secretario_pendente(secretario_id: int, item: Dict[str
         supabase.table("notificacoes_secretario_pendentes").insert(row).execute()
         return True
     except Exception as e:
+        if _erro_tabela_notif_secretario_pendentes(e):
+            _marcar_tabela_notif_secretario_pendentes_indisponivel(e)
+            return _mem_registrar_notificacao_secretario_pendente(secretario_id, item)
         logger.error("Erro ao registrar notificação pendente do secretário: %s", e)
         return False
 
 
 def listar_notificacoes_secretario_pendentes(secretario_id: int) -> List[Dict[str, str]]:
     """Lista notificações pendentes de um secretário, da mais antiga para a mais nova."""
+    if _notif_secretario_pendentes_tabela_indisponivel:
+        return _mem_listar_notificacoes_secretario_pendentes(secretario_id)
+
     try:
         sid = _norm_intlike(secretario_id)
         if not sid:
@@ -959,12 +1037,18 @@ def listar_notificacoes_secretario_pendentes(secretario_id: int) -> List[Dict[st
             )
         return out
     except Exception as e:
+        if _erro_tabela_notif_secretario_pendentes(e):
+            _marcar_tabela_notif_secretario_pendentes_indisponivel(e)
+            return _mem_listar_notificacoes_secretario_pendentes(secretario_id)
         logger.error("Erro ao listar notificações pendentes do secretário: %s", e)
         return []
 
 
 def listar_secretarios_com_notificacoes_pendentes() -> List[int]:
     """Retorna IDs de secretários que possuem notificações pendentes."""
+    if _notif_secretario_pendentes_tabela_indisponivel:
+        return _mem_listar_secretarios_com_notificacoes_pendentes()
+
     try:
         resp = supabase.table("notificacoes_secretario_pendentes").select("secretario_id").execute()
         secretarios: List[int] = []
@@ -976,12 +1060,18 @@ def listar_secretarios_com_notificacoes_pendentes() -> List[int]:
                 secretarios.append(sid)
         return secretarios
     except Exception as e:
+        if _erro_tabela_notif_secretario_pendentes(e):
+            _marcar_tabela_notif_secretario_pendentes_indisponivel(e)
+            return _mem_listar_secretarios_com_notificacoes_pendentes()
         logger.error("Erro ao listar secretários com notificações pendentes: %s", e)
         return []
 
 
 def remover_notificacoes_secretario_pendentes(secretario_id: int) -> bool:
     """Remove todas as notificações pendentes de um secretário após envio consolidado."""
+    if _notif_secretario_pendentes_tabela_indisponivel:
+        return _mem_remover_notificacoes_secretario_pendentes(secretario_id)
+
     try:
         sid = _norm_intlike(secretario_id)
         if not sid:
@@ -995,6 +1085,9 @@ def remover_notificacoes_secretario_pendentes(secretario_id: int) -> bool:
         )
         return True
     except Exception as e:
+        if _erro_tabela_notif_secretario_pendentes(e):
+            _marcar_tabela_notif_secretario_pendentes_indisponivel(e)
+            return _mem_remover_notificacoes_secretario_pendentes(secretario_id)
         logger.error("Erro ao remover notificações pendentes do secretário: %s", e)
         return False
 

@@ -1360,7 +1360,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try:
                     await query.delete_message()
                 except Exception as e:
-                    logger.error(f"Erro ao deletar mensagem: {e}")
+                    logger.debug(f"Aviso ao deletar mensagem de cancelamento: {e}")
                 
                 # Envia mensagem de confirmação no grupo
                 await context.bot.send_message(
