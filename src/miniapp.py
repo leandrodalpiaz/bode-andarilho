@@ -155,11 +155,14 @@ _CSS = """
   --btn-text:var(--tg-theme-button-text-color,#fff);
   --sec:var(--tg-theme-secondary-bg-color,#f1f1f1);
   --border:rgba(128,128,128,.2);
+  --select-bg:var(--tg-theme-secondary-bg-color,#f1f1f1);
+  --select-text:var(--tg-theme-text-color,#000);
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   background:var(--bg);color:var(--text);
+  color-scheme:light dark;
   min-height:100vh;padding:12px 12px 84px;
 }
 h1{font-size:17px;font-weight:700;margin-bottom:14px}
@@ -169,10 +172,16 @@ h1{font-size:17px;font-weight:700;margin-bottom:14px}
 .field{margin-bottom:14px}
 .field:last-child{margin-bottom:0}
 label{display:block;font-size:13px;color:var(--hint);margin-bottom:3px;font-weight:500}
-input,select,textarea{
+input,textarea{
   width:100%;background:transparent;border:none;
   border-bottom:1px solid var(--border);padding:6px 0;
   font-size:16px;color:var(--text);outline:none;font-family:inherit;
+  -webkit-appearance:none;appearance:none;
+}
+select{
+  width:100%;background-color:var(--select-bg);border:none;
+  border-bottom:1px solid var(--border);padding:6px 0;
+  font-size:16px;color:var(--select-text);outline:none;font-family:inherit;
   -webkit-appearance:none;appearance:none;
 }
 select{
@@ -180,6 +189,8 @@ select{
   background-repeat:no-repeat;background-position:right 2px center;
   background-size:10px 6px;padding-right:20px;
 }
+option{background-color:var(--bg);color:var(--text)}
+select:focus{border-bottom:1px solid var(--btn)}
 textarea{
   border:1px solid var(--border);border-radius:8px;
   padding:8px;resize:none;min-height:64px;
