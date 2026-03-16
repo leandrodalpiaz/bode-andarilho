@@ -464,6 +464,9 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "cadastrar_evento":
         from src.cadastro_evento import novo_evento_start
         await novo_evento_start(update, context)
+    elif data == "ev_cancelar":
+        from src.cadastro_evento import ev_cancelar
+        await ev_cancelar(update, context)
     
     # Fallback
     else:
