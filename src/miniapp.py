@@ -234,9 +234,21 @@ input::placeholder,textarea::placeholder{color:var(--hint)}
 """
 
 _JS_BASE = """
-const tg=window.Telegram.WebApp;
-tg.ready();
-tg.expand();
+const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+if (tg) {
+  try { tg.ready(); } catch (e) {}
+  try { tg.expand(); } catch (e) {}
+}
+function safeClose() {
+  if (tg && typeof tg.close === 'function') {
+    try { tg.close(); return; } catch (e) {}
+  }
+  if (window.history.length > 1) window.history.back();
+  else window.location.href = '/';
+}
+function hasInitData() {
+  return !!(tg && tg.initData);
+}
 function setPrimaryLoading(isLoading){
   const btn=document.getElementById('btn_publicar_evento');
   if(btn){
@@ -634,7 +646,7 @@ function mostrarPromptSalvarLoja(){
   document.getElementById('salvar_loja_card').style.display='block';
   const acoes=document.getElementById('acoes_publicacao');
   if(acoes) acoes.style.display='none';
-  tg.MainButton.hide();
+  if(tg && tg.MainButton){try{tg.MainButton.hide();}catch(e){}}
 }
 
 (async()=>{
@@ -642,7 +654,7 @@ function mostrarPromptSalvarLoja(){
     const r=await fetch('/api/lojas',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({init_data:tg.initData})
+      body:JSON.stringify({init_data:hasInitData()?tg.initData:''})
     });
     const j=await r.json();
     if(j.ok&&j.lojas&&j.lojas.length>0){
@@ -701,7 +713,7 @@ async function salvarLojaAtual(){
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
-      init_data:tg.initData,
+      init_data:tg ? tg.initData : '',
       nome:dados.nome,
       numero:dados.numero,
       oriente:dados.oriente,
@@ -716,16 +728,24 @@ async function salvarLojaAtual(){
 async function publicarEvento(){
   if(enviandoEvento)return;
   if(!validate())return;
+  if(!hasInitData()){
+    showToast('Abra pelo botão do bot para publicar.');
+    setPrimaryLoading(false);
+    enviandoEvento=false;
+    return;
+  }
   enviandoEvento=true;
   setPrimaryLoading(true);
-  tg.MainButton.showProgress(false);
-  tg.MainButton.disable();
+  if(tg && tg.MainButton){
+    tg.MainButton.showProgress(false);
+    tg.MainButton.disable();
+  }
   try{
     const r=await fetch('/api/cadastro_evento',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        init_data:tg.initData,
+        init_data:tg ? tg.initData : '',
         data:val('data_ev'),
         horario:val('horario'),
         grau:val('grau'),
@@ -749,30 +769,38 @@ async function publicarEvento(){
         showToast('Evento publicado com sucesso.');
         mostrarPromptSalvarLoja();
       }else{
-        tg.close();
+        safeClose();
       }
     }
     else{
       showToast(j.error||'Erro. Tente novamente.');
-      tg.MainButton.hideProgress();
-      tg.MainButton.enable();
+      if(tg && tg.MainButton){
+        tg.MainButton.hideProgress();
+        tg.MainButton.enable();
+      }
       setPrimaryLoading(false);
       enviandoEvento=false;
     }
   }catch{
     showToast('Falha de conexão. Tente novamente.');
-    tg.MainButton.hideProgress();
-    tg.MainButton.enable();
+    if(tg && tg.MainButton){
+      tg.MainButton.hideProgress();
+      tg.MainButton.enable();
+    }
     setPrimaryLoading(false);
     enviandoEvento=false;
   }
 }
 
-tg.MainButton.setText('Publicar Evento');
-tg.MainButton.show();
-tg.MainButton.onClick(publicarEvento);
+window.publicarEvento = publicarEvento;
+window.cancelarEvento = safeClose;
+if(tg && tg.MainButton){
+  tg.MainButton.setText('Publicar Evento');
+  tg.MainButton.show();
+  tg.MainButton.onClick(publicarEvento);
+}
 document.getElementById('btn_publicar_evento').addEventListener('click',publicarEvento);
-document.getElementById('btn_cancelar_evento').addEventListener('click',()=>tg.close());
+document.getElementById('btn_cancelar_evento').addEventListener('click',safeClose);
 
 document.getElementById('btn_salvar_loja').addEventListener('click',async()=>{
   const btnSalvar=document.getElementById('btn_salvar_loja');
@@ -781,7 +809,7 @@ document.getElementById('btn_salvar_loja').addEventListener('click',async()=>{
   btnPular.disabled=true;
   try{
     const j=await salvarLojaAtual();
-    if(j.ok){tg.close();}
+    if(j.ok){safeClose();}
     else{
       showToast(j.error||'Não foi possível salvar a loja.');
       btnSalvar.disabled=false;
@@ -794,9 +822,7 @@ document.getElementById('btn_salvar_loja').addEventListener('click',async()=>{
   }
 });
 
-document.getElementById('btn_pular_loja').addEventListener('click',()=>{
-  tg.close();
-});
+document.getElementById('btn_pular_loja').addEventListener('click',safeClose);
 """
     return _html_wrap("Cadastro de Evento", body, script)
 
