@@ -1,16 +1,16 @@
-﻿# src/cadastro_evento.py
+# src/cadastro_evento.py
 # ============================================
 # BODE ANDARILHO - CADASTRO DE EVENTOS
 # ============================================
 # 
-# Este mÃ³dulo gerencia o cadastro de novos eventos por secretÃ¡rios e administradores.
+# Este módulo gerencia o cadastro de novos eventos por secretários e administradores.
 # 
 # Funcionalidades principais:
-# - Cadastro completo com 16 etapas (data, horÃ¡rio, loja, grau, etc.)
-# - IntegraÃ§Ã£o com prÃ©-cadastro de lojas (atalho)
-# - VerificaÃ§Ã£o de duplicidade de eventos
-# - PublicaÃ§Ã£o automÃ¡tica no grupo
-# - NavegaÃ§Ã£o com botÃµes Voltar/Cancelar
+# - Cadastro completo com 16 etapas (data, horário, loja, grau, etc.)
+# - Integração com pré-cadastro de lojas (atalho)
+# - Verificação de duplicidade de eventos
+# - Publicação automática no grupo
+# - Navegação com botões Voltar/Cancelar
 # - Cada etapa mostra APENAS a pergunta atual (sem acumular respostas)
 # 
 # ============================================
@@ -56,19 +56,19 @@ from src.bot import (
 )
 
 # ============================================
-# CONFIGURAÃ‡ÃƒO DE LOG
+# CONFIGURAÇÃO DE LOG
 # ============================================
 
 logger = logging.getLogger(__name__)
 
 # ============================================
-# CONSTANTES E CONFIGURAÃ‡Ã•ES
+# CONSTANTES E CONFIGURAÇÕES
 # ============================================
 
 GRUPO_PRINCIPAL_ID = os.getenv("GRUPO_PRINCIPAL_ID", "-1003721338228")
 MAX_TEXTO = 250
 
-# Estados da conversaÃ§Ã£o
+# Estados da conversação
 (
     ESCOLHER_LOJA,
     CONFIRMAR_LOJA,
@@ -91,7 +91,7 @@ MAX_TEXTO = 250
     CONFIRMAR,
 ) = range(19)
 
-# OpÃ§Ãµes fixas
+# Opções fixas
 GRAUS_OPCOES = [
     ("Aprendiz", "Aprendiz"),
     ("Companheiro", "Companheiro"),
@@ -99,17 +99,17 @@ GRAUS_OPCOES = [
     ("Mestre Instalado", "Mestre Instalado"),
 ]
 
-AGAPE_RESPOSTAS = [("Sim", "sim"), ("NÃ£o", "nao")]
+AGAPE_RESPOSTAS = [("Sim", "sim"), ("Não", "nao")]
 AGAPE_TIPOS = [("Gratuito", "gratuito"), ("Pago (dividido)", "pago")]
-OBS_RESPOSTAS = [("Sim", "sim"), ("NÃ£o", "nao")]
+OBS_RESPOSTAS = [("Sim", "sim"), ("Não", "nao")]
 
 
 # ============================================
-# FUNÃ‡Ã•ES AUXILIARES
+# FUNÇÕES AUXILIARES
 # ============================================
 
 def _norm_text(v: Any) -> str:
-    """Normaliza texto, removendo NaN e espaÃ§os."""
+    """Normaliza texto, removendo NaN e espaços."""
     if v is None:
         return ""
     s = str(v).strip()
@@ -121,7 +121,7 @@ def _truncate(s: str, n: int = MAX_TEXTO) -> str:
     s = _norm_text(s)
     if len(s) <= n:
         return s
-    return s[: n - 1].rstrip() + "â€¦"
+    return s[: n - 1].rstrip() + "…"
 
 
 def _escape_md(s: str) -> str:
@@ -159,13 +159,13 @@ def _parse_hora(texto: str) -> Optional[str]:
 
 
 def _tipo_agape_evento(texto_agape: str) -> str:
-    """Detecta o tipo de Ã¡gape salvo no evento."""
+    """Detecta o tipo de ágape salvo no evento."""
     texto = _norm_text(texto_agape).lower()
     if "pago" in texto or "dividido" in texto:
         return "pago"
     if "gratuito" in texto:
         return "gratuito"
-    if "com Ã¡gape" in texto or "com agape" in texto:
+    if "com ágape" in texto or "com agape" in texto:
         return "com"
     if texto in ("sim", "s"):
         return "com"
@@ -173,52 +173,52 @@ def _tipo_agape_evento(texto_agape: str) -> str:
 
 
 def _dia_semana_ingles(dt: datetime) -> str:
-    """Retorna o dia da semana em inglÃªs."""
+    """Retorna o dia da semana em inglês."""
     return dt.strftime("%A")
 
 
 def _teclado_cancelar() -> InlineKeyboardMarkup:
-    """Teclado com apenas botÃ£o Cancelar."""
-    return InlineKeyboardMarkup([[InlineKeyboardButton("âŒ Cancelar", callback_data="ev_cancelar")]])
+    """Teclado com apenas botão Cancelar."""
+    return InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")]])
 
 
 def _teclado_voltar_cancelar() -> InlineKeyboardMarkup:
-    """Teclado com botÃµes Voltar e Cancelar."""
+    """Teclado com botões Voltar e Cancelar."""
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("â¬…ï¸ Voltar", callback_data="ev_voltar")],
-            [InlineKeyboardButton("âŒ Cancelar", callback_data="ev_cancelar")],
+            [InlineKeyboardButton("⬅️ Voltar", callback_data="ev_voltar")],
+            [InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")],
         ]
     )
 
 
 def _teclado_sim_nao(prefix: str) -> InlineKeyboardMarkup:
-    """Teclado para perguntas Sim/NÃ£o."""
+    """Teclado para perguntas Sim/Não."""
     opcoes = AGAPE_RESPOSTAS if prefix == "agape" else OBS_RESPOSTAS
     linhas = [[InlineKeyboardButton(lbl, callback_data=f"{prefix}|{val}")] for (lbl, val) in opcoes]
-    linhas.append([InlineKeyboardButton("â¬…ï¸ Voltar", callback_data="ev_voltar")])
-    linhas.append([InlineKeyboardButton("âŒ Cancelar", callback_data="ev_cancelar")])
+    linhas.append([InlineKeyboardButton("⬅️ Voltar", callback_data="ev_voltar")])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")])
     return InlineKeyboardMarkup(linhas)
 
 
 def _teclado_graus() -> InlineKeyboardMarkup:
-    """Teclado com opÃ§Ãµes de grau."""
+    """Teclado com opções de grau."""
     linhas = [[InlineKeyboardButton(lbl, callback_data=f"grau|{val}")] for (lbl, val) in GRAUS_OPCOES]
-    linhas.append([InlineKeyboardButton("â¬…ï¸ Voltar", callback_data="ev_voltar")])
-    linhas.append([InlineKeyboardButton("âŒ Cancelar", callback_data="ev_cancelar")])
+    linhas.append([InlineKeyboardButton("⬅️ Voltar", callback_data="ev_voltar")])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")])
     return InlineKeyboardMarkup(linhas)
 
 
 def _teclado_agape_tipos() -> InlineKeyboardMarkup:
-    """Teclado com tipos de Ã¡gape."""
+    """Teclado com tipos de ágape."""
     linhas = [[InlineKeyboardButton(lbl, callback_data=f"agape_tipo|{val}")] for (lbl, val) in AGAPE_TIPOS]
-    linhas.append([InlineKeyboardButton("â¬…ï¸ Voltar", callback_data="ev_voltar")])
-    linhas.append([InlineKeyboardButton("âŒ Cancelar", callback_data="ev_cancelar")])
+    linhas.append([InlineKeyboardButton("⬅️ Voltar", callback_data="ev_voltar")])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")])
     return InlineKeyboardMarkup(linhas)
 
 
 def _definir_secretario_responsavel(context: ContextTypes.DEFAULT_TYPE, telegram_id: Any, nome: str = "") -> None:
-    """Define no contexto o secretÃƒÂ¡rio responsÃƒÂ¡vel do evento."""
+    """Define no contexto o secretário responsável do evento."""
     sid = _norm_text(telegram_id)
     context.user_data["novo_evento_secretario_responsavel_id"] = sid
     context.user_data["novo_evento_telegram_id_secretario"] = sid  # compatibilidade legado
@@ -227,27 +227,27 @@ def _definir_secretario_responsavel(context: ContextTypes.DEFAULT_TYPE, telegram
 
 
 def _teclado_selecionar_secretario(secretarios: List[Dict[str, str]]) -> InlineKeyboardMarkup:
-    """Teclado para escolher secretÃƒÂ¡rio responsÃƒÂ¡vel (suporte admin)."""
+    """Teclado para escolher secretário responsável (suporte admin)."""
     linhas = []
     for sec in secretarios[:30]:
         sid = _norm_text(sec.get("telegram_id"))
         nome = _truncate(_norm_text(sec.get("nome")) or sid, 50)
         if sid:
-            linhas.append([InlineKeyboardButton(f"Ã°Å¸â€˜Â¤ {nome}", callback_data=f"definir_secretario|{sid}")])
-    linhas.append([InlineKeyboardButton("Ã¢ÂÅ’ Cancelar", callback_data="ev_cancelar")])
+            linhas.append([InlineKeyboardButton(f"👤 {nome}", callback_data=f"definir_secretario|{sid}")])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")])
     return InlineKeyboardMarkup(linhas)
 
 
 async def _pedir_secretario_responsavel(update: Update, context: ContextTypes.DEFAULT_TYPE, texto: str) -> int:
-    """Solicita escolha de secretÃƒÂ¡rio responsÃƒÂ¡vel no fluxo de cadastro."""
+    """Solicita escolha de secretário responsável no fluxo de cadastro."""
     secretarios = listar_secretarios_ativos()
     if not secretarios:
         await navegar_para(
             update,
             context,
             "Cadastro de Evento",
-            "Ã¢ÂÅ’ NÃƒÂ£o hÃƒÂ¡ secretÃƒÂ¡rios ativos para atribuir a responsabilidade do evento.",
-            InlineKeyboardMarkup([[InlineKeyboardButton("Ã°Å¸â€â„¢ Voltar ao menu", callback_data="menu_principal")]]),
+            "❌ Não há secretários ativos para atribuir a responsabilidade do evento.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")]]),
             limpar_conteudo=True,
         )
         return ConversationHandler.END
@@ -256,7 +256,7 @@ async def _pedir_secretario_responsavel(update: Update, context: ContextTypes.DE
     await navegar_para(
         update,
         context,
-        "Cadastro de Evento > SecretÃƒÂ¡rio ResponsÃƒÂ¡vel",
+        "Cadastro de Evento > Secretário Responsável",
         texto,
         _teclado_selecionar_secretario(secretarios),
         limpar_conteudo=True,
@@ -265,23 +265,23 @@ async def _pedir_secretario_responsavel(update: Update, context: ContextTypes.DE
 
 
 def _event_key(data: str, hora: str, nome: str, numero: str) -> str:
-    """Gera chave Ãºnica para detecÃ§Ã£o de duplicidade."""
+    """Gera chave única para detecção de duplicidade."""
     return f"{_norm_text(data)}|{_norm_text(hora)}|{_norm_text(nome).lower()}|{_norm_text(numero)}"
 
 
 def _status_ativo_ou_vazio(status: str) -> bool:
-    """Verifica se o status Ã© ativo ou vazio."""
+    """Verifica se o status é ativo ou vazio."""
     s = _norm_text(status).lower()
     return s == "" or s == "ativo"
 
 
 def _encontrar_duplicado(evento: Dict[str, Any], eventos_existentes: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """Verifica se jÃ¡ existe um evento duplicado."""
+    """Verifica se já existe um evento duplicado."""
     alvo = _event_key(
         evento.get("Data do evento", ""),
         evento.get("Hora", ""),
         evento.get("Nome da loja", ""),
-        evento.get("NÃºmero da loja", ""),
+        evento.get("Número da loja", ""),
     )
 
     for ev in eventos_existentes:
@@ -291,7 +291,7 @@ def _encontrar_duplicado(evento: Dict[str, Any], eventos_existentes: List[Dict[s
             ev.get("Data do evento", ""),
             ev.get("Hora", ""),
             ev.get("Nome da loja", ""),
-            ev.get("NÃºmero da loja", ""),
+            ev.get("Número da loja", ""),
         )
         if k == alvo:
             return ev
@@ -299,7 +299,7 @@ def _encontrar_duplicado(evento: Dict[str, Any], eventos_existentes: List[Dict[s
 
 
 def _montar_evento_dict(context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Any]:
-    """Monta o dicionÃ¡rio do evento com os dados coletados."""
+    """Monta o dicionário do evento com os dados coletados."""
     data_txt = context.user_data.get("novo_evento_data", "")
     hora_txt = context.user_data.get("novo_evento_horario", "")
 
@@ -318,7 +318,7 @@ def _montar_evento_dict(context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Any]:
         else:
             agape_str = "Sim"
     else:
-        agape_str = "NÃ£o"
+        agape_str = "Não"
 
     obs_txt = context.user_data.get("novo_evento_observacoes_texto", "")
     if context.user_data.get("novo_evento_observacoes_tem", "nao") != "sim":
@@ -338,25 +338,25 @@ def _montar_evento_dict(context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Any]:
         "Dia da semana": dia_semana,
         "Hora": hora_txt,
         "Nome da loja": context.user_data.get("novo_evento_nome_loja", ""),
-        "NÃºmero da loja": context.user_data.get("novo_evento_numero_loja", ""),
+        "Número da loja": context.user_data.get("novo_evento_numero_loja", ""),
         "Oriente": context.user_data.get("novo_evento_oriente", ""),
         "Grau": context.user_data.get("novo_evento_grau", ""),
-        "Tipo de sessÃ£o": context.user_data.get("novo_evento_tipo_sessao", ""),
+        "Tipo de sessão": context.user_data.get("novo_evento_tipo_sessao", ""),
         "Rito": context.user_data.get("novo_evento_rito", ""),
-        "PotÃªncia": context.user_data.get("novo_evento_potencia", ""),
-        "Traje obrigatÃ³rio": context.user_data.get("novo_evento_traje", ""),
-        "Ãgape": agape_str,
-        "ObservaÃ§Ãµes": obs_txt,
+        "Potência": context.user_data.get("novo_evento_potencia", ""),
+        "Traje obrigatório": context.user_data.get("novo_evento_traje", ""),
+        "Ágape": agape_str,
+        "Observações": obs_txt,
         "Telegram ID do grupo": context.user_data.get("novo_evento_telegram_id_grupo", GRUPO_PRINCIPAL_ID),
-        "Telegram ID do secretÃ¡rio": secretario_id,
-        "SecretÃ¡rio snapshot (Telegram ID)": secretario_id,
-        "SecretÃ¡rio snapshot (Nome)": secretario_nome,
+        "Telegram ID do secretário": secretario_id,
+        "Secretário snapshot (Telegram ID)": secretario_id,
+        "Secretário snapshot (Nome)": secretario_nome,
         "Criado por (Telegram ID)": criado_por_id,
         "Criado por (Nome)": criado_por_nome,
-        "Ãltima ediÃ§Ã£o por (Telegram ID)": criado_por_id,
-        "Ãltima ediÃ§Ã£o por (Nome)": criado_por_nome,
+        "Última edição por (Telegram ID)": criado_por_id,
+        "Última edição por (Nome)": criado_por_nome,
         "Status": "Ativo",
-        "EndereÃ§o da sessÃ£o": context.user_data.get("novo_evento_endereco", ""),
+        "Endereço da sessão": context.user_data.get("novo_evento_endereco", ""),
     }
 
 
@@ -372,8 +372,8 @@ def _limpar_contexto_evento(context: ContextTypes.DEFAULT_TYPE):
 
 def _voltar_um_passo(context: ContextTypes.DEFAULT_TYPE) -> int:
     """
-    Remove o Ãºltimo campo preenchido e retorna ao estado anterior.
-    Respeita os ramos condicionais (Ã¡gape_tipo sÃ³ se Ã¡gape==sim, etc.).
+    Remove o último campo preenchido e retorna ao estado anterior.
+    Respeita os ramos condicionais (ágape_tipo só se ágape==sim, etc.).
     """
     ordem = [
         ("novo_evento_data", DATA),
@@ -412,51 +412,51 @@ def _voltar_um_passo(context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 def _montar_resumo_evento_md(evento: Dict[str, Any], duplicado: Optional[Dict[str, Any]] = None) -> str:
-    """Monta o resumo do evento para confirmaÃ§Ã£o."""
+    """Monta o resumo do evento para confirmação."""
     nome = _escape_md(evento.get("Nome da loja", ""))
-    numero = _escape_md(evento.get("NÃºmero da loja", ""))
+    numero = _escape_md(evento.get("Número da loja", ""))
     numero_fmt = f" {numero}" if numero and numero != "0" else ""
     data_txt = _escape_md(evento.get("Data do evento", ""))
     hora_txt = _escape_md(evento.get("Hora", ""))
     oriente = _escape_md(evento.get("Oriente", ""))
     grau = _escape_md(evento.get("Grau", ""))
-    tipo = _escape_md(evento.get("Tipo de sessÃ£o", ""))
+    tipo = _escape_md(evento.get("Tipo de sessão", ""))
     rito = _escape_md(evento.get("Rito", ""))
-    potencia = _escape_md(evento.get("PotÃªncia", ""))
-    traje = _escape_md(evento.get("Traje obrigatÃ³rio", ""))
-    agape = _escape_md(evento.get("Ãgape", ""))
-    obs = _escape_md(evento.get("ObservaÃ§Ãµes", ""))
-    end = _escape_md(evento.get("EndereÃ§o da sessÃ£o", ""))
+    potencia = _escape_md(evento.get("Potência", ""))
+    traje = _escape_md(evento.get("Traje obrigatório", ""))
+    agape = _escape_md(evento.get("Ágape", ""))
+    obs = _escape_md(evento.get("Observações", ""))
+    end = _escape_md(evento.get("Endereço da sessão", ""))
 
     linhas = [
         "*Confirme os dados do evento:*",
         "",
-        f"ðŸ› *Loja:* {nome}{numero_fmt}",
-        f"ðŸ“… *Data:* {data_txt}",
-        f"ðŸ•• *Hora:* {hora_txt}",
-        f"ðŸ“ *Oriente:* {oriente}",
-        f"ðŸ”º *Grau mÃ­nimo:* {grau}",
-        f"ðŸ•¯ *Tipo de sessÃ£o:* {tipo}",
-        f"ðŸ“œ *Rito:* {rito}",
-        f"âšœï¸ *PotÃªncia:* {potencia}",
-        f"ðŸŽ© *Traje:* {traje}",
-        f"ðŸ½ *Ãgape:* {agape}",
-        f"ðŸ—º *EndereÃ§o:* {end}",
+        f"🏛 *Loja:* {nome}{numero_fmt}",
+        f"📅 *Data:* {data_txt}",
+        f"🕕 *Hora:* {hora_txt}",
+        f"📍 *Oriente:* {oriente}",
+        f"🔺 *Grau mínimo:* {grau}",
+        f"🕯 *Tipo de sessão:* {tipo}",
+        f"📜 *Rito:* {rito}",
+        f"⚜️ *Potência:* {potencia}",
+        f"🎩 *Traje:* {traje}",
+        f"🍽 *Ágape:* {agape}",
+        f"🗺 *Endereço:* {end}",
     ]
     if obs:
-        linhas.append(f"ðŸ“ *Ordem do dia / observaÃ§Ãµes:* {obs}")
+        linhas.append(f"📝 *Ordem do dia / observações:* {obs}")
 
     if duplicado:
         d_nome = _escape_md(duplicado.get("Nome da loja", ""))
-        d_num = _escape_md(duplicado.get("NÃºmero da loja", ""))
+        d_num = _escape_md(duplicado.get("Número da loja", ""))
         d_num_fmt = f" {d_num}" if d_num and d_num != "0" else ""
         d_data = _escape_md(duplicado.get("Data do evento", ""))
         d_hora = _escape_md(duplicado.get("Hora", ""))
         linhas.extend(
             [
                 "",
-                "âš ï¸ *AtenÃ§Ã£o:* encontrei um evento ativo com a mesma *data/hora/loja/nÃºmero*:",
-                f"â€¢ {d_nome}{d_num_fmt} â€” {d_data} {d_hora}",
+                "⚠️ *Atenção:* encontrei um evento ativo com a mesma *data/hora/loja/número*:",
+                f"• {d_nome}{d_num_fmt} — {d_data} {d_hora}",
             ]
         )
 
@@ -464,19 +464,19 @@ def _montar_resumo_evento_md(evento: Dict[str, Any], duplicado: Optional[Dict[st
 
 
 def _teclado_confirmacao(tem_duplicado: bool) -> InlineKeyboardMarkup:
-    """Teclado para tela de confirmaÃ§Ã£o.
+    """Teclado para tela de confirmação.
 
-    Quando hÃ¡ duplicidade mostramos apenas a opÃ§Ã£o de "Publicar mesmo assim";
-    o botÃ£o "Confirmar publicaÃ§Ã£o" anterior fazia o fluxo repetir a mesma tela
-    (o que confundia os usuÃ¡rios).
+    Quando há duplicidade mostramos apenas a opção de "Publicar mesmo assim";
+    o botão "Confirmar publicação" anterior fazia o fluxo repetir a mesma tela
+    (o que confundia os usuários).
     """
     linhas = []
     if tem_duplicado:
-        linhas.append([InlineKeyboardButton("âš ï¸ Publicar mesmo assim", callback_data="confirmar_publicacao_forcar")])
+        linhas.append([InlineKeyboardButton("⚠️ Publicar mesmo assim", callback_data="confirmar_publicacao_forcar")])
     else:
-        linhas.append([InlineKeyboardButton("âœ… Confirmar publicaÃ§Ã£o", callback_data="confirmar_publicacao")])
-    linhas.append([InlineKeyboardButton("ðŸ”„ Refazer", callback_data="refazer_cadastro")])
-    linhas.append([InlineKeyboardButton("âŒ Cancelar", callback_data="cancelar_publicacao")])
+        linhas.append([InlineKeyboardButton("✅ Confirmar publicação", callback_data="confirmar_publicacao")])
+    linhas.append([InlineKeyboardButton("🔄 Refazer", callback_data="refazer_cadastro")])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_publicacao")])
     return InlineKeyboardMarkup(linhas)
 
 
@@ -486,23 +486,23 @@ def _teclado_pos_publicacao(id_evento: str, agape_evento: str) -> InlineKeyboard
     linhas = []
 
     if tipo_agape == "gratuito":
-        linhas.append([InlineKeyboardButton("ðŸ½ Participar com Ã¡gape (gratuito)", callback_data=f"confirmar|{id_evento}|gratuito")])
-        linhas.append([InlineKeyboardButton("ðŸš« Participar sem Ã¡gape", callback_data=f"confirmar|{id_evento}|sem")])
+        linhas.append([InlineKeyboardButton("🍽 Participar com ágape (gratuito)", callback_data=f"confirmar|{id_evento}|gratuito")])
+        linhas.append([InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento}|sem")])
     elif tipo_agape == "pago":
-        linhas.append([InlineKeyboardButton("ðŸ½ Participar com Ã¡gape (pago)", callback_data=f"confirmar|{id_evento}|pago")])
-        linhas.append([InlineKeyboardButton("ðŸš« Participar sem Ã¡gape", callback_data=f"confirmar|{id_evento}|sem")])
+        linhas.append([InlineKeyboardButton("🍽 Participar com ágape (pago)", callback_data=f"confirmar|{id_evento}|pago")])
+        linhas.append([InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento}|sem")])
     elif tipo_agape == "com":
-        linhas.append([InlineKeyboardButton("ðŸ½ Participar com Ã¡gape", callback_data=f"confirmar|{id_evento}|com")])
-        linhas.append([InlineKeyboardButton("ðŸš« Participar sem Ã¡gape", callback_data=f"confirmar|{id_evento}|sem")])
+        linhas.append([InlineKeyboardButton("🍽 Participar com ágape", callback_data=f"confirmar|{id_evento}|com")])
+        linhas.append([InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento}|sem")])
     else:
-        linhas.append([InlineKeyboardButton("âœ… Confirmar presenÃ§a", callback_data=f"confirmar|{id_evento}|sem")])
+        linhas.append([InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_evento}|sem")])
 
-    linhas.append([InlineKeyboardButton("ðŸ‘¥ Ver confirmados", callback_data=f"ver_confirmados|{id_evento}")])
+    linhas.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{id_evento}")])
     return InlineKeyboardMarkup(linhas)
 
 
 # ============================================
-# INÃCIO DO CADASTRO (COM INTEGRAÃ‡ÃƒO DE LOJAS)
+# INÍCIO DO CADASTRO (COM INTEGRAÇÃO DE LOJAS)
 # ============================================
 
 async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -514,16 +514,16 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if nivel not in ["2", "3"]:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "VocÃª nÃ£o tem permissÃ£o para cadastrar eventos.",
+            "Você não tem permissão para cadastrar eventos.",
             limpar_conteudo=True
         )
         return ConversationHandler.END
 
-    # Trilha de auditoria: quem estÃ¡ operando o cadastro
+    # Trilha de auditoria: quem está operando o cadastro
     context.user_data["novo_evento_criado_por_id"] = str(user_id)
     context.user_data["novo_evento_criado_por_nome"] = _norm_text(update.effective_user.full_name or "")
 
-    # Por padrÃ£o, o responsÃ¡vel do evento Ã© o prÃ³prio operador.
+    # Por padrão, o responsável do evento é o próprio operador.
     _definir_secretario_responsavel(context, str(user_id), _norm_text(update.effective_user.full_name or ""))
 
     # Se veio do grupo, bloqueia e orienta
@@ -531,8 +531,8 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["novo_evento_telegram_id_grupo"] = str(update.effective_chat.id)
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "ðŸ”” O cadastro de eventos deve ser feito no meu chat privado.\n\n"
-            "Acesse meu privado e utilize o menu 'Ãrea do SecretÃ¡rio' para cadastrar.",
+            "🔔 O cadastro de eventos deve ser feito no meu chat privado.\n\n"
+            "Acesse meu privado e utilize o menu 'Área do Secretário' para cadastrar.",
             limpar_conteudo=True
         )
         return ConversationHandler.END
@@ -540,14 +540,14 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Privado: define grupo principal automaticamente
     context.user_data["novo_evento_telegram_id_grupo"] = GRUPO_PRINCIPAL_ID
 
-    # Mini App: mantido para secretÃ¡rios. Admin usa o fluxo guiado para suporte tÃ©cnico.
+    # Mini App: mantido para secretários. Admin usa o fluxo guiado para suporte técnico.
     if WEBAPP_URL_EVENTO and nivel != "3":
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "ðŸ“… *Cadastrar nova sessÃ£o*\n\nToque no botÃ£o abaixo para preencher o formulÃ¡rio:",
+            "📅 *Cadastrar nova sessão*\n\nToque no botão abaixo para preencher o formulário:",
             InlineKeyboardMarkup([
-                [InlineKeyboardButton("ðŸ“‹ Abrir formulÃ¡rio", web_app=WebAppInfo(url=WEBAPP_URL_EVENTO))],
-                [InlineKeyboardButton("âŒ Cancelar", callback_data="menu_principal")],
+                [InlineKeyboardButton("📋 Abrir formulário", web_app=WebAppInfo(url=WEBAPP_URL_EVENTO))],
+                [InlineKeyboardButton("❌ Cancelar", callback_data="menu_principal")],
             ]),
             limpar_conteudo=True,
         )
@@ -564,20 +564,20 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ):
             context.user_data.pop(k, None)
 
-    # Lojas visÃ­veis: secretÃ¡rio vÃª as suas; admin vÃª todas.
+    # Lojas visíveis: secretário vê as suas; admin vê todas.
     lojas = listar_lojas_visiveis(user_id, nivel)
     
     if lojas:
-        # Oferece opÃ§Ã£o de usar loja cadastrada.
+        # Oferece opção de usar loja cadastrada.
         botoes_lojas = []
         for i, loja in enumerate(lojas[:20]):
             nome = loja.get("Nome da Loja", "")
-            numero = loja.get("NÃºmero", "")
+            numero = loja.get("Número", "")
             nome_fmt = f"{nome} {numero}" if numero else nome
-            resp_nome = _norm_text(loja.get("Nome do secretÃ¡rio responsÃ¡vel"))
-            label = f"ðŸ› {nome_fmt}"
+            resp_nome = _norm_text(loja.get("Nome do secretário responsável"))
+            label = f"🏛 {nome_fmt}"
             if str(nivel) == "3" and resp_nome:
-                label = f"ðŸ› {nome_fmt} â€¢ {resp_nome[:20]}"
+                label = f"🏛 {nome_fmt} • {resp_nome[:20]}"
             botoes_lojas.append([
                 InlineKeyboardButton(
                     label,
@@ -585,38 +585,38 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             ])
         
-        botoes_lojas.append([InlineKeyboardButton("ðŸ“ Cadastrar manualmente", callback_data="cadastrar_manual")])
-        botoes_lojas.append([InlineKeyboardButton("âŒ Cancelar", callback_data="ev_cancelar")])
+        botoes_lojas.append([InlineKeyboardButton("📝 Cadastrar manualmente", callback_data="cadastrar_manual")])
+        botoes_lojas.append([InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")])
         
         context.user_data["lojas_disponiveis"] = lojas
         
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "ðŸ›ï¸ *Cadastro de Evento*\n\n"
+            "🏛 *Cadastro de Evento*\n\n"
             + (
-                "Selecione uma loja para herdar os dados e o secretÃ¡rio responsÃ¡vel."
+                "Selecione uma loja para herdar os dados e o secretário responsável."
                 if str(nivel) == "3"
-                else "VocÃª tem lojas cadastradas. Deseja usar os dados de alguma como atalho?"
+                else "Você tem lojas cadastradas. Deseja usar os dados de alguma como atalho?"
             ),
             InlineKeyboardMarkup(botoes_lojas),
             limpar_conteudo=True
         )
         return ESCOLHER_LOJA
     else:
-        # Sem lojas: admin escolhe responsÃ¡vel antes de seguir manualmente.
+        # Sem lojas: admin escolhe responsável antes de seguir manualmente.
         if str(nivel) == "3":
             return await _pedir_secretario_responsavel(
                 update,
                 context,
-                "Defina o *secretÃ¡rio responsÃ¡vel* deste evento antes de continuar o cadastro manual.",
+                "Defina o *secretário responsável* deste evento antes de continuar o cadastro manual.",
             )
 
-        # SecretÃ¡rio segue fluxo manual padrÃ£o.
+        # Secretário segue fluxo manual padrão.
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "ðŸ“… *Data do evento* (Ex: 25/03/2026)",
+            "📅 *Data do evento* (Ex: 25/03/2026)",
             _teclado_cancelar(),
             limpar_conteudo=True
         )
@@ -625,7 +625,7 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Processa a escolha da loja pelo secretÃ¡rio."""
+    """Processa a escolha da loja pelo secretário."""
     query = update.callback_query
     data = query.data
     user_id = update.effective_user.id
@@ -637,12 +637,12 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
             return await _pedir_secretario_responsavel(
                 update,
                 context,
-                "Como este cadastro serÃ¡ manual, selecione quem serÃ¡ o *secretÃ¡rio responsÃ¡vel* do evento.",
+                "Como este cadastro será manual, selecione quem será o *secretário responsável* do evento.",
             )
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "ðŸ“… *Data do evento* (Ex: 25/03/2026)",
+            "📅 *Data do evento* (Ex: 25/03/2026)",
             _teclado_cancelar(),
             limpar_conteudo=True
         )
@@ -661,12 +661,12 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
                 context.user_data["novo_evento_loja_id"] = _norm_text(loja.get("ID") or loja.get("id"))
 
                 sid = _norm_text(
-                    loja.get("Telegram ID do secretÃ¡rio responsÃ¡vel")
+                    loja.get("Telegram ID do secretário responsável")
                     or loja.get("secretario_responsavel_id")
                     or loja.get("Telegram ID")
                 )
                 sname = _norm_text(
-                    loja.get("Nome do secretÃ¡rio responsÃ¡vel")
+                    loja.get("Nome do secretário responsável")
                     or loja.get("secretario_responsavel_nome")
                 )
                 if sid:
@@ -675,24 +675,24 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
                     return await _pedir_secretario_responsavel(
                         update,
                         context,
-                        "Esta loja ainda nÃ£o tem secretÃ¡rio vinculado. Selecione o responsÃ¡vel para continuar.",
+                        "Esta loja ainda não tem secretário vinculado. Selecione o responsável para continuar.",
                     )
                 
-                # Mostra os dados da loja e pergunta confirmaÃ§Ã£o
+                # Mostra os dados da loja e pergunta confirmação
                 dados_loja = (
-                    f"ðŸ› *{loja.get('Nome da Loja')}* {loja.get('NÃºmero', '')}\n"
-                    f"ðŸ“ Oriente: {loja.get('Oriente da Loja', loja.get('Oriente', ''))}\n"
-                    f"ðŸ“œ Rito: {loja.get('Rito')}\n"
-                    f"âšœï¸ PotÃªncia: {loja.get('PotÃªncia')}\n"
-                    f"ðŸ“ EndereÃ§o: {loja.get('EndereÃ§o')}\n"
-                    f"ðŸ‘¤ SecretÃ¡rio responsÃ¡vel: {sname or sid or 'NÃ£o definido'}\n\n"
+                    f"🏛 *{loja.get('Nome da Loja')}* {loja.get('Número', '')}\n"
+                    f"📍 Oriente: {loja.get('Oriente da Loja', loja.get('Oriente', ''))}\n"
+                    f"📜 Rito: {loja.get('Rito')}\n"
+                    f"⚜️ Potência: {loja.get('Potência')}\n"
+                    f"📍 Endereço: {loja.get('Endereço')}\n"
+                    f"👤 Secretário responsável: {sname or sid or 'Não definido'}\n\n"
                     f"Deseja usar esta loja?"
                 )
                 
                 teclado = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("âœ… Sim, usar esta loja", callback_data="confirmar_loja_sim")],
-                    [InlineKeyboardButton("âŒ NÃ£o, escolher outra", callback_data="escolher_outra_loja")],
-                    [InlineKeyboardButton("ðŸ“ Cadastrar manualmente", callback_data="cadastrar_manual")],
+                    [InlineKeyboardButton("✅ Sim, usar esta loja", callback_data="confirmar_loja_sim")],
+                    [InlineKeyboardButton("❌ Não, escolher outra", callback_data="escolher_outra_loja")],
+                    [InlineKeyboardButton("📝 Cadastrar manualmente", callback_data="cadastrar_manual")],
                 ])
                 
                 await navegar_para(
@@ -706,34 +706,34 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
             else:
                 await _enviar_ou_editar_mensagem(
                     context, user_id, TIPO_RESULTADO,
-                    "âŒ Loja nÃ£o encontrada. Tente novamente.",
+                    "❌ Loja não encontrada. Tente novamente.",
                     limpar_conteudo=True
                 )
                 return ESCOLHER_LOJA
         except (ValueError, IndexError) as e:
-            logger.error(f"Erro ao processar seleÃ§Ã£o de loja: {e}")
+            logger.error(f"Erro ao processar seleção de loja: {e}")
             await _enviar_ou_editar_mensagem(
                 context, user_id, TIPO_RESULTADO,
-                "âŒ Erro ao processar seleÃ§Ã£o. Tente novamente.",
+                "❌ Erro ao processar seleção. Tente novamente.",
                 limpar_conteudo=True
             )
             return ESCOLHER_LOJA
     
-    # Se chegou aqui, comando invÃ¡lido
+    # Se chegou aqui, comando inválido
     await _enviar_ou_editar_mensagem(
         context, user_id, TIPO_RESULTADO,
-        "âŒ Comando invÃ¡lido. Tente novamente.",
+        "❌ Comando inválido. Tente novamente.",
         limpar_conteudo=True
     )
     return ESCOLHER_LOJA
 
 
 # ============================================
-# DEFINIÃ‡ÃƒO DE RESPONSÃVEL (SUPORTE ADMIN)
+# DEFINIÇÃO DE RESPONSÁVEL (SUPORTE ADMIN)
 # ============================================
 
 async def definir_secretario_responsavel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Define o secretÃ¡rio responsÃ¡vel e segue para a coleta de data."""
+    """Define o secretário responsável e segue para a coleta de data."""
     query = update.callback_query
     data = query.data or ""
 
@@ -754,7 +754,7 @@ async def definir_secretario_responsavel_callback(update: Update, context: Conte
         update,
         context,
         "Cadastro de Evento",
-        "ðŸ“… *Data do evento* (Ex: 25/03/2026)",
+        "📅 *Data do evento* (Ex: 25/03/2026)",
         _teclado_cancelar(),
         limpar_conteudo=True,
     )
@@ -763,7 +763,7 @@ async def definir_secretario_responsavel_callback(update: Update, context: Conte
 
 
 # ============================================
-# CONFIRMAÃ‡ÃƒO DE LOJA (CORRIGIDO COM LOGGER)
+# CONFIRMAÇÃO DE LOJA (CORRIGIDO COM LOGGER)
 # ============================================
 
 async def confirmar_loja_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -778,22 +778,22 @@ async def confirmar_loja_callback(update: Update, context: ContextTypes.DEFAULT_
     if data == "confirmar_loja_sim":
         loja = context.user_data.get("loja_selecionada")
         if loja:
-            # PrÃ©-preenche os dados da loja
+            # Pré-preenche os dados da loja
             context.user_data["novo_evento_loja_id"] = _norm_text(loja.get("ID") or loja.get("id"))
             context.user_data["novo_evento_nome_loja"] = loja.get("Nome da Loja", "")
-            context.user_data["novo_evento_numero_loja"] = str(loja.get("NÃºmero", "0"))
+            context.user_data["novo_evento_numero_loja"] = str(loja.get("Número", "0"))
             context.user_data["novo_evento_oriente"] = loja.get("Oriente da Loja", loja.get("Oriente", ""))
             context.user_data["novo_evento_rito"] = loja.get("Rito", "")
-            context.user_data["novo_evento_potencia"] = loja.get("PotÃªncia", "")
-            context.user_data["novo_evento_endereco"] = loja.get("EndereÃ§o", "")
+            context.user_data["novo_evento_potencia"] = loja.get("Potência", "")
+            context.user_data["novo_evento_endereco"] = loja.get("Endereço", "")
             if not _norm_text(context.user_data.get("novo_evento_secretario_responsavel_id")):
                 sid = _norm_text(
-                    loja.get("Telegram ID do secretÃ¡rio responsÃ¡vel")
+                    loja.get("Telegram ID do secretário responsável")
                     or loja.get("secretario_responsavel_id")
                     or loja.get("Telegram ID")
                 )
                 sname = _norm_text(
-                    loja.get("Nome do secretÃ¡rio responsÃ¡vel")
+                    loja.get("Nome do secretário responsável")
                     or loja.get("secretario_responsavel_nome")
                 )
                 _definir_secretario_responsavel(context, sid, sname)
@@ -801,7 +801,7 @@ async def confirmar_loja_callback(update: Update, context: ContextTypes.DEFAULT_
             await navegar_para(
                 update, context,
                 "Cadastro de Evento",
-                "ðŸ“… *Data do evento* (Ex: 25/03/2026)",
+                "📅 *Data do evento* (Ex: 25/03/2026)",
                 _teclado_voltar_cancelar(),
                 limpar_conteudo=True
             )
@@ -823,22 +823,22 @@ async def confirmar_loja_callback(update: Update, context: ContextTypes.DEFAULT_
         botoes_lojas = []
         for i, loja in enumerate(lojas[:5]):
             nome = loja.get("Nome da Loja", "")
-            numero = loja.get("NÃºmero", "")
+            numero = loja.get("Número", "")
             nome_fmt = f"{nome} {numero}" if numero else nome
             botoes_lojas.append([
                 InlineKeyboardButton(
-                    f"ðŸ› {nome_fmt}",
+                    f"🏛 {nome_fmt}",
                     callback_data=f"usar_loja_{i}"
                 )
             ])
         
-        botoes_lojas.append([InlineKeyboardButton("ðŸ“ Cadastrar manualmente", callback_data="cadastrar_manual")])
-        botoes_lojas.append([InlineKeyboardButton("âŒ Cancelar", callback_data="ev_cancelar")])
+        botoes_lojas.append([InlineKeyboardButton("📝 Cadastrar manualmente", callback_data="cadastrar_manual")])
+        botoes_lojas.append([InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")])
         
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "ðŸ›ï¸ *Cadastro de Evento*\n\nEscolha uma loja:",
+            "🏛 *Cadastro de Evento*\n\nEscolha uma loja:",
             InlineKeyboardMarkup(botoes_lojas),
             limpar_conteudo=True
         )
@@ -851,22 +851,22 @@ async def confirmar_loja_callback(update: Update, context: ContextTypes.DEFAULT_
             return await _pedir_secretario_responsavel(
                 update,
                 context,
-                "Como este cadastro sera manual, selecione quem sera o *secretario responsavel* do evento.",
+                "Como este cadastro será manual, selecione quem será o *secretário responsável* do evento.",
             )
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "ðŸ“… *Data do evento* (Ex: 25/03/2026)",
+            "📅 *Data do evento* (Ex: 25/03/2026)",
             _teclado_cancelar(),
             limpar_conteudo=True
         )
         await enviar_dica_contextual(update, context, "cadastro_evento_data")
         return DATA
     
-    # Se chegou aqui, comando nÃ£o reconhecido
+    # Se chegou aqui, comando não reconhecido
     await _enviar_ou_editar_mensagem(
         context, user_id, TIPO_RESULTADO,
-        "âŒ OpÃ§Ã£o invÃ¡lida. Tente novamente.",
+        "❌ Opção inválida. Tente novamente.",
         limpar_conteudo=True
     )
     return CONFIRMAR_LOJA
@@ -885,10 +885,10 @@ async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data_text = _norm_text(update.message.text)
     dt = _parse_data_ddmmyyyy(data_text)
     if not dt:
-        # mostra o erro na prÃ³pria mensagem de resultado (mantÃ©m teclado)
+        # mostra o erro na própria mensagem de resultado (mantém teclado)
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "Data invÃ¡lida. Use o formato *dd/mm/aaaa* (Ex: 25/03/2026).",
+            "Data inválida. Use o formato *dd/mm/aaaa* (Ex: 25/03/2026).",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True,
         )
@@ -898,7 +898,7 @@ async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if dt < hoje:
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "A data nÃ£o pode ser no passado. Tente novamente:",
+            "A data não pode ser no passado. Tente novamente:",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True,
         )
@@ -909,7 +909,7 @@ async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await navegar_para(
         update, context,
         "Cadastro de Evento",
-        "ðŸ•• *HorÃ¡rio* (Ex: 19:30)",
+        "🕕 *Horário* (Ex: 19:30)",
         _teclado_voltar_cancelar(),
         limpar_conteudo=True
     )
@@ -917,7 +917,7 @@ async def receber_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recebe e valida o horÃ¡rio."""
+    """Recebe e valida o horário."""
     try:
         await update.message.delete()
     except:
@@ -926,7 +926,7 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not hora:
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "HorÃ¡rio invÃ¡lido. Use *HH:MM* (Ex: 19:30).",
+            "Horário inválido. Use *HH:MM* (Ex: 19:30).",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True,
         )
@@ -934,12 +934,12 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["novo_evento_horario"] = hora
     
-    # Se jÃ¡ tem nome da loja prÃ©-carregada (veio de loja cadastrada), pula para grau
+    # Se já tem nome da loja pré-carregada (veio de loja cadastrada), pula para grau
     if "novo_evento_nome_loja" in context.user_data:
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "ðŸ”º *Grau mÃ­nimo*",
+            "🔺 *Grau mínimo*",
             _teclado_graus(),
             limpar_conteudo=True
         )
@@ -949,7 +949,7 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "ðŸ› *Nome da loja*",
+            "🏛 *Nome da loja*",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
@@ -957,7 +957,7 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recebe o nome da loja - chamado tanto do fluxo manual quanto da confirmaÃ§Ã£o de loja."""
+    """Recebe o nome da loja - chamado tanto do fluxo manual quanto da confirmação de loja."""
     try:
         await update.message.delete()
     except:
@@ -966,7 +966,7 @@ async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not nome:
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "Informe um nome vÃ¡lido para a loja.",
+            "Informe um nome válido para a loja.",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True,
         )
@@ -977,7 +977,7 @@ async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await navegar_para(
         update, context,
         "Cadastro de Evento",
-        "ðŸ”¢ *NÃºmero da loja* (se nÃ£o houver, digite 0)",
+        "🔢 *Número da loja* (se não houver, digite 0)",
         _teclado_voltar_cancelar(),
         limpar_conteudo=True
     )
@@ -985,7 +985,7 @@ async def receber_nome_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recebe o nÃºmero da loja - etapa intermediÃ¡ria entre NOME_LOJA e ORIENTE."""
+    """Recebe o número da loja - etapa intermediária entre NOME_LOJA e ORIENTE."""
     try:
         await update.message.delete()
     except:
@@ -997,12 +997,12 @@ async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     context.user_data["novo_evento_numero_loja"] = numero
     
-    # Se jÃ¡ tem oriente prÃ©-carregada (veio de loja cadastrada), pula para grau
+    # Se já tem oriente pré-carregada (veio de loja cadastrada), pula para grau
     if "novo_evento_oriente" in context.user_data:
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "ðŸ”º *Grau mÃ­nimo* (Aprendiz, Companheiro, Mestre)",
+            "🔺 *Grau mínimo* (Aprendiz, Companheiro, Mestre)",
             _teclado_graus(),
             limpar_conteudo=True
         )
@@ -1012,7 +1012,7 @@ async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "ðŸ“ *Oriente*",
+            "📍 *Oriente*",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
@@ -1029,7 +1029,7 @@ async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not oriente:
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "Informe um oriente vÃ¡lido.",
+            "Informe um oriente válido.",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True,
         )
@@ -1040,7 +1040,7 @@ async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await navegar_para(
         update, context,
         "Cadastro de Evento",
-        "ðŸ”º *Grau mÃ­nimo*",
+        "🔺 *Grau mínimo*",
         _teclado_graus(),
         limpar_conteudo=True
     )
@@ -1048,11 +1048,11 @@ async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# RECEBEDOR DE GRAU (BOTÃ•ES)
+# RECEBEDOR DE GRAU (BOTÕES)
 # ============================================
 
 async def receber_grau_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recebe o grau selecionado via botÃ£o."""
+    """Recebe o grau selecionado via botão."""
     query = update.callback_query
     await query.answer()
 
@@ -1063,7 +1063,7 @@ async def receber_grau_callback(update: Update, context: ContextTypes.DEFAULT_TY
     if grau not in permitidos:
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "Grau invÃ¡lido. Selecione uma opÃ§Ã£o:",
+            "Grau inválido. Selecione uma opção:",
             _teclado_graus(),
             limpar_conteudo=True
         )
@@ -1075,7 +1075,7 @@ async def receber_grau_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await navegar_para(
         update, context,
         "Cadastro de Evento",
-        "ðŸ•¯ *Tipo de sessÃ£o* (texto livre)",
+        "🕯 *Tipo de sessão* (texto livre)",
         _teclado_voltar_cancelar(),
         limpar_conteudo=True
     )
@@ -1083,11 +1083,11 @@ async def receber_grau_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 # ============================================
-# RECEBEDORES DAS PRÃ“XIMAS ETAPAS
+# RECEBEDORES DAS PRÓXIMAS ETAPAS
 # ============================================
 
 async def receber_tipo_sessao(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recebe o tipo de sessÃ£o."""
+    """Recebe o tipo de sessão."""
     try:
         await update.message.delete()
     except:
@@ -1095,12 +1095,12 @@ async def receber_tipo_sessao(update: Update, context: ContextTypes.DEFAULT_TYPE
     val = _truncate(update.message.text)
     context.user_data["novo_evento_tipo_sessao"] = val
     
-    # Se jÃ¡ tem rito (veio de cadastro com loja), pula
+    # Se já tem rito (veio de cadastro com loja), pula
     if "novo_evento_rito" in context.user_data:
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "ðŸ‘” *Traje obrigatÃ³rio* (texto livre)",
+            "👔 *Traje obrigatório* (texto livre)",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
@@ -1109,7 +1109,7 @@ async def receber_tipo_sessao(update: Update, context: ContextTypes.DEFAULT_TYPE
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "ðŸ“œ *Rito* (texto livre)",
+            "📜 *Rito* (texto livre)",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
@@ -1125,12 +1125,12 @@ async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
     val = _truncate(update.message.text)
     context.user_data["novo_evento_rito"] = val
     
-    # Se jÃ¡ tem potÃªncia (veio de cadastro com loja), pula
+    # Se já tem potência (veio de cadastro com loja), pula
     if "novo_evento_potencia" in context.user_data:
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "ðŸ‘” *Traje obrigatÃ³rio* (texto livre)",
+            "👔 *Traje obrigatório* (texto livre)",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
@@ -1139,7 +1139,7 @@ async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "âšœï¸ *PotÃªncia* (texto livre)",
+            "⚜️ *Potência* (texto livre)",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
@@ -1147,7 +1147,7 @@ async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recebe a potÃªncia."""
+    """Recebe a potência."""
     try:
         await update.message.delete()
     except:
@@ -1158,7 +1158,7 @@ async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await navegar_para(
         update, context,
         "Cadastro de Evento",
-        "ðŸ‘” *Traje obrigatÃ³rio* (texto livre)",
+        "👔 *Traje obrigatório* (texto livre)",
         _teclado_voltar_cancelar(),
         limpar_conteudo=True
     )
@@ -1166,14 +1166,14 @@ async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def receber_traje(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recebe o traje obrigatÃ³rio."""
+    """Recebe o traje obrigatório."""
     val = _truncate(update.message.text)
     context.user_data["novo_evento_traje"] = val
     
     await navegar_para(
         update, context,
         "Cadastro de Evento",
-        "ðŸ½ *HaverÃ¡ Ãgape?*",
+        "🍽 *Haverá Ágape?*",
         _teclado_sim_nao("agape"),
         limpar_conteudo=True
     )
@@ -1181,11 +1181,11 @@ async def receber_traje(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# FLUXOS POR BOTÃ•ES (ÃGAPE, OBSERVAÃ‡Ã•ES)
+# FLUXOS POR BOTÕES (ÁGAPE, OBSERVAÇÕES)
 # ============================================
 
 async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Processa resposta sobre Ã¡gape."""
+    """Processa resposta sobre ágape."""
     query = update.callback_query
     await query.answer()
     _, val = query.data.split("|", 1)
@@ -1194,7 +1194,7 @@ async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if val not in ("sim", "nao"):
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "Selecione uma opÃ§Ã£o:",
+            "Selecione uma opção:",
             _teclado_sim_nao("agape"),
             limpar_conteudo=True
         )
@@ -1207,7 +1207,7 @@ async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "ðŸ’° *Tipo de Ãgape?*",
+            "💰 *Tipo de Ágape?*",
             _teclado_agape_tipos(),
             limpar_conteudo=True
         )
@@ -1216,7 +1216,7 @@ async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await navegar_para(
         update, context,
         "Cadastro de Evento",
-        "ðŸ“ *Deseja adicionar observaÃ§Ãµes?*",
+        "📝 *Deseja adicionar observações?*",
         _teclado_sim_nao("obs"),
         limpar_conteudo=True
     )
@@ -1224,7 +1224,7 @@ async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Processa o tipo de Ã¡gape."""
+    """Processa o tipo de ágape."""
     query = update.callback_query
     await query.answer()
     _, val = query.data.split("|", 1)
@@ -1233,7 +1233,7 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if val not in ("gratuito", "pago"):
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "Selecione uma opÃ§Ã£o:",
+            "Selecione uma opção:",
             _teclado_agape_tipos(),
             limpar_conteudo=True
         )
@@ -1244,7 +1244,7 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await navegar_para(
         update, context,
         "Cadastro de Evento",
-        "ðŸ“ *Deseja adicionar observaÃ§Ãµes?*",
+        "📝 *Deseja adicionar observações?*",
         _teclado_sim_nao("obs"),
         limpar_conteudo=True
     )
@@ -1252,7 +1252,7 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Processa se haverÃ¡ observaÃ§Ãµes."""
+    """Processa se haverá observações."""
     query = update.callback_query
     await query.answer()
     _, val = query.data.split("|", 1)
@@ -1261,7 +1261,7 @@ async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_
     if val not in ("sim", "nao"):
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "Selecione uma opÃ§Ã£o:",
+            "Selecione uma opção:",
             _teclado_sim_nao("obs"),
             limpar_conteudo=True
         )
@@ -1274,13 +1274,13 @@ async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "âœï¸ *Digite as observaÃ§Ãµes* (texto livre)",
+            "✏️ *Digite as observações* (texto livre)",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
         return OBSERVACOES_TEXTO
 
-    # Se jÃ¡ tem endereÃ§o (veio de cadastro com loja), pula para confirmaÃ§Ã£o
+    # Se já tem endereço (veio de cadastro com loja), pula para confirmação
     if "novo_evento_endereco" in context.user_data:
         evento = _montar_evento_dict(context)
         eventos_existentes = listar_eventos() or []
@@ -1298,7 +1298,7 @@ async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "ðŸ“ *EndereÃ§o da sessÃ£o*",
+            "📍 *Endereço da sessão*",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
@@ -1307,11 +1307,11 @@ async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def receber_observacoes_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recebe o texto das observaÃ§Ãµes."""
+    """Recebe o texto das observações."""
     val = _truncate(update.message.text, 500)
     context.user_data["novo_evento_observacoes_texto"] = val
     
-    # Se jÃ¡ tem endereÃ§o (veio de cadastro com loja), pula para confirmaÃ§Ã£o
+    # Se já tem endereço (veio de cadastro com loja), pula para confirmação
     if "novo_evento_endereco" in context.user_data:
         evento = _montar_evento_dict(context)
         eventos_existentes = listar_eventos() or []
@@ -1329,7 +1329,7 @@ async def receber_observacoes_texto(update: Update, context: ContextTypes.DEFAUL
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "ðŸ“ *EndereÃ§o da sessÃ£o*",
+            "📍 *Endereço da sessão*",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
@@ -1338,7 +1338,7 @@ async def receber_observacoes_texto(update: Update, context: ContextTypes.DEFAUL
 
 
 async def receber_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recebe o endereÃ§o e exibe tela de confirmaÃ§Ã£o."""
+    """Recebe o endereço e exibe tela de confirmação."""
     try:
         await update.message.delete()
     except:
@@ -1347,7 +1347,7 @@ async def receber_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(val) < 3:
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "EndereÃ§o muito curto. Digite novamente:",
+            "Endereço muito curto. Digite novamente:",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True,
         )
@@ -1369,7 +1369,7 @@ async def receber_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# CONFIRMAÃ‡ÃƒO / PUBLICAÃ‡ÃƒO
+# CONFIRMAÇÃO / PUBLICAÇÃO
 # ============================================
 
 async def confirmar_publicacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1382,7 +1382,7 @@ async def confirmar_publicacao(update: Update, context: ContextTypes.DEFAULT_TYP
     dup = _encontrar_duplicado(evento, eventos_existentes)
     
     if dup:
-        # ao invÃ©s de reapresentar a tela idÃªntica, mostra um alerta explicando a aÃ§Ã£o
+        # ao invés de reapresentar a tela idêntica, mostra um alerta explicando a ação
         await query.answer("Existe duplicidade. Use 'Publicar mesmo assim' se quiser.", show_alert=True)
         return CONFIRMAR
 
@@ -1415,7 +1415,7 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
         )
         return
 
-    # Extrai ID do evento e aborta publicaÃ§Ã£o se a persistÃªncia falhar.
+    # Extrai ID do evento e aborta publicação se a persistência falhar.
     id_evento = ""
     if isinstance(resultado, str):
         id_evento = resultado
@@ -1425,9 +1425,9 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
     if not id_evento:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "âŒ Falha ao salvar o evento na base de dados. A publicaÃ§Ã£o no grupo foi cancelada para evitar inconsistÃªncias.",
+            "❌ Falha ao salvar o evento na base de dados. A publicação no grupo foi cancelada para evitar inconsistências.",
             InlineKeyboardMarkup([[
-                InlineKeyboardButton("ðŸ”™ Voltar ao menu", callback_data="menu_principal")
+                InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")
             ]]),
             limpar_conteudo=True
         )
@@ -1460,7 +1460,7 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
         _limpar_contexto_evento(context)
         return
 
-    # 2.1) Persiste o ID da mensagem no grupo para permitir sincronizaÃ§Ã£o futura.
+    # 2.1) Persiste o ID da mensagem no grupo para permitir sincronização futura.
     registrar_post_evento_grupo(id_evento, grupo_id_int, msg_publicada.message_id)
 
     evento_sync = {
@@ -1468,19 +1468,19 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
         "Telegram Message ID do grupo": str(msg_publicada.message_id),
     }
     if not atualizar_evento(0, evento_sync):
-        logger.warning("Evento %s publicado, mas nÃ£o foi possÃ­vel salvar Telegram Message ID do grupo.", id_evento)
+        logger.warning("Evento %s publicado, mas não foi possível salvar Telegram Message ID do grupo.", id_evento)
 
     # 3) Confirma no privado
-    msg = "âœ… Evento cadastrado e publicado no grupo."
+    msg = "✅ Evento cadastrado e publicado no grupo."
     if forcar:
         msg += " (publicado com duplicidade assumida)"
     
     await navegar_para(
         update, context,
-        "Cadastro ConcluÃ­do",
+        "Cadastro Concluído",
         msg,
         InlineKeyboardMarkup([[
-            InlineKeyboardButton("ðŸ”™ Voltar ao menu", callback_data="menu_principal")
+            InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")
         ]]),
         limpar_conteudo=True
     )
@@ -1513,7 +1513,7 @@ async def refazer_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await navegar_para(
         update, context,
         "Cadastro de Evento",
-        "ðŸ“… *Data do evento* (Ex: 25/03/2026)",
+        "📅 *Data do evento* (Ex: 25/03/2026)",
         _teclado_cancelar(),
         limpar_conteudo=True
     )
@@ -1522,7 +1522,7 @@ async def refazer_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# NAVEGAÃ‡ÃƒO (VOLTAR/CANCELAR)
+# NAVEGAÇÃO (VOLTAR/CANCELAR)
 # ============================================
 
 async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1538,7 +1538,7 @@ async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if estado == DATA:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "ðŸ“… *Data do evento* (Ex: 25/03/2026)",
+            "📅 *Data do evento* (Ex: 25/03/2026)",
             _teclado_cancelar(),
             limpar_conteudo=True
         )
@@ -1546,7 +1546,7 @@ async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif estado == HORARIO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "ðŸ•• *HorÃ¡rio* (Ex: 19:30)",
+            "🕕 *Horário* (Ex: 19:30)",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
@@ -1560,7 +1560,7 @@ async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif estado == NUMERO_LOJA:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "ðŸ”¢ *NÃºmero da loja* (se nÃ£o houver, digite 0)",
+            "🔢 *Número da loja* (se não houver, digite 0)",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
@@ -1574,70 +1574,70 @@ async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif estado == GRAU:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "ðŸ”º *Grau mÃ­nimo*",
+            "🔺 *Grau mínimo*",
             _teclado_graus(),
             limpar_conteudo=True
         )
     elif estado == TIPO_SESSAO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "ðŸ•¯ *Tipo de sessÃ£o* (texto livre)",
+            "🕯 *Tipo de sessão* (texto livre)",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
     elif estado == RITO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "ðŸ“œ *Rito* (texto livre)",
+            "📜 *Rito* (texto livre)",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
     elif estado == POTENCIA:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "âšœï¸ *PotÃªncia* (texto livre)",
+            "⚜️ *Potência* (texto livre)",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
     elif estado == TRAJE:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "ðŸ‘” *Traje obrigatÃ³rio* (texto livre)",
+            "👔 *Traje obrigatório* (texto livre)",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
     elif estado == AGAPE:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "ðŸ½ *HaverÃ¡ Ãgape?*",
+            "🍽 *Haverá Ágape?*",
             _teclado_sim_nao("agape"),
             limpar_conteudo=True
         )
     elif estado == AGAPE_TIPO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "ðŸ’° *Tipo de Ãgape?*",
+            "💰 *Tipo de Ágape?*",
             _teclado_agape_tipos(),
             limpar_conteudo=True
         )
     elif estado == OBSERVACOES_TEM:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "ðŸ“ *Deseja adicionar observaÃ§Ãµes?*",
+            "📝 *Deseja adicionar observações?*",
             _teclado_sim_nao("obs"),
             limpar_conteudo=True
         )
     elif estado == OBSERVACOES_TEXTO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "âœï¸ *Digite as observaÃ§Ãµes* (texto livre)",
+            "✏️ *Digite as observações* (texto livre)",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
     elif estado == ENDERECO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "ðŸ“ *EndereÃ§o da sessÃ£o*",
+            "📍 *Endereço da sessão*",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
@@ -1658,7 +1658,7 @@ async def ev_cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Cadastro Cancelado",
             "Cadastro cancelado. Use o menu acima para voltar.",
             InlineKeyboardMarkup([[
-                InlineKeyboardButton("ðŸ”™ Voltar ao menu", callback_data="menu_principal")
+                InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")
             ]]),
             limpar_conteudo=True
         )
@@ -1671,7 +1671,7 @@ async def ev_cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cancelar_publicacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Cancela a publicaÃ§Ã£o."""
+    """Cancela a publicação."""
     query = update.callback_query
     await query.answer()
     await ev_cancelar(update, context)
@@ -1791,5 +1791,3 @@ cadastro_evento_handler = ConversationHandler(
     name="cadastro_evento_handler",
     persistent=False,
 )
-
-
