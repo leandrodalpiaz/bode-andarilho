@@ -30,6 +30,7 @@ from starlette.requests import Request
 from starlette.responses import PlainTextResponse, Response
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram.error import InvalidToken
 
 from src.miniapp import (
     get_cadastro_membro,
@@ -660,8 +661,8 @@ async def shutdown(server, telegram_app: Application):
 
 async def main():
     """Função principal que inicia o bot e o servidor webhook."""
-    
-    token = _require_env("TELEGRAM_TOKEN", TOKEN)
+
+    token = _require_env("TELEGRAM_TOKEN", TOKEN).strip().strip('"').strip("'")
     render_url = _require_env("RENDER_EXTERNAL_URL", RENDER_URL)
 
     webhook_url = _join_url(render_url, WEBHOOK_PATH)
@@ -677,7 +678,14 @@ async def main():
     telegram_app = Application.builder().token(token).build()
     register_handlers(telegram_app)
 
-    await telegram_app.initialize()
+    try:
+        await telegram_app.initialize()
+    except InvalidToken:
+        logger.error(
+            "TELEGRAM_TOKEN inválido ou revogado. Atualize a variável de ambiente no provider."
+        )
+        raise RuntimeError("Falha de autenticação no Telegram.") from None
+
     await telegram_app.start()
 
     await telegram_app.bot.set_webhook(
