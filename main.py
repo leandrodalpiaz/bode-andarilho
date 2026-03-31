@@ -22,6 +22,7 @@ import asyncio
 import logging
 import signal
 import hmac
+import hashlib
 from datetime import datetime
 from typing import Optional
 
@@ -217,6 +218,24 @@ def _env_bool(value: Optional[str], default: bool = False) -> bool:
     if value is None:
         return default
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _resolver_webhook_secret(token: str, explicit_value: Optional[str]) -> tuple[str, bool]:
+    """
+    Resolve o segredo do webhook.
+    - Prioriza TELEGRAM_WEBHOOK_SECRET quando definido.
+    - Fallback: segredo derivado do token para evitar crash em ambientes legados.
+    """
+    explicit = _clean_env_text(explicit_value)
+    if explicit:
+        return explicit, True
+
+    derivado = hmac.new(
+        b"bode-andarilho-webhook",
+        token.encode("utf-8"),
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+    return derivado, False
 
 
 async def _auto_delete_mensagens_grupo(context, chat_id: int, message_ids: list[int], delay: int = 15) -> None:
@@ -696,7 +715,7 @@ async def main():
 
     token = _require_env("TELEGRAM_TOKEN", _clean_env_text(TOKEN))
     render_url = _require_env("RENDER_EXTERNAL_URL", _clean_env_text(RENDER_URL))
-    webhook_secret = _require_env("TELEGRAM_WEBHOOK_SECRET", _clean_env_text(WEBHOOK_SECRET))
+    webhook_secret, secret_explicit = _resolver_webhook_secret(token, WEBHOOK_SECRET)
     webhook_path = _clean_env_text(WEBHOOK_PATH) or "/telegram/webhook"
     webhook_path = webhook_path if webhook_path.startswith("/") else f"/{webhook_path}"
 
@@ -710,7 +729,15 @@ async def main():
     logger.info("WEBHOOK_URL: %s", webhook_url)
     logger.info("DROP_PENDING_UPDATES_ON_BOOT: %s", drop_pending_updates)
     logger.info("WEBHOOK_MAX_CONNECTIONS: %s", WEBHOOK_MAX_CONNECTIONS)
-    logger.info("TELEGRAM_WEBHOOK_SECRET configurado: %s", "SIM" if webhook_secret else "NAO")
+    logger.info(
+        "TELEGRAM_WEBHOOK_SECRET: %s",
+        "EXPLICITO" if secret_explicit else "DERIVADO_DO_TOKEN",
+    )
+    if not secret_explicit:
+        logger.warning(
+            "TELEGRAM_WEBHOOK_SECRET ausente. Usando segredo derivado do TELEGRAM_TOKEN; "
+            "recomenda-se configurar TELEGRAM_WEBHOOK_SECRET no provider."
+        )
 
     telegram_app = Application.builder().token(token).build()
     register_handlers(telegram_app)
