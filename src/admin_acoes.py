@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (
     ContextTypes,
     ConversationHandler,
@@ -41,6 +41,7 @@ from src.sheets_supabase import (
     obter_secretario_responsavel_evento,
 )
 from src.permissoes import get_nivel
+from src.miniapp import WEBAPP_URL_EVENTO
 
 from src.bot import (
     navegar_para,
@@ -50,6 +51,13 @@ from src.bot import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _botao_cadastrar_evento() -> InlineKeyboardButton:
+    """Retorna botão de cadastro priorizando o Mini App."""
+    if WEBAPP_URL_EVENTO:
+        return InlineKeyboardButton("📌 Cadastrar evento", web_app=WebAppInfo(url=WEBAPP_URL_EVENTO))
+    return InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")
 
 # ============================================
 # CONSTANTES E CONFIGURAÇÕES
@@ -106,7 +114,7 @@ async def exibir_menu_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
+        [_botao_cadastrar_evento()],
         [InlineKeyboardButton("📋 Gerenciar todos os eventos", callback_data="meus_eventos")],
         [InlineKeyboardButton("👥 Ver todos os membros", callback_data="admin_ver_membros")],
         [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],

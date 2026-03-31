@@ -21,7 +21,7 @@ import urllib.parse
 from datetime import datetime
 from typing import Optional
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.error import Forbidden
 from telegram.ext import (
     ContextTypes,
@@ -55,6 +55,7 @@ from src.eventos import (
 )
 from src.permissoes import get_nivel
 from src.ajuda.dicas import enviar_dica_contextual
+from src.miniapp import WEBAPP_URL_EVENTO
 
 from src.bot import (
     navegar_para,
@@ -128,6 +129,18 @@ def _confirmacao_com_agape(agape_valor: str) -> bool:
         return False
     marcadores = ("com ágape", "com agape", "confirmada", "gratuito", "pago", "sim")
     return any(marcador in texto for marcador in marcadores)
+
+
+def _callback_voltar_area(nivel: str) -> str:
+    """Define para qual painel o usuário deve voltar."""
+    return "area_admin" if str(nivel) == "3" else "area_secretario"
+
+
+def _botao_cadastrar_evento(texto: str = "📌 Cadastrar evento") -> InlineKeyboardButton:
+    """Retorna botão de cadastro priorizando o Mini App."""
+    if WEBAPP_URL_EVENTO:
+        return InlineKeyboardButton(texto, web_app=WebAppInfo(url=WEBAPP_URL_EVENTO))
+    return InlineKeyboardButton(texto, callback_data="cadastrar_evento")
 
 
 def _registrar_ultima_edicao(evento: dict, user_id: int, user_nome: str = "") -> None:
@@ -250,7 +263,7 @@ async def exibir_menu_secretario(update: Update, context: ContextTypes.DEFAULT_T
         return
 
     teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
+        [_botao_cadastrar_evento()],
         [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
         [InlineKeyboardButton("👥 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
         [InlineKeyboardButton("🏛️ Minhas lojas", callback_data="menu_lojas")],
@@ -304,8 +317,8 @@ async def meus_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not eventos_futuros:
         teclado = InlineKeyboardMarkup([
-            [InlineKeyboardButton("➕ Cadastrar evento", callback_data="cadastrar_evento")],
-            [InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario")],
+            [_botao_cadastrar_evento("➕ Cadastrar evento")],
+            [InlineKeyboardButton("🔙 Voltar", callback_data=_callback_voltar_area(nivel))],
         ])
         await navegar_para(
             update, context,
@@ -326,8 +339,8 @@ async def meus_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         ])
 
-    botoes.append([InlineKeyboardButton("➕ Cadastrar novo", callback_data="cadastrar_evento")])
-    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario")])
+    botoes.append([_botao_cadastrar_evento("➕ Cadastrar novo")])
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data=_callback_voltar_area(nivel))])
 
     await navegar_para(
         update, context,
@@ -1079,7 +1092,7 @@ async def listar_eventos_cancelados(update: Update, context: ContextTypes.DEFAUL
 
     if not eventos_filtrados:
         teclado = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario")],
+            [InlineKeyboardButton("🔙 Voltar", callback_data=_callback_voltar_area(nivel))],
         ])
         await navegar_para(
             update, context,
@@ -1101,7 +1114,7 @@ async def listar_eventos_cancelados(update: Update, context: ContextTypes.DEFAUL
             )
         ])
 
-    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario")])
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data=_callback_voltar_area(nivel))])
 
     await navegar_para(
         update, context,
@@ -1203,7 +1216,7 @@ async def executar_refazer_evento(update: Update, context: ContextTypes.DEFAULT_
             "✅ *Evento reaberto com sucesso!*\n\n"
             f"O evento {evento.get('Nome da loja', '')} foi reativado e aparecerá em 'Meus eventos'.",
             InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario")
+                InlineKeyboardButton("🔙 Voltar", callback_data=_callback_voltar_area(nivel))
             ]])
         )
     else:

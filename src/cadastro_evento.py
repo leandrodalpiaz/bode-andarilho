@@ -70,6 +70,7 @@ MAX_TEXTO = 250
 
 # Estados da conversação
 (
+    ESCOLHER_INICIO_ADMIN,
     ESCOLHER_LOJA,
     CONFIRMAR_LOJA,
     SELECIONAR_RESPONSAVEL,
@@ -89,7 +90,7 @@ MAX_TEXTO = 250
     OBSERVACOES_TEXTO,
     ENDERECO,
     CONFIRMAR,
-) = range(19)
+) = range(20)
 
 # Opções fixas
 GRAUS_OPCOES = [
@@ -234,6 +235,15 @@ def _teclado_selecionar_secretario(secretarios: List[Dict[str, str]]) -> InlineK
         nome = _truncate(_norm_text(sec.get("nome")) or sid, 50)
         if sid:
             linhas.append([InlineKeyboardButton(f"👤 {nome}", callback_data=f"definir_secretario|{sid}")])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")])
+    return InlineKeyboardMarkup(linhas)
+
+
+def _teclado_inicio_admin(tem_lojas: bool) -> InlineKeyboardMarkup:
+    """Teclado inicial do cadastro para admin, separando formulário novo de atalhos."""
+    linhas = [[InlineKeyboardButton("📝 Cadastro manual", callback_data="cadastro_evento_manual")]]
+    if tem_lojas:
+        linhas.append([InlineKeyboardButton("🏛 Usar loja cadastrada como atalho", callback_data="cadastro_evento_usar_loja")])
     linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")])
     return InlineKeyboardMarkup(linhas)
 
@@ -519,6 +529,8 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ConversationHandler.END
 
+    _limpar_contexto_evento(context)
+
     # Trilha de auditoria: quem está operando o cadastro
     context.user_data["novo_evento_criado_por_id"] = str(user_id)
     context.user_data["novo_evento_criado_por_nome"] = _norm_text(update.effective_user.full_name or "")
@@ -553,20 +565,23 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ConversationHandler.END
 
-    for k in list(context.user_data.keys()):
-        if k.startswith("novo_evento_") and k not in (
-            "novo_evento_telegram_id_grupo",
-            "novo_evento_telegram_id_secretario",
-            "novo_evento_secretario_responsavel_id",
-            "novo_evento_secretario_responsavel_nome",
-            "novo_evento_criado_por_id",
-            "novo_evento_criado_por_nome",
-        ):
-            context.user_data.pop(k, None)
-
     # Lojas visíveis: secretário vê as suas; admin vê todas.
     lojas = listar_lojas_visiveis(user_id, nivel)
-    
+
+    if str(nivel) == "3":
+        context.user_data["lojas_disponiveis"] = lojas or []
+        await navegar_para(
+            update,
+            context,
+            "Cadastro de Evento",
+            "📅 *Novo cadastro de evento*\n\n"
+            "Escolha como deseja iniciar. "
+            "O cadastro manual abre um formulário em branco; o atalho de loja apenas reaproveita dados base para acelerar o preenchimento.",
+            _teclado_inicio_admin(bool(lojas)),
+            limpar_conteudo=True,
+        )
+        return ESCOLHER_INICIO_ADMIN
+
     if lojas:
         # Oferece opção de usar loja cadastrada.
         botoes_lojas = []
@@ -622,6 +637,56 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await enviar_dica_contextual(update, context, "cadastro_evento_data")
         return DATA
+
+
+async def escolher_inicio_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Direciona o admin para cadastro manual ou uso de loja como atalho."""
+    data = update.callback_query.data or ""
+    lojas = context.user_data.get("lojas_disponiveis", [])
+
+    if data == "cadastro_evento_manual":
+        context.user_data.pop("novo_evento_loja_id", None)
+        return await _pedir_secretario_responsavel(
+            update,
+            context,
+            "Defina o *secretário responsável* deste evento antes de continuar o cadastro manual.",
+        )
+
+    if data == "cadastro_evento_usar_loja":
+        if not lojas:
+            return await _pedir_secretario_responsavel(
+                update,
+                context,
+                "Não encontrei lojas cadastradas disponíveis. Defina o *secretário responsável* para continuar manualmente.",
+            )
+
+        botoes_lojas = []
+        for i, loja in enumerate(lojas[:20]):
+            nome = loja.get("Nome da Loja", "")
+            numero = loja.get("Número", "")
+            nome_fmt = f"{nome} {numero}" if numero else nome
+            resp_nome = _norm_text(loja.get("Nome do secretário responsável"))
+            label = f"🏛 {nome_fmt}"
+            if resp_nome:
+                label = f"🏛 {nome_fmt} • {resp_nome[:20]}"
+            botoes_lojas.append([
+                InlineKeyboardButton(label, callback_data=f"usar_loja_{i}")
+            ])
+
+        botoes_lojas.append([InlineKeyboardButton("📝 Cadastro manual", callback_data="cadastrar_manual")])
+        botoes_lojas.append([InlineKeyboardButton("❌ Cancelar", callback_data="ev_cancelar")])
+
+        await navegar_para(
+            update,
+            context,
+            "Cadastro de Evento",
+            "🏛 *Cadastro de Evento*\n\nSelecione uma loja para usar como atalho no novo cadastro:",
+            InlineKeyboardMarkup(botoes_lojas),
+            limpar_conteudo=True,
+        )
+        return ESCOLHER_LOJA
+
+    return await ev_cancelar(update, context)
 
 
 async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1693,6 +1758,10 @@ async def cancelar_cadastro_evento(update: Update, context: ContextTypes.DEFAULT
 cadastro_evento_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(novo_evento_start, pattern=r"^cadastrar_evento$")],
     states={
+        ESCOLHER_INICIO_ADMIN: [
+            CallbackQueryHandler(escolher_inicio_admin_callback, pattern=r"^(cadastro_evento_manual|cadastro_evento_usar_loja)$"),
+            CallbackQueryHandler(ev_cancelar, pattern=r"^ev_cancelar$"),
+        ],
         ESCOLHER_LOJA: [CallbackQueryHandler(escolher_loja_callback, pattern="^(usar_loja_\\d+|cadastrar_manual)$")],
         CONFIRMAR_LOJA: [
             CallbackQueryHandler(confirmar_loja_callback, pattern="^(confirmar_loja_sim|escolher_outra_loja|cadastrar_manual)$")
