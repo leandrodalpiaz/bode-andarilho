@@ -26,6 +26,8 @@ from src.sheets_supabase import (
     buscar_membro,
     buscar_confirmacoes_no_periodo,
     buscar_eventos_no_periodo,
+    get_preferencia_lembretes,
+    obter_secretario_responsavel_evento,
 )
 from src.messages import (
     LEMBRETE_TITULO,
@@ -120,7 +122,7 @@ async def enviar_lembretes_24h(bot: Bot):
         numero_fmt = f" {numero_loja}" if numero_loja else ""
 
         # Resolve o ID do secretário antes do loop para poder aplicar o skip
-        secretario_id = _parse_telegram_id(evento.get("Telegram ID do secretário", ""))
+        secretario_id = obter_secretario_responsavel_evento(evento)
 
         # Envia lembretes para confirmados (skip do secretário — receberá mensagem especial)
         for membro in confirmados:
@@ -129,8 +131,15 @@ async def enviar_lembretes_24h(bot: Bot):
             if not telegram_id:
                 continue
 
+            telegram_id_int = _parse_telegram_id(telegram_id)
+            if telegram_id_int is None:
+                continue
+
             # Secretário receberá circular própria com contagem; não duplicar aqui
-            if secretario_id and _parse_telegram_id(telegram_id) == secretario_id:
+            if secretario_id and telegram_id_int == secretario_id:
+                continue
+
+            if not get_preferencia_lembretes(telegram_id_int):
                 continue
 
             # Monta mensagem usando template
@@ -150,7 +159,7 @@ async def enviar_lembretes_24h(bot: Bot):
 
             try:
                 await bot.send_message(
-                    chat_id=int(telegram_id),
+                    chat_id=telegram_id_int,
                     text=texto,
                     parse_mode="Markdown"
                 )
@@ -191,7 +200,10 @@ async def enviar_lembretes_24h(bot: Bot):
                 except Exception as e:
                     print(f"Erro ao enviar lembrete 24h para secretário {secretario_id}: {e}")
         elif evento.get("Telegram ID do secretário", ""):
-            logger.warning("Telegram ID do secretário inválido em lembrete 24h: %r", evento.get("Telegram ID do secretário", ""))
+            logger.warning(
+                "Secretário responsável não resolvido em lembrete 24h (valor legado=%r).",
+                evento.get("Telegram ID do secretário", ""),
+            )
 
 
 # ============================================
@@ -229,7 +241,7 @@ async def enviar_lembretes_meio_dia(bot: Bot):
         numero_fmt = f" {numero_loja}" if numero_loja else ""
 
         # Resolve o ID do secretário antes do loop para poder aplicar o skip
-        secretario_id = _parse_telegram_id(evento.get("Telegram ID do secretário", ""))
+        secretario_id = obter_secretario_responsavel_evento(evento)
 
         # Envia lembretes para confirmados (skip do secretário — receberá circular especial)
         for membro in confirmados:
@@ -238,8 +250,15 @@ async def enviar_lembretes_meio_dia(bot: Bot):
             if not telegram_id:
                 continue
 
+            telegram_id_int = _parse_telegram_id(telegram_id)
+            if telegram_id_int is None:
+                continue
+
             # Secretário receberá circular própria com contagem; não duplicar aqui
-            if secretario_id and _parse_telegram_id(telegram_id) == secretario_id:
+            if secretario_id and telegram_id_int == secretario_id:
+                continue
+
+            if not get_preferencia_lembretes(telegram_id_int):
                 continue
 
             # Monta mensagem usando template
@@ -256,7 +275,7 @@ async def enviar_lembretes_meio_dia(bot: Bot):
 
             try:
                 await bot.send_message(
-                    chat_id=int(telegram_id),
+                    chat_id=telegram_id_int,
                     text=texto,
                     parse_mode="Markdown"
                 )
@@ -290,7 +309,10 @@ async def enviar_lembretes_meio_dia(bot: Bot):
                 except Exception as e:
                     print(f"Erro ao enviar circular meio-dia ao secretário {secretario_id}: {e}")
         elif evento.get("Telegram ID do secretário", ""):
-            logger.warning("Telegram ID do secretário inválido em lembrete meio-dia: %r", evento.get("Telegram ID do secretário", ""))
+            logger.warning(
+                "Secretário responsável não resolvido em lembrete meio-dia (valor legado=%r).",
+                evento.get("Telegram ID do secretário", ""),
+            )
 
 
 async def enviar_celebracao_mensal(bot: Bot):

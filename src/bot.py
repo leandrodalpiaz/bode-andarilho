@@ -69,10 +69,11 @@ def menu_principal_teclado(nivel: str) -> InlineKeyboardMarkup:
     Gera o teclado do menu principal baseado no nível de acesso.
     """
     botoes = [
-        [InlineKeyboardButton("📅 Ver Sessões Agendadas", callback_data="ver_eventos")],
-        [InlineKeyboardButton("✅ Minhas Visitações", callback_data="minhas_confirmacoes")],
-        [InlineKeyboardButton("👤 Meu Perfil / Dados", callback_data="meu_cadastro")],
-        [InlineKeyboardButton("❓ Ajuda & Orientações", callback_data="menu_ajuda")],
+        [InlineKeyboardButton("📅 Ver Sessões", callback_data="ver_eventos")],
+        [InlineKeyboardButton("✅ Minhas Presenças", callback_data="minhas_confirmacoes")],
+        [InlineKeyboardButton("👤 Meu Perfil", callback_data="meu_cadastro")],
+        [InlineKeyboardButton("🔔 Meus Lembretes", callback_data="menu_lembretes")],
+        [InlineKeyboardButton("❓ Ajuda", callback_data="menu_ajuda")],
     ]
 
     # Secretários (Nível 2) e Admins (Nível 3)
@@ -248,7 +249,11 @@ async def criar_estrutura_inicial(context, user_id: int, membro: dict) -> bool:
     nivel = get_nivel(user_id)
     
     # Menu Fixo (Portal de Entrada)
-    texto_menu = f"🐐 *Bode Andarilho*\n\nSaudações, Ir.·. {membro.get('Nome', '')}!"
+    texto_menu = (
+        f"🐐 *Bode Andarilho*\n\n"
+        f"Saudações, Ir.·. {membro.get('Nome', '')}!\n\n"
+        "Escolha uma opção abaixo para seguir:"
+    )
     sucesso = await _enviar_ou_editar_mensagem(
         context, user_id, TIPO_MENU, texto_menu, menu_principal_teclado(nivel)
     )
@@ -264,7 +269,7 @@ async def criar_estrutura_inicial(context, user_id: int, membro: dict) -> bool:
     # Resultado Inicial
     await _enviar_ou_editar_mensagem(
         context, user_id, TIPO_RESULTADO,
-        "A conversa seguirá por aqui. Escolha uma ação no painel."
+        "Tudo pronto por aqui. Use o menu acima para navegar pelo bot."
     )
     
     return True
@@ -422,7 +427,10 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif data == "limpar_historico":
         await limpar_historico(update, context)
-    
+    elif data == "menu_lembretes":
+        from src.membro_lembretes import menu_lembretes_membro
+        await menu_lembretes_membro(update, context)
+
     # --- Gestão de Eventos e Visitas ---
     elif data in ("ver_eventos", "voltar_eventos"):
         from src.eventos import mostrar_eventos

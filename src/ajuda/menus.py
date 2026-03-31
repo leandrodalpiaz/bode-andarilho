@@ -38,12 +38,12 @@ async def menu_ajuda_principal(update: Update, context: ContextTypes.DEFAULT_TYP
 	texto = TEXTO_MENU_AJUDA_PRINCIPAL
 	teclado = InlineKeyboardMarkup(
 		[
-			[InlineKeyboardButton("📘 Guia Rápido", callback_data="ajuda_guia")],
+			[InlineKeyboardButton("📘 Guia rápido", callback_data="ajuda_guia")],
 			[InlineKeyboardButton("📚 Tutoriais", callback_data="ajuda_tutoriais")],
-			[InlineKeyboardButton("❓ Perguntas Frequentes", callback_data="ajuda_faq")],
+			[InlineKeyboardButton("❓ Perguntas frequentes", callback_data="ajuda_faq")],
 			[InlineKeyboardButton("📖 Glossário", callback_data="ajuda_glossario")],
 			[InlineKeyboardButton("🏛️ Sobre o Bode", callback_data="ajuda_sobre")],
-			[InlineKeyboardButton("🔙 Voltar ao menu principal", callback_data="menu_principal")],
+			[InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
 		]
 	)
 

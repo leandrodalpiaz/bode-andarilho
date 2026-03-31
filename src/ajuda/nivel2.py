@@ -11,11 +11,11 @@ async def guia_nivel2(update, context):
 	texto += "*2. Criar uma Sessão:*\n"
 	texto += "   Na 'Área do Secretário', clique em '📌 Cadastrar evento'. Você pode usar os dados de uma loja pré-cadastrada como atalho. O bot publicará a sessão automaticamente no grupo.\n\n"
 	texto += "*3. Gerenciar Meus Eventos:*\n"
-	texto += "   Em '📋 Meus eventos', você pode ver os eventos que criou e acessar opções como '📊 Resumo da sessão', '✏️ Editar evento', '👥 Ver confirmados', '📋 Copiar lista' e '❌ Cancelar evento'.\n\n"
+	texto += "   Em '📋 Meus eventos', você pode ver os eventos que criou e acessar opções como '📊 Resumo da sessão', '✏️ Editar evento', '👥 Ver confirmados', '📋 Copiar lista de confirmados' e '❌ Cancelar evento'.\n\n"
 	texto += "*4. Ver Lista de Confirmados:*\n"
 	texto += "   Nos detalhes de um evento, clique em '👥 Ver confirmados' para ver a lista completa de irmãos que confirmaram presença, incluindo grau, loja, oriente e se vão com ágape.\n\n"
 	texto += "*5. Copiar Lista para Ágape:*\n"
-	texto += "   Em 'Meus eventos', escolha o evento e clique em '📋 Copiar lista'. O bot gera um texto formatado que você pode copiar e colar para compartilhar com quem organiza o ágape.\n\n"
+	texto += "   Em 'Meus eventos', escolha o evento e clique em '📋 Copiar lista de confirmados'. O bot gera um texto formatado que você pode copiar e colar para compartilhar com quem organiza o ágape.\n\n"
 	texto += "*6. Configurar Notificações:*\n"
 	texto += "   Na 'Área do Secretário', em '🔔 Configurar notificações', você pode ativar ou desativar os avisos no privado sobre novas confirmações nos seus eventos."
 
@@ -71,7 +71,7 @@ async def ajuda_nivel2_gerenciar_eventos(update, context):
 		"   - *'📊 Resumo da sessão':* Para uma visão rápida das confirmações.\n"
 		"   - *'✏️ Editar evento':* Para alterar detalhes do evento (atenção: edições removem confirmações).\n"
 		"   - *'👥 Ver confirmados':* Para ver a lista completa de participantes.\n"
-		"   - *'📋 Copiar lista':* Para gerar um texto fácil de compartilhar.\n"
+		"   - *'📋 Copiar lista de confirmados':* Para gerar um texto fácil de compartilhar.\n"
 		"   - *'❌ Cancelar evento':* Para desmarcar a sessão (atenção: ação irreversível)."
 	)
 	teclado = InlineKeyboardMarkup(
@@ -97,7 +97,7 @@ async def ajuda_nivel2_copiar_lista(update, context):
 	texto = (
 		"*Como Copiar a Lista para Ágape:*\n\n"
 		"1. Em '📋 Meus eventos', escolha o evento desejado.\n"
-		"2. Clique em '📋 Copiar lista'.\n"
+		"2. Clique em '📋 Copiar lista de confirmados'.\n"
 		"3. O bot enviará uma mensagem com a lista formatada. Selecione o texto, copie e cole onde precisar (ex: WhatsApp para quem organiza o ágape)."
 	)
 	teclado = InlineKeyboardMarkup(

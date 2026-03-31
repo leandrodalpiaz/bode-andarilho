@@ -27,7 +27,7 @@
 
 ## 1. Visão Geral
 
-O **Bode Andarilho** é um bot do Telegram desenvolvido para gerenciar eventos, presenças e membros de uma comunidade maçônica. O bot opera exclusivamente via webhook (hospedado no Render) e oferece uma interface de navegação baseada em mensagens editáveis com teclados inline.
+O **Bode Andarilho** é um bot do Telegram desenvolvido para gerenciar eventos, presenças e membros de uma comunidade maçônica. O bot opera exclusivamente via webhook (hospedado em Railway) e oferece uma interface de navegação baseada em mensagens editáveis com teclados inline.
 
 **Funcionalidades principais:**
 
@@ -53,7 +53,7 @@ O **Bode Andarilho** é um bot do Telegram desenvolvido para gerenciar eventos, 
 | Servidor web (webhook) | Starlette + uvicorn |
 | Banco de Dados | **Supabase (PostgreSQL)** |
 | Agendador | APScheduler 3.11.2 |
-| Hospedagem | Render (worker process) |
+| Hospedagem | Railway |
 
 Os dados são persistidos no **Supabase (PostgreSQL)** através do cliente oficial `supabase-py`.
 
@@ -61,7 +61,7 @@ Os dados são persistidos no **Supabase (PostgreSQL)** através do cliente ofici
 
 ```
 ┌─────────────┐     HTTPS/webhook      ┌──────────────────────┐
-│  Telegram   │ ─────────────────────► │  Render (uvicorn)    │
+│  Telegram   │ ─────────────────────► │  Railway (uvicorn)   │
 │  Servers    │                         │  main.py             │
 └─────────────┘                         └──────────┬───────────┘
                                                     │
@@ -87,7 +87,7 @@ Os dados são persistidos no **Supabase (PostgreSQL)** através do cliente ofici
 ### Diagrama de fluxo de requisição
 
 ```
-Telegram → Webhook (Render) → main.py → Handlers → sheets_supabase.py → Supabase (PostgreSQL)
+Telegram → Webhook (Railway) → main.py → Handlers → sheets_supabase.py → Supabase (PostgreSQL)
 ```
 
 ### Processo de inicialização (`main.py`)
@@ -109,7 +109,7 @@ Telegram → Webhook (Render) → main.py → Handlers → sheets_supabase.py �
 ```
 bode_andarilho/
 ├── main.py                    # Ponto de entrada, webhook, registro de handlers
-├── Procfile                   # worker: python main.py
+├── Procfile                   # web: python main.py
 ├── requirements.txt           # Dependências Python
 ├── runtime.txt                # python-3.12.0
 ├── docs/
@@ -150,14 +150,15 @@ bode_andarilho/
 
 ### 4.1 Variáveis de Ambiente
 
-As seguintes variáveis de ambiente devem ser definidas (em produção, configuradas no painel do Render):
+As seguintes variáveis de ambiente devem ser definidas (em produção, configuradas no painel do Railway):
 
 ```env
 # Telegram
 TELEGRAM_TOKEN=<token do bot obtido no BotFather>
+TELEGRAM_WEBHOOK_SECRET=<segredo aleatório forte para validar chamadas do webhook>
 
 # Render
-RENDER_EXTERNAL_URL=https://seu-app.onrender.com
+RENDER_EXTERNAL_URL=https://worker-production-2d2d.up.railway.app
 PORT=10000
 WEBHOOK_PATH=/telegram/webhook
 
@@ -179,7 +180,7 @@ python-telegram-bot==22.6
 APScheduler==3.11.2
 requests==2.32.5
 
-# Webhook (Render)
+# Webhook (Railway)
 starlette==0.37.0
 uvicorn==0.30.0
 httpx==0.28.1
@@ -214,7 +215,8 @@ Para desenvolvimento local, crie um arquivo `.env` na raiz do projeto:
 
 ```env
 TELEGRAM_TOKEN=...
-RENDER_EXTERNAL_URL=https://seu-app.onrender.com
+TELEGRAM_WEBHOOK_SECRET=...
+RENDER_EXTERNAL_URL=https://worker-production-2d2d.up.railway.app
 PORT=10000
 WEBHOOK_PATH=/telegram/webhook
 GRUPO_PRINCIPAL_ID=...
@@ -451,7 +453,7 @@ Localizado em `src/ajuda/`. Contém conteúdo educativo e de suporte ao usuário
 
 ### 11.1 Logs
 
-O bot utiliza o sistema de logging padrão do Python. Em produção (Render), os logs são visualizados pelo painel do serviço em tempo real. Eventos críticos como falha de webhook, erros no scheduler e exceções nos handlers são registrados automaticamente pelo `python-telegram-bot`.
+O bot utiliza o sistema de logging padrão do Python. Em produção (Railway), os logs são visualizados pelo painel do serviço em tempo real. Eventos críticos como falha de webhook, erros no scheduler e exceções nos handlers são registrados automaticamente pelo `python-telegram-bot`.
 
 ### 11.2 Pontos de Atenção
 
@@ -465,10 +467,10 @@ O bot utiliza o sistema de logging padrão do Python. Em produção (Render), os
 
 Para recriar o ambiente completo do zero:
 
-1. Criar conta/projeto no Render
+1. Criar conta/projeto no Railway
 2. Conectar ao repositório no GitHub
 3. Configurar todas as variáveis de ambiente (seção 4.1)
-4. Definir o processo como `worker: python main.py` (Procfile)
+4. Definir o processo como `web: python main.py` (Procfile)
 5. Criar o projeto no Supabase e executar o SQL de criação das tabelas (incluindo `docs/supabase_notificacoes_secretario.sql` para pendências do secretário)
 6. Migrar os dados existentes executando os INSERTs de seed disponíveis em `docs/supabase_seed.sql`
 7. Criar um bot no BotFather e adicionar ao grupo principal como administrador

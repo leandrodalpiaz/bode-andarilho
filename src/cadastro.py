@@ -235,38 +235,28 @@ def _teclado_inicio(
     cadastro_parcial: bool = False,
 ) -> InlineKeyboardMarkup:
     """Cria teclado da tela inicial de cadastro."""
-    if revalidacao:
-        return InlineKeyboardMarkup(
-            [
-                [InlineKeyboardButton("🔄 Revalidar cadastro", callback_data="editar_cadastro")],
-                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
-            ]
-        )
-    if cadastrado:
-        return InlineKeyboardMarkup(
-            [
-                [InlineKeyboardButton("✏️ Editar meu cadastro", callback_data="editar_cadastro")],
-                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
-            ]
-        )
-    if cadastro_parcial:
-        return InlineKeyboardMarkup(
-            [
-                [InlineKeyboardButton("▶️ Continuar cadastro", callback_data="continuar_cadastro")],
-                [InlineKeyboardButton("🔁 Recomeçar cadastro", callback_data="iniciar_cadastro")],
-                [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
-            ]
-        )
-    if WEBAPP_URL_MEMBRO:
-        btn_iniciar = InlineKeyboardButton("🧾 Iniciar cadastro", web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO))
-    else:
-        btn_iniciar = InlineKeyboardButton("🧾 Iniciar cadastro", callback_data="iniciar_cadastro")
-    return InlineKeyboardMarkup(
-        [
-            [btn_iniciar],
-            [InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")],
-        ]
+    btn_webapp = (
+        InlineKeyboardButton("🧾 Abrir formulário de cadastro", web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO))
+        if WEBAPP_URL_MEMBRO
+        else None
     )
+    linhas = []
+
+    if btn_webapp:
+        linhas.append([btn_webapp])
+
+    if revalidacao:
+        linhas.append([InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")])
+        return InlineKeyboardMarkup(linhas)
+    if cadastrado:
+        linhas.append([InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")])
+        return InlineKeyboardMarkup(linhas)
+    if cadastro_parcial:
+        linhas.append([InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")])
+        return InlineKeyboardMarkup(linhas)
+
+    linhas.append([InlineKeyboardButton("⬅️ Voltar ao menu", callback_data="menu_principal")])
+    return InlineKeyboardMarkup(linhas)
 
 
 def _teclado_grau() -> InlineKeyboardMarkup:
@@ -400,6 +390,12 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             texto = CADASTRO_INICIO_PADRAO
 
+        if not WEBAPP_URL_MEMBRO:
+            texto = (
+                "⚠️ O formulário de cadastro está temporariamente indisponível.\n\n"
+                "Assim que o Mini App estiver online novamente, o cadastro continuará por ele."
+            )
+
         teclado_inicio = _teclado_inicio(cadastrado, forcar_revalidacao, cadastro_parcial)
 
         if update.callback_query:
@@ -472,10 +468,19 @@ async def editar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT
         context.user_data["pos_cadastro"] = pos
 
     if not membro:
+        teclado = (
+            InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🧾 Abrir formulário de cadastro", web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO))]]
+            )
+            if WEBAPP_URL_MEMBRO
+            else InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")]]
+            )
+        )
         await _enviar_ou_editar_mensagem(
             context, telegram_id, TIPO_RESULTADO,
             "Você ainda não tem cadastro. Vamos iniciar agora.",
-            InlineKeyboardMarkup([[InlineKeyboardButton("🧾 Iniciar cadastro", callback_data="iniciar_cadastro")]])
+            teclado
         )
         return ConversationHandler.END
 

@@ -21,6 +21,7 @@ import os
 import asyncio
 import logging
 import signal
+import hmac
 from datetime import datetime
 from typing import Optional
 
@@ -56,7 +57,7 @@ from telegram.ext import (
 # ============================================
 
 # Cadastro de membros
-from src.cadastro import cadastro_handler, cadastro_start
+from src.cadastro import cadastro_start
 
 # Menus e navegação principal
 from src.bot import (
@@ -136,6 +137,11 @@ from src.lojas import (
 # Ajuda contextual e gamificação
 from src.ajuda.menus import ajuda_handlers
 from src.ajuda.conquistas import mostrar_marcos_secretario, mostrar_conquistas_membro
+from src.membro_lembretes import (
+    menu_lembretes_membro,
+    lembretes_membro_ativar,
+    lembretes_membro_desativar,
+)
 
 # Utilitários
 from src.sheets_supabase import buscar_membro, membro_esta_ativo, atualizar_status_membro
@@ -168,6 +174,7 @@ PORT = int(os.getenv("PORT", "10000"))
 WEBHOOK_PATH = os.getenv("WEBHOOK_PATH", "/telegram/webhook")
 DROP_PENDING_UPDATES_ON_BOOT = os.getenv("DROP_PENDING_UPDATES_ON_BOOT", "false")
 WEBHOOK_MAX_CONNECTIONS = int(os.getenv("WEBHOOK_MAX_CONNECTIONS", "20"))
+WEBHOOK_SECRET = os.getenv("TELEGRAM_WEBHOOK_SECRET")
 # ID do grupo principal (obrigatório para verificação de presença no grupo)
 GRUPO_PRINCIPAL_ID_STR = os.getenv("GRUPO_PRINCIPAL_ID", "")
 GRUPO_TELEGRAM_ID: Optional[int] = int(GRUPO_PRINCIPAL_ID_STR) if GRUPO_PRINCIPAL_ID_STR.lstrip("-").isdigit() else None
@@ -265,7 +272,7 @@ async def bode_grupo_handler(update: Update, context):
         if WEBAPP_URL_MEMBRO:
             btn_cadastro = InlineKeyboardButton("🧾 Iniciar cadastro", web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO))
         else:
-            btn_cadastro = InlineKeyboardButton("🧾 Iniciar cadastro", callback_data="iniciar_cadastro")
+            btn_cadastro = InlineKeyboardButton("📩 Abrir privado do bot", url=link_privado)
         teclado_cadastro = InlineKeyboardMarkup([[btn_cadastro]])
         sucesso = await _enviar_ou_editar_mensagem(
             context,
@@ -417,7 +424,7 @@ async def novo_membro_grupo_handler(update: Update, context):
         if WEBAPP_URL_MEMBRO:
             btn_onboarding = InlineKeyboardButton("🧾 Fazer meu cadastro", web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO))
         else:
-            btn_onboarding = InlineKeyboardButton("🧾 Fazer meu cadastro", callback_data="iniciar_cadastro")
+            btn_onboarding = InlineKeyboardButton("📩 Abrir privado do bot", url=link_privado)
         teclado_onboarding = InlineKeyboardMarkup([[btn_onboarding]])
         try:
             await context.bot.send_message(
@@ -459,7 +466,6 @@ def register_handlers(app: Application) -> None:
     """Registra todos os handlers na ordem correta."""
 
     # ===== 1. CONVERSATION HANDLERS =====
-    app.add_handler(cadastro_handler)
     app.add_handler(confirmacao_presenca_handler)
     app.add_handler(cadastro_evento_handler)
     app.add_handler(promover_handler)
@@ -480,6 +486,11 @@ def register_handlers(app: Application) -> None:
     # ===== 3. CALLBACKS DA CENTRAL DE AJUDA =====
     for handler in ajuda_handlers:
         app.add_handler(handler)
+
+    # ===== 3.1 CALLBACKS LEGADOS DE CADASTRO REDIRECIONADOS AO MINI APP =====
+    app.add_handler(CallbackQueryHandler(
+        cadastro_start, pattern=r"^(iniciar_cadastro|editar_cadastro|continuar_cadastro)$"
+    ))
 
     # ===== 4. CALLBACKS DE GAMIFICAÇÃO =====
     app.add_handler(CallbackQueryHandler(
@@ -596,6 +607,17 @@ def register_handlers(app: Application) -> None:
         notificacoes_desativar, pattern=r"^notificacoes_desativar$"
     ))
 
+    # ===== 9.1 CALLBACKS DE LEMBRETES DO MEMBRO =====
+    app.add_handler(CallbackQueryHandler(
+        menu_lembretes_membro, pattern=r"^menu_lembretes$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        lembretes_membro_ativar, pattern=r"^lembretes_membro_ativar$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        lembretes_membro_desativar, pattern=r"^lembretes_membro_desativar$"
+    ))
+
     # ===== 10. CALLBACKS DE LOJAS =====
     app.add_handler(CallbackQueryHandler(menu_lojas, pattern=r"^menu_lojas$"))
     app.add_handler(CallbackQueryHandler(listar_lojas_handler, pattern=r"^loja_listar$"))
@@ -674,6 +696,7 @@ async def main():
 
     token = _require_env("TELEGRAM_TOKEN", _clean_env_text(TOKEN))
     render_url = _require_env("RENDER_EXTERNAL_URL", _clean_env_text(RENDER_URL))
+    webhook_secret = _require_env("TELEGRAM_WEBHOOK_SECRET", _clean_env_text(WEBHOOK_SECRET))
     webhook_path = _clean_env_text(WEBHOOK_PATH) or "/telegram/webhook"
     webhook_path = webhook_path if webhook_path.startswith("/") else f"/{webhook_path}"
 
@@ -687,6 +710,7 @@ async def main():
     logger.info("WEBHOOK_URL: %s", webhook_url)
     logger.info("DROP_PENDING_UPDATES_ON_BOOT: %s", drop_pending_updates)
     logger.info("WEBHOOK_MAX_CONNECTIONS: %s", WEBHOOK_MAX_CONNECTIONS)
+    logger.info("TELEGRAM_WEBHOOK_SECRET configurado: %s", "SIM" if webhook_secret else "NAO")
 
     telegram_app = Application.builder().token(token).build()
     register_handlers(telegram_app)
@@ -706,6 +730,7 @@ async def main():
         allowed_updates=Update.ALL_TYPES,
         drop_pending_updates=drop_pending_updates,
         max_connections=WEBHOOK_MAX_CONNECTIONS,
+        secret_token=webhook_secret,
     )
 
     info = await telegram_app.bot.get_webhook_info()
@@ -715,6 +740,11 @@ async def main():
     async def webhook(request: Request) -> Response:
         """Endpoint que recebe as atualizações do Telegram."""
         try:
+            secret_header = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+            if not hmac.compare_digest(secret_header, webhook_secret):
+                logger.warning("Webhook rejeitado: header de segredo ausente ou inválido.")
+                return Response(status_code=403)
+
             data = await request.json()
             update = Update.de_json(data, telegram_app.bot)
             await telegram_app.process_update(update)

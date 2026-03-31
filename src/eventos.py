@@ -1,4 +1,4 @@
-﻿# src/eventos.py
+# src/eventos.py
 # ============================================
 # BODE ANDARILHO - GERENCIAMENTO DE EVENTOS
 # ============================================
@@ -30,16 +30,17 @@ from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler
 from src.sheets_supabase import (
     listar_eventos,
     buscar_membro,
-    registrar_confirmacao,
-    cancelar_confirmacao,
-    buscar_confirmacao,
-    listar_confirmacoes_por_evento,
+    registrar_confirmação,
+    cancelar_confirmação,
+    buscar_confirmação,
+    listar_confirmações_por_evento,
     atualizar_evento,
     get_notificacao_status,
     listar_notificacoes_secretario_pendentes,
     listar_secretarios_com_notificacoes_pendentes,
     registrar_notificacao_secretario_pendente,
     remover_notificacoes_secretario_pendentes,
+    obter_secretario_responsavel_evento,
 )
 from src.ajuda.dicas import enviar_dica_contextual
 from src.messages import (
@@ -117,8 +118,9 @@ def _texto_resumo_notificacoes_pendentes(itens: List[Dict[str, str]]) -> str:
     total = len(itens)
     linhas = []
     for i, item in enumerate(itens[:20], start=1):
+        agape = item.get("agape") or item.get("ágape", "")
         linhas.append(
-            f"{i}. {item.get('nome', 'Irmão')} | {item.get('data', '')} - {item.get('loja', '')} | {item.get('agape', '')}"
+            f"{i}. {item.get('nome', 'Irmão')} | {item.get('data', '')} - {item.get('loja', '')} | {agape}"
         )
 
     if total > 20:
@@ -165,7 +167,7 @@ async def _auto_delete_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int,
     try:
         await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
     except Exception as e:
-        logger.debug("Nao foi possivel autoapagar mensagem %s no chat %s: %s", message_id, chat_id, e)
+        logger.debug("Não foi possivel autoapagar mensagem %s no chat %s: %s", message_id, chat_id, e)
 
 
 def registrar_post_evento_grupo(id_evento: str, chat_id: int, message_id: int) -> None:
@@ -225,43 +227,43 @@ def traduzir_dia_abreviado(dia_ingles: str) -> str:
     return dias_abreviados.get(dia_ingles, dia_ingles)
 
 
-def extrair_tipo_agape(texto_agape: str) -> str:
-    texto = (texto_agape or "").lower()
+def extrair_tipo_ágape(texto_ágape: str) -> str:
+    texto = (texto_ágape or "").lower()
     if "pago" in texto or "dividido" in texto:
         return "pago"
     if "gratuito" in texto:
         return "gratuito"
-    if "com ágape" in texto or "com agape" in texto:
+    if "com ágape" in texto or "com ágape" in texto:
         return "com"
     if texto.strip() in ("sim", "s"):
         return "com"
     return "sem"
 
 
-def _teclado_confirmacao_evento(id_evento: str, agape_evento: str) -> List[List[InlineKeyboardButton]]:
-    """Monta botões de confirmação conforme tipo de ágape da sessão."""
+def _teclado_confirmação_evento(id_evento: str, ágape_evento: str) -> List[List[InlineKeyboardButton]]:
+    """Monta botoes de confirmação conforme tipo de ágape da sessão."""
     id_cod = _encode_cb(id_evento)
-    tipo_agape = extrair_tipo_agape(agape_evento)
+    tipo_ágape = extrair_tipo_ágape(ágape_evento)
 
-    if tipo_agape == "gratuito":
+    if tipo_ágape == "gratuito":
         return [
-            [InlineKeyboardButton("🍽 Participar com ágape (gratuito)", callback_data=f"confirmar|{id_cod}|gratuito")],
-            [InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_cod}|sem")],
+            [InlineKeyboardButton("\U0001F37D Confirmar com ágape (gratuito)", callback_data=f"confirmar|{id_cod}|gratuito")],
+            [InlineKeyboardButton("\u2705 Confirmar sem ágape", callback_data=f"confirmar|{id_cod}|sem")],
         ]
 
-    if tipo_agape == "pago":
+    if tipo_ágape == "pago":
         return [
-            [InlineKeyboardButton("🍽 Participar com ágape (pago)", callback_data=f"confirmar|{id_cod}|pago")],
-            [InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_cod}|sem")],
+            [InlineKeyboardButton("\U0001F37D Confirmar com ágape (pago)", callback_data=f"confirmar|{id_cod}|pago")],
+            [InlineKeyboardButton("\u2705 Confirmar sem ágape", callback_data=f"confirmar|{id_cod}|sem")],
         ]
 
-    if tipo_agape == "com":
+    if tipo_ágape == "com":
         return [
-            [InlineKeyboardButton("🍽 Participar com ágape", callback_data=f"confirmar|{id_cod}|com")],
-            [InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_cod}|sem")],
+            [InlineKeyboardButton("\U0001F37D Confirmar com ágape", callback_data=f"confirmar|{id_cod}|com")],
+            [InlineKeyboardButton("\u2705 Confirmar sem ágape", callback_data=f"confirmar|{id_cod}|sem")],
         ]
 
-    return [[InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_cod}|sem")]]
+    return [[InlineKeyboardButton("\u2705 Confirmar presença", callback_data=f"confirmar|{id_cod}|sem")]]
 
 
 def _escape_md(value: Any) -> str:
@@ -284,8 +286,8 @@ def montar_texto_publicacao_evento(evento: dict) -> str:
     """Monta o texto principal do card de evento publicado no grupo."""
     aviso = str(evento.get("_aviso_resumo") or "").strip()
     nome = _escape_md(evento.get("Nome da loja", ""))
-    numero = _escape_md(evento.get("Número da loja", ""))
-    numero_fmt = f" {numero}" if numero and numero != "0" else ""
+    número = _escape_md(evento.get("Número da loja", ""))
+    número_fmt = f" {número}" if número and número != "0" else ""
     data_txt = _escape_md(evento.get("Data do evento", ""))
     hora_txt = _escape_md(evento.get("Hora", ""))
     dia_semana_raw = str(evento.get("Dia da semana", "") or "").strip()
@@ -299,10 +301,10 @@ def montar_texto_publicacao_evento(evento: dict) -> str:
     tipo = _escape_md(evento.get("Tipo de sessão", ""))
     rito = _escape_md(evento.get("Rito", ""))
     traje = _escape_md(evento.get("Traje obrigatório", ""))
-    agape = _escape_md(evento.get("Ágape", ""))
-    endereco_raw = "" if evento.get("Endereço da sessão") is None else str(evento.get("Endereço da sessão")).strip()
-    endereco = _escape_md(endereco_raw)
-    url_local = _normalizar_url_local(endereco_raw)
+    ágape = _escape_md(evento.get("Ágape", ""))
+    endereço_raw = "" if evento.get("Endereço da sessão") is None else str(evento.get("Endereço da sessão")).strip()
+    endereço = _escape_md(endereço_raw)
+    url_local = _normalizar_url_local(endereço_raw)
     observacao = _escape_md(evento.get("Observações", "")) or "-"
     status = str(evento.get("Status", "") or "").strip().lower()
 
@@ -317,21 +319,21 @@ def montar_texto_publicacao_evento(evento: dict) -> str:
         f"{data_hora}\n"
         f"Grau: {grau}\n\n"
         "LOJA\n"
-        f"{nome}{numero_fmt}\n"
+        f"{nome}{número_fmt}\n"
         f"{oriente} - {potencia}\n\n"
         "SESSÃO\n"
         f"Tipo: {tipo}\n"
         f"Rito: {rito}\n"
         f"Traje: {traje}\n"
-        f"Ágape: {agape}\n\n"
-        "OBSERVAÇÃO\n"
+        f"Ágape: {ágape}\n\n"
+        "ORDEM DO DIA / OBSERVAÇÕES\n"
         f"{observacao}\n\n"
     )
 
     if url_local:
         texto += f"Local: [Abrir no mapa]({url_local})"
     else:
-        texto += f"Local: {endereco}"
+        texto += f"Local: {endereço}"
 
     if status == "cancelado":
         texto += "\n\n⛔ *STATUS:* CANCELADO"
@@ -340,15 +342,15 @@ def montar_texto_publicacao_evento(evento: dict) -> str:
 
 def montar_teclado_publicacao_evento(evento: dict) -> Optional[InlineKeyboardMarkup]:
     """Monta teclado do card publicado no grupo conforme status atual."""
-    status = str(evento.get("Status", "") or "").strip().lower()
-    if status == "cancelado":
+    status_interacao = _status_interacao_evento(evento)
+    if status_interacao != "disponivel":
         return None
 
     id_evento = normalizar_id_evento(evento)
-    agape = str(evento.get("Ágape", "") or "")
-    endereco_raw = "" if evento.get("Endereço da sessão") is None else str(evento.get("Endereço da sessão")).strip()
-    url_local = _normalizar_url_local(endereco_raw)
-    linhas = _teclado_confirmacao_evento(id_evento, agape)
+    ágape = str(evento.get("Ágape", "") or "")
+    endereço_raw = "" if evento.get("Endereço da sessão") is None else str(evento.get("Endereço da sessão")).strip()
+    url_local = _normalizar_url_local(endereço_raw)
+    linhas = _teclado_confirmação_evento(id_evento, ágape)
     linhas.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")])
     if url_local:
         linhas.append([InlineKeyboardButton("📍 Abrir no mapa", url=url_local)])
@@ -419,13 +421,13 @@ async def sincronizar_resumo_evento_grupo(context: ContextTypes.DEFAULT_TYPE, ev
         return False
 
 
-def _texto_participacao_agape(tipo_agape: str) -> str:
+def _texto_participacao_ágape(tipo_ágape: str) -> str:
     """Retorna texto humano para a escolha de participação no ágape."""
-    if tipo_agape == "gratuito":
+    if tipo_ágape == "gratuito":
         return "Participação com ágape (gratuito) foi selecionada."
-    if tipo_agape == "pago":
+    if tipo_ágape == "pago":
         return "Participação com ágape (pago) foi selecionada."
-    if tipo_agape == "com":
+    if tipo_ágape == "com":
         return "Participação com ágape foi selecionada."
     return "Participação sem ágape foi selecionada."
 
@@ -490,6 +492,42 @@ def _parse_hora(texto: Any) -> Tuple[int, int]:
         return (99, 99)
 
 
+def _data_hora_evento(ev: dict) -> Optional[datetime]:
+    data_dt = parse_data_evento(ev.get("Data do evento", ""))
+    if not data_dt:
+        return None
+
+    hh, mm = _parse_hora(ev.get("Hora", ""))
+    if hh == 99:
+        hh, mm = 23, 59
+
+    try:
+        return data_dt.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    except ValueError:
+        return data_dt
+
+
+def _status_interacao_evento(ev: dict, agora: Optional[datetime] = None) -> str:
+    status = str(ev.get("Status", "") or "").strip().lower()
+    if status == "cancelado":
+        return "cancelado"
+
+    data_hora = _data_hora_evento(ev)
+    if data_hora and data_hora < (agora or datetime.now()):
+        return "ocorrido"
+
+    return "disponivel"
+
+
+def _mensagem_status_evento(ev: dict) -> str:
+    status_interacao = _status_interacao_evento(ev)
+    if status_interacao == "cancelado":
+        return "⛔ *Status:* sessão cancelada."
+    if status_interacao == "ocorrido":
+        return "ℹ️ *Status:* esta sessão já ocorreu."
+    return ""
+
+
 def _encode_cb(value: str) -> str:
     return urllib.parse.quote(str(value), safe="")
 
@@ -534,13 +572,13 @@ def montar_linha_confirmado(dados_membro_ou_snapshot: dict) -> str:
     grau = normalizar_grau_nome(grau_raw)
 
     loja = (dados_membro_ou_snapshot.get("Loja") or dados_membro_ou_snapshot.get("loja") or "").strip()
-    numero = (dados_membro_ou_snapshot.get("Número da loja") or dados_membro_ou_snapshot.get("numero_loja") or "")
-    numero = str(numero).strip()
+    número = (dados_membro_ou_snapshot.get("Número da loja") or dados_membro_ou_snapshot.get("número_loja") or "")
+    número = str(número).strip()
 
     oriente = (dados_membro_ou_snapshot.get("Oriente") or dados_membro_ou_snapshot.get("oriente") or "").strip()
     potencia = (dados_membro_ou_snapshot.get("Potência") or dados_membro_ou_snapshot.get("potencia") or "").strip()
 
-    loja_composta = f"{loja} {numero}".strip()
+    loja_composta = f"{loja} {número}".strip()
     return f"{nome} - {grau} - {loja_composta} - {oriente} - {potencia}"
 
 
@@ -586,7 +624,7 @@ def _eventos_ordenados(eventos: List[dict]) -> List[dict]:
     return [x.evento for x in tmp]
 
 
-def _filtrar_por_periodo(eventos: List[dict], token: str) -> Tuple[str, List[dict]]:
+def _filtrar_por_período(eventos: List[dict], token: str) -> Tuple[str, List[dict]]:
     hoje = date.today()
 
     if token == TOKEN_SEMANA_ATUAL:
@@ -645,36 +683,46 @@ def _formatar_data_curta(ev: dict) -> str:
 
 def _linha_botao_evento(ev: dict) -> str:
     nome = str(ev.get("Nome da loja", "") or "").strip() or "Evento"
-    numero = str(ev.get("Número da loja", "") or "").strip()
+    número = str(ev.get("N\u00famero da loja", "") or "").strip()
     hora = str(ev.get("Hora", "") or "").strip()
 
-    numero_fmt = f" {numero}" if numero else ""
-    hora_fmt = hora if hora else "—"
+    número_fmt = f" {número}" if número else ""
+    hora_fmt = hora if hora else "--"
     data_curta = _formatar_data_curta(ev)
 
-    return f"📅 {data_curta} • 🕕 {hora_fmt} • 🏛 {nome}{numero_fmt}"
+    return f"\U0001F4C5 {data_curta} | \U0001F550 {hora_fmt} | \U0001F3DB {nome}{número_fmt}"
+
+
+def contar_confirmações_futuras(user_id: int) -> int:
+    """Conta quantas sessões futuras o membro ja confirmou."""
+    eventos = _eventos_ordenados(listar_eventos() or [])
+    agora = datetime.now()
+    total = 0
+
+    for ev in eventos:
+        if _status_interacao_evento(ev, agora) != "disponivel":
+            continue
+        id_evento = normalizar_id_evento(ev)
+        if buscar_confirmação(id_evento, user_id):
+            total += 1
+
+    return total
 
 
 # ============================================
 # FUNÇÃO PARA NOTIFICAR SECRETÁRIO
 # ============================================
 
-async def notificar_secretario(context: ContextTypes.DEFAULT_TYPE, evento: dict, membro: dict, tipo_agape: str):
+async def notificar_secretario(context: ContextTypes.DEFAULT_TYPE, evento: dict, membro: dict, tipo_ágape: str):
     """
     Notifica o secretário que criou o evento sobre uma nova confirmação de presença.
-    
-    O secretário é determinado pelo campo 'Telegram ID do secretário' do evento.
-    Se vazio, nenhuma notificação é enviada (respeita preferência do secretário).
+
+    O secretário é resolvido prioritariamente pelo vínculo da loja; fallback legado
+    considera os campos antigos do evento.
     """
-    secretario_id = evento.get("Telegram ID do secretário", "")
+    secretario_id = obter_secretario_responsavel_evento(evento)
     if not secretario_id:
         logger.debug(f"Nenhum secretário definido para o evento")
-        return
-
-    try:
-        secretario_id = int(float(secretario_id))
-    except (ValueError, TypeError):
-        logger.warning(f"ID do secretário inválido: {secretario_id}")
         return
 
     # Verifica se o SECRETÁRIO quer receber notificações
@@ -683,23 +731,23 @@ async def notificar_secretario(context: ContextTypes.DEFAULT_TYPE, evento: dict,
         return
 
     nome_loja = evento.get("Nome da loja", "")
-    numero = evento.get("Número da loja", "")
-    numero_fmt = f" {numero}" if numero else ""
+    número = evento.get("Número da loja", "")
+    número_fmt = f" {número}" if número else ""
     data = evento.get("Data do evento", "")
     nome_membro = membro.get("Nome", "")
-    texto_participacao = _texto_participacao_agape(tipo_agape)
+    texto_participacao = _texto_participacao_ágape(tipo_ágape)
 
     texto = NOTIFICACAO_NOVA_CONFIRMACAO.format(
         nome=nome_membro,
         data=data,
-        loja=f"{nome_loja}{numero_fmt}",
-        agape=texto_participacao,
+        loja=f"{nome_loja}{número_fmt}",
+        ágape=texto_participacao,
     )
 
     item_pendente = {
         "nome": nome_membro,
         "data": str(data or ""),
-        "loja": f"{nome_loja}{numero_fmt}",
+        "loja": f"{nome_loja}{número_fmt}",
         "agape": texto_participacao,
     }
 
@@ -745,7 +793,7 @@ def gerar_calendario_mes(ano: int, mes: int, eventos: List[dict]) -> str:
         mes = hoje.month
 
     meses_pt = {
-        1: "JANEIRO", 2: "FEVEREIRO", 3: "MARÇO", 4: "ABRIL",
+        1: "JANEIRO", 2: "FEVEREIRO", 3: "MARCO", 4: "ABRIL",
         5: "MAIO", 6: "JUNHO", 7: "JULHO", 8: "AGOSTO",
         9: "SETEMBRO", 10: "OUTUBRO", 11: "NOVEMBRO", 12: "DEZEMBRO"
     }
@@ -759,7 +807,7 @@ def gerar_calendario_mes(ano: int, mes: int, eventos: List[dict]) -> str:
             dias_com_evento.add(data_dt.day)
 
     linhas = []
-    linhas.append(f"📅 *{meses_pt[mes]} {ano}*")
+    linhas.append(f"\U0001F4C5 *{meses_pt[mes]} {ano}*")
     linhas.append("```")
     linhas.append(" DOM SEG TER QUA QUI SEX SAB")
 
@@ -770,15 +818,15 @@ def gerar_calendario_mes(ano: int, mes: int, eventos: List[dict]) -> str:
                 linha += "    "
             else:
                 if dia in dias_com_evento:
-                    linha += f" {dia:2d}●"
+                    linha += f" {dia:2d}o"
                 else:
                     linha += f" {dia:2d} "
         linhas.append(linha)
 
     linhas.append("```")
     linhas.append("")
-    linhas.append(f"Legenda: ● Dias com sessão")
-    linhas.append(f"Total de sessões no mês: {len(dias_com_evento)}")
+    linhas.append("Legenda: o Dias com sessão")
+    linhas.append(f"Total de sessões no mes: {len(dias_com_evento)}")
 
     return "\n".join(linhas)
 
@@ -789,26 +837,24 @@ def gerar_calendario_mes(ano: int, mes: int, eventos: List[dict]) -> str:
 
 async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📅 Calendário do mês", callback_data="calendario|0|0")],
-        [InlineKeyboardButton("📅 Esta semana", callback_data=f"data|{TOKEN_SEMANA_ATUAL}")],
-        [InlineKeyboardButton("📅 Próxima semana", callback_data=f"data|{TOKEN_PROXIMA_SEMANA}")],
-        [InlineKeyboardButton("📅 Este mês", callback_data=f"data|{TOKEN_MES_ATUAL}")],
-        [InlineKeyboardButton("📅 Próximos meses", callback_data=f"data|{TOKEN_PROXIMOS_MESES}")],
-        [InlineKeyboardButton("🔺 Por grau", callback_data=f"data|{TOKEN_POR_GRAU_MENU}")],
-        [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
+        [InlineKeyboardButton("\U0001F4C5 Calendário do mes", callback_data="calendario|0|0")],
+        [InlineKeyboardButton("\U0001F4CD Esta semana", callback_data=f"data|{TOKEN_SEMANA_ATUAL}")],
+        [InlineKeyboardButton("\U0001F4CD Próxima semana", callback_data=f"data|{TOKEN_PROXIMA_SEMANA}")],
+        [InlineKeyboardButton("\U0001F5D3 Este mes", callback_data=f"data|{TOKEN_MES_ATUAL}")],
+        [InlineKeyboardButton("\U0001F5D3 Próximos meses", callback_data=f"data|{TOKEN_PROXIMOS_MESES}")],
+        [InlineKeyboardButton("\U0001F53A Filtrar por grau", callback_data=f"data|{TOKEN_POR_GRAU_MENU}")],
+        [InlineKeyboardButton("\U0001F519 Voltar ao menu", callback_data="menu_principal")],
     ])
 
     await navegar_para(
         update, context,
         "Ver Sessões",
-        "📅 *Como deseja visualizar as sessões?*",
+        "\U0001F4C5 *Sessões Agendadas*\n\nEscolha como deseja buscar as sessões:",
         teclado
     )
 
 
 async def mostrar_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from datetime import datetime
-
     hoje = datetime.now()
     ano = hoje.year
     mes = hoje.month
@@ -823,7 +869,7 @@ async def mostrar_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 if 1 <= mes_param <= 12:
                     ano = ano_param
                     mes = mes_param
-            except:
+            except Exception:
                 pass
 
     eventos = listar_eventos() or []
@@ -843,17 +889,17 @@ async def mostrar_calendario(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     botoes = [
         [
-            InlineKeyboardButton("◀️ Anterior", callback_data=f"calendario|{ano_ant}|{mes_ant}"),
-            InlineKeyboardButton("📅 Mês atual", callback_data="calendario_atual"),
-            InlineKeyboardButton("Próximo ▶️", callback_data=f"calendario|{ano_prox}|{mes_prox}")
+            InlineKeyboardButton("Anterior", callback_data=f"calendario|{ano_ant}|{mes_ant}"),
+            InlineKeyboardButton("Mes atual", callback_data="calendario_atual"),
+            InlineKeyboardButton("Proximo", callback_data=f"calendario|{ano_prox}|{mes_prox}"),
         ],
-        [InlineKeyboardButton("📋 Ver sessões do mês", callback_data=f"data|{TOKEN_MES_ATUAL}")],
-        [InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")],
+        [InlineKeyboardButton("\U0001F4CB Ver sessões do mes", callback_data=f"data|{TOKEN_MES_ATUAL}")],
+        [InlineKeyboardButton("\U0001F519 Voltar", callback_data="ver_eventos")],
     ]
 
     await navegar_para(
         update, context,
-        f"Ver Sessões > Calendário",
+        "Ver Sessões > Calendário",
         calendario,
         InlineKeyboardMarkup(botoes)
     )
@@ -870,15 +916,15 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
 
     if token_or_data == TOKEN_POR_GRAU_MENU:
         teclado = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"🔺 {GRAU_APRENDIZ}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_APRENDIZ}")],
-            [InlineKeyboardButton(f"🔺 {GRAU_COMPANHEIRO}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_COMPANHEIRO}")],
-            [InlineKeyboardButton(f"🔺 {GRAU_MESTRE}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_MESTRE}")],
-            [InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")],
+            [InlineKeyboardButton(f"\U0001F53A {GRAU_APRENDIZ}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_APRENDIZ}")],
+            [InlineKeyboardButton(f"\U0001F53A {GRAU_COMPANHEIRO}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_COMPANHEIRO}")],
+            [InlineKeyboardButton(f"\U0001F53A {GRAU_MESTRE}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_MESTRE}")],
+            [InlineKeyboardButton("\U0001F519 Voltar", callback_data="ver_eventos")],
         ])
         await navegar_para(
             update, context,
-            "Ver Sessões > Por Grau",
-            "🔺 *Selecione o grau:*",
+            "Ver Sessões > Filtrar por Grau",
+            "\U0001F53A *Selecione o grau desejado:*",
             teclado
         )
         return
@@ -886,15 +932,17 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
     eventos = listar_eventos() or []
 
     if token_or_data in (TOKEN_SEMANA_ATUAL, TOKEN_PROXIMA_SEMANA, TOKEN_MES_ATUAL, TOKEN_PROXIMOS_MESES):
-        titulo, filtrados = _filtrar_por_periodo(eventos, token_or_data)
+        titulo, filtrados = _filtrar_por_período(eventos, token_or_data)
 
         if not filtrados:
             await _enviar_ou_editar_mensagem(
                 context, update.effective_user.id, TIPO_RESULTADO,
-                f"*{titulo}*\n\nNão há sessões agendadas para este período.",
-                InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")
-                ]])
+                f"*{titulo}*\n\nNenhuma sessão encontrada neste filtro.\n\nVocê pode tentar outro período ou consultar o calendario do mes.",
+                InlineKeyboardMarkup([
+                    [InlineKeyboardButton("\U0001F4C5 Calendário do mes", callback_data="calendario|0|0")],
+                    [InlineKeyboardButton("\U0001F5D3 Ver outro período", callback_data="ver_eventos")],
+                    [InlineKeyboardButton("\U0001F519 Voltar ao menu", callback_data="menu_principal")],
+                ])
             )
             return
 
@@ -907,12 +955,12 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
                 callback_data=f"evento|{_encode_cb(id_evento)}"
             )])
 
-        botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")])
+        botoes.append([InlineKeyboardButton("\U0001F519 Voltar", callback_data="ver_eventos")])
 
         await navegar_para(
             update, context,
             f"Ver Sessões > {titulo}",
-            f"*{titulo}*\n\nSelecione uma sessão:",
+            f"\U0001F4C5 *Sessões encontradas*\n\n{titulo}\n\nSelecione uma sessão para ver os detalhes:",
             InlineKeyboardMarkup(botoes)
         )
 
@@ -933,10 +981,11 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
         if not filtrados:
             await _enviar_ou_editar_mensagem(
                 context, update.effective_user.id, TIPO_RESULTADO,
-                f"*{titulo}*\n\nNão há sessões para este grau no momento.",
-                InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🔙 Voltar", callback_data=f"data|{TOKEN_POR_GRAU_MENU}")
-                ]])
+                f"*{titulo}*\n\nNenhuma sessão encontrada neste filtro.\n\nVocê pode escolher outro grau ou voltar para os demais períodos.",
+                InlineKeyboardMarkup([
+                    [InlineKeyboardButton("\U0001F53A Escolher outro grau", callback_data=f"data|{TOKEN_POR_GRAU_MENU}")],
+                    [InlineKeyboardButton("\U0001F519 Voltar", callback_data="ver_eventos")],
+                ])
             )
             return
 
@@ -949,12 +998,12 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
                 callback_data=f"evento|{_encode_cb(id_evento)}"
             )])
 
-        botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data=f"data|{TOKEN_POR_GRAU_MENU}")])
+        botoes.append([InlineKeyboardButton("\U0001F519 Voltar", callback_data=f"data|{TOKEN_POR_GRAU_MENU}")])
 
         await navegar_para(
             update, context,
-            f"Ver Sessões > Por Grau > {grau}",
-            f"*{titulo}*\n\nSelecione uma sessão:",
+            f"Ver Sessões > Filtrar por Grau > {grau}",
+            f"\U0001F4C5 *Sessões encontradas*\n\n{titulo}\n\nSelecione uma sessão para ver os detalhes:",
             InlineKeyboardMarkup(botoes)
         )
 
@@ -974,25 +1023,25 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     if not evento:
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "Sessão não encontrada ou não está mais ativa.",
+            "Sessao não encontrada ou não esta mais ativa.",
             limpar_conteudo=True
         )
         return
 
     nome = str(evento.get("Nome da loja", "") or "").strip()
-    numero = str(evento.get("Número da loja", "") or "").strip()
-    numero_fmt = f" {numero}" if numero else ""
+    número = str(evento.get("Número da loja", evento.get("N\u00famero da loja", "")) or "").strip()
+    número_fmt = f" {número}" if número else ""
     oriente = str(evento.get("Oriente", "") or "").strip()
-    potencia = str(evento.get("Potência", "") or "").strip()
+    potencia = str(evento.get("Potência", evento.get("Pot\u00eancia", "")) or "").strip()
     data = evento.get("Data do evento", "")
     hora = str(evento.get("Hora", "") or "").strip()
-    tipo_sessao = str(evento.get("Tipo de sessão", "") or "").strip()
+    tipo_sessão = str(evento.get("Tipo de sessão", evento.get("Tipo de sess\u00e3o", "")) or "").strip()
     rito = str(evento.get("Rito", "") or "").strip()
     grau = normalizar_grau_nome(str(evento.get("Grau", "") or "").strip())
-    traje = str(evento.get("Traje obrigatório", "") or "").strip()
-    agape = str(evento.get("Ágape", "") or "").strip()
-    obs = str(evento.get("Observações", "") or "").strip()
-    endereco_raw = str(evento.get("Endereço da sessão", "") or "").strip()
+    traje = str(evento.get("Traje obrigatorio", evento.get("Traje obrigat\u00f3rio", "")) or "").strip()
+    ágape = str(evento.get("Ágape", evento.get("\u00c1gape", "")) or "").strip()
+    obs = str(evento.get("Observações", evento.get("Observa\u00e7\u00f5es", "")) or "").strip()
+    endereço_raw = str(evento.get("Endereço da sessão", evento.get("Endere\u00e7o da sess\u00e3o", "")) or "").strip()
 
     data_obj = parse_data_evento(data)
     if data_obj:
@@ -1002,47 +1051,50 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         data_formatada = str(data or "").strip()
 
     texto = (
-        f"🏛 *LOJA {nome}{numero_fmt}*\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"📍 *Oriente:* {oriente}\n"
-        f"⚜️ *Potência:* {potencia}\n"
-        f"📅 *Data:* {data_formatada}\n"
-        f"🕕 *Horário:* {hora}\n"
-        f"🕯 *Tipo:* {tipo_sessao}\n"
-        f"📜 *Rito:* {rito}\n"
-        f"🔺 *Grau mínimo:* {grau}\n"
-        f"👔 *Traje:* {traje}\n"
-        f"🍽 *Ágape:* {agape}\n"
+        "\U0001F4DC *Detalhes da Sessao*\n\n"
+        f"*Loja:* {nome}{número_fmt}\n"
+        f"*Oriente:* {oriente}\n"
+        f"*Potência:* {potencia}\n"
+        f"*Data:* {data_formatada}\n"
+        f"*Horário:* {hora}\n"
+        f"*Tipo:* {tipo_sessão}\n"
+        f"*Rito:* {rito}\n"
+        f"*Grau mínimo:* {grau}\n"
+        f"*Traje:* {traje}\n"
+        f"*Ágape:* {ágape}\n"
     )
 
     botoes_extras = []
-    if endereco_raw:
-        if endereco_raw.startswith(("http://", "https://")):
-            texto += f"\n📍 *Link do local:* [Clique aqui]({endereco_raw})"
-            botoes_extras.append([InlineKeyboardButton("📍 Abrir no mapa", url=endereco_raw)])
+    if endereço_raw:
+        if endereço_raw.startswith(("http://", "https://")):
+            texto += f"\n*Local:* [Abrir mapa]({endereço_raw})"
+            botoes_extras.append([InlineKeyboardButton("\U0001F4CD Abrir no mapa", url=endereço_raw)])
         else:
-            texto += f"\n📍 *Endereço:* {endereco_raw}"
+            texto += f"\n*Endereço:* {endereço_raw}"
     else:
-        texto += "\n📍 *Endereço:* Não informado"
+        texto += "\n*Endereço:* Não informado"
 
     if obs:
-        texto += f"\n\n📌 *Observações:* {obs}"
+        texto += f"\n\n*Observações:* {obs}"
 
     user_id = update.effective_user.id
-    ja_confirmou = buscar_confirmacao(id_evento, user_id)
+    ja_confirmou = buscar_confirmação(id_evento, user_id)
+    status_msg = _mensagem_status_evento(evento)
     botoes = []
 
-    if ja_confirmou:
-        botoes.append([InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")])
+    if status_msg:
+        texto += f"\n\n{status_msg}"
+    elif ja_confirmou:
+        botoes.append([InlineKeyboardButton("\u274C Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")])
     else:
-        botoes.extend(_teclado_confirmacao_evento(id_evento, agape))
+        botoes.extend(_teclado_confirmação_evento(id_evento, ágape))
 
-    botoes.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")])
-    
+    botoes.append([InlineKeyboardButton("\U0001F465 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")])
+
     if botoes_extras:
         botoes.extend(botoes_extras)
-    
-    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")])
+
+    botoes.append([InlineKeyboardButton("\U0001F519 Voltar", callback_data="ver_eventos")])
 
     await navegar_para(
         update, context,
@@ -1052,17 +1104,18 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     )
 
 
+
 # ============================================
 # CONFIRMAÇÃO DE PRESENÇA
 # ============================================
 
-async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def iniciar_confirmação_presença(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     partes = query.data.split("|")
     if len(partes) < 3:
         return ConversationHandler.END
 
-    _, id_evento_cod, tipo_agape = partes
+    _, id_evento_cod, tipo_ágape = partes
     id_evento = _decode_cb(id_evento_cod)
     user_id = update.effective_user.id
 
@@ -1089,11 +1142,31 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         )
         return ConversationHandler.END
 
+    status_interacao = _status_interacao_evento(evento)
+    if status_interacao == "cancelado":
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⛔ Esta sessão foi cancelada e não aceita novas confirmações.",
+            limpar_conteudo=True
+        )
+        if update.effective_chat.type in ["group", "supergroup"]:
+            await _responder_callback_seguro(query, "Sessão cancelada.", show_alert=True)
+        return ConversationHandler.END
+    if status_interacao == "ocorrido":
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "ℹ️ Esta sessão já ocorreu e não aceita novas confirmações.",
+            limpar_conteudo=True
+        )
+        if update.effective_chat.type in ["group", "supergroup"]:
+            await _responder_callback_seguro(query, "Esta sessão já ocorreu.", show_alert=True)
+        return ConversationHandler.END
+
     if not membro:
         context.user_data["pos_cadastro"] = {
             "acao": "confirmar",
             "id_evento": id_evento,
-            "tipo_agape": tipo_agape
+            "tipo_ágape": tipo_ágape
         }
         teclado = InlineKeyboardMarkup([[InlineKeyboardButton("📝 Fazer cadastro", callback_data="iniciar_cadastro")]])
         sucesso_privado = await _enviar_ou_editar_mensagem(
@@ -1120,7 +1193,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         return ConversationHandler.END
 
     # Verificar confirmação existente (agora cacheada)
-    if buscar_confirmacao(id_evento, user_id):
+    if buscar_confirmação(id_evento, user_id):
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             JA_CONFIRMOU,
@@ -1133,50 +1206,45 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             await _responder_callback_seguro(query, "Você já confirmou. Verifique seu privado.")
         return ConversationHandler.END
 
-    participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não"
-    confirmou_com_agape = tipo_agape != "sem"
-    desc_agape = {
+    participacao_ágape = "Confirmada" if tipo_ágape != "sem" else "Não"
+    confirmou_com_ágape = tipo_ágape != "sem"
+    desc_ágape = {
         "gratuito": "Gratuito",
         "pago": "Pago",
         "com": "Com ágape",
-    }.get(tipo_agape, "Não aplicável")
-    texto_participacao = _texto_participacao_agape(tipo_agape)
+    }.get(tipo_ágape, "Não aplicável")
+    texto_participacao = _texto_participacao_ágape(tipo_ágape)
 
-    dados_confirmacao = {
+    dados_confirmação = {
         "id_evento": id_evento,
         "telegram_id": str(user_id),
         "nome": membro.get("Nome", ""),
         "grau": normalizar_grau_nome(membro.get("Grau", "")),
         "cargo": membro.get("Cargo", ""),
         "loja": membro.get("Loja", ""),
-        "numero_loja": membro.get("Número da loja", ""),
+        "número_loja": membro.get("Número da loja", ""),
         "oriente": membro.get("Oriente", ""),
         "potencia": membro.get("Potência", ""),
-        "agape": f"{participacao_agape} ({desc_agape})",
+        "ágape": f"{participacao_ágape} ({desc_ágape})",
         "veneravel_mestre": membro.get("Venerável Mestre", ""),
     }
-    registrar_confirmacao(dados_confirmacao)
+    registrar_confirmação(dados_confirmação)
 
     # Verificar se o usuário é o secretário do evento
-    secretario_id = evento.get("Telegram ID do secretário", "")
-    try:
-        secretario_id = int(float(secretario_id))
-    except:
-        secretario_id = None
-    
+    secretario_id = obter_secretario_responsavel_evento(evento)
     eh_secretario = secretario_id == user_id
 
     # Notificar secretário apenas se não for o próprio usuário
     if not eh_secretario:
-        await notificar_secretario(context, evento, membro, tipo_agape)
+        await notificar_secretario(context, evento, membro, tipo_ágape)
 
     data = str(evento.get("Data do evento", "") or "").strip()
     nome_loja = str(evento.get("Nome da loja", "") or "").strip()
-    numero_loja = str(evento.get("Número da loja", "") or "").strip()
+    número_loja = str(evento.get("Número da loja", "") or "").strip()
     horario = str(evento.get("Hora", "") or "").strip()
-    numero_fmt = f" {numero_loja}" if numero_loja else ""
+    número_fmt = f" {número_loja}" if número_loja else ""
 
-    bloco_importancia = f"{MENSAGEM_CONFIRMACAO_AGAPE}\n\n" if confirmou_com_agape else ""
+    bloco_importancia = f"{MENSAGEM_CONFIRMACAO_AGAPE}\n\n" if confirmou_com_ágape else ""
 
     if eh_secretario:
         # Mensagem combinada para secretário
@@ -1184,7 +1252,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             nome=membro.get('Nome', ''),
             data=data,
             loja=nome_loja,
-            numero_fmt=numero_fmt,
+            número_fmt=número_fmt,
             horario=horario,
             participacao=texto_participacao,
             bloco_importancia=bloco_importancia,
@@ -1200,22 +1268,22 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         ])
     else:
         # Mensagem normal para usuário comum
-        if confirmou_com_agape:
+        if confirmou_com_ágape:
             resposta = CONFIRMACAO_COM_AGAPE_TMPL.format(
                 nome=membro.get('Nome', ''),
                 data=data,
                 loja=nome_loja,
-                numero_fmt=numero_fmt,
+                número_fmt=número_fmt,
                 horario=horario,
                 participacao=texto_participacao,
-                msg_agape=MENSAGEM_CONFIRMACAO_AGAPE,
+                msg_ágape=MENSAGEM_CONFIRMACAO_AGAPE,
             )
         else:
             resposta = CONFIRMACAO_SEM_AGAPE_TMPL.format(
                 nome=membro.get('Nome', ''),
                 data=data,
                 loja=nome_loja,
-                numero_fmt=numero_fmt,
+                número_fmt=número_fmt,
                 horario=horario,
                 participacao=texto_participacao,
             )
@@ -1231,7 +1299,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         parse_mode="Markdown",
         reply_markup=teclado
     )
-    await enviar_dica_contextual(update, context, "confirmacao_presenca")
+    await enviar_dica_contextual(update, context, "confirmação_presença")
 
     if update.effective_chat.type in ["group", "supergroup"]:
         await _responder_callback_seguro(query, "✅ Presença confirmada! Verifique seu privado.")
@@ -1240,10 +1308,10 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
 
 
 # Função auxiliar para continuar confirmação após cadastro
-async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE, pos: dict):
+async def iniciar_confirmação_presença_pos_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE, pos: dict):
     user_id = update.effective_user.id
     id_evento = pos.get("id_evento")
-    tipo_agape = pos.get("tipo_agape", "sem")
+    tipo_ágape = pos.get("tipo_ágape", "sem")
 
     if not id_evento:
         return
@@ -1257,11 +1325,25 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
         )
         return
 
+    status_interacao = _status_interacao_evento(evento)
+    if status_interacao == "cancelado":
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⛔ Esta sessão foi cancelada e não aceita novas confirmações."
+        )
+        return
+    if status_interacao == "ocorrido":
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="ℹ️ Esta sessão já ocorreu e não aceita novas confirmações."
+        )
+        return
+
     membro = buscar_membro(user_id)
     if not membro:
         return
 
-    if buscar_confirmacao(id_evento, user_id):
+    if buscar_confirmação(id_evento, user_id):
         await context.bot.send_message(
             chat_id=user_id,
             text=CONFIRMACAO_JA_CONFIRMADO_POS_CADASTRO,
@@ -1272,54 +1354,54 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
         )
         return
 
-    participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não"
-    confirmou_com_agape = tipo_agape != "sem"
-    desc_agape = {
+    participacao_ágape = "Confirmada" if tipo_ágape != "sem" else "Não"
+    confirmou_com_ágape = tipo_ágape != "sem"
+    desc_ágape = {
         "gratuito": "Gratuito",
         "pago": "Pago",
         "com": "Com ágape",
-    }.get(tipo_agape, "Não aplicável")
-    texto_participacao = _texto_participacao_agape(tipo_agape)
+    }.get(tipo_ágape, "Não aplicável")
+    texto_participacao = _texto_participacao_ágape(tipo_ágape)
 
-    dados_confirmacao = {
+    dados_confirmação = {
         "id_evento": id_evento,
         "telegram_id": str(user_id),
         "nome": membro.get("Nome", ""),
         "grau": normalizar_grau_nome(membro.get("Grau", "")),
         "cargo": membro.get("Cargo", ""),
         "loja": membro.get("Loja", ""),
-        "numero_loja": membro.get("Número da loja", ""),
+        "número_loja": membro.get("Número da loja", ""),
         "oriente": membro.get("Oriente", ""),
         "potencia": membro.get("Potência", ""),
-        "agape": f"{participacao_agape} ({desc_agape})",
+        "ágape": f"{participacao_ágape} ({desc_ágape})",
         "veneravel_mestre": membro.get("Venerável Mestre", ""),
     }
-    registrar_confirmacao(dados_confirmacao)
+    registrar_confirmação(dados_confirmação)
 
-    await notificar_secretario(context, evento, membro, tipo_agape)
+    await notificar_secretario(context, evento, membro, tipo_ágape)
 
     data = str(evento.get("Data do evento", "") or "").strip()
     nome_loja = str(evento.get("Nome da loja", "") or "").strip()
-    numero_loja = str(evento.get("Número da loja", "") or "").strip()
+    número_loja = str(evento.get("Número da loja", "") or "").strip()
     horario = str(evento.get("Hora", "") or "").strip()
-    numero_fmt = f" {numero_loja}" if numero_loja else ""
+    número_fmt = f" {número_loja}" if número_loja else ""
 
-    if confirmou_com_agape:
+    if confirmou_com_ágape:
         resposta = CONFIRMACAO_COM_AGAPE_TMPL.format(
             nome=membro.get('Nome', ''),
             data=data,
             loja=nome_loja,
-            numero_fmt=numero_fmt,
+            número_fmt=número_fmt,
             horario=horario,
             participacao=texto_participacao,
-            msg_agape=MENSAGEM_CONFIRMACAO_AGAPE,
+            msg_ágape=MENSAGEM_CONFIRMACAO_AGAPE,
         )
     else:
         resposta = CONFIRMACAO_SEM_AGAPE_TMPL.format(
             nome=membro.get('Nome', ''),
             data=data,
             loja=nome_loja,
-            numero_fmt=numero_fmt,
+            número_fmt=número_fmt,
             horario=horario,
             participacao=texto_participacao,
         )
@@ -1333,14 +1415,14 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
             [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")],
         ])
     )
-    await enviar_dica_contextual(update, context, "confirmacao_presenca")
+    await enviar_dica_contextual(update, context, "confirmação_presença")
 
 
 # ============================================
 # CANCELAMENTO DE PRESENÇA (CORRIGIDO COM IMPORTAÇÕES)
 # ============================================
 
-async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cancelar_presença(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Processa o cancelamento de presença."""
     query = update.callback_query
     data = query.data
@@ -1350,10 +1432,31 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _, id_evento_cod = data.split("|", 1)
         id_evento = _decode_cb(id_evento_cod)
         user_id = update.effective_user.id
+        eventos = listar_eventos() or []
+        evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
 
         logger.info(f"Processando confirmação de cancelamento: evento {id_evento}, usuário {user_id}")
 
-        if cancelar_confirmacao(id_evento, user_id):
+        if evento:
+            status_interacao = _status_interacao_evento(evento)
+            if status_interacao == "cancelado":
+                await _enviar_ou_editar_mensagem(
+                    context, user_id, TIPO_RESULTADO,
+                    "⛔ Esta sessão foi cancelada.",
+                    limpar_conteudo=True
+                )
+                await query.answer("Sessão cancelada.", show_alert=True)
+                return
+            if status_interacao == "ocorrido":
+                await _enviar_ou_editar_mensagem(
+                    context, user_id, TIPO_RESULTADO,
+                    "ℹ️ Esta sessão já ocorreu. Não é mais possível cancelar presença.",
+                    limpar_conteudo=True
+                )
+                await query.answer("Esta sessão já ocorreu.", show_alert=True)
+                return
+
+        if cancelar_confirmação(id_evento, user_id):
             # Feedback visual IMEDIATO
             if update.effective_chat.type in ["group", "supergroup"]:
                 # No grupo: apaga a lista e mostra mensagem de confirmação
@@ -1392,8 +1495,29 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _, id_evento_cod = data.split("|", 1)
         id_evento = _decode_cb(id_evento_cod)
         user_id = update.effective_user.id
+        eventos = listar_eventos() or []
+        evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
 
         logger.info(f"Processando pedido de cancelamento: evento {id_evento}, usuário {user_id}")
+
+        if evento:
+            status_interacao = _status_interacao_evento(evento)
+            if status_interacao == "cancelado":
+                await _enviar_ou_editar_mensagem(
+                    context, user_id, TIPO_RESULTADO,
+                    "⛔ Esta sessão foi cancelada.",
+                    limpar_conteudo=True
+                )
+                await query.answer("Sessão cancelada.", show_alert=True)
+                return
+            if status_interacao == "ocorrido":
+                await _enviar_ou_editar_mensagem(
+                    context, user_id, TIPO_RESULTADO,
+                    "ℹ️ Esta sessão já ocorreu. Não é mais possível cancelar presença.",
+                    limpar_conteudo=True
+                )
+                await query.answer("Esta sessão já ocorreu.", show_alert=True)
+                return
 
         # Se estiver em grupo, redireciona para o privado para confirmação
         if update.effective_chat.type in ["group", "supergroup"]:
@@ -1426,7 +1550,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Se estiver no privado, já pode cancelar direto
-        if cancelar_confirmacao(id_evento, user_id):
+        if cancelar_confirmação(id_evento, user_id):
             await _enviar_ou_editar_mensagem(
                 context, user_id, TIPO_RESULTADO,
                 PRESENCA_CANCELADA,
@@ -1448,7 +1572,7 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await _enviar_ou_editar_mensagem(
         context, update.effective_user.id, TIPO_RESULTADO,
-        "Comando de cancelamento inválido.",
+        "Comando de cancelamento invalido.",
         limpar_conteudo=True
     )
 
@@ -1461,7 +1585,7 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
-    await query.answer("👥 Buscando lista de confirmados...")
+    await query.answer("Buscando lista de confirmados...")
 
     _, id_evento_cod = query.data.split("|", 1)
     id_evento = _decode_cb(id_evento_cod)
@@ -1472,16 +1596,15 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not evento:
         titulo = "CONFIRMADOS"
         data_evento = ""
-        nome_loja = ""
     else:
         nome_loja = str(evento.get("Nome da loja", "") or "").strip()
         data_evento = str(evento.get("Data do evento", "") or "").strip()
         titulo = f"CONFIRMADOS - {nome_loja}"
 
-    confirmacoes = listar_confirmacoes_por_evento(id_evento) or []
+    confirmações = listar_confirmações_por_evento(id_evento) or []
 
     linhas: List[str] = []
-    for c in confirmacoes:
+    for c in confirmações:
         tid = _tid_to_int(c.get("Telegram ID") or c.get("telegram_id"))
         membro = buscar_membro(tid) if tid is not None else None
 
@@ -1492,29 +1615,28 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Grau": c.get("Grau", c.get("grau", "")),
                 "Nome": c.get("Nome", c.get("nome", "")),
                 "Loja": c.get("Loja", c.get("loja", "")),
-                "Número da loja": c.get("Número da loja", c.get("numero_loja", "")),
+                "N\u00famero da loja": c.get("N\u00famero da loja", c.get("número_loja", "")),
                 "Oriente": c.get("Oriente", c.get("oriente", "")),
-                "Potência": c.get("Potência", c.get("potencia", "")),
-                "Venerável Mestre": c.get("Venerável Mestre", c.get("veneravel_mestre", "")),
+                "Pot\u00eancia": c.get("Pot\u00eancia", c.get("potencia", "")),
+                "Vener\u00e1vel Mestre": c.get("Vener\u00e1vel Mestre", c.get("veneravel_mestre", "")),
             }
             linhas.append(montar_linha_confirmado(snapshot))
 
-    corpo = "Nenhuma presença confirmada até o momento." if not linhas else "\n".join(linhas)
+    corpo = "Nenhuma presença confirmada ate o momento." if not linhas else "\n".join(linhas)
     texto = f"*{titulo}*\n{data_evento}\n\n{corpo}"
 
     user_id = update.effective_user.id
-    ja_confirmou = buscar_confirmacao(id_evento, user_id)
+    ja_confirmou = buscar_confirmação(id_evento, user_id)
 
     botoes = []
     if ja_confirmou:
-        botoes.append([InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")])
+        botoes.append([InlineKeyboardButton("\u274C Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")])
     else:
-        agape_evento = str((evento or {}).get("Ágape", "") or "")
-        botoes.extend(_teclado_confirmacao_evento(id_evento, agape_evento))
+        ágape_evento = str((evento or {}).get("\u00c1gape", "") or "")
+        botoes.extend(_teclado_confirmação_evento(id_evento, ágape_evento))
 
-    botoes.append([InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")])
+    botoes.append([InlineKeyboardButton("Fechar", callback_data="fechar_mensagem")])
 
-    # COMPORTAMENTO ORIGINAL: SEMPRE envia nova mensagem
     msg = await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=texto,
@@ -1522,8 +1644,6 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(botoes),
     )
 
-    # No grupo, a lista completa é temporária para evitar poluição visual.
-    # O resumo é independente e permanece visível.
     if update.effective_chat and update.effective_chat.type in ("group", "supergroup"):
         asyncio.create_task(
             _auto_delete_message(
@@ -1536,50 +1656,49 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# MINHAS CONFIRMAÇÕES
+# MINHAS CONFIRMACOES
 # ============================================
 
-async def minhas_confirmacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def minhas_confirmações(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    qtd_futuras = contar_confirmações_futuras(user_id)
+
     teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📅 Próximas sessões", callback_data="minhas_confirmacoes_futuro")],
-        [InlineKeyboardButton("📜 Histórico", callback_data="minhas_confirmacoes_historico")],
-        [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
+        [InlineKeyboardButton(f"\U0001F4C5 Próximas sessões ({qtd_futuras})", callback_data="minhas_confirmações_futuro")],
+        [InlineKeyboardButton("\U0001F4DC Histórico", callback_data="minhas_confirmações_historico")],
+        [InlineKeyboardButton("\U0001F519 Voltar ao menu", callback_data="menu_principal")],
     ])
 
     await navegar_para(
         update, context,
         "Minhas Presenças",
-        "📌 *Suas confirmações*\n\nEscolha o que deseja ver:",
+        "\u2705 *Minhas Presenças*\n\nConsulte suas confirmações futuras ou o seu historico:",
         teclado
     )
 
 
-async def minhas_confirmacoes_futuro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def minhas_confirmações_futuro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     eventos = listar_eventos() or []
     eventos = _eventos_ordenados(eventos)
 
-    hoje = datetime.now().date()
+    agora = datetime.now()
 
     confirmados = []
     for ev in eventos:
         id_evento = normalizar_id_evento(ev)
-        if buscar_confirmacao(id_evento, user_id):
-            data_str = ev.get("Data do evento", "")
-            try:
-                data_evento = datetime.strptime(data_str, "%d/%m/%Y").date()
-                if data_evento >= hoje:
-                    confirmados.append(ev)
-            except:
+        if buscar_confirmação(id_evento, user_id):
+            if _status_interacao_evento(ev, agora) == "disponivel":
                 confirmados.append(ev)
 
     if not confirmados:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "📅 *Próximas sessões*\n\nVocê não possui confirmações para as próximas sessões.",
-            InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 Voltar", callback_data="minhas_confirmacoes")
-            ]]),
+            "\U0001F4C5 *Próximas Sessões Confirmadas*\n\nVocê ainda não possui sessões futuras confirmadas.",
+            InlineKeyboardMarkup([
+                [InlineKeyboardButton("\U0001F4C5 Ver Sessões", callback_data="ver_eventos")],
+                [InlineKeyboardButton("\U0001F519 Voltar", callback_data="minhas_confirmações")],
+            ]),
             limpar_conteudo=True
         )
         return
@@ -1590,41 +1709,36 @@ async def minhas_confirmacoes_futuro(update: Update, context: ContextTypes.DEFAU
         label = _linha_botao_evento(ev)
         botoes.append([InlineKeyboardButton(label, callback_data=f"detalhes_confirmado|{_encode_cb(id_evento)}")])
 
-    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="minhas_confirmacoes")])
+    botoes.append([InlineKeyboardButton("\U0001F519 Voltar", callback_data="minhas_confirmações")])
 
     await navegar_para(
         update, context,
         "Minhas Presenças > Próximas",
-        "📅 *Próximas sessões*\n\nSelecione para ver detalhes:",
+        "\U0001F4C5 *Próximas Sessões Confirmadas*\n\nSelecione uma sessão para ver detalhes ou cancelar sua presença:",
         InlineKeyboardMarkup(botoes)
     )
 
 
-async def minhas_confirmacoes_historico(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def minhas_confirmações_historico(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     eventos = listar_eventos() or []
     eventos = _eventos_ordenados(eventos)
 
-    hoje = datetime.now().date()
+    agora = datetime.now()
 
     confirmados = []
     for ev in eventos:
         id_evento = normalizar_id_evento(ev)
-        if buscar_confirmacao(id_evento, user_id):
-            data_str = ev.get("Data do evento", "")
-            try:
-                data_evento = datetime.strptime(data_str, "%d/%m/%Y").date()
-                if data_evento < hoje:
-                    confirmados.append(ev)
-            except:
-                continue
+        if buscar_confirmação(id_evento, user_id):
+            if _status_interacao_evento(ev, agora) == "ocorrido":
+                confirmados.append(ev)
 
     if not confirmados:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "📜 *Histórico*\n\nVocê ainda não participou de nenhuma sessão.",
+            "\U0001F4DC *Histórico*\n\nVocê ainda não participou de nenhuma sessão.",
             InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 Voltar", callback_data="minhas_confirmacoes")
+                InlineKeyboardButton("\U0001F519 Voltar", callback_data="minhas_confirmações")
             ]]),
             limpar_conteudo=True
         )
@@ -1636,60 +1750,22 @@ async def minhas_confirmacoes_historico(update: Update, context: ContextTypes.DE
         label = _linha_botao_evento(ev)
         botoes.append([InlineKeyboardButton(label, callback_data=f"detalhes_historico|{_encode_cb(id_evento)}")])
 
-    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="minhas_confirmacoes")])
+    botoes.append([InlineKeyboardButton("\U0001F519 Voltar", callback_data="minhas_confirmações")])
 
     await navegar_para(
         update, context,
         "Minhas Presenças > Histórico",
-        "📜 *Histórico*\n\nSessões que você participou:",
+        "\U0001F4DC *Histórico de Presenças*\n\nAqui estao suas participacoes anteriores:",
         InlineKeyboardMarkup(botoes)
     )
+    if status_msg:
+        texto += f"\n\n{status_msg}"
 
-
-async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    _, id_evento_cod = query.data.split("|", 1)
-    id_evento = _decode_cb(id_evento_cod)
-
-    eventos = listar_eventos() or []
-    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
-
-    if not evento:
-        await _enviar_ou_editar_mensagem(
-            context, update.effective_user.id, TIPO_RESULTADO,
-            "Sessão não encontrada.",
-            limpar_conteudo=True
-        )
-        return
-
-    nome = str(evento.get("Nome da loja", "") or "").strip()
-    numero = str(evento.get("Número da loja", "") or "").strip()
-    numero_fmt = f" {numero}" if numero else ""
-    data_txt = str(evento.get("Data do evento", "") or "").strip()
-    hora = str(evento.get("Hora", "") or "").strip()
-    oriente = str(evento.get("Oriente", "") or "").strip()
-    potencia = str(evento.get("Potência", "") or "").strip()
-
-    user_id = update.effective_user.id
-    confirmacao = buscar_confirmacao(id_evento, user_id)
-    agape_info = ""
-    if confirmacao:
-        agape = confirmacao.get("Ágape", "")
-        if agape:
-            agape_info = f"\n🍽 *Ágape:* {agape}"
-
-    texto = (
-        f"🏛 *{nome}{numero_fmt}*\n"
-        f"📅 {data_txt}\n"
-        f"🕕 {hora}\n"
-        f"📍 {oriente}\n"
-        f"⚜️ {potencia}{agape_info}"
-    )
-
-    teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")],
-        [InlineKeyboardButton("🔙 Voltar", callback_data="minhas_confirmacoes_futuro")],
-    ])
+    linhas_teclado = []
+    if _status_interacao_evento(evento) == "disponivel":
+        linhas_teclado.append([InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")])
+    linhas_teclado.append([InlineKeyboardButton("🔙 Voltar", callback_data="minhas_confirmações_futuro")])
+    teclado = InlineKeyboardMarkup(linhas_teclado)
 
     await navegar_para(
         update, context,
@@ -1716,32 +1792,32 @@ async def detalhes_historico(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     nome = str(evento.get("Nome da loja", "") or "").strip()
-    numero = str(evento.get("Número da loja", "") or "").strip()
-    numero_fmt = f" {numero}" if numero else ""
+    número = str(evento.get("Número da loja", "") or "").strip()
+    número_fmt = f" {número}" if número else ""
     data_txt = str(evento.get("Data do evento", "") or "").strip()
     hora = str(evento.get("Hora", "") or "").strip()
     oriente = str(evento.get("Oriente", "") or "").strip()
     potencia = str(evento.get("Potência", "") or "").strip()
 
     user_id = update.effective_user.id
-    confirmacao = buscar_confirmacao(id_evento, user_id)
-    agape_info = ""
-    if confirmacao:
-        agape = confirmacao.get("Ágape", "")
-        if agape:
-            agape_info = f"\n🍽 *Ágape:* {agape}"
+    confirmação = buscar_confirmação(id_evento, user_id)
+    ágape_info = ""
+    if confirmação:
+        ágape = confirmação.get("Ágape", "")
+        if ágape:
+            ágape_info = f"\n🍽 *Ágape:* {ágape}"
 
     texto = (
-        f"🏛 *{nome}{numero_fmt}*\n"
+        f"🏛 *{nome}{número_fmt}*\n"
         f"📅 {data_txt}\n"
         f"🕕 {hora}\n"
         f"📍 {oriente}\n"
-        f"⚜️ {potencia}{agape_info}\n\n"
+        f"⚜️ {potencia}{ágape_info}\n\n"
         "_Esta sessão já aconteceu._"
     )
 
     teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 Voltar", callback_data="minhas_confirmacoes_historico")],
+        [InlineKeyboardButton("🔙 Voltar", callback_data="minhas_confirmações_historico")],
     ])
 
     await navegar_para(
@@ -1774,8 +1850,8 @@ async def fechar_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # CONVERSATION HANDLER
 # ============================================
 
-confirmacao_presenca_handler = ConversationHandler(
-    entry_points=[CallbackQueryHandler(iniciar_confirmacao_presenca, pattern=r"^confirmar\|")],
+confirmação_presença_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(iniciar_confirmação_presença, pattern=r"^confirmar\|")],
     states={},
-    fallbacks=[CommandHandler("cancelar", cancelar_presenca)],
+    fallbacks=[CommandHandler("cancelar", cancelar_presença)],
 )

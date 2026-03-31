@@ -38,6 +38,7 @@ from src.sheets_supabase import (
     get_notificacao_status,
     set_notificacao_status,
     listar_eventos,
+    obter_secretario_responsavel_evento,
 )
 from src.permissoes import get_nivel
 
@@ -106,12 +107,12 @@ async def exibir_menu_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")],
-        [InlineKeyboardButton("📋 Gerenciar eventos", callback_data="meus_eventos")],
+        [InlineKeyboardButton("📋 Gerenciar todos os eventos", callback_data="meus_eventos")],
         [InlineKeyboardButton("👥 Ver todos os membros", callback_data="admin_ver_membros")],
         [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
         [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
         [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
-        [InlineKeyboardButton("🏛️ Minhas lojas", callback_data="menu_lojas")],
+        [InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")],
         [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
         [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
     ])
@@ -153,7 +154,8 @@ async def menu_notificacoes(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🔔 *Configurações de Notificações*\n\n"
         f"Status atual: {status_texto}\n\n"
         f"Quando ativadas, você receberá uma mensagem no privado "
-        f"cada vez que alguém confirmar presença em um evento que você criou.\n\n"
+        f"cada vez que alguém confirmar presença em um evento que você criou. "
+        f"Esse mesmo ajuste também controla seus lembretes privados do bot.\n\n"
         f"*Nota:* Esta configuração é permanente e ficará salva na planilha."
     )
 
@@ -989,7 +991,7 @@ async def ver_confirmados_secretario(update: Update, context: ContextTypes.DEFAU
         # Secretário: apenas seus eventos
         eventos_filtrados = [
             ev for ev in eventos 
-            if str(ev.get("Telegram ID do secretário", "")).strip() == str(user_id)
+            if obter_secretario_responsavel_evento(ev) == int(user_id)
         ]
         titulo = "👥 *Confirmados por Evento*"
 

@@ -38,6 +38,8 @@ from src.sheets_supabase import (
     listar_confirmacoes_por_evento,
     cancelar_todas_confirmacoes,
     atualizar_evento,
+    obter_secretario_responsavel_evento,
+    usuario_pode_gerenciar_evento,
 )
 from src.eventos import (
     normalizar_id_evento,
@@ -126,6 +128,12 @@ def _confirmacao_com_agape(agape_valor: str) -> bool:
         return False
     marcadores = ("com ágape", "com agape", "confirmada", "gratuito", "pago", "sim")
     return any(marcador in texto for marcador in marcadores)
+
+
+def _registrar_ultima_edicao(evento: dict, user_id: int, user_nome: str = "") -> None:
+    """Atualiza campos de auditoria de edição no payload do evento."""
+    evento["Última edição por (Telegram ID)"] = str(user_id)
+    evento["Última edição por (Nome)"] = (user_nome or "").strip()
 
 
 async def _notificar_confirmados_evento(
@@ -278,7 +286,7 @@ async def meus_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         eventos_filtrados = [
             ev for ev in eventos 
-            if str(ev.get("Telegram ID do secretário", "")).strip() == str(user_id)
+            if obter_secretario_responsavel_evento(ev) == int(user_id)
         ]
         titulo = "📋 *Meus eventos*"
 
@@ -351,10 +359,9 @@ async def menu_gerenciar_evento(update: Update, context: ContextTypes.DEFAULT_TY
 
     # Verifica permissão
     user_id = update.effective_user.id
-    criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
     nivel = get_nivel(user_id)
     
-    if str(user_id) != criador_id and nivel != "3":
+    if not usuario_pode_gerenciar_evento(user_id, nivel, evento):
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "⛔ Você não tem permissão para gerenciar este evento."
@@ -372,7 +379,7 @@ async def menu_gerenciar_evento(update: Update, context: ContextTypes.DEFAULT_TY
         [InlineKeyboardButton("📊 Resumo da sessão", callback_data=f"resumo_evento|{_encode_cb(id_evento)}")],
         [InlineKeyboardButton("✏️ Editar evento", callback_data="editar_evento_secretario")],
         [InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")],
-        [InlineKeyboardButton("📋 Copiar lista", callback_data=f"copiar_lista|{_encode_cb(id_evento)}")],
+        [InlineKeyboardButton("📋 Copiar lista de confirmados", callback_data=f"copiar_lista|{_encode_cb(id_evento)}")],
         [InlineKeyboardButton("❌ Cancelar evento", callback_data=f"confirmar_cancelamento|{_encode_cb(id_evento)}")],
         [InlineKeyboardButton("🔙 Voltar", callback_data="meus_eventos")],
     ])
@@ -407,10 +414,9 @@ async def resumo_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     # Verifica permissão
     user_id = update.effective_user.id
-    criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
     nivel = get_nivel(user_id)
     
-    if str(user_id) != criador_id and nivel != "3":
+    if not usuario_pode_gerenciar_evento(user_id, nivel, evento):
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "⛔ Permissão negada."
@@ -512,10 +518,9 @@ async def copiar_lista_confirmados(update: Update, context: ContextTypes.DEFAULT
 
     # Verifica permissão
     user_id = update.effective_user.id
-    criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
     nivel = get_nivel(user_id)
     
-    if str(user_id) != criador_id and nivel != "3":
+    if not usuario_pode_gerenciar_evento(user_id, nivel, evento):
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "⛔ Permissão negada."
@@ -623,10 +628,9 @@ async def confirmar_cancelamento(update: Update, context: ContextTypes.DEFAULT_T
 
     # Verifica permissão
     user_id = update.effective_user.id
-    criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
     nivel = get_nivel(user_id)
     
-    if str(user_id) != criador_id and nivel != "3":
+    if not usuario_pode_gerenciar_evento(user_id, nivel, evento):
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "⛔ Permissão negada."
@@ -670,10 +674,9 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
 
     # Verifica permissão
     user_id = update.effective_user.id
-    criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
     nivel = get_nivel(user_id)
     
-    if str(user_id) != criador_id and nivel != "3":
+    if not usuario_pode_gerenciar_evento(user_id, nivel, evento):
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "⛔ Permissão negada."
@@ -681,6 +684,7 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     evento["Status"] = "Cancelado"
+    _registrar_ultima_edicao(evento, user_id, update.effective_user.full_name or "")
     sucesso = atualizar_evento(0, evento)
     
     if sucesso:
@@ -806,6 +810,7 @@ async def receber_novo_valor_evento(update: Update, context: ContextTypes.DEFAUL
         return ConversationHandler.END
 
     evento[campo_info["chave"]] = novo_valor
+    _registrar_ultima_edicao(evento, update.effective_user.id, update.effective_user.full_name or "")
 
     id_evento = normalizar_id_evento(evento)
     sucesso = atualizar_evento(0, evento)
@@ -862,17 +867,24 @@ async def ver_confirmados_secretario(update: Update, context: ContextTypes.DEFAU
     """Menu para visualizar confirmados de um evento específico do secretário."""
     query = update.callback_query
     user_id = update.effective_user.id
-    
-    # Lista eventos do secretário
+    nivel = get_nivel(user_id)
+
+    # Lista eventos visíveis ao perfil.
     eventos = listar_eventos() or []
-    eventos_secretario = [
-        e for e in eventos 
-        if str(e.get("Telegram ID do secretário", "")).strip() == str(user_id)
-    ]
+    if nivel == "3":
+        eventos_secretario = [e for e in eventos if str(e.get("Status", "")).lower() in ("ativo", "")]
+        botao_voltar = "area_admin"
+    else:
+        eventos_secretario = [
+            e for e in eventos
+            if obter_secretario_responsavel_evento(e) == int(user_id)
+        ]
+        botao_voltar = "area_secretario"
     
     if not eventos_secretario:
         if query:
-            await query.answer("Você não tem eventos cadastrados.", show_alert=True)
+            msg_vazio = "Nenhum evento encontrado." if nivel == "3" else "Você não tem eventos cadastrados."
+            await query.answer(msg_vazio, show_alert=True)
         return
     
     if query:
@@ -895,7 +907,7 @@ async def ver_confirmados_secretario(update: Update, context: ContextTypes.DEFAU
             InlineKeyboardButton(lbl, callback_data=f"visualizar_confirmados|{_encode_cb(id_evento)}")
         ])
     
-    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario")])
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data=botao_voltar)])
     
     from src.bot import navegar_para
     await navegar_para(
@@ -922,12 +934,10 @@ async def visualizar_confirmados(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer("Evento não encontrado.", show_alert=True)
         return
     
-    # Verificar permissão (secretário que criou ou admin)
-    criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
-    from src.permissoes import get_nivel
+    # Verificar permissão
     nivel = get_nivel(user_id)
     
-    if str(user_id) != criador_id and nivel != "3":
+    if not usuario_pode_gerenciar_evento(user_id, nivel, evento):
         await query.answer("⛔ Permissão negada.", show_alert=True)
         return
     
@@ -1062,7 +1072,7 @@ async def listar_eventos_cancelados(update: Update, context: ContextTypes.DEFAUL
     else:
         eventos_filtrados = [
             ev for ev in eventos 
-            if str(ev.get("Telegram ID do secretário", "")).strip() == str(user_id)
+            if obter_secretario_responsavel_evento(ev) == int(user_id)
             and ev.get("Status", "").lower() == "cancelado"
         ]
         titulo = "🔄 *Meus Eventos Cancelados*"
@@ -1119,10 +1129,9 @@ async def confirmar_refazer_evento(update: Update, context: ContextTypes.DEFAULT
 
     # Verifica permissão
     user_id = update.effective_user.id
-    criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
     nivel = get_nivel(user_id)
     
-    if str(user_id) != criador_id and nivel != "3":
+    if not usuario_pode_gerenciar_evento(user_id, nivel, evento):
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "⛔ Permissão negada."
@@ -1170,10 +1179,9 @@ async def executar_refazer_evento(update: Update, context: ContextTypes.DEFAULT_
 
     # Verifica permissão
     user_id = update.effective_user.id
-    criador_id = str(evento.get("Telegram ID do secretário", "")).strip()
     nivel = get_nivel(user_id)
     
-    if str(user_id) != criador_id and nivel != "3":
+    if not usuario_pode_gerenciar_evento(user_id, nivel, evento):
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "⛔ Permissão negada."
@@ -1182,6 +1190,7 @@ async def executar_refazer_evento(update: Update, context: ContextTypes.DEFAULT_
 
     # Reativa o evento
     evento["Status"] = "Ativo"
+    _registrar_ultima_edicao(evento, user_id, update.effective_user.full_name or "")
     sucesso = atualizar_evento(0, evento)
     
     if sucesso:

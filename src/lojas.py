@@ -21,7 +21,12 @@ from telegram.ext import (
     filters,
 )
 
-from src.sheets_supabase import listar_lojas, cadastrar_loja, excluir_loja
+from src.sheets_supabase import (
+    listar_lojas_visiveis,
+    listar_secretarios_ativos,
+    cadastrar_loja,
+    excluir_loja,
+)
 from src.permissoes import get_nivel
 
 from src.bot import (
@@ -34,7 +39,7 @@ from src.bot import (
 logger = logging.getLogger(__name__)
 
 # Estados da conversação para cadastro de loja
-NOME, NUMERO, ORIENTE, RITO, POTENCIA, ENDERECO, CONFIRMAR = range(7)
+NOME, NUMERO, ORIENTE, RITO, POTENCIA, ENDERECO, RESPONSAVEL, CONFIRMAR = range(8)
 
 
 # ============================================
@@ -63,6 +68,44 @@ async def _safe_answer(query, text: str | None = None):
             logger.warning("Callback expirado/invalidado ignorado: %s", msg)
         else:
             raise
+
+
+def _norm_text(valor: object) -> str:
+    """Normaliza texto para uso em contexto/armazenamento."""
+    if valor is None:
+        return ""
+    return str(valor).strip()
+
+
+def _resumo_loja_markdown(dados: dict) -> str:
+    """Monta resumo da loja para confirmação."""
+    responsavel = _norm_text(dados.get("secretario_responsavel_nome")) or _norm_text(
+        dados.get("secretario_responsavel_id")
+    )
+    responsavel_linha = f"*Secretário responsável:* {responsavel}\n" if responsavel else ""
+    return (
+        f"🏛️ *Confirme os dados da loja:*\n\n"
+        f"*Nome:* {dados.get('nome', '')}\n"
+        f"*Número:* {dados.get('numero', '')}\n"
+        f"*Oriente:* {dados.get('oriente', '')}\n"
+        f"*Rito:* {dados.get('rito', '')}\n"
+        f"*Potência:* {dados.get('potencia', '')}\n"
+        f"*Endereço:* {dados.get('endereco', '')}\n"
+        f"{responsavel_linha}\n"
+        f"Tudo correto?"
+    )
+
+
+def _teclado_selecionar_secretario(secretarios: list[dict]) -> InlineKeyboardMarkup:
+    """Teclado para admin escolher secretário responsável da loja."""
+    botoes = []
+    for sec in secretarios[:30]:
+        sid = _norm_text(sec.get("telegram_id"))
+        nome = _norm_text(sec.get("nome")) or sid
+        if sid:
+            botoes.append([InlineKeyboardButton(f"👤 {nome}", callback_data=f"loja_secretario|{sid}")])
+    botoes.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_cadastro_loja")])
+    return InlineKeyboardMarkup(botoes)
 
 
 async def _finalizar_mensagem_cadastro(
@@ -120,9 +163,10 @@ async def menu_lojas(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    rotulo_lista = "📋 Listar todas as lojas" if nivel == "3" else "📋 Listar minhas lojas"
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Cadastrar nova loja", callback_data="loja_cadastrar")],
-        [InlineKeyboardButton("📋 Listar minhas lojas", callback_data="loja_listar")],
+        [InlineKeyboardButton(rotulo_lista, callback_data="loja_listar")],
         [InlineKeyboardButton("❌ Excluir loja", callback_data="loja_excluir_menu")],
         [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")],
         [InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")],
@@ -132,8 +176,11 @@ async def menu_lojas(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update, context,
         "Gerenciamento de Lojas",
         "🏛️ *Gerenciamento de Lojas*\n\n"
-        "Aqui você pode cadastrar os dados fixos da sua loja "
-        "para usar como atalho ao criar novos eventos.",
+        + (
+            "Aqui você pode cadastrar e manter todas as lojas, incluindo o secretário responsável de cada uma."
+            if nivel == "3"
+            else "Aqui você pode cadastrar os dados fixos da sua loja para usar como atalho ao criar novos eventos."
+        ),
         teclado
     )
 
@@ -145,7 +192,9 @@ async def menu_lojas(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def listar_lojas_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Lista as lojas cadastradas pelo secretário."""
     user_id = update.effective_user.id
-    lojas = listar_lojas(user_id)
+    nivel = get_nivel(user_id)
+    lojas = listar_lojas_visiveis(user_id, nivel)
+    titulo = "📋 *Todas as Lojas*" if nivel == "3" else "📋 *Minhas Lojas*"
 
     if not lojas:
         teclado = InlineKeyboardMarkup([
@@ -155,13 +204,22 @@ async def listar_lojas_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await navegar_para(
             update, context,
             "Gerenciamento de Lojas > Minhas Lojas",
-            "📋 *Minhas Lojas*\n\nVocê ainda não cadastrou nenhuma loja.",
+            f"{titulo}\n\nNenhuma loja cadastrada.",
             teclado
         )
         return
 
-    texto = "📋 *Minhas Lojas*\n\n"
+    texto = f"{titulo}\n\n"
     for loja in lojas:
+        sid = _norm_text(
+            loja.get("Telegram ID do secretário responsável")
+            or loja.get("secretario_responsavel_id")
+            or loja.get("Telegram ID")
+        )
+        sname = _norm_text(
+            loja.get("Nome do secretário responsável")
+            or loja.get("secretario_responsavel_nome")
+        )
         texto += (
             f"🏛 *{loja.get('Nome da Loja')}*"
             f"{' ' + str(loja.get('Número')) if loja.get('Número') else ''}\n"
@@ -169,6 +227,7 @@ async def listar_lojas_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             f"📜 Rito: {loja.get('Rito')}\n"
             f"⚜️ Potência: {loja.get('Potência')}\n"
             f"📍 Endereço: {loja.get('Endereço')}\n"
+            f"👤 Secretário responsável: {sname or sid or 'Não definido'}\n"
             f"━━━━━━━━━━━━━━━━\n"
         )
 
@@ -195,7 +254,8 @@ async def excluir_loja_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await _safe_answer(query)
 
     user_id = update.effective_user.id
-    lojas = listar_lojas(user_id)
+    nivel = get_nivel(user_id)
+    lojas = listar_lojas_visiveis(user_id, nivel)
 
     if not lojas:
         await query.edit_message_text(
@@ -344,9 +404,12 @@ async def cadastrar_loja_inicio(update: Update, context: ContextTypes.DEFAULT_TY
         return ConversationHandler.END
 
     context.user_data["nova_loja"] = {}
+    context.user_data.pop("secretarios_disponiveis_loja", None)
+    context.user_data["nova_loja_operador_id"] = str(user_id)
+    context.user_data["nova_loja_nivel"] = str(nivel)
 
-    # Mini App: se URL configurada, abre formulário web e encerra conversa
-    if WEBAPP_URL_LOJA:
+    # Mini App: secretários podem usar webform; admin segue fluxo guiado para escolher responsável.
+    if WEBAPP_URL_LOJA and nivel != "3":
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "🏙️ *Cadastrar nova loja*\n\nToque no botão abaixo para preencher o formulário:",
@@ -472,17 +535,22 @@ async def receber_endereco_loja(update: Update, context: ContextTypes.DEFAULT_TY
 
     context.user_data["nova_loja"]["endereco"] = endereco
     dados = context.user_data["nova_loja"]
+    nivel = _norm_text(context.user_data.get("nova_loja_nivel"))
 
-    resumo = (
-        f"🏛️ *Confirme os dados da loja:*\n\n"
-        f"*Nome:* {dados['nome']}\n"
-        f"*Número:* {dados['numero']}\n"
-        f"*Oriente:* {dados['oriente']}\n"
-        f"*Rito:* {dados['rito']}\n"
-        f"*Potência:* {dados['potencia']}\n"
-        f"*Endereço:* {dados['endereco']}\n\n"
-        f"Tudo correto?"
-    )
+    if nivel == "3":
+        secretarios = listar_secretarios_ativos()
+        if not secretarios:
+            await update.message.reply_text("❌ Não há secretários ativos para vincular a esta loja.")
+            return ConversationHandler.END
+        context.user_data["secretarios_disponiveis_loja"] = secretarios
+        await update.message.reply_text(
+            "👤 *Selecione o secretário responsável por esta loja:*",
+            parse_mode="Markdown",
+            reply_markup=_teclado_selecionar_secretario(secretarios),
+        )
+        return RESPONSAVEL
+
+    resumo = _resumo_loja_markdown(dados)
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Sim, cadastrar", callback_data="confirmar_cadastro_loja")],
@@ -491,6 +559,38 @@ async def receber_endereco_loja(update: Update, context: ContextTypes.DEFAULT_TY
     ])
 
     await update.message.reply_text(resumo, parse_mode="Markdown", reply_markup=teclado)
+    return CONFIRMAR
+
+
+async def selecionar_secretario_loja_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Define o secretário responsável da loja (fluxo admin)."""
+    query = update.callback_query
+    await _safe_answer(query)
+    data = query.data or ""
+
+    if not data.startswith("loja_secretario|"):
+        return RESPONSAVEL
+
+    sid = _norm_text(data.split("|", 1)[1])
+    secretarios = context.user_data.get("secretarios_disponiveis_loja", [])
+    nome = ""
+    for sec in secretarios:
+        if _norm_text(sec.get("telegram_id")) == sid:
+            nome = _norm_text(sec.get("nome"))
+            break
+
+    dados = context.user_data.get("nova_loja", {})
+    dados["secretario_responsavel_id"] = sid
+    dados["secretario_responsavel_nome"] = nome
+    context.user_data["nova_loja"] = dados
+
+    resumo = _resumo_loja_markdown(dados)
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Sim, cadastrar", callback_data="confirmar_cadastro_loja")],
+        [InlineKeyboardButton("🔄 Recomeçar", callback_data="loja_cadastrar")],
+        [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_cadastro_loja")],
+    ])
+    await query.edit_message_text(resumo, parse_mode="Markdown", reply_markup=teclado)
     return CONFIRMAR
 
 
@@ -513,6 +613,7 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
         logger.warning(f"Erro ao editar mensagem para feedback: {e}")
 
     dados = context.user_data.get("nova_loja", {})
+    operador_id = _norm_text(context.user_data.get("nova_loja_operador_id")) or str(user_id)
 
     if not dados:
         logger.error(f"Erro: dados não encontrados para usuário {user_id}")
@@ -528,6 +629,7 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
         return ConversationHandler.END
 
     try:
+        dados.setdefault("vinculo_atualizado_por_id", operador_id)
         sucesso = await asyncio.to_thread(cadastrar_loja, user_id, dados)
     except Exception as e:
         logger.error("Erro inesperado ao cadastrar loja para %s: %s", user_id, e, exc_info=True)
@@ -552,6 +654,9 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
     await _finalizar_mensagem_cadastro(update, context, texto, teclado)
 
     context.user_data.pop("nova_loja", None)
+    context.user_data.pop("secretarios_disponiveis_loja", None)
+    context.user_data.pop("nova_loja_nivel", None)
+    context.user_data.pop("nova_loja_operador_id", None)
     return ConversationHandler.END
 
 
@@ -575,6 +680,9 @@ async def cancelar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_T
             await update.message.reply_text("Cadastro cancelado.")
 
     context.user_data.pop("nova_loja", None)
+    context.user_data.pop("secretarios_disponiveis_loja", None)
+    context.user_data.pop("nova_loja_nivel", None)
+    context.user_data.pop("nova_loja_operador_id", None)
     return ConversationHandler.END
 
 
@@ -591,6 +699,10 @@ cadastro_loja_handler = ConversationHandler(
         RITO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_rito)],
         POTENCIA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_potencia)],
         ENDERECO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_endereco_loja)],
+        RESPONSAVEL: [
+            CallbackQueryHandler(selecionar_secretario_loja_callback, pattern=r"^loja_secretario\|"),
+            CallbackQueryHandler(cancelar_cadastro_loja, pattern="^cancelar_cadastro_loja$"),
+        ],
         CONFIRMAR: [
             CallbackQueryHandler(confirmar_cadastro_loja, pattern="^confirmar_cadastro_loja$"),
             CallbackQueryHandler(cancelar_cadastro_loja, pattern="^cancelar_cadastro_loja$"),

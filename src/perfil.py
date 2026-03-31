@@ -110,6 +110,7 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"*Potência:* {potencia}\n"
         f"*Venerável Mestre:* {vm}\n"
         f"*Nível de acesso:* {nivel_texto}\n"
+        f"*Permissões:* consultar sessões, confirmar presença e editar seus dados.\n"
     )
 
     conquistas = await calcular_conquistas_membro(user_id)
@@ -121,6 +122,7 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("✏️ Editar perfil", callback_data="editar_perfil")],
+        [InlineKeyboardButton("🏆 Ver minhas conquistas", callback_data="mostrar_conquistas_membro")],
         [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
     ])
 

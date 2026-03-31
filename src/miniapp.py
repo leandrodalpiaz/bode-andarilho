@@ -52,7 +52,21 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 # URLS DOS WEBAPPS (lidas do ambiente em import-time)
 # ─────────────────────────────────────────────────────────────────────────────
-_RENDER_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
+def _webapp_base_url() -> str:
+    raw = (os.getenv("RENDER_EXTERNAL_URL", "") or "").strip().rstrip("/")
+    lowered = raw.lower()
+    if not raw:
+        return ""
+    if not lowered.startswith("https://"):
+        logger.warning("Mini App desativada: RENDER_EXTERNAL_URL precisa usar HTTPS. Valor atual: %s", raw)
+        return ""
+    if "seu-app.onrender.com" in lowered or "example.com" in lowered:
+        logger.warning("Mini App desativada: RENDER_EXTERNAL_URL ainda está com placeholder. Valor atual: %s", raw)
+        return ""
+    return raw
+
+
+_RENDER_URL = _webapp_base_url()
 WEBAPP_URL_MEMBRO = f"{_RENDER_URL}/webapp/cadastro_membro" if _RENDER_URL else ""
 WEBAPP_URL_EVENTO = f"{_RENDER_URL}/webapp/cadastro_evento" if _RENDER_URL else ""
 WEBAPP_URL_LOJA   = f"{_RENDER_URL}/webapp/cadastro_loja"   if _RENDER_URL else ""
@@ -400,9 +414,10 @@ def html_cadastro_loja() -> str:
     <div id="potencia_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="endereco">Endereço completo *</label>
-    <input id="endereco" type="text" placeholder="Rua, número, bairro, cidade">
+    <label for="endereco">Endereço da loja ou link do Google Maps *</label>
+    <input id="endereco" type="text" placeholder="Ex.: https://maps.app.goo.gl/... ou Rua X, 123 - Centro">
     <div id="endereco_err" class="err"></div>
+    <div class="info">Preferencialmente, cole o link do Google Maps para facilitar a localização exata.</div>
   </div>
 </div>
 """
@@ -452,17 +467,17 @@ tg.MainButton.onClick(async()=>{
 def html_cadastro_evento() -> str:
     body = """
 <div id="lojas_card" class="card" style="display:none">
-  <div class="card-title">Atalho — Lojas Cadastradas</div>
+  <div class="card-title">Atalho - Lojas cadastradas</div>
   <div class="field">
     <label for="loja_sel">Selecione para auto-preencher</label>
     <select id="loja_sel">
-      <option value="">Preencher manualmente…</option>
+      <option value="">Preencher manualmente...</option>
     </select>
   </div>
 </div>
 
 <div class="card">
-  <div class="card-title">A Sessão</div>
+  <div class="card-title">A sessão</div>
   <div class="field">
     <label for="data_ev">Data * <span class="info">(DD/MM/AAAA)</span></label>
     <input id="data_ev" type="text" placeholder="25/03/2026" maxlength="10" inputmode="numeric">
@@ -476,7 +491,7 @@ def html_cadastro_evento() -> str:
   <div class="field">
     <label for="grau">Grau mínimo *</label>
     <select id="grau">
-      <option value="">Selecione…</option>
+      <option value="">Selecione...</option>
       <option>Aprendiz</option>
       <option>Companheiro</option>
       <option>Mestre</option>
@@ -497,16 +512,16 @@ def html_cadastro_evento() -> str:
   <div class="field">
     <label for="agape">Ágape *</label>
     <select id="agape">
-      <option value="">Selecione…</option>
-      <option value="Não">Não haverá ágape</option>
-      <option value="Sim (Gratuito)">Sim — Gratuito</option>
-      <option value="Sim (Pago)">Sim — Pago (dividido)</option>
+      <option value="">Selecione...</option>
+      <option value="Nao">Não haverá ágape</option>
+      <option value="Sim (Gratuito)">Sim - Gratuito</option>
+      <option value="Sim (Pago)">Sim - Pago (dividido)</option>
     </select>
     <div id="agape_err" class="err"></div>
   </div>
   <div class="field">
     <label for="observacoes">Observações <span class="info">(opcional)</span></label>
-    <textarea id="observacoes" placeholder="Informações adicionais…"></textarea>
+    <textarea id="observacoes" placeholder="Informações adicionais..."></textarea>
   </div>
 </div>
 
@@ -537,16 +552,63 @@ def html_cadastro_evento() -> str:
     <div id="potencia_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="endereco">Endereço *</label>
-    <input id="endereco" type="text" placeholder="Rua, número, bairro, cidade">
+    <label for="endereco">Endereço da sessão ou link do Google Maps *</label>
+    <input id="endereco" type="text" placeholder="Ex.: https://maps.app.goo.gl/... ou Rua X, 123 - Centro">
     <div id="endereco_err" class="err"></div>
+    <div class="info">Preferencialmente, cole o link do Google Maps para que o bot gere o atalho de mapa.</div>
+  </div>
+</div>
+
+<div id="salvar_loja_card" class="card" style="display:none">
+  <div class="card-title">Salvar Loja</div>
+  <div class="field">
+    <label>Deseja salvar esta loja para reutilizar nos próximos eventos?</label>
+    <div class="info">Os dados informados neste evento serão aproveitados para criar o atalho da loja.</div>
+  </div>
+  <div class="field">
+    <button id="btn_salvar_loja" type="button" style="width:100%;background:var(--btn);color:var(--btn-text);border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:600">Salvar loja</button>
+  </div>
+  <div class="field">
+    <button id="btn_pular_loja" type="button" style="width:100%;background:var(--sec);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:15px">Agora não</button>
   </div>
 </div>
 """
-    script = """
+    script = r"""
 maskDate(document.getElementById('data_ev'));
+let lojasCarregadas=[];
+let lojaSelecionadaViaAtalho=false;
 
-// Carrega lojas cadastradas do secretário
+function norm(v){
+  return (v||'').toString().trim().toLowerCase();
+}
+
+function dadosLojaAtual(){
+  return {
+    nome: val('nome_loja'),
+    numero: val('numero_loja')||'0',
+    oriente: val('oriente'),
+    rito: val('rito'),
+    potencia: val('potencia'),
+    endereco: val('endereco')
+  };
+}
+
+function lojaJaExiste(dados){
+  return lojasCarregadas.some(l =>
+    norm(l.nome)===norm(dados.nome) &&
+    norm(l.numero||'0')===norm(dados.numero||'0') &&
+    norm(l.rito)===norm(dados.rito)
+  );
+}
+
+function mostrarPromptSalvarLoja(){
+  document.querySelectorAll('.card').forEach(card=>{
+    if(card.id!=='salvar_loja_card') card.style.display='none';
+  });
+  document.getElementById('salvar_loja_card').style.display='block';
+  tg.MainButton.hide();
+}
+
 (async()=>{
   try{
     const r=await fetch('/api/lojas',{
@@ -556,6 +618,7 @@ maskDate(document.getElementById('data_ev'));
     });
     const j=await r.json();
     if(j.ok&&j.lojas&&j.lojas.length>0){
+      lojasCarregadas=j.lojas;
       const sel=document.getElementById('loja_sel');
       j.lojas.forEach((l,i)=>{
         const o=document.createElement('option');
@@ -570,7 +633,11 @@ maskDate(document.getElementById('data_ev'));
 })();
 
 document.getElementById('loja_sel').addEventListener('change',function(){
-  if(!this.value)return;
+  if(!this.value){
+    lojaSelecionadaViaAtalho=false;
+    return;
+  }
+  lojaSelecionadaViaAtalho=true;
   const o=this.options[this.selectedIndex];
   const l=JSON.parse(o.dataset.loja||'{}');
   if(l.nome)document.getElementById('nome_loja').value=l.nome;
@@ -598,6 +665,24 @@ function validate(){
   ok=req('potencia','Potência')&&ok;
   ok=req('endereco','Endereço')&&ok;
   return ok;
+}
+
+async function salvarLojaAtual(){
+  const dados=dadosLojaAtual();
+  const r=await fetch('/api/cadastro_loja',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      init_data:tg.initData,
+      nome:dados.nome,
+      numero:dados.numero,
+      oriente:dados.oriente,
+      rito:dados.rito,
+      potencia:dados.potencia,
+      endereco:dados.endereco
+    })
+  });
+  return await r.json();
 }
 
 tg.MainButton.setText('Publicar Evento');
@@ -628,12 +713,46 @@ tg.MainButton.onClick(async()=>{
       })
     });
     const j=await r.json();
-    if(j.ok){tg.close();}
+    if(j.ok){
+      const dadosLoja=dadosLojaAtual();
+      const deveOferecerSalvar=!lojaSelecionadaViaAtalho && !lojaJaExiste(dadosLoja);
+      if(deveOferecerSalvar){
+        showToast('Evento publicado com sucesso.');
+        mostrarPromptSalvarLoja();
+      }else{
+        tg.close();
+      }
+    }
     else{showToast(j.error||'Erro. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
   }catch{showToast('Falha de conexão. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
 });
+
+document.getElementById('btn_salvar_loja').addEventListener('click',async()=>{
+  const btnSalvar=document.getElementById('btn_salvar_loja');
+  const btnPular=document.getElementById('btn_pular_loja');
+  btnSalvar.disabled=true;
+  btnPular.disabled=true;
+  try{
+    const j=await salvarLojaAtual();
+    if(j.ok){tg.close();}
+    else{
+      showToast(j.error||'Não foi possível salvar a loja.');
+      btnSalvar.disabled=false;
+      btnPular.disabled=false;
+    }
+  }catch{
+    showToast('Falha de conexão. Tente novamente.');
+    btnSalvar.disabled=false;
+    btnPular.disabled=false;
+  }
+});
+
+document.getElementById('btn_pular_loja').addEventListener('click',()=>{
+  tg.close();
+});
 """
     return _html_wrap("Cadastro de Evento", body, script)
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
