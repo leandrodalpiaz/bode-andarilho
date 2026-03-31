@@ -53,7 +53,7 @@ async def ajuda_nivel2_criar_sessao(update, context):
 		"*Como Criar uma Sessão (Evento):*\n\n"
 		"1. Na 'Área do Secretário', clique em '📌 Cadastrar evento'.\n"
 		"2. Se você já tem lojas cadastradas, o bot perguntará se deseja usar uma delas como atalho para preencher alguns dados automaticamente.\n"
-		"3. Siga as perguntas do bot, fornecendo detalhes como data, horário, grau mínimo, tipo de sessão, traje, ágape e observações.\n"
+        "3. Siga as perguntas do bot, fornecendo detalhes como data, horário, grau mínimo, tipo de sessão, traje, ágape e ordem do dia / observações.\n"
 		"4. Após revisar o resumo, clique em '✅ Confirmar publicação'. O evento será publicado no grupo da loja."
 	)
 	teclado = InlineKeyboardMarkup(

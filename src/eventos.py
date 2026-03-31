@@ -324,7 +324,7 @@ def montar_texto_publicacao_evento(evento: dict) -> str:
         f"Rito: {rito}\n"
         f"Traje: {traje}\n"
         f"Ágape: {agape}\n\n"
-        "OBSERVAÇÃO\n"
+        "ORDEM DO DIA / OBSERVAÇÕES\n"
         f"{observacao}\n\n"
     )
 
@@ -1026,7 +1026,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         texto += "\n📍 *Endereço:* Não informado"
 
     if obs:
-        texto += f"\n\n📌 *Observações:* {obs}"
+        texto += f"\n\n📌 *Ordem do dia / observações:* {obs}"
 
     user_id = update.effective_user.id
     ja_confirmou = buscar_confirmacao(id_evento, user_id)

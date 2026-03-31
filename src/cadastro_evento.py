@@ -1246,7 +1246,7 @@ async def receber_traje(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ============================================
-# FLUXOS POR BOTÕES (ÁGAPE, OBSERVAÇÕES)
+# FLUXOS POR BOTÕES (ÁGAPE, ORDEM DO DIA / OBSERVAÇÕES)
 # ============================================
 
 async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1281,7 +1281,7 @@ async def receber_agape(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await navegar_para(
         update, context,
         "Cadastro de Evento",
-        "📝 *Deseja adicionar observações?*",
+        "📝 *Deseja adicionar ordem do dia / observações?*",
         _teclado_sim_nao("obs"),
         limpar_conteudo=True
     )
@@ -1309,7 +1309,7 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await navegar_para(
         update, context,
         "Cadastro de Evento",
-        "📝 *Deseja adicionar observações?*",
+        "📝 *Deseja adicionar ordem do dia / observações?*",
         _teclado_sim_nao("obs"),
         limpar_conteudo=True
     )
@@ -1317,7 +1317,7 @@ async def receber_agape_tipo(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Processa se haverá observações."""
+    """Processa se haverá ordem do dia / observações."""
     query = update.callback_query
     await query.answer()
     _, val = query.data.split("|", 1)
@@ -1339,7 +1339,7 @@ async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "✏️ *Digite as observações* (texto livre)",
+            "✏️ *Digite a ordem do dia / observações* (texto livre)",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
@@ -1372,7 +1372,7 @@ async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def receber_observacoes_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recebe o texto das observações."""
+    """Recebe o texto de ordem do dia / observações."""
     val = _truncate(update.message.text, 500)
     context.user_data["novo_evento_observacoes_texto"] = val
     
@@ -1688,14 +1688,14 @@ async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif estado == OBSERVACOES_TEM:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "📝 *Deseja adicionar observações?*",
+            "📝 *Deseja adicionar ordem do dia / observações?*",
             _teclado_sim_nao("obs"),
             limpar_conteudo=True
         )
     elif estado == OBSERVACOES_TEXTO:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "✏️ *Digite as observações* (texto livre)",
+            "✏️ *Digite a ordem do dia / observações* (texto livre)",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )

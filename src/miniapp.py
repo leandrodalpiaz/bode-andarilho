@@ -538,8 +538,8 @@ def html_cadastro_evento() -> str:
     <div id="agape_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="observacoes">Observações <span class="info">(opcional)</span></label>
-    <textarea id="observacoes" placeholder="Informações adicionais..."></textarea>
+    <label for="observacoes">Ordem do dia / observações <span class="info">(opcional)</span></label>
+    <textarea id="observacoes" placeholder="Informações adicionais da sessão..."></textarea>
   </div>
 </div>
 
@@ -1092,7 +1092,7 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
             f"Rito: {_escape_md(rito)}\n"
             f"Traje: {_escape_md(traje)}\n"
             f"Ágape: {_escape_md(agape)}\n\n"
-            "OBSERVAÇÃO\n"
+            "ORDEM DO DIA / OBSERVAÇÕES\n"
             f"{_escape_md(observacoes) or '-'}\n\n"
         )
 

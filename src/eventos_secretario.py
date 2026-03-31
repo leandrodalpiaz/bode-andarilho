@@ -93,7 +93,7 @@ CAMPOS_EVENTO_EDITAVEIS = {
     "potencia": {"nome": "Potência", "chave": "Potência"},
     "traje": {"nome": "Traje obrigatório", "chave": "Traje obrigatório"},
     "agape": {"nome": "Ágape (texto livre)", "chave": "Ágape"},
-    "observacoes": {"nome": "Observações", "chave": "Observações"},
+    "observacoes": {"nome": "Ordem do dia / observações", "chave": "Observações"},
     "endereco": {"nome": "Endereço da sessão", "chave": "Endereço da sessão"},
 }
 
