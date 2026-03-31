@@ -234,25 +234,9 @@ input::placeholder,textarea::placeholder{color:var(--hint)}
 """
 
 _JS_BASE = """
-const tg=(window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
-if(tg){
-  try{tg.ready();}catch(e){}
-  try{tg.expand();}catch(e){}
-}
-function tgMB(action,...args){
-  if(!tg || !tg.MainButton || typeof tg.MainButton[action] !== 'function') return;
-  try{tg.MainButton[action](...args);}catch(e){}
-}
-function closeMiniApp(){
-  if(tg && typeof tg.close === 'function'){
-    try{tg.close();return;}catch(e){}
-  }
-  if(window.history.length > 1){
-    window.history.back();
-  }else{
-    window.location.href='/';
-  }
-}
+const tg=window.Telegram.WebApp;
+tg.ready();
+tg.expand();
 function setPrimaryLoading(isLoading){
   const btn=document.getElementById('btn_publicar_evento');
   if(btn){
@@ -650,7 +634,7 @@ function mostrarPromptSalvarLoja(){
   document.getElementById('salvar_loja_card').style.display='block';
   const acoes=document.getElementById('acoes_publicacao');
   if(acoes) acoes.style.display='none';
-  tgMB('hide');
+  tg.MainButton.hide();
 }
 
 (async()=>{
@@ -658,7 +642,7 @@ function mostrarPromptSalvarLoja(){
     const r=await fetch('/api/lojas',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({init_data:(tg && tg.initData) || ''})
+      body:JSON.stringify({init_data:tg.initData})
     });
     const j=await r.json();
     if(j.ok&&j.lojas&&j.lojas.length>0){
@@ -717,7 +701,7 @@ async function salvarLojaAtual(){
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
-      init_data:(tg && tg.initData) || '',
+      init_data:tg.initData,
       nome:dados.nome,
       numero:dados.numero,
       oriente:dados.oriente,
@@ -734,14 +718,14 @@ async function publicarEvento(){
   if(!validate())return;
   enviandoEvento=true;
   setPrimaryLoading(true);
-  tgMB('showProgress', false);
-  tgMB('disable');
+  tg.MainButton.showProgress(false);
+  tg.MainButton.disable();
   try{
     const r=await fetch('/api/cadastro_evento',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        init_data:(tg && tg.initData) || '',
+        init_data:tg.initData,
         data:val('data_ev'),
         horario:val('horario'),
         grau:val('grau'),
@@ -765,36 +749,30 @@ async function publicarEvento(){
         showToast('Evento publicado com sucesso.');
         mostrarPromptSalvarLoja();
       }else{
-        closeMiniApp();
+        tg.close();
       }
     }
     else{
       showToast(j.error||'Erro. Tente novamente.');
-      tgMB('hideProgress');
-      tgMB('enable');
+      tg.MainButton.hideProgress();
+      tg.MainButton.enable();
       setPrimaryLoading(false);
       enviandoEvento=false;
     }
   }catch{
     showToast('Falha de conexão. Tente novamente.');
-    tgMB('hideProgress');
-    tgMB('enable');
+    tg.MainButton.hideProgress();
+    tg.MainButton.enable();
     setPrimaryLoading(false);
     enviandoEvento=false;
   }
 }
 
-window.publicarEvento = publicarEvento;
-window.cancelarEvento = closeMiniApp;
-tgMB('setText', 'Publicar Evento');
-tgMB('show');
-if(tg && tg.MainButton && typeof tg.MainButton.onClick === 'function'){
-  try{tg.MainButton.onClick(publicarEvento);}catch(e){}
-}
-const btnPublicar = document.getElementById('btn_publicar_evento');
-if(btnPublicar) btnPublicar.onclick = publicarEvento;
-const btnCancelar = document.getElementById('btn_cancelar_evento');
-if(btnCancelar) btnCancelar.onclick = closeMiniApp;
+tg.MainButton.setText('Publicar Evento');
+tg.MainButton.show();
+tg.MainButton.onClick(publicarEvento);
+document.getElementById('btn_publicar_evento').addEventListener('click',publicarEvento);
+document.getElementById('btn_cancelar_evento').addEventListener('click',()=>tg.close());
 
 document.getElementById('btn_salvar_loja').addEventListener('click',async()=>{
   const btnSalvar=document.getElementById('btn_salvar_loja');
@@ -803,7 +781,7 @@ document.getElementById('btn_salvar_loja').addEventListener('click',async()=>{
   btnPular.disabled=true;
   try{
     const j=await salvarLojaAtual();
-    if(j.ok){closeMiniApp();}
+    if(j.ok){tg.close();}
     else{
       showToast(j.error||'Não foi possível salvar a loja.');
       btnSalvar.disabled=false;
@@ -816,7 +794,9 @@ document.getElementById('btn_salvar_loja').addEventListener('click',async()=>{
   }
 });
 
-document.getElementById('btn_pular_loja').addEventListener('click', closeMiniApp);
+document.getElementById('btn_pular_loja').addEventListener('click',()=>{
+  tg.close();
+});
 """
     return _html_wrap("Cadastro de Evento", body, script)
 
