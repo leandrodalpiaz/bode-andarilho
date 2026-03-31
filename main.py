@@ -187,6 +187,16 @@ def _join_url(base: str, path: str) -> str:
     return f"{base}{path}"
 
 
+def _clean_env_text(value: Optional[str]) -> Optional[str]:
+    """Normaliza valores de env removendo espaços/aspas acidentais."""
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in {"'", '"'}:
+        cleaned = cleaned[1:-1].strip()
+    return cleaned
+
+
 def _link_privado_bot(bot_username: Optional[str], start_param: str = "start") -> str:
     """Monta link seguro para abrir o chat privado do bot com deep link opcional."""
     username = (bot_username or "BodeAndarilhoBot").lstrip("@")
@@ -662,15 +672,18 @@ async def shutdown(server, telegram_app: Application):
 async def main():
     """Função principal que inicia o bot e o servidor webhook."""
 
-    token = _require_env("TELEGRAM_TOKEN", TOKEN).strip().strip('"').strip("'")
-    render_url = _require_env("RENDER_EXTERNAL_URL", RENDER_URL)
+    token = _require_env("TELEGRAM_TOKEN", _clean_env_text(TOKEN))
+    render_url = _require_env("RENDER_EXTERNAL_URL", _clean_env_text(RENDER_URL))
+    webhook_path = _clean_env_text(WEBHOOK_PATH) or "/telegram/webhook"
+    webhook_path = webhook_path if webhook_path.startswith("/") else f"/{webhook_path}"
 
-    webhook_url = _join_url(render_url, WEBHOOK_PATH)
+    webhook_url = _join_url(render_url, webhook_path)
     drop_pending_updates = _env_bool(DROP_PENDING_UPDATES_ON_BOOT, default=False)
 
     logger.info("TOKEN carregado: %s", "SIM" if token else "NAO")
     logger.info("RENDER_URL: %s", render_url)
     logger.info("PORT: %s", PORT)
+    logger.info("WEBHOOK_PATH normalizado: %r", webhook_path)
     logger.info("WEBHOOK_URL: %s", webhook_url)
     logger.info("DROP_PENDING_UPDATES_ON_BOOT: %s", drop_pending_updates)
     logger.info("WEBHOOK_MAX_CONNECTIONS: %s", WEBHOOK_MAX_CONNECTIONS)
@@ -720,7 +733,7 @@ async def main():
         routes=[
             Route("/", root, methods=["GET"]),
             Route("/health", health, methods=["GET"]),
-            Route(WEBHOOK_PATH, webhook, methods=["POST"]),
+            Route(webhook_path, webhook, methods=["POST"]),
             Route("/webapp/cadastro_membro", get_cadastro_membro, methods=["GET"]),
             Route("/webapp/cadastro_evento", get_cadastro_evento, methods=["GET"]),
             Route("/webapp/cadastro_loja", get_cadastro_loja, methods=["GET"]),
