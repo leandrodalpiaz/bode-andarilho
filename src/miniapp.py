@@ -246,9 +246,6 @@ function safeClose() {
   if (window.history.length > 1) window.history.back();
   else window.location.href = '/';
 }
-function hasInitData() {
-  return !!(tg && tg.initData);
-}
 function setPrimaryLoading(isLoading){
   const btn=document.getElementById('btn_publicar_evento');
   if(btn){
@@ -654,7 +651,7 @@ function mostrarPromptSalvarLoja(){
     const r=await fetch('/api/lojas',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({init_data:hasInitData()?tg.initData:''})
+      body:JSON.stringify({init_data: tg ? tg.initData : ''})
     });
     const j=await r.json();
     if(j.ok&&j.lojas&&j.lojas.length>0){
@@ -728,12 +725,6 @@ async function salvarLojaAtual(){
 async function publicarEvento(){
   if(enviandoEvento)return;
   if(!validate())return;
-  if(!hasInitData()){
-    showToast('Abra pelo botão do bot para publicar.');
-    setPrimaryLoading(false);
-    enviandoEvento=false;
-    return;
-  }
   enviandoEvento=true;
   setPrimaryLoading(true);
   if(tg && tg.MainButton){
@@ -794,35 +785,42 @@ async function publicarEvento(){
 
 window.publicarEvento = publicarEvento;
 window.cancelarEvento = safeClose;
-if(tg && tg.MainButton){
-  tg.MainButton.setText('Publicar Evento');
-  tg.MainButton.show();
-  tg.MainButton.onClick(publicarEvento);
-}
-document.getElementById('btn_publicar_evento').addEventListener('click',publicarEvento);
-document.getElementById('btn_cancelar_evento').addEventListener('click',safeClose);
-
-document.getElementById('btn_salvar_loja').addEventListener('click',async()=>{
-  const btnSalvar=document.getElementById('btn_salvar_loja');
-  const btnPular=document.getElementById('btn_pular_loja');
-  btnSalvar.disabled=true;
-  btnPular.disabled=true;
-  try{
-    const j=await salvarLojaAtual();
-    if(j.ok){safeClose();}
-    else{
-      showToast(j.error||'Não foi possível salvar a loja.');
-      btnSalvar.disabled=false;
-      btnPular.disabled=false;
-    }
-  }catch{
-    showToast('Falha de conexão. Tente novamente.');
-    btnSalvar.disabled=false;
-    btnPular.disabled=false;
+  if(tg && tg.MainButton){
+    try{
+      tg.MainButton.setText('Publicar Evento');
+      tg.MainButton.show();
+      tg.MainButton.onClick(publicarEvento);
+    }catch(e){}
   }
-});
+const btnPublicar = document.getElementById('btn_publicar_evento');
+if(btnPublicar){btnPublicar.addEventListener('click',publicarEvento);}
+const btnCancelar = document.getElementById('btn_cancelar_evento');
+if(btnCancelar){btnCancelar.addEventListener('click',safeClose);}
 
-document.getElementById('btn_pular_loja').addEventListener('click',safeClose);
+const btnSalvarLoja=document.getElementById('btn_salvar_loja');
+const btnPularLoja=document.getElementById('btn_pular_loja');
+if(btnSalvarLoja){
+  btnSalvarLoja.addEventListener('click',async()=>{
+    if(btnSalvarLoja) btnSalvarLoja.disabled=true;
+    if(btnPularLoja) btnPularLoja.disabled=true;
+    try{
+      const j=await salvarLojaAtual();
+      if(j.ok){safeClose();}
+      else{
+        showToast(j.error||'Não foi possível salvar a loja.');
+        if(btnSalvarLoja) btnSalvarLoja.disabled=false;
+        if(btnPularLoja) btnPularLoja.disabled=false;
+      }
+    }catch{
+      showToast('Falha de conexão. Tente novamente.');
+      if(btnSalvarLoja) btnSalvarLoja.disabled=false;
+      if(btnPularLoja) btnPularLoja.disabled=false;
+    }
+  });
+}
+if(btnPularLoja){
+  btnPularLoja.addEventListener('click',safeClose);
+}
 """
     return _html_wrap("Cadastro de Evento", body, script)
 
