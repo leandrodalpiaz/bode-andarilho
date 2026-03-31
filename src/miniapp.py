@@ -220,12 +220,30 @@ input::placeholder,textarea::placeholder{color:var(--hint)}
 }
 .toast.on{display:block}
 .info{font-size:12px;color:var(--hint);margin-top:3px}
+.actions{position:sticky;bottom:0;background:linear-gradient(to top,var(--bg) 75%,rgba(255,255,255,0));padding:12px 0 20px;margin-top:8px}
+.actions-stack{display:flex;flex-direction:column;gap:10px}
+.btn-primary{
+  width:100%;background:var(--btn);color:var(--btn-text);border:none;border-radius:12px;
+  padding:14px 16px;font-size:16px;font-weight:700;box-shadow:0 8px 22px rgba(0,0,0,.12)
+}
+.btn-primary:disabled{opacity:.65}
+.btn-secondary{
+  width:100%;background:var(--sec);color:var(--text);border:1px solid var(--border);border-radius:12px;
+  padding:13px 16px;font-size:15px;font-weight:600
+}
 """
 
 _JS_BASE = """
 const tg=window.Telegram.WebApp;
 tg.ready();
 tg.expand();
+function setPrimaryLoading(isLoading){
+  const btn=document.getElementById('btn_publicar_evento');
+  if(btn){
+    btn.disabled=!!isLoading;
+    btn.textContent=isLoading?'Publicando...':'Publicar Evento';
+  }
+}
 function showToast(msg,dur){
   const t=document.getElementById('toast');
   t.textContent=msg;t.classList.add('on');
@@ -572,11 +590,19 @@ def html_cadastro_evento() -> str:
     <button id="btn_pular_loja" type="button" style="width:100%;background:var(--sec);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:15px">Agora não</button>
   </div>
 </div>
+
+<div id="acoes_publicacao" class="actions">
+  <div class="actions-stack">
+    <button id="btn_publicar_evento" type="button" class="btn-primary">Publicar Evento</button>
+    <button id="btn_cancelar_evento" type="button" class="btn-secondary">Cancelar</button>
+  </div>
+</div>
 """
     script = r"""
 maskDate(document.getElementById('data_ev'));
 let lojasCarregadas=[];
 let lojaSelecionadaViaAtalho=false;
+let enviandoEvento=false;
 
 function norm(v){
   return (v||'').toString().trim().toLowerCase();
@@ -606,6 +632,8 @@ function mostrarPromptSalvarLoja(){
     if(card.id!=='salvar_loja_card') card.style.display='none';
   });
   document.getElementById('salvar_loja_card').style.display='block';
+  const acoes=document.getElementById('acoes_publicacao');
+  if(acoes) acoes.style.display='none';
   tg.MainButton.hide();
 }
 
@@ -685,10 +713,11 @@ async function salvarLojaAtual(){
   return await r.json();
 }
 
-tg.MainButton.setText('Publicar Evento');
-tg.MainButton.show();
-tg.MainButton.onClick(async()=>{
+async function publicarEvento(){
+  if(enviandoEvento)return;
   if(!validate())return;
+  enviandoEvento=true;
+  setPrimaryLoading(true);
   tg.MainButton.showProgress(false);
   tg.MainButton.disable();
   try{
@@ -723,9 +752,27 @@ tg.MainButton.onClick(async()=>{
         tg.close();
       }
     }
-    else{showToast(j.error||'Erro. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
-  }catch{showToast('Falha de conexão. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
-});
+    else{
+      showToast(j.error||'Erro. Tente novamente.');
+      tg.MainButton.hideProgress();
+      tg.MainButton.enable();
+      setPrimaryLoading(false);
+      enviandoEvento=false;
+    }
+  }catch{
+    showToast('Falha de conexão. Tente novamente.');
+    tg.MainButton.hideProgress();
+    tg.MainButton.enable();
+    setPrimaryLoading(false);
+    enviandoEvento=false;
+  }
+}
+
+tg.MainButton.setText('Publicar Evento');
+tg.MainButton.show();
+tg.MainButton.onClick(publicarEvento);
+document.getElementById('btn_publicar_evento').addEventListener('click',publicarEvento);
+document.getElementById('btn_cancelar_evento').addEventListener('click',()=>tg.close());
 
 document.getElementById('btn_salvar_loja').addEventListener('click',async()=>{
   const btnSalvar=document.getElementById('btn_salvar_loja');
