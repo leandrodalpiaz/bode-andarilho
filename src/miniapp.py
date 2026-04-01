@@ -37,7 +37,7 @@ from urllib.parse import parse_qsl, unquote
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Update
 
 from src.sheets_supabase import (
     buscar_membro,
@@ -145,6 +145,493 @@ def _teclado_rascunho_loja(dados: Dict[str, Any], nivel: str) -> InlineKeyboardM
     linhas.append([_botao_editar_webapp("✏️ Editar loja", WEBAPP_URL_LOJA)])
     linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="draft_loja_cancelar")])
     return InlineKeyboardMarkup(linhas)
+
+
+def _json_error(mensagem: str, status_code: int = 400) -> JSONResponse:
+    return JSONResponse({"ok": False, "error": mensagem}, status_code=status_code)
+
+
+async def _validar_requisicao_webapp(request: Request) -> tuple[Optional[dict], Optional[int], Optional[JSONResponse]]:
+    bot_token: str = request.app.state.bot_token
+    try:
+        body: dict = await request.json()
+    except Exception:
+        return None, None, _json_error("JSON inválido.", 400)
+
+    init_data = (body.get("init_data") or "").strip()
+    user = verify_telegram_webapp_data(init_data, bot_token)
+    if not user:
+        return None, None, _json_error("Não autorizado.", 403)
+
+    telegram_id = user.get("id")
+    if not telegram_id:
+        return None, None, _json_error("Usuário não identificado.", 403)
+
+    return body, int(telegram_id), None
+
+
+def _extrair_dados_membro(body: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "nome": _norm_text(body.get("nome"))[:200],
+        "data_nasc": _norm_text(body.get("data_nasc"))[:10],
+        "grau": _norm_text(body.get("grau"))[:50],
+        "vm": _norm_text(body.get("vm"))[:10],
+        "loja": _norm_text(body.get("loja"))[:200],
+        "numero_loja": _norm_text(body.get("numero_loja") or "0")[:10],
+        "oriente": _norm_text(body.get("oriente"))[:200],
+        "potencia": _norm_text(body.get("potencia"))[:200],
+    }
+
+
+def _validar_dados_membro(dados: Dict[str, Any]) -> Optional[str]:
+    if not all([dados["nome"], dados["data_nasc"], dados["grau"], dados["vm"], dados["loja"], dados["oriente"], dados["potencia"]]):
+        return "Preencha todos os campos obrigatórios."
+    try:
+        datetime.strptime(dados["data_nasc"], "%d/%m/%Y")
+    except ValueError:
+        return "Data de nascimento inválida. Use DD/MM/AAAA."
+    if dados["grau"] not in {"Aprendiz", "Companheiro", "Mestre", "Mestre Instalado"}:
+        return "Grau inválido."
+    return None
+
+
+def _payload_membro(telegram_id: int, dados: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "Telegram ID": str(telegram_id),
+        "Nome": dados["nome"],
+        "Data de nascimento": dados["data_nasc"],
+        "Grau": dados["grau"],
+        "Venerável Mestre": dados["vm"],
+        "Loja": dados["loja"],
+        "Número da loja": dados["numero_loja"],
+        "Oriente": dados["oriente"],
+        "Potência": dados["potencia"],
+        "Status": "Ativo",
+        "Nivel": "1",
+    }
+
+
+async def api_rascunho_membro(request: Request) -> JSONResponse:
+    body, telegram_id, erro = await _validar_requisicao_webapp(request)
+    if erro:
+        return erro
+    dados = _extrair_dados_membro(body or {})
+    mensagem = _validar_dados_membro(dados)
+    if mensagem:
+        return _json_error(mensagem, 400)
+    _salvar_rascunho(_RASCUNHOS_MEMBRO, telegram_id, dados)
+    try:
+        await _enviar_resumo_rascunho_membro(request.app.state.telegram_app.bot, telegram_id)
+    except Exception as e:
+        logger.warning("Falha ao enviar resumo do rascunho de membro para %s: %s", telegram_id, e)
+    return JSONResponse({"ok": True, "message": "Rascunho salvo com sucesso."})
+
+
+async def draft_membro_confirmar(update: Update, context) -> None:
+    query = update.callback_query
+    await query.answer()
+    telegram_id = int(update.effective_user.id)
+    dados = _obter_rascunho(_RASCUNHOS_MEMBRO, telegram_id)
+    if not dados:
+        await query.answer("Não encontrei um rascunho para confirmar.", show_alert=True)
+        return
+    ja_existe = buscar_membro(telegram_id)
+    ok = cadastrar_membro(_payload_membro(telegram_id, dados))
+    if not ok:
+        await query.answer("Não consegui concluir o cadastro agora.", show_alert=True)
+        return
+    _limpar_rascunho(_RASCUNHOS_MEMBRO, telegram_id)
+    nome_esc = _escape_md(dados.get("nome", ""))
+    if ja_existe:
+        texto = f"✅ *Cadastro atualizado\\!*\n\nSaudações, Ir\\.·\\. {nome_esc}\\. Seus dados foram atualizados\\."
+    else:
+        texto = (
+            f"✅ *Cadastro realizado a contento\\!*\n\n"
+            f"Bem\\-vindo ao Bode Andarilho, Ir\\.·\\. {nome_esc}\\!\n"
+            "Use /start para acessar o Painel do Obreiro\\."
+        )
+    await query.edit_message_text(text=texto, parse_mode="MarkdownV2")
+
+
+async def draft_membro_cancelar(update: Update, context) -> None:
+    query = update.callback_query
+    await query.answer()
+    telegram_id = int(update.effective_user.id)
+    _limpar_rascunho(_RASCUNHOS_MEMBRO, telegram_id)
+    await query.edit_message_text("Tudo certo. O rascunho do cadastro foi cancelado.")
+
+
+def _extrair_dados_loja(body: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "nome": _norm_text(body.get("nome"))[:200],
+        "numero": _norm_text(body.get("numero") or "0")[:10],
+        "oriente": _norm_text(body.get("oriente"))[:200],
+        "rito": _norm_text(body.get("rito"))[:200],
+        "potencia": _norm_text(body.get("potencia"))[:200],
+        "endereco": _norm_text(body.get("endereco"))[:400],
+    }
+
+
+def _validar_dados_loja(dados: Dict[str, Any]) -> Optional[str]:
+    if not all([dados["nome"], dados["oriente"], dados["rito"], dados["potencia"], dados["endereco"]]):
+        return "Preencha todos os campos obrigatórios."
+    return None
+
+
+def _payload_loja(dados: Dict[str, Any], executor_id: int) -> Dict[str, Any]:
+    return {
+        "nome": dados["nome"],
+        "numero": dados["numero"],
+        "oriente": dados["oriente"],
+        "rito": dados["rito"],
+        "potencia": dados["potencia"],
+        "endereco": dados["endereco"],
+        "secretario_responsavel_id": _norm_text(dados.get("secretario_responsavel_id")) or str(executor_id),
+        "secretario_responsavel_nome": _norm_text(dados.get("secretario_responsavel_nome")),
+        "vinculo_atualizado_por_id": str(executor_id),
+    }
+
+
+async def api_rascunho_loja(request: Request) -> JSONResponse:
+    body, telegram_id, erro = await _validar_requisicao_webapp(request)
+    if erro:
+        return erro
+    dados = _extrair_dados_loja(body or {})
+    mensagem = _validar_dados_loja(dados)
+    if mensagem:
+        return _json_error(mensagem, 400)
+    _salvar_rascunho(_RASCUNHOS_LOJA, telegram_id, dados)
+    try:
+        await _enviar_resumo_rascunho_loja(request.app.state.telegram_app.bot, telegram_id)
+    except Exception as e:
+        logger.warning("Falha ao enviar resumo do rascunho de loja para %s: %s", telegram_id, e)
+    return JSONResponse({"ok": True, "message": "Rascunho salvo com sucesso."})
+
+
+async def draft_loja_escolher_secretario(update: Update, context) -> None:
+    query = update.callback_query
+    await query.answer()
+    telegram_id = int(update.effective_user.id)
+    dados = _obter_rascunho(_RASCUNHOS_LOJA, telegram_id)
+    if not dados:
+        await query.answer("Não encontrei um rascunho de loja.", show_alert=True)
+        return
+    secretarios = listar_secretarios_ativos() or []
+    if not secretarios:
+        await query.answer("Nenhum secretário ativo foi encontrado.", show_alert=True)
+        return
+    await query.edit_message_text(
+        "Escolha o secretário responsável por esta loja:",
+        reply_markup=_teclado_secretarios("draft_loja_set_secretario", secretarios),
+    )
+
+
+async def draft_loja_set_secretario(update: Update, context) -> None:
+    query = update.callback_query
+    await query.answer()
+    telegram_id = int(update.effective_user.id)
+    dados = _obter_rascunho(_RASCUNHOS_LOJA, telegram_id)
+    if not dados:
+        await query.answer("Não encontrei um rascunho de loja.", show_alert=True)
+        return
+    _, secretario_id = (query.data or "").split("|", 1)
+    secretario = next((sec for sec in (listar_secretarios_ativos() or []) if _norm_text(sec.get("telegram_id")) == secretario_id), None)
+    dados["secretario_responsavel_id"] = secretario_id
+    dados["secretario_responsavel_nome"] = _norm_text((secretario or {}).get("nome")) or secretario_id
+    _salvar_rascunho(_RASCUNHOS_LOJA, telegram_id, dados)
+    nivel = str(get_nivel(telegram_id))
+    await query.edit_message_text(
+        text=_resumo_loja_md(dados),
+        parse_mode="MarkdownV2",
+        reply_markup=_teclado_rascunho_loja(dados, nivel),
+    )
+
+
+async def draft_loja_set_secretario_cancelar(update: Update, context) -> None:
+    query = update.callback_query
+    await query.answer()
+    telegram_id = int(update.effective_user.id)
+    dados = _obter_rascunho(_RASCUNHOS_LOJA, telegram_id)
+    if not dados:
+        await query.edit_message_text("Tudo certo. A seleção do secretário foi cancelada.")
+        return
+    nivel = str(get_nivel(telegram_id))
+    await query.edit_message_text(
+        text=_resumo_loja_md(dados),
+        parse_mode="MarkdownV2",
+        reply_markup=_teclado_rascunho_loja(dados, nivel),
+    )
+
+
+async def draft_loja_confirmar(update: Update, context) -> None:
+    query = update.callback_query
+    await query.answer()
+    telegram_id = int(update.effective_user.id)
+    dados = _obter_rascunho(_RASCUNHOS_LOJA, telegram_id)
+    if not dados:
+        await query.answer("Não encontrei um rascunho de loja.", show_alert=True)
+        return
+    nivel = str(get_nivel(telegram_id))
+    if nivel == "3" and not _norm_text(dados.get("secretario_responsavel_id")):
+        await query.answer("Defina primeiro o secretário responsável.", show_alert=True)
+        return
+    ok = cadastrar_loja(telegram_id, _payload_loja(dados, telegram_id))
+    if not ok:
+        await query.answer("Não consegui registrar a loja agora.", show_alert=True)
+        return
+    _limpar_rascunho(_RASCUNHOS_LOJA, telegram_id)
+    nome_esc = _escape_md(dados.get("nome", ""))
+    await query.edit_message_text(
+        text=f"✅ *Loja cadastrada\\!*\n\n🏛 *{nome_esc}* foi registrada com sucesso e já pode ser usada nos próximos eventos\\.",
+        parse_mode="MarkdownV2",
+    )
+
+
+async def draft_loja_cancelar(update: Update, context) -> None:
+    query = update.callback_query
+    await query.answer()
+    telegram_id = int(update.effective_user.id)
+    _limpar_rascunho(_RASCUNHOS_LOJA, telegram_id)
+    await query.edit_message_text("Tudo certo. O rascunho da loja foi cancelado.")
+
+
+def _extrair_dados_evento(body: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "data": _norm_text(body.get("data"))[:10],
+        "horario": _norm_text(body.get("horario"))[:5],
+        "grau": _norm_text(body.get("grau"))[:50],
+        "tipo_sessao": _norm_text(body.get("tipo_sessao"))[:200],
+        "traje": _norm_text(body.get("traje"))[:200],
+        "agape": _norm_text(body.get("agape"))[:50],
+        "observacoes": _norm_text(body.get("observacoes"))[:500],
+        "nome_loja": _norm_text(body.get("nome_loja"))[:200],
+        "numero_loja": _norm_text(body.get("numero_loja") or "0")[:10],
+        "oriente": _norm_text(body.get("oriente"))[:200],
+        "rito": _norm_text(body.get("rito"))[:200],
+        "potencia": _norm_text(body.get("potencia"))[:200],
+        "endereco": _norm_text(body.get("endereco"))[:400],
+    }
+
+
+def _validar_dados_evento(dados: Dict[str, Any]) -> Optional[str]:
+    obrigatorios = [
+        dados["data"], dados["horario"], dados["grau"], dados["tipo_sessao"],
+        dados["traje"], dados["agape"], dados["nome_loja"], dados["oriente"],
+        dados["rito"], dados["potencia"], dados["endereco"],
+    ]
+    if not all(obrigatorios):
+        return "Preencha todos os campos obrigatórios."
+    dt = _parse_data_ddmmyyyy(dados["data"])
+    if not dt:
+        return "Data inválida. Use DD/MM/AAAA."
+    if dt < datetime.now().replace(hour=0, minute=0, second=0, microsecond=0):
+        return "A data não pode ser no passado."
+    return None
+
+
+def _payload_evento(dados: Dict[str, Any], secretario_id: str) -> Dict[str, Any]:
+    dt = _parse_data_ddmmyyyy(dados["data"])
+    return {
+        "Data do evento": dados["data"],
+        "Dia da semana": dt.strftime("%A") if dt else "",
+        "Hora": dados["horario"],
+        "Nome da loja": dados["nome_loja"],
+        "Número da loja": dados["numero_loja"],
+        "Oriente": dados["oriente"],
+        "Grau": dados["grau"],
+        "Tipo de sessão": dados["tipo_sessao"],
+        "Rito": dados["rito"],
+        "Potência": dados["potencia"],
+        "Traje obrigatório": dados["traje"],
+        "Ágape": dados["agape"],
+        "Observações": dados["observacoes"],
+        "Telegram ID do grupo": _GRUPO_PRINCIPAL_ID,
+        "Telegram ID do secretário": secretario_id,
+        "Status": "Ativo",
+        "Endereço da sessão": dados["endereco"],
+    }
+
+
+def _texto_publicacao_evento(dados: Dict[str, Any]) -> str:
+    dt = _parse_data_ddmmyyyy(dados.get("data", ""))
+    dia_semana = {
+        "Monday": "segunda",
+        "Tuesday": "terça",
+        "Wednesday": "quarta",
+        "Thursday": "quinta",
+        "Friday": "sexta",
+        "Saturday": "sábado",
+        "Sunday": "domingo",
+    }.get(dt.strftime("%A"), "") if dt else ""
+    numero_loja = _norm_text(dados.get("numero_loja") or "0")
+    numero_fmt = f" {numero_loja}" if numero_loja and numero_loja != "0" else ""
+    return "\n".join([
+        "NOVA SESSÃO",
+        "",
+        f"{dados.get('data', '')} ({dia_semana}) • {dados.get('horario', '')}" if dia_semana else f"{dados.get('data', '')} • {dados.get('horario', '')}",
+        f"Grau: {dados.get('grau', '')}",
+        "",
+        "LOJA",
+        f"{dados.get('nome_loja', '')}{numero_fmt}",
+        f"{dados.get('oriente', '')} - {dados.get('potencia', '')}",
+        "",
+        "SESSÃO",
+        f"Tipo: {dados.get('tipo_sessao', '')}",
+        f"Rito: {dados.get('rito', '')}",
+        f"Traje: {dados.get('traje', '')}",
+        f"Ágape: {dados.get('agape', '')}",
+        "",
+        "ORDEM DO DIA / OBSERVAÇÕES",
+        dados.get("observacoes") or "-",
+        "",
+        f"Local: {dados.get('endereco', '')}",
+    ])
+
+
+async def _publicar_evento_no_grupo(bot, id_evento: str, dados: Dict[str, Any]) -> None:
+    await bot.send_message(
+        chat_id=int(_GRUPO_PRINCIPAL_ID),
+        text=_texto_publicacao_evento(dados),
+        reply_markup=_teclado_pos_publicacao(id_evento, _norm_text(dados.get("agape"))),
+    )
+
+
+async def api_rascunho_evento(request: Request) -> JSONResponse:
+    body, telegram_id, erro = await _validar_requisicao_webapp(request)
+    if erro:
+        return erro
+    dados = _extrair_dados_evento(body or {})
+    mensagem = _validar_dados_evento(dados)
+    if mensagem:
+        return _json_error(mensagem, 400)
+    _salvar_rascunho(_RASCUNHOS_EVENTO, telegram_id, dados)
+    try:
+        await _enviar_resumo_rascunho_evento(request.app.state.telegram_app.bot, telegram_id)
+    except Exception as e:
+        logger.warning("Falha ao enviar resumo do rascunho de evento para %s: %s", telegram_id, e)
+    return JSONResponse({"ok": True, "message": "Rascunho salvo com sucesso."})
+
+
+async def draft_evento_escolher_secretario(update: Update, context) -> None:
+    query = update.callback_query
+    await query.answer()
+    telegram_id = int(update.effective_user.id)
+    dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
+    if not dados:
+        await query.answer("Não encontrei um rascunho de evento.", show_alert=True)
+        return
+    secretarios = listar_secretarios_ativos() or []
+    if not secretarios:
+        await query.answer("Nenhum secretário ativo foi encontrado.", show_alert=True)
+        return
+    await query.edit_message_text(
+        "Escolha o secretário responsável por esta sessão:",
+        reply_markup=_teclado_secretarios("draft_evento_set_secretario", secretarios),
+    )
+
+
+async def draft_evento_set_secretario(update: Update, context) -> None:
+    query = update.callback_query
+    await query.answer()
+    telegram_id = int(update.effective_user.id)
+    dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
+    if not dados:
+        await query.answer("Não encontrei um rascunho de evento.", show_alert=True)
+        return
+    _, secretario_id = (query.data or "").split("|", 1)
+    secretario = next((sec for sec in (listar_secretarios_ativos() or []) if _norm_text(sec.get("telegram_id")) == secretario_id), None)
+    dados["secretario_responsavel_id"] = secretario_id
+    dados["secretario_responsavel_nome"] = _norm_text((secretario or {}).get("nome")) or secretario_id
+    _salvar_rascunho(_RASCUNHOS_EVENTO, telegram_id, dados)
+    nivel = str(get_nivel(telegram_id))
+    lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
+    await query.edit_message_text(
+        text=_resumo_evento_md(dados),
+        parse_mode="MarkdownV2",
+        reply_markup=_teclado_rascunho_evento(dados, nivel, lojas_existentes),
+    )
+
+
+async def draft_evento_set_secretario_cancelar(update: Update, context) -> None:
+    query = update.callback_query
+    await query.answer()
+    telegram_id = int(update.effective_user.id)
+    dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
+    if not dados:
+        await query.edit_message_text("Tudo certo. A escolha do secretário foi cancelada.")
+        return
+    nivel = str(get_nivel(telegram_id))
+    lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
+    await query.edit_message_text(
+        text=_resumo_evento_md(dados),
+        parse_mode="MarkdownV2",
+        reply_markup=_teclado_rascunho_evento(dados, nivel, lojas_existentes),
+    )
+
+
+async def _confirmar_evento(update: Update, context, salvar_loja: bool) -> None:
+    query = update.callback_query
+    telegram_id = int(update.effective_user.id)
+    dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
+    if not dados:
+        await query.answer("Não encontrei um rascunho de evento.", show_alert=True)
+        return
+    nivel = str(get_nivel(telegram_id))
+    secretario_id = _norm_text(dados.get("secretario_responsavel_id")) or str(telegram_id)
+    if nivel == "3" and not _norm_text(dados.get("secretario_responsavel_id")):
+        await query.answer("Defina primeiro o secretário responsável.", show_alert=True)
+        return
+    lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
+    if salvar_loja and _evento_tem_loja_nova(dados, lojas_existentes):
+        ok_loja = cadastrar_loja(
+            telegram_id,
+            {
+                "nome": dados.get("nome_loja"),
+                "numero": dados.get("numero_loja"),
+                "oriente": dados.get("oriente"),
+                "rito": dados.get("rito"),
+                "potencia": dados.get("potencia"),
+                "endereco": dados.get("endereco"),
+                "secretario_responsavel_id": secretario_id,
+                "secretario_responsavel_nome": _norm_text(dados.get("secretario_responsavel_nome")),
+                "vinculo_atualizado_por_id": str(telegram_id),
+            },
+        )
+        if not ok_loja:
+            await query.answer("Não consegui salvar a loja vinculada a esta sessão.", show_alert=True)
+            return
+    id_evento = cadastrar_evento(_payload_evento(dados, secretario_id))
+    if not id_evento:
+        await query.answer("Não consegui registrar a sessão agora.", show_alert=True)
+        return
+    try:
+        await _publicar_evento_no_grupo(context.bot, id_evento, dados)
+    except Exception as e:
+        logger.warning("Falha ao publicar evento %s no grupo: %s", id_evento, e)
+        await query.answer("A sessão foi salva, mas não consegui publicar no grupo.", show_alert=True)
+        return
+    _limpar_rascunho(_RASCUNHOS_EVENTO, telegram_id)
+    await query.edit_message_text("✅ Sessão publicada com sucesso no grupo.")
+
+
+async def draft_evento_confirmar_com_loja(update: Update, context) -> None:
+    query = update.callback_query
+    await query.answer()
+    await _confirmar_evento(update, context, salvar_loja=True)
+
+
+async def draft_evento_confirmar_sem_loja(update: Update, context) -> None:
+    query = update.callback_query
+    await query.answer()
+    await _confirmar_evento(update, context, salvar_loja=False)
+
+
+async def draft_evento_cancelar(update: Update, context) -> None:
+    query = update.callback_query
+    await query.answer()
+    telegram_id = int(update.effective_user.id)
+    _limpar_rascunho(_RASCUNHOS_EVENTO, telegram_id)
+    await query.edit_message_text("Tudo certo. O rascunho da sessão foi cancelado.")
 
 
 def _teclado_secretarios(prefixo: str, secretarios: List[Dict[str, Any]]) -> InlineKeyboardMarkup:
