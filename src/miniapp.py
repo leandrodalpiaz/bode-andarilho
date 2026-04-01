@@ -419,15 +419,19 @@ def _extrair_dados_evento(body: Dict[str, Any]) -> Dict[str, Any]:
         "data": _norm_text(body.get("data"))[:10],
         "horario": _norm_text(body.get("horario"))[:5],
         "grau": _norm_text(body.get("grau"))[:50],
+        "grau_outro": _norm_text(body.get("grau_outro"))[:100],
         "tipo_sessao": _norm_text(body.get("tipo_sessao"))[:200],
         "traje": _norm_text(body.get("traje"))[:200],
+        "traje_outro": _norm_text(body.get("traje_outro"))[:200],
         "agape": _norm_text(body.get("agape"))[:50],
         "observacoes": _norm_text(body.get("observacoes"))[:500],
         "nome_loja": _norm_text(body.get("nome_loja"))[:200],
         "numero_loja": _norm_text(body.get("numero_loja") or "0")[:10],
         "oriente": _norm_text(body.get("oriente"))[:200],
         "rito": _norm_text(body.get("rito"))[:200],
+        "rito_outro": _norm_text(body.get("rito_outro"))[:200],
         "potencia": _norm_text(body.get("potencia"))[:200],
+        "potencia_outra": _norm_text(body.get("potencia_outra"))[:200],
         "endereco": _norm_text(body.get("endereco"))[:400],
     }
 
@@ -446,11 +450,31 @@ def _validar_dados_evento(dados: Dict[str, Any]) -> Optional[str]:
         return "Data inválida. Use DD/MM/AAAA."
     if dt < datetime.now().replace(hour=0, minute=0, second=0, microsecond=0):
         return "A data não pode ser no passado."
+    if dados["grau"] not in {"Aprendiz", "Companheiro", "Mestre", "Outro"}:
+        return "Grau da sessão inválido."
+    if dados["grau"] == "Outro" and not dados["grau_outro"]:
+        return "Informe o grau da sessão quando selecionar 'Outro'."
+    if dados["traje"] not in {"Traje maçônico", "Livre", "Outro"}:
+        return "Traje inválido."
+    if dados["traje"] == "Outro" and not dados["traje_outro"]:
+        return "Informe o traje quando selecionar 'Outro'."
+    if dados["rito"] not in {"REAA", "Schroeder", "Adonhiramita", "Brasileiro", "York", "Moderno", "Escocês Retificado", "Memphis-Misraim", "Outro"}:
+        return "Rito inválido."
+    if dados["rito"] == "Outro" and not dados["rito_outro"]:
+        return "Informe o rito quando selecionar 'Outro'."
+    if dados["potencia"] not in {"Grande Loja - RS", "GORGS", "GOB-RS", "Outra"}:
+        return "Potência inválida."
+    if dados["potencia"] == "Outra" and not dados["potencia_outra"]:
+        return "Informe a potência quando selecionar 'Outra'."
     return None
 
 
 def _payload_evento(dados: Dict[str, Any], secretario_id: str) -> Dict[str, Any]:
     dt = _parse_data_ddmmyyyy(dados["data"])
+    grau = dados["grau_outro"] if dados.get("grau") == "Outro" else dados["grau"]
+    traje = dados["traje_outro"] if dados.get("traje") == "Outro" else dados["traje"]
+    rito = dados["rito_outro"] if dados.get("rito") == "Outro" else dados["rito"]
+    potencia = dados["potencia_outra"] if dados.get("potencia") == "Outra" else dados["potencia"]
     return {
         "Data do evento": dados["data"],
         "Dia da semana": dt.strftime("%A") if dt else "",
@@ -458,11 +482,11 @@ def _payload_evento(dados: Dict[str, Any], secretario_id: str) -> Dict[str, Any]
         "Nome da loja": dados["nome_loja"],
         "Número da loja": dados["numero_loja"],
         "Oriente": dados["oriente"],
-        "Grau": dados["grau"],
+        "Grau": grau,
         "Tipo de sessão": dados["tipo_sessao"],
-        "Rito": dados["rito"],
-        "Potência": dados["potencia"],
-        "Traje obrigatório": dados["traje"],
+        "Rito": rito,
+        "Potência": potencia,
+        "Traje obrigatório": traje,
         "Ágape": dados["agape"],
         "Observações": dados["observacoes"],
         "Telegram ID do grupo": _GRUPO_PRINCIPAL_ID,
@@ -690,19 +714,23 @@ def _resumo_evento_md(dados: Dict[str, Any]) -> str:
     linha_resp = f"*Secretário responsável:* {_escape_md(responsavel)}\n" if responsavel else ""
     obs = _norm_text(dados.get("observacoes"))
     linha_obs = f"*Ordem do dia / observações:* {_escape_md(obs)}\n" if obs else ""
+    grau = dados.get("grau_outro") if _norm_text(dados.get("grau")) == "Outro" else dados.get("grau", "")
+    traje = dados.get("traje_outro") if _norm_text(dados.get("traje")) == "Outro" else dados.get("traje", "")
+    rito = dados.get("rito_outro") if _norm_text(dados.get("rito")) == "Outro" else dados.get("rito", "")
+    potencia = dados.get("potencia_outra") if _norm_text(dados.get("potencia")) == "Outra" else dados.get("potencia", "")
     return (
         "📋 *Confirme a sessão antes de publicar*\n\n"
         f"*Data:* {_escape_md(dados.get('data', ''))}\n"
         f"*Horário:* {_escape_md(dados.get('horario', ''))}\n"
-        f"*Grau da sessão:* {_escape_md(dados.get('grau', ''))}\n"
+        f"*Grau da sessão:* {_escape_md(grau or '')}\n"
         f"*Tipo de sessão:* {_escape_md(dados.get('tipo_sessao', ''))}\n"
-        f"*Traje:* {_escape_md(dados.get('traje', ''))}\n"
+        f"*Traje:* {_escape_md(traje or '')}\n"
         f"*Ágape:* {_escape_md(dados.get('agape', ''))}\n"
         f"{linha_obs}"
         f"*Loja:* {_escape_md(dados.get('nome_loja', ''))}{numero_fmt}\n"
         f"*Oriente:* {_escape_md(dados.get('oriente', ''))}\n"
-        f"*Rito:* {_escape_md(dados.get('rito', ''))}\n"
-        f"*Potência:* {_escape_md(dados.get('potencia', ''))}\n"
+        f"*Rito:* {_escape_md(rito or '')}\n"
+        f"*Potência:* {_escape_md(potencia or '')}\n"
         f"*Endereço:* {_escape_md(dados.get('endereco', ''))}\n"
         f"{linha_resp}"
     )
@@ -1319,9 +1347,14 @@ def html_cadastro_evento() -> str:
       <option>Aprendiz</option>
       <option>Companheiro</option>
       <option>Mestre</option>
-      <option>Mestre Instalado</option>
+      <option>Outro</option>
     </select>
     <div id="grau_err" class="err"></div>
+  </div>
+  <div class="field" id="grau_outro_wrap" style="display:none">
+    <label for="grau_outro">Informe o grau da sessão *</label>
+    <input id="grau_outro" type="text" placeholder="Ex.: Câmara do Meio">
+    <div id="grau_outro_err" class="err"></div>
   </div>
   <div class="field">
     <label for="tipo_sessao">Tipo de sessão *</label>
@@ -1330,8 +1363,18 @@ def html_cadastro_evento() -> str:
   </div>
   <div class="field">
     <label for="traje">Traje *</label>
-    <input id="traje" type="text" placeholder="Ex.: Traje escuro / Terno e gravata">
+    <select id="traje">
+      <option value="">Selecione...</option>
+      <option value="Traje maçônico">Traje maçônico</option>
+      <option value="Livre">Livre</option>
+      <option value="Outro">Outro</option>
+    </select>
     <div id="traje_err" class="err"></div>
+  </div>
+  <div class="field" id="traje_outro_wrap" style="display:none">
+    <label for="traje_outro">Informe o traje *</label>
+    <input id="traje_outro" type="text" placeholder="Ex.: Social completo">
+    <div id="traje_outro_err" class="err"></div>
   </div>
   <div class="field">
     <label for="agape">Ágape *</label>
@@ -1367,13 +1410,40 @@ def html_cadastro_evento() -> str:
   </div>
   <div class="field">
     <label for="rito">Rito *</label>
-    <input id="rito" type="text" placeholder="Ex.: Brasileiro / Escocês">
+    <select id="rito">
+      <option value="">Selecione...</option>
+      <option value="REAA">REAA</option>
+      <option value="Schroeder">Schroeder</option>
+      <option value="Adonhiramita">Adonhiramita</option>
+      <option value="Brasileiro">Brasileiro</option>
+      <option value="York">York</option>
+      <option value="Moderno">Moderno</option>
+      <option value="Escocês Retificado">Escocês Retificado</option>
+      <option value="Memphis-Misraim">Memphis-Misraim</option>
+      <option value="Outro">Outro</option>
+    </select>
     <div id="rito_err" class="err"></div>
+  </div>
+  <div class="field" id="rito_outro_wrap" style="display:none">
+    <label for="rito_outro">Informe o rito *</label>
+    <input id="rito_outro" type="text" placeholder="Ex.: Rito Moderno">
+    <div id="rito_outro_err" class="err"></div>
   </div>
   <div class="field">
     <label for="potencia">Potência *</label>
-    <input id="potencia" type="text" placeholder="Ex.: GLESP">
+    <select id="potencia">
+      <option value="">Selecione...</option>
+      <option value="Grande Loja - RS">Grande Loja - RS</option>
+      <option value="GORGS">GORGS</option>
+      <option value="GOB-RS">GOB-RS</option>
+      <option value="Outra">Outra</option>
+    </select>
     <div id="potencia_err" class="err"></div>
+  </div>
+  <div class="field" id="potencia_outra_wrap" style="display:none">
+    <label for="potencia_outra">Informe a potência *</label>
+    <input id="potencia_outra" type="text" placeholder="Ex.: GLMMG">
+    <div id="potencia_outra_err" class="err"></div>
   </div>
   <div class="field">
     <label for="endereco">Endereço da sessão ou link do Google Maps *</label>
@@ -1395,6 +1465,35 @@ maskDate(document.getElementById('data_ev'));
 let lojasCarregadas=[];
 let lojaSelecionadaViaAtalho=false;
 let enviandoEvento=false;
+
+function syncOutro(selectId, wrapId, inputId, valorOutro){
+  const wrap=document.getElementById(wrapId);
+  if(!wrap)return;
+  const ativo=val(selectId)===valorOutro;
+  wrap.style.display=ativo?'block':'none';
+  if(!ativo)clearErr(inputId);
+}
+
+function aplicarValorComOutro(selectId, inputId, wrapId, valor, valorOutro){
+  const select=document.getElementById(selectId);
+  if(!select)return;
+  const texto=(valor||'').toString().trim();
+  if(!texto){
+    select.value='';
+    if(document.getElementById(inputId))document.getElementById(inputId).value='';
+    syncOutro(selectId, wrapId, inputId, valorOutro);
+    return;
+  }
+  const existe=Array.from(select.options).some(o=>o.value===texto || o.text===texto);
+  if(existe){
+    select.value=texto;
+    if(document.getElementById(inputId))document.getElementById(inputId).value='';
+  }else{
+    select.value=valorOutro;
+    if(document.getElementById(inputId))document.getElementById(inputId).value=texto;
+  }
+  syncOutro(selectId, wrapId, inputId, valorOutro);
+}
 
 function norm(v){
   return (v||'').toString().trim().toLowerCase();
@@ -1431,16 +1530,16 @@ function norm(v){
     if(jDraft.ok&&jDraft.draft){
       if(jDraft.draft.data)document.getElementById('data_ev').value=jDraft.draft.data;
       if(jDraft.draft.horario)document.getElementById('horario').value=jDraft.draft.horario;
-      if(jDraft.draft.grau)document.getElementById('grau').value=jDraft.draft.grau;
+      if(jDraft.draft.grau)aplicarValorComOutro('grau','grau_outro','grau_outro_wrap',jDraft.draft.grau_outro||jDraft.draft.grau,'Outro');
       if(jDraft.draft.tipo_sessao)document.getElementById('tipo_sessao').value=jDraft.draft.tipo_sessao;
-      if(jDraft.draft.traje)document.getElementById('traje').value=jDraft.draft.traje;
+      if(jDraft.draft.traje)aplicarValorComOutro('traje','traje_outro','traje_outro_wrap',jDraft.draft.traje_outro||jDraft.draft.traje,'Outro');
       if(jDraft.draft.agape)document.getElementById('agape').value=jDraft.draft.agape;
       if(jDraft.draft.observacoes)document.getElementById('observacoes').value=jDraft.draft.observacoes;
       if(jDraft.draft.nome_loja)document.getElementById('nome_loja').value=jDraft.draft.nome_loja;
       if(jDraft.draft.numero_loja)document.getElementById('numero_loja').value=jDraft.draft.numero_loja;
       if(jDraft.draft.oriente)document.getElementById('oriente').value=jDraft.draft.oriente;
-      if(jDraft.draft.rito)document.getElementById('rito').value=jDraft.draft.rito;
-      if(jDraft.draft.potencia)document.getElementById('potencia').value=jDraft.draft.potencia;
+      if(jDraft.draft.rito)aplicarValorComOutro('rito','rito_outro','rito_outro_wrap',jDraft.draft.rito_outro||jDraft.draft.rito,'Outro');
+      if(jDraft.draft.potencia)aplicarValorComOutro('potencia','potencia_outra','potencia_outra_wrap',jDraft.draft.potencia_outra||jDraft.draft.potencia,'Outra');
       if(jDraft.draft.endereco)document.getElementById('endereco').value=jDraft.draft.endereco;
     }
   }catch(e){}
@@ -1457,10 +1556,19 @@ document.getElementById('loja_sel').addEventListener('change',function(){
   if(l.nome)document.getElementById('nome_loja').value=l.nome;
   if(l.numero)document.getElementById('numero_loja').value=l.numero;
   if(l.oriente)document.getElementById('oriente').value=l.oriente;
-  if(l.rito)document.getElementById('rito').value=l.rito;
-  if(l.potencia)document.getElementById('potencia').value=l.potencia;
+  if(l.rito)aplicarValorComOutro('rito','rito_outro','rito_outro_wrap',l.rito,'Outro');
+  if(l.potencia)aplicarValorComOutro('potencia','potencia_outra','potencia_outra_wrap',l.potencia,'Outra');
   if(l.endereco)document.getElementById('endereco').value=l.endereco;
 });
+
+document.getElementById('grau').addEventListener('change',()=>syncOutro('grau','grau_outro_wrap','grau_outro','Outro'));
+document.getElementById('traje').addEventListener('change',()=>syncOutro('traje','traje_outro_wrap','traje_outro','Outro'));
+document.getElementById('rito').addEventListener('change',()=>syncOutro('rito','rito_outro_wrap','rito_outro','Outro'));
+document.getElementById('potencia').addEventListener('change',()=>syncOutro('potencia','potencia_outra_wrap','potencia_outra','Outra'));
+syncOutro('grau','grau_outro_wrap','grau_outro','Outro');
+syncOutro('traje','traje_outro_wrap','traje_outro','Outro');
+syncOutro('rito','rito_outro_wrap','rito_outro','Outro');
+syncOutro('potencia','potencia_outra_wrap','potencia_outra','Outra');
 
 function validate(){
   let ok=true;
@@ -1479,13 +1587,17 @@ function validate(){
   }
   ok=req('horario','Horário')&&ok;
   ok=req('grau','Grau da sessão')&&ok;
+  if(val('grau')==='Outro') ok=req('grau_outro','Grau da sessão')&&ok;
   ok=req('tipo_sessao','Tipo de sessão')&&ok;
   ok=req('traje','Traje')&&ok;
+  if(val('traje')==='Outro') ok=req('traje_outro','Traje')&&ok;
   ok=req('agape','Ágape')&&ok;
   ok=req('nome_loja','Nome da loja')&&ok;
   ok=req('oriente','Oriente')&&ok;
   ok=req('rito','Rito')&&ok;
+  if(val('rito')==='Outro') ok=req('rito_outro','Rito')&&ok;
   ok=req('potencia','Potência')&&ok;
+  if(val('potencia')==='Outra') ok=req('potencia_outra','Potência')&&ok;
   ok=req('endereco','Endereço')&&ok;
   return ok;
 }
@@ -1504,15 +1616,19 @@ async function publicarEvento(){
         data:val('data_ev'),
         horario:val('horario'),
         grau:val('grau'),
+        grau_outro:val('grau_outro'),
         tipo_sessao:val('tipo_sessao'),
         traje:val('traje'),
+        traje_outro:val('traje_outro'),
         agape:val('agape'),
         observacoes:(document.getElementById('observacoes').value||'').trim(),
         nome_loja:val('nome_loja'),
         numero_loja:val('numero_loja')||'0',
         oriente:val('oriente'),
         rito:val('rito'),
+        rito_outro:val('rito_outro'),
         potencia:val('potencia'),
+        potencia_outra:val('potencia_outra'),
         endereco:val('endereco')
       })
     });
@@ -1584,7 +1700,7 @@ async def api_listar_lojas(request: Request) -> JSONResponse:
 
     lojas = listar_lojas(int(telegram_id)) or []
     result = []
-    for lj in lojas[:10]:
+    for lj in lojas:
         result.append({
             "nome":     lj.get("Nome da Loja", ""),
             "numero":   str(lj.get("Número") or "0"),
