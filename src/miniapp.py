@@ -176,6 +176,7 @@ async def _validar_requisicao_webapp(request: Request) -> tuple[Optional[dict], 
 
 def _extrair_dados_membro(body: Dict[str, Any]) -> Dict[str, Any]:
     return {
+        "loja_id": _norm_text(body.get("loja_id"))[:80],
         "nome": _norm_text(body.get("nome"))[:200],
         "data_nasc": _norm_text(body.get("data_nasc"))[:10],
         "grau": _norm_text(body.get("grau"))[:50],
@@ -211,6 +212,7 @@ def _payload_membro(telegram_id: int, dados: Dict[str, Any]) -> Dict[str, Any]:
     potencia = dados["potencia_outra"] if dados.get("potencia") == "Outra" else dados["potencia"]
     return {
         "Telegram ID": str(telegram_id),
+        "ID da loja": dados.get("loja_id", ""),
         "Nome": dados["nome"],
         "Data de nascimento": dados["data_nasc"],
         "Grau": dados["grau"],
@@ -1050,6 +1052,16 @@ def html_cadastro_membro() -> str:
 <div class="card">
   <div class="info">Após preencher, o bot enviará um resumo no chat para confirmação final.</div>
 </div>
+<div id="lojas_membro_card" class="card" style="display:none">
+  <div class="card-title">Sua Loja</div>
+  <div class="field">
+    <label for="loja_sel_membro">Selecione sua loja cadastrada</label>
+    <select id="loja_sel_membro">
+      <option value="">Preencher manualmente...</option>
+    </select>
+    <div class="info">Se preferir, você pode seguir com o preenchimento manual logo abaixo.</div>
+  </div>
+</div>
 <div class="card">
   <div class="card-title">Identificação</div>
   <div class="field">
@@ -1127,11 +1139,41 @@ def html_cadastro_membro() -> str:
 """
     script = """
 maskDate(document.getElementById('data_nasc'));
+let lojasMembroCarregadas=[];
+let lojaMembroSelecionada=false;
+let lojaMembroId='';
+
 function syncPotenciaOutra(){
   const wrap=document.getElementById('potencia_outra_wrap');
   if(!wrap)return;
   wrap.style.display=val('potencia')==='Outra'?'block':'none';
   if(val('potencia')!=='Outra')clearErr('potencia_outra');
+}
+function definirLojaManual(){
+  lojaMembroSelecionada=false;
+  lojaMembroId='';
+  const sel=document.getElementById('loja_sel_membro');
+  if(sel && sel.value)sel.value='';
+}
+function aplicarLojaMembro(loja){
+  if(!loja)return;
+  lojaMembroSelecionada=true;
+  lojaMembroId=(loja.id||'').toString();
+  if(loja.nome)document.getElementById('loja').value=loja.nome;
+  if(loja.numero)document.getElementById('numero_loja').value=loja.numero;
+  if(loja.oriente)document.getElementById('oriente').value=loja.oriente;
+  if(loja.potencia){
+    const select=document.getElementById('potencia');
+    const existe=Array.from(select.options).some(o=>o.value===loja.potencia);
+    if(existe){
+      select.value=loja.potencia;
+      document.getElementById('potencia_outra').value='';
+    }else{
+      select.value='Outra';
+      document.getElementById('potencia_outra').value=loja.potencia;
+    }
+    syncPotenciaOutra();
+  }
 }
 function validate(){
   let ok=true;
@@ -1155,6 +1197,20 @@ function validate(){
 }
 document.getElementById('potencia').addEventListener('change',syncPotenciaOutra);
 syncPotenciaOutra();
+['loja','numero_loja','oriente','potencia','potencia_outra'].forEach((id)=>{
+  const el=document.getElementById(id);
+  if(!el)return;
+  el.addEventListener('input',()=>{ if(lojaMembroSelecionada)definirLojaManual(); });
+  el.addEventListener('change',()=>{ if(lojaMembroSelecionada)definirLojaManual(); });
+});
+document.getElementById('loja_sel_membro').addEventListener('change',function(){
+  if(!this.value){
+    definirLojaManual();
+    return;
+  }
+  const loja=lojasMembroCarregadas[Number(this.value)];
+  aplicarLojaMembro(loja);
+});
 if(tg && tg.MainButton){
   tg.MainButton.setText('Continuar para revisão');
   tg.MainButton.show();
@@ -1166,6 +1222,7 @@ if(tg && tg.MainButton){
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
           init_data:tgInitData(),
+          loja_id:lojaMembroId,
           nome:val('nome'),
           data_nasc:val('data_nasc'),
           grau:val('grau'),
@@ -1186,6 +1243,25 @@ if(tg && tg.MainButton){
 }
 (async()=>{
   try{
+    const rLojas=await fetch('/api/lojas',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({init_data:tgInitData()})
+    });
+    const jLojas=await rLojas.json();
+    if(jLojas.ok&&jLojas.lojas&&jLojas.lojas.length>0){
+      lojasMembroCarregadas=jLojas.lojas;
+      const sel=document.getElementById('loja_sel_membro');
+      jLojas.lojas.forEach((l,i)=>{
+        const o=document.createElement('option');
+        o.value=i;
+        o.textContent=l.nome+(l.numero&&l.numero!=='0'?' '+l.numero:'');
+        sel.appendChild(o);
+      });
+      document.getElementById('lojas_membro_card').style.display='block';
+    }
+  }catch(e){}
+  try{
     const r=await fetch('/api/rascunho_membro',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -1193,6 +1269,7 @@ if(tg && tg.MainButton){
     });
     const j=await r.json();
     if(j.ok&&j.draft){
+      if(j.draft.loja_id)lojaMembroId=j.draft.loja_id;
       if(j.draft.nome)document.getElementById('nome').value=j.draft.nome;
       if(j.draft.data_nasc)document.getElementById('data_nasc').value=j.draft.data_nasc;
       if(j.draft.grau)document.getElementById('grau').value=j.draft.grau;
@@ -1203,6 +1280,13 @@ if(tg && tg.MainButton){
       if(j.draft.oriente)document.getElementById('oriente').value=j.draft.oriente;
       if(j.draft.potencia)document.getElementById('potencia').value=j.draft.potencia;
       if(j.draft.potencia_outra)document.getElementById('potencia_outra').value=j.draft.potencia_outra;
+      if(j.draft.loja_id && lojasMembroCarregadas.length){
+        const idx=lojasMembroCarregadas.findIndex((l)=>(l.id||'').toString()===j.draft.loja_id.toString());
+        if(idx>=0){
+          document.getElementById('loja_sel_membro').value=String(idx);
+          aplicarLojaMembro(lojasMembroCarregadas[idx]);
+        }
+      }
       syncPotenciaOutra();
     }
   }catch(e){}
@@ -1702,6 +1786,7 @@ async def api_listar_lojas(request: Request) -> JSONResponse:
     result = []
     for lj in lojas:
         result.append({
+            "id":       str(lj.get("ID") or lj.get("id") or ""),
             "nome":     lj.get("Nome da Loja", ""),
             "numero":   str(lj.get("Número") or "0"),
             "oriente":  lj.get("Oriente da Loja") or lj.get("Oriente", ""),

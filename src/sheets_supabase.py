@@ -128,6 +128,7 @@ def _mem_remover_notificacoes_secretario_pendentes(secretario_id: int) -> bool:
 # sheets_key -> supabase_column
 _MEMBROS_SHEETS_TO_DB: Dict[str, str] = {
     "Telegram ID":        "telegram_id",
+    "ID da loja":         "loja_id",
     "Nome":               "nome",
     "Loja":               "loja",
     "Grau":               "grau",
@@ -513,6 +514,7 @@ def cadastrar_membro(dados: dict) -> bool:
         # Monta registro para inserção
         row: Dict[str, Any] = {
             "telegram_id":    telegram_id,
+            "loja_id":        _norm_text(dados.get("ID da loja") or dados.get("loja_id")),
             "nome":           _norm_text(dados.get("Nome") or dados.get("nome")),
             "grau":           _norm_text(dados.get("Grau") or dados.get("grau")),
             "cargo":          _norm_text(dados.get("Cargo") or dados.get("cargo")),
@@ -576,6 +578,7 @@ def atualizar_membro(telegram_id: int, dados_atualizados: dict, preservar_nivel:
         update: Dict[str, Any] = {}
 
         _alias_map = {
+            "loja_id":        "ID da loja",
             "nome":           "Nome",
             "grau":           "Grau",
             "cargo":          "Cargo",
