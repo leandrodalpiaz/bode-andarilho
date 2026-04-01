@@ -1,4 +1,4 @@
-﻿# main.py
+# main.py
 # ============================================
 # BODE ANDARILHO - PONTO DE ENTRADA PRINCIPAL
 # ============================================
@@ -41,7 +41,23 @@ from src.miniapp import (
     api_cadastro_membro,
     api_cadastro_evento,
     api_cadastro_loja,
+    api_rascunho_membro,
+    api_rascunho_loja,
+    api_rascunho_evento,
     api_listar_lojas,
+    draft_membro_confirmar,
+    draft_membro_cancelar,
+    draft_loja_escolher_secretario,
+    draft_loja_set_secretario,
+    draft_loja_set_secretario_cancelar,
+    draft_loja_confirmar,
+    draft_loja_cancelar,
+    draft_evento_escolher_secretario,
+    draft_evento_set_secretario,
+    draft_evento_set_secretario_cancelar,
+    draft_evento_confirmar_com_loja,
+    draft_evento_confirmar_sem_loja,
+    draft_evento_cancelar,
     WEBAPP_URL_MEMBRO,
 )
 from telegram.ext import (
@@ -214,7 +230,7 @@ def _link_privado_bot(bot_username: Optional[str], start_param: str = "start") -
 
 
 def _env_bool(value: Optional[str], default: bool = False) -> bool:
-    """Converte string de ambiente para bool com fallback seguro."""
+    """Converte string de ambiente para bool com alternativa segura."""
     if value is None:
         return default
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
@@ -346,7 +362,7 @@ async def mensagem_grupo_handler(update: Update, context):
             )
             return
 
-        # Fallback para comandos não suportados no grupo.
+        # Alternativa para comandos não suportados no grupo.
         if text.startswith("/"):
             link_privado = _link_privado_bot(getattr(context.bot, "username", None), "start")
             teclado_privado = InlineKeyboardMarkup(
@@ -460,7 +476,7 @@ async def novo_membro_grupo_handler(update: Update, context):
                 user.id, e_priv,
             )
 
-        # Fallback: mensagem mínima no grupo com deep link (auto-apagada em 30 s)
+        # Alternativa: mensagem mínima no grupo com deep link (autoapagada em 30 s)
         teclado_deep = InlineKeyboardMarkup(
             [[InlineKeyboardButton("🧾 Fazer meu cadastro", url=link_privado)]]
         )
@@ -645,6 +661,21 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(confirmar_exclusao_loja, pattern=r"^excluir_loja_\d+$"))
     app.add_handler(CallbackQueryHandler(executar_exclusao_loja, pattern=r"^excluir_loja_confirmar$"))
 
+    # ===== 10.1 CALLBACKS HÍBRIDOS DOS MINI APPS =====
+    app.add_handler(CallbackQueryHandler(draft_membro_confirmar, pattern=r"^draft_membro_confirmar$"))
+    app.add_handler(CallbackQueryHandler(draft_membro_cancelar, pattern=r"^draft_membro_cancelar$"))
+    app.add_handler(CallbackQueryHandler(draft_loja_escolher_secretario, pattern=r"^draft_loja_escolher_secretario$"))
+    app.add_handler(CallbackQueryHandler(draft_loja_set_secretario, pattern=r"^draft_loja_set_secretario\|"))
+    app.add_handler(CallbackQueryHandler(draft_loja_set_secretario_cancelar, pattern=r"^draft_loja_set_secretario_cancelar$"))
+    app.add_handler(CallbackQueryHandler(draft_loja_confirmar, pattern=r"^draft_loja_confirmar$"))
+    app.add_handler(CallbackQueryHandler(draft_loja_cancelar, pattern=r"^draft_loja_cancelar$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_escolher_secretario, pattern=r"^draft_evento_escolher_secretario$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_set_secretario, pattern=r"^draft_evento_set_secretario\|"))
+    app.add_handler(CallbackQueryHandler(draft_evento_set_secretario_cancelar, pattern=r"^draft_evento_set_secretario_cancelar$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_confirmar_com_loja, pattern=r"^draft_evento_confirmar_com_loja$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_confirmar_sem_loja, pattern=r"^draft_evento_confirmar_sem_loja$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_cancelar, pattern=r"^draft_evento_cancelar$"))
+
     # ===== 11. HANDLER PARA NOVOS MEMBROS NO GRUPO =====
     app.add_handler(ChatMemberHandler(novo_membro_grupo_handler))
 
@@ -797,6 +828,9 @@ async def main():
             Route("/api/cadastro_membro", api_cadastro_membro, methods=["POST"]),
             Route("/api/cadastro_evento", api_cadastro_evento, methods=["POST"]),
             Route("/api/cadastro_loja", api_cadastro_loja, methods=["POST"]),
+            Route("/api/rascunho_membro", api_rascunho_membro, methods=["POST"]),
+            Route("/api/rascunho_evento", api_rascunho_evento, methods=["POST"]),
+            Route("/api/rascunho_loja", api_rascunho_loja, methods=["POST"]),
             Route("/api/lojas", api_listar_lojas, methods=["POST"]),
         ]
     )

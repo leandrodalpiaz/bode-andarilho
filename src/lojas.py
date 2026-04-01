@@ -114,7 +114,7 @@ async def _finalizar_mensagem_cadastro(
     texto: str,
     teclado: InlineKeyboardMarkup,
 ):
-    """Finaliza o fluxo no mesmo card de processamento; fallback para nova mensagem."""
+    """Finaliza o fluxo no mesmo card de processamento; se necess?rio, envia uma nova mensagem."""
     query = update.callback_query
     user_id = update.effective_user.id
 

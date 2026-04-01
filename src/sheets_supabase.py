@@ -1,4 +1,4 @@
-﻿# src/sheets_supabase.py
+# src/sheets_supabase.py
 """
 Substituto do sheets.py usando Supabase como backend.
 Mantém as mesmas assinaturas, nomes e retornos do sheets.py original,
@@ -37,7 +37,7 @@ _ttl_eventos = 30                        # 30 segundos
 _cache_lojas: Dict[int, tuple] = {}      # telegram_id -> (dados, timestamp)
 _ttl_lojas = 300                         # 5 minutos
 
-# Fallback para notificações pendentes do secretário quando a tabela
+# Alternativa para notificações pendentes do secretário quando a tabela
 # dedicada ainda não foi criada no Supabase.
 _notif_secretario_pendentes_em_memoria: Dict[int, List[Dict[str, str]]] = {}
 _notif_secretario_pendentes_tabela_indisponivel = False
@@ -249,7 +249,7 @@ def _safe_cache_int(value: Any) -> int:
 
 
 # =========================
-# Helpers (internos)
+# Fun??es auxiliares internas
 # =========================
 
 def _now_str(segundos: bool = True) -> str:
@@ -378,7 +378,7 @@ def listar_membros(include_inativos: bool = False) -> List[Dict[str, Any]]:
 
 def buscar_membro(telegram_id: int) -> Optional[Dict[str, Any]]:
     """Retorna o dicionário com dados do membro. Otimizado com cache."""
-    # Verificar cache
+    # Verifica o cache
     if telegram_id in _cache_membros:
         cached, timestamp = _cache_membros[telegram_id]
         if time.time() - timestamp < _ttl_membros:
@@ -426,7 +426,7 @@ def _extrair_coluna_ausente(exc: Exception) -> str:
         return ""
 
     # Exemplos conhecidos:
-    # - Could not find the 'coluna' column of 'tabela' in the schema cache
+    # - N?o foi poss?vel encontrar a coluna 'coluna' da tabela 'tabela' no cache de esquema
     # - ... "column 'coluna' ..."
     m = re.search(r"'([^']+)'\\s+column", txt)
     if m:
@@ -541,7 +541,7 @@ def cadastrar_membro(dados: dict) -> bool:
             else:
                 raise
 
-        # Invalidar cache
+        # Invalida o cache
         _cache_membros.pop(int(float(telegram_id)), None)
         return True
 
@@ -613,7 +613,7 @@ def atualizar_membro(telegram_id: int, dados_atualizados: dict, preservar_nivel:
             else:
                 raise
 
-        # Invalidar cache
+        # Invalida o cache
         _cache_membros.pop(telegram_id, None)
         _cache_membros.pop(int(float(tid)), None)
         return True
@@ -633,7 +633,7 @@ def atualizar_nivel_membro(telegram_id: int, novo_nivel: str) -> bool:
         nivel = _norm_intlike(novo_nivel) or "1"
         supabase.table("membros").update({"nivel": nivel}).eq("telegram_id", tid).execute()
 
-        # Invalidar cache
+        # Invalida o cache
         _cache_membros.pop(telegram_id, None)
         _cache_membros.pop(int(float(tid)), None)
         return True
@@ -650,7 +650,7 @@ def atualizar_status_membro(telegram_id: int, novo_status: str) -> bool:
 
 
 def excluir_membro(telegram_id: int) -> bool:
-    """Exclui fisicamente um membro pelo Telegram ID (fallback para bases sem coluna status)."""
+    """Exclui fisicamente um membro pelo Telegram ID (alternativa para bases sem coluna de status)."""
     try:
         tid = _norm_intlike(telegram_id)
         if not tid:
@@ -658,7 +658,7 @@ def excluir_membro(telegram_id: int) -> bool:
 
         supabase.table("membros").delete().eq("telegram_id", tid).execute()
 
-        # Invalidar cache
+        # Invalida o cache
         _cache_membros.pop(telegram_id, None)
         _cache_membros.pop(int(float(tid)), None)
         return True
@@ -737,7 +737,7 @@ def atualizar_evento(indice: int, evento: dict) -> bool:
     try:
         id_evento = _norm_text(evento.get("ID Evento") or evento.get("id_evento"))
         if not id_evento:
-            # Fallback: busca por data_evento + nome_loja
+            # Alternativa: busca por data_evento + nome_loja
             data_ev = _norm_text(evento.get("Data do evento", ""))
             nome_loja = _norm_text(evento.get("Nome da loja", ""))
             if not data_ev or not nome_loja:
@@ -788,7 +788,7 @@ def registrar_confirmacao(dados: dict) -> bool:
         if not id_evento or not telegram_id:
             return False
 
-        # FORCE: bypass cache para evitar race conditions
+        # FOR?A: ignora o cache para evitar condi??es de corrida
         if buscar_confirmacao(id_evento, int(float(telegram_id)), usar_cache=False):
             return False
 
@@ -811,7 +811,7 @@ def registrar_confirmacao(dados: dict) -> bool:
 
         supabase.table("confirmacoes").insert(row).execute()
 
-        # Invalidar cache
+        # Invalida o cache
         cache_key = (id_evento, int(float(telegram_id)))
         _cache_confirmacoes.pop(cache_key, None)
         return True
@@ -864,7 +864,7 @@ def cancelar_confirmacao(id_evento: str, telegram_id: int) -> bool:
 
         supabase.table("confirmacoes").delete().eq("id_evento", target_evento).eq("telegram_id", target_id).execute()
 
-        # Invalidar cache
+        # Invalida o cache
         cache_key = (id_evento, telegram_id)
         _cache_confirmacoes.pop(cache_key, None)
         return True
@@ -899,7 +899,7 @@ def cancelar_todas_confirmacoes(id_evento: str) -> bool:
 
         supabase.table("confirmacoes").delete().eq("id_evento", target_evento).execute()
 
-        # Invalidar cache de todas as entradas relacionadas ao evento
+        # Invalida o cache de todas as entradas relacionadas ao evento
         keys_to_remove = [k for k in _cache_confirmacoes if k[0] == id_evento]
         for k in keys_to_remove:
             _cache_confirmacoes.pop(k, None)
@@ -916,7 +916,7 @@ def cancelar_todas_confirmacoes(id_evento: str) -> bool:
 # =========================
 
 def _secretario_responsavel_loja_id(loja: Dict[str, Any]) -> str:
-    """Resolve o secretário responsável da loja (novo campo com fallback legado)."""
+    """Resolve o secretário responsável da loja (novo campo com alternativa legada)."""
     sid = _norm_intlike(
         loja.get("Telegram ID do secretário responsável")
         or loja.get("secretario_responsavel_id")
@@ -926,7 +926,7 @@ def _secretario_responsavel_loja_id(loja: Dict[str, Any]) -> str:
 
 
 def _secretario_responsavel_loja_nome(loja: Dict[str, Any]) -> str:
-    """Nome do secretário responsável com fallback para vazio."""
+    """Nome do secretário responsável com alternativa para vazio."""
     return _norm_text(
         loja.get("Nome do secretário responsável")
         or loja.get("secretario_responsavel_nome")

@@ -37,7 +37,7 @@ from urllib.parse import parse_qsl, unquote
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from src.sheets_supabase import (
     buscar_membro,
@@ -45,7 +45,9 @@ from src.sheets_supabase import (
     cadastrar_evento,
     cadastrar_loja,
     listar_lojas,
+    listar_secretarios_ativos,
 )
+from src.permissoes import get_nivel
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +74,183 @@ WEBAPP_URL_EVENTO = f"{_RENDER_URL}/webapp/cadastro_evento" if _RENDER_URL else 
 WEBAPP_URL_LOJA   = f"{_RENDER_URL}/webapp/cadastro_loja"   if _RENDER_URL else ""
 
 _GRUPO_PRINCIPAL_ID = os.getenv("GRUPO_PRINCIPAL_ID", "")
+
+_RASCUNHOS_MEMBRO: Dict[int, Dict[str, Any]] = {}
+_RASCUNHOS_LOJA: Dict[int, Dict[str, Any]] = {}
+_RASCUNHOS_EVENTO: Dict[int, Dict[str, Any]] = {}
+
+
+def _botao_editar_webapp(texto: str, url: str) -> InlineKeyboardButton:
+    return InlineKeyboardButton(texto, web_app=WebAppInfo(url=url))
+
+
+def _salvar_rascunho(bucket: Dict[int, Dict[str, Any]], telegram_id: int, dados: Dict[str, Any]) -> None:
+    payload = dict(dados)
+    payload["_saved_at"] = datetime.now().isoformat(timespec="seconds")
+    bucket[int(telegram_id)] = payload
+
+
+def _obter_rascunho(bucket: Dict[int, Dict[str, Any]], telegram_id: int) -> Dict[str, Any]:
+    return dict(bucket.get(int(telegram_id), {}))
+
+
+def _limpar_rascunho(bucket: Dict[int, Dict[str, Any]], telegram_id: int) -> None:
+    bucket.pop(int(telegram_id), None)
+
+
+def _resumo_membro_md(dados: Dict[str, Any]) -> str:
+    numero_loja = _norm_text(dados.get("numero_loja") or "0")
+    numero_fmt = f" - Nº {_escape_md(numero_loja)}" if numero_loja and numero_loja != "0" else ""
+    return (
+        "🧾 *Confirme seu cadastro*\n\n"
+        f"*Nome:* {_escape_md(dados.get('nome', ''))}\n"
+        f"*Data de nascimento:* {_escape_md(dados.get('data_nasc', ''))}\n"
+        f"*Grau:* {_escape_md(dados.get('grau', ''))}\n"
+        f"*Venerável Mestre:* {_escape_md(dados.get('vm', ''))}\n"
+        f"*Loja:* {_escape_md(dados.get('loja', ''))}{numero_fmt}\n"
+        f"*Oriente:* {_escape_md(dados.get('oriente', ''))}\n"
+        f"*Potência:* {_escape_md(dados.get('potencia', ''))}\n"
+    )
+
+
+def _teclado_rascunho_membro() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Confirmar cadastro", callback_data="draft_membro_confirmar")],
+        [_botao_editar_webapp("✏️ Editar dados", WEBAPP_URL_MEMBRO)],
+        [InlineKeyboardButton("❌ Cancelar", callback_data="draft_membro_cancelar")],
+    ])
+
+
+def _resumo_loja_md(dados: Dict[str, Any]) -> str:
+    responsavel = _norm_text(dados.get("secretario_responsavel_nome") or dados.get("secretario_responsavel_id"))
+    linha_responsavel = f"*Secretário responsável:* {_escape_md(responsavel)}\n" if responsavel else ""
+    return (
+        "🏛️ *Confirme os dados da loja*\n\n"
+        f"*Nome:* {_escape_md(dados.get('nome', ''))}\n"
+        f"*Número:* {_escape_md(dados.get('numero', '0'))}\n"
+        f"*Oriente:* {_escape_md(dados.get('oriente', ''))}\n"
+        f"*Rito:* {_escape_md(dados.get('rito', ''))}\n"
+        f"*Potência:* {_escape_md(dados.get('potencia', ''))}\n"
+        f"*Endereço:* {_escape_md(dados.get('endereco', ''))}\n"
+        f"{linha_responsavel}"
+    )
+
+
+def _teclado_rascunho_loja(dados: Dict[str, Any], nivel: str) -> InlineKeyboardMarkup:
+    linhas: List[List[InlineKeyboardButton]] = []
+    if str(nivel) == "3" and not _norm_text(dados.get("secretario_responsavel_id")):
+        linhas.append([InlineKeyboardButton("👤 Definir secretário responsável", callback_data="draft_loja_escolher_secretario")])
+    else:
+        linhas.append([InlineKeyboardButton("✅ Confirmar loja", callback_data="draft_loja_confirmar")])
+    linhas.append([_botao_editar_webapp("✏️ Editar loja", WEBAPP_URL_LOJA)])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="draft_loja_cancelar")])
+    return InlineKeyboardMarkup(linhas)
+
+
+def _teclado_secretarios(prefixo: str, secretarios: List[Dict[str, Any]]) -> InlineKeyboardMarkup:
+    linhas: List[List[InlineKeyboardButton]] = []
+    for sec in secretarios[:30]:
+        sid = _norm_text(sec.get("telegram_id"))
+        nome = _norm_text(sec.get("nome") or sid)
+        if sid:
+            linhas.append([InlineKeyboardButton(f"👤 {nome}", callback_data=f"{prefixo}|{sid}")])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data=f"{prefixo}_cancelar")])
+    return InlineKeyboardMarkup(linhas)
+
+
+def _evento_tem_loja_nova(dados: Dict[str, Any], lojas_existentes: List[Dict[str, Any]]) -> bool:
+    nome = _norm_text(dados.get("nome_loja"))
+    numero = _norm_text(dados.get("numero_loja") or "0")
+    rito = _norm_text(dados.get("rito"))
+    if not nome:
+        return False
+    for loja in lojas_existentes:
+        if (
+            _norm_text(loja.get("Nome da Loja")) == nome
+            and _norm_text(loja.get("Número") or "0") == numero
+            and _norm_text(loja.get("Rito")) == rito
+        ):
+            return False
+    return True
+
+
+def _resumo_evento_md(dados: Dict[str, Any]) -> str:
+    numero_loja = _norm_text(dados.get("numero_loja") or "0")
+    numero_fmt = f" {_escape_md(numero_loja)}" if numero_loja and numero_loja != "0" else ""
+    responsavel = _norm_text(dados.get("secretario_responsavel_nome") or dados.get("secretario_responsavel_id"))
+    linha_resp = f"*Secretário responsável:* {_escape_md(responsavel)}\n" if responsavel else ""
+    obs = _norm_text(dados.get("observacoes"))
+    linha_obs = f"*Ordem do dia / observações:* {_escape_md(obs)}\n" if obs else ""
+    return (
+        "📋 *Confirme a sessão antes de publicar*\n\n"
+        f"*Data:* {_escape_md(dados.get('data', ''))}\n"
+        f"*Horário:* {_escape_md(dados.get('horario', ''))}\n"
+        f"*Grau mínimo:* {_escape_md(dados.get('grau', ''))}\n"
+        f"*Tipo de sessão:* {_escape_md(dados.get('tipo_sessao', ''))}\n"
+        f"*Traje:* {_escape_md(dados.get('traje', ''))}\n"
+        f"*Ágape:* {_escape_md(dados.get('agape', ''))}\n"
+        f"{linha_obs}"
+        f"*Loja:* {_escape_md(dados.get('nome_loja', ''))}{numero_fmt}\n"
+        f"*Oriente:* {_escape_md(dados.get('oriente', ''))}\n"
+        f"*Rito:* {_escape_md(dados.get('rito', ''))}\n"
+        f"*Potência:* {_escape_md(dados.get('potencia', ''))}\n"
+        f"*Endereço:* {_escape_md(dados.get('endereco', ''))}\n"
+        f"{linha_resp}"
+    )
+
+
+def _teclado_rascunho_evento(dados: Dict[str, Any], nivel: str, lojas_existentes: List[Dict[str, Any]]) -> InlineKeyboardMarkup:
+    linhas: List[List[InlineKeyboardButton]] = []
+    if str(nivel) == "3" and not _norm_text(dados.get("secretario_responsavel_id")):
+        linhas.append([InlineKeyboardButton("👤 Definir secretário responsável", callback_data="draft_evento_escolher_secretario")])
+    else:
+        if _evento_tem_loja_nova(dados, lojas_existentes):
+            linhas.append([InlineKeyboardButton("✅ Publicar e salvar loja", callback_data="draft_evento_confirmar_com_loja")])
+            linhas.append([InlineKeyboardButton("✅ Publicar sem salvar loja", callback_data="draft_evento_confirmar_sem_loja")])
+        else:
+            linhas.append([InlineKeyboardButton("✅ Publicar no grupo", callback_data="draft_evento_confirmar_sem_loja")])
+    linhas.append([_botao_editar_webapp("✏️ Editar formulário", WEBAPP_URL_EVENTO)])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="draft_evento_cancelar")])
+    return InlineKeyboardMarkup(linhas)
+
+
+async def _enviar_resumo_rascunho_membro(bot, telegram_id: int) -> None:
+    dados = _obter_rascunho(_RASCUNHOS_MEMBRO, telegram_id)
+    if not dados:
+        return
+    await bot.send_message(
+        chat_id=telegram_id,
+        text=_resumo_membro_md(dados),
+        parse_mode="MarkdownV2",
+        reply_markup=_teclado_rascunho_membro(),
+    )
+
+
+async def _enviar_resumo_rascunho_loja(bot, telegram_id: int) -> None:
+    dados = _obter_rascunho(_RASCUNHOS_LOJA, telegram_id)
+    if not dados:
+        return
+    nivel = str(get_nivel(telegram_id))
+    await bot.send_message(
+        chat_id=telegram_id,
+        text=_resumo_loja_md(dados),
+        parse_mode="MarkdownV2",
+        reply_markup=_teclado_rascunho_loja(dados, nivel),
+    )
+
+
+async def _enviar_resumo_rascunho_evento(bot, telegram_id: int) -> None:
+    dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
+    if not dados:
+        return
+    nivel = str(get_nivel(telegram_id))
+    lojas_existentes = listar_lojas(int(telegram_id), include_todas=(nivel == "3")) or []
+    await bot.send_message(
+        chat_id=telegram_id,
+        text=_resumo_evento_md(dados),
+        parse_mode="MarkdownV2",
+        reply_markup=_teclado_rascunho_evento(dados, nivel, lojas_existentes),
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -123,7 +302,7 @@ def verify_telegram_webapp_data(init_data: str, bot_token: str) -> Optional[dict
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HELPERS INTERNOS
+# FUN??ES AUXILIARES INTERNAS
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _parse_data_ddmmyyyy(texto: str) -> Optional[datetime]:
@@ -131,6 +310,12 @@ def _parse_data_ddmmyyyy(texto: str) -> Optional[datetime]:
         return datetime.strptime(texto.strip(), "%d/%m/%Y")
     except Exception:
         return None
+
+
+def _norm_text(valor: Any) -> str:
+    if valor is None:
+        return ""
+    return str(valor).strip()
 
 
 def _escape_md(s: str) -> str:
@@ -241,7 +426,13 @@ function setPrimaryLoading(isLoading){
   const btn=document.getElementById('btn_publicar_evento');
   if(btn){
     btn.disabled=!!isLoading;
-    btn.textContent=isLoading?'Publicando...':'Publicar Evento';
+    btn.textContent=isLoading?'Enviando...':'Continuar para revisão';
+  }
+}
+function hideMainButtonSafe(){
+  if(tg && tg.MainButton){
+    try{ tg.MainButton.offClick(publicarEvento); }catch(e){}
+    try{ tg.MainButton.hide(); }catch(e){}
   }
 }
 function showToast(msg,dur){
@@ -296,6 +487,9 @@ def _html_wrap(title: str, body: str, script: str) -> str:
 
 def html_cadastro_membro() -> str:
     body = """
+<div class="card">
+  <div class="info">Após preencher, o bot enviará um resumo no chat para confirmação final.</div>
+</div>
 <div class="card">
   <div class="card-title">Identificação</div>
   <div class="field">
@@ -368,14 +562,12 @@ function validate(){
   ok=req('potencia','Potência')&&ok;
   return ok;
 }
-tg.MainButton.setText('Confirmar Cadastro');
+tg.MainButton.setText('Continuar para revisão');
 tg.MainButton.show();
 tg.MainButton.onClick(async()=>{
   if(!validate())return;
-  tg.MainButton.showProgress(false);
-  tg.MainButton.disable();
   try{
-    const r=await fetch('/api/cadastro_membro',{
+    const r=await fetch('/api/rascunho_membro',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
@@ -395,6 +587,27 @@ tg.MainButton.onClick(async()=>{
     else{showToast(j.error||'Erro. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
   }catch{showToast('Falha de conexão. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
 });
+
+(async()=>{
+  try{
+    const r=await fetch('/api/rascunho_membro',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({init_data:tg.initData,action:'get'})
+    });
+    const j=await r.json();
+    if(j.ok&&j.draft){
+      if(j.draft.nome)document.getElementById('nome').value=j.draft.nome;
+      if(j.draft.data_nasc)document.getElementById('data_nasc').value=j.draft.data_nasc;
+      if(j.draft.grau)document.getElementById('grau').value=j.draft.grau;
+      if(j.draft.vm)document.getElementById('vm').value=j.draft.vm;
+      if(j.draft.loja)document.getElementById('loja').value=j.draft.loja;
+      if(j.draft.numero_loja)document.getElementById('numero_loja').value=j.draft.numero_loja;
+      if(j.draft.oriente)document.getElementById('oriente').value=j.draft.oriente;
+      if(j.draft.potencia)document.getElementById('potencia').value=j.draft.potencia;
+    }
+  }catch(e){}
+})();
 """
     return _html_wrap("Cadastro de Membro", body, script)
 
@@ -405,6 +618,9 @@ tg.MainButton.onClick(async()=>{
 
 def html_cadastro_loja() -> str:
     body = """
+<div class="card">
+  <div class="info">Após preencher, o bot enviará um resumo no chat para confirmação final.</div>
+</div>
 <div class="card">
   <div class="card-title">Dados da Loja</div>
   <div class="field">
@@ -449,14 +665,12 @@ function validate(){
   ok=req('endereco','Endereço')&&ok;
   return ok;
 }
-tg.MainButton.setText('Salvar Loja');
+tg.MainButton.setText('Continuar para revisão');
 tg.MainButton.show();
 tg.MainButton.onClick(async()=>{
   if(!validate())return;
-  tg.MainButton.showProgress(false);
-  tg.MainButton.disable();
   try{
-    const r=await fetch('/api/cadastro_loja',{
+    const r=await fetch('/api/rascunho_loja',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
@@ -474,6 +688,25 @@ tg.MainButton.onClick(async()=>{
     else{showToast(j.error||'Erro. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
   }catch{showToast('Falha de conexão. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
 });
+
+(async()=>{
+  try{
+    const r=await fetch('/api/rascunho_loja',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({init_data:tg.initData,action:'get'})
+    });
+    const j=await r.json();
+    if(j.ok&&j.draft){
+      if(j.draft.nome)document.getElementById('nome_loja').value=j.draft.nome;
+      if(j.draft.numero)document.getElementById('numero').value=j.draft.numero;
+      if(j.draft.oriente)document.getElementById('oriente').value=j.draft.oriente;
+      if(j.draft.rito)document.getElementById('rito').value=j.draft.rito;
+      if(j.draft.potencia)document.getElementById('potencia').value=j.draft.potencia;
+      if(j.draft.endereco)document.getElementById('endereco').value=j.draft.endereco;
+    }
+  }catch(e){}
+})();
 """
     return _html_wrap("Cadastro de Loja", body, script)
 
@@ -484,6 +717,9 @@ tg.MainButton.onClick(async()=>{
 
 def html_cadastro_evento() -> str:
     body = """
+<div class="card">
+  <div class="info">Preencha os dados e continue. A publicação final será confirmada no chat do bot.</div>
+</div>
 <div id="lojas_card" class="card" style="display:none">
   <div class="card-title">Atalho - Lojas cadastradas</div>
   <div class="field">
@@ -577,24 +813,10 @@ def html_cadastro_evento() -> str:
   </div>
 </div>
 
-<div id="salvar_loja_card" class="card" style="display:none">
-  <div class="card-title">Salvar Loja</div>
-  <div class="field">
-    <label>Deseja salvar esta loja para reutilizar nos próximos eventos?</label>
-    <div class="info">Os dados informados neste evento serão aproveitados para criar o atalho da loja.</div>
-  </div>
-  <div class="field">
-    <button id="btn_salvar_loja" type="button" style="width:100%;background:var(--btn);color:var(--btn-text);border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:600">Salvar loja</button>
-  </div>
-  <div class="field">
-    <button id="btn_pular_loja" type="button" style="width:100%;background:var(--sec);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:15px">Agora não</button>
-  </div>
-</div>
-
 <div id="acoes_publicacao" class="actions">
   <div class="actions-stack">
-    <button id="btn_publicar_evento" type="button" class="btn-primary">Publicar Evento</button>
-    <button id="btn_cancelar_evento" type="button" class="btn-secondary">Cancelar</button>
+    <button id="btn_publicar_evento" type="button" class="btn-primary">Continuar para revisão</button>
+    <button id="btn_cancelar_evento" type="button" class="btn-secondary">Fechar</button>
   </div>
 </div>
 """
@@ -606,35 +828,6 @@ let enviandoEvento=false;
 
 function norm(v){
   return (v||'').toString().trim().toLowerCase();
-}
-
-function dadosLojaAtual(){
-  return {
-    nome: val('nome_loja'),
-    numero: val('numero_loja')||'0',
-    oriente: val('oriente'),
-    rito: val('rito'),
-    potencia: val('potencia'),
-    endereco: val('endereco')
-  };
-}
-
-function lojaJaExiste(dados){
-  return lojasCarregadas.some(l =>
-    norm(l.nome)===norm(dados.nome) &&
-    norm(l.numero||'0')===norm(dados.numero||'0') &&
-    norm(l.rito)===norm(dados.rito)
-  );
-}
-
-function mostrarPromptSalvarLoja(){
-  document.querySelectorAll('.card').forEach(card=>{
-    if(card.id!=='salvar_loja_card') card.style.display='none';
-  });
-  document.getElementById('salvar_loja_card').style.display='block';
-  const acoes=document.getElementById('acoes_publicacao');
-  if(acoes) acoes.style.display='none';
-  tg.MainButton.hide();
 }
 
 (async()=>{
@@ -656,6 +849,29 @@ function mostrarPromptSalvarLoja(){
         sel.appendChild(o);
       });
       document.getElementById('lojas_card').style.display='block';
+    }
+  }catch(e){}
+  try{
+    const rDraft=await fetch('/api/rascunho_evento',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({init_data:tg.initData,action:'get'})
+    });
+    const jDraft=await rDraft.json();
+    if(jDraft.ok&&jDraft.draft){
+      if(jDraft.draft.data)document.getElementById('data_ev').value=jDraft.draft.data;
+      if(jDraft.draft.horario)document.getElementById('horario').value=jDraft.draft.horario;
+      if(jDraft.draft.grau)document.getElementById('grau').value=jDraft.draft.grau;
+      if(jDraft.draft.tipo_sessao)document.getElementById('tipo_sessao').value=jDraft.draft.tipo_sessao;
+      if(jDraft.draft.traje)document.getElementById('traje').value=jDraft.draft.traje;
+      if(jDraft.draft.agape)document.getElementById('agape').value=jDraft.draft.agape;
+      if(jDraft.draft.observacoes)document.getElementById('observacoes').value=jDraft.draft.observacoes;
+      if(jDraft.draft.nome_loja)document.getElementById('nome_loja').value=jDraft.draft.nome_loja;
+      if(jDraft.draft.numero_loja)document.getElementById('numero_loja').value=jDraft.draft.numero_loja;
+      if(jDraft.draft.oriente)document.getElementById('oriente').value=jDraft.draft.oriente;
+      if(jDraft.draft.rito)document.getElementById('rito').value=jDraft.draft.rito;
+      if(jDraft.draft.potencia)document.getElementById('potencia').value=jDraft.draft.potencia;
+      if(jDraft.draft.endereco)document.getElementById('endereco').value=jDraft.draft.endereco;
     }
   }catch(e){}
 })();
@@ -718,10 +934,8 @@ async function publicarEvento(){
   if(!validate())return;
   enviandoEvento=true;
   setPrimaryLoading(true);
-  tg.MainButton.showProgress(false);
-  tg.MainButton.disable();
   try{
-    const r=await fetch('/api/cadastro_evento',{
+    const r=await fetch('/api/rascunho_evento',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
@@ -743,60 +957,23 @@ async function publicarEvento(){
     });
     const j=await r.json();
     if(j.ok){
-      const dadosLoja=dadosLojaAtual();
-      const deveOferecerSalvar=!lojaSelecionadaViaAtalho && !lojaJaExiste(dadosLoja);
-      if(deveOferecerSalvar){
-        showToast('Evento publicado com sucesso.');
-        mostrarPromptSalvarLoja();
-      }else{
-        tg.close();
-      }
+      tg.close();
     }
     else{
       showToast(j.error||'Erro. Tente novamente.');
-      tg.MainButton.hideProgress();
-      tg.MainButton.enable();
       setPrimaryLoading(false);
       enviandoEvento=false;
     }
   }catch{
     showToast('Falha de conexão. Tente novamente.');
-    tg.MainButton.hideProgress();
-    tg.MainButton.enable();
     setPrimaryLoading(false);
     enviandoEvento=false;
   }
 }
 
-tg.MainButton.setText('Publicar Evento');
-tg.MainButton.show();
-tg.MainButton.onClick(publicarEvento);
+hideMainButtonSafe();
 document.getElementById('btn_publicar_evento').addEventListener('click',publicarEvento);
 document.getElementById('btn_cancelar_evento').addEventListener('click',()=>tg.close());
-
-document.getElementById('btn_salvar_loja').addEventListener('click',async()=>{
-  const btnSalvar=document.getElementById('btn_salvar_loja');
-  const btnPular=document.getElementById('btn_pular_loja');
-  btnSalvar.disabled=true;
-  btnPular.disabled=true;
-  try{
-    const j=await salvarLojaAtual();
-    if(j.ok){tg.close();}
-    else{
-      showToast(j.error||'Não foi possível salvar a loja.');
-      btnSalvar.disabled=false;
-      btnPular.disabled=false;
-    }
-  }catch{
-    showToast('Falha de conexão. Tente novamente.');
-    btnSalvar.disabled=false;
-    btnPular.disabled=false;
-  }
-});
-
-document.getElementById('btn_pular_loja').addEventListener('click',()=>{
-  tg.close();
-});
 """
     return _html_wrap("Cadastro de Evento", body, script)
 
@@ -1121,3 +1298,4 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
         logger.warning("Falha ao confirmar evento para %s: %s", telegram_id, e)
 
     return JSONResponse({"ok": True})
+

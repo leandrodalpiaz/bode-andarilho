@@ -1,4 +1,4 @@
-﻿# src/eventos.py
+# src/eventos.py
 # ============================================
 # BODE ANDARILHO - GERENCIAMENTO DE EVENTOS
 # ============================================
@@ -73,7 +73,7 @@ from src.bot import (
 
 logger = logging.getLogger(__name__)
 
-# Fallback em memória para instalações que ainda não possuem a coluna
+# Alternativa em memória para instalações que ainda não possuem a coluna
 # `grupo_mensagem_id` em `eventos`.
 _CACHE_POST_EVENTO_GRUPO: Dict[str, Tuple[int, int]] = {}
 
@@ -169,7 +169,7 @@ async def _auto_delete_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int,
 
 
 def registrar_post_evento_grupo(id_evento: str, chat_id: int, message_id: int) -> None:
-    """Registra em memória o post do evento no grupo (fallback sem coluna persistida)."""
+    """Registra em memória a mensagem do evento no grupo (alternativa sem coluna persistida)."""
     if not id_evento:
         return
     _CACHE_POST_EVENTO_GRUPO[id_evento] = (int(chat_id), int(message_id))
@@ -362,7 +362,7 @@ async def sincronizar_resumo_evento_grupo(context: ContextTypes.DEFAULT_TYPE, ev
     msg_id = _tid_to_int(evento.get("Telegram Message ID do grupo") or evento.get("grupo_mensagem_id"))
 
     async def _publicar_novo_card() -> bool:
-        """Fallback para eventos legados sem message_id: publica novo card e persiste ID."""
+        """Alternativa para eventos legados sem message_id: publica novo card e persiste o ID."""
         if not grupo_id:
             logger.warning("Não foi possível sincronizar card do evento %s: grupo_id ausente.", id_evento)
             return False
@@ -390,7 +390,7 @@ async def sincronizar_resumo_evento_grupo(context: ContextTypes.DEFAULT_TYPE, ev
             logger.warning("Falha ao publicar card fallback do evento %s no grupo: %s", id_evento, e)
             return False
 
-    # Fallback para ambientes sem persistência do message_id no banco.
+    # Alternativa para ambientes sem persistência do message_id no banco.
     if (not grupo_id or not msg_id) and id_evento in _CACHE_POST_EVENTO_GRUPO:
         grupo_id, msg_id = _CACHE_POST_EVENTO_GRUPO[id_evento]
 

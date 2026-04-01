@@ -1,4 +1,4 @@
-﻿# src/cadastro.py
+# src/cadastro.py
 # ============================================
 # BODE ANDARILHO - CADASTRO DE MEMBROS
 # ============================================
@@ -681,7 +681,7 @@ async def _mostrar_confirmacao(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 def _dados_para_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Any]:
-    """Monta payload final do cadastro para persistência."""
+    """Monta os dados finais do cadastro para persistência."""
     return {
         "nome": context.user_data.get("cadastro_nome", ""),
         "data_nasc": context.user_data.get("cadastro_data_nasc", ""),

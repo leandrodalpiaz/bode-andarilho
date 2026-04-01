@@ -1,4 +1,4 @@
-﻿# src/admin_acoes.py
+# src/admin_acoes.py
 # ============================================
 # BODE ANDARILHO - AÇÕES ADMINISTRATIVAS
 # ============================================
@@ -86,7 +86,7 @@ CAMPOS_EDITAVEIS = {
 # ============================================
 
 async def cancelar_operacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Cancela operação (fallback para ConversationHandlers)."""
+    """Cancela a operação como alternativa para ConversationHandlers."""
     if update.message:
         await update.message.reply_text("Operação cancelada.")
     elif update.callback_query:

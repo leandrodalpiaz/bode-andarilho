@@ -1,4 +1,4 @@
-﻿# src/eventos_secretario.py
+# src/eventos_secretario.py
 # ============================================
 # BODE ANDARILHO - ÁREA DO SECRETÁRIO
 # ============================================
@@ -144,7 +144,7 @@ def _botao_cadastrar_evento(texto: str = "📌 Cadastrar evento") -> InlineKeybo
 
 
 def _registrar_ultima_edicao(evento: dict, user_id: int, user_nome: str = "") -> None:
-    """Atualiza campos de auditoria de edição no payload do evento."""
+    """Atualiza campos de auditoria de edição nos dados do evento."""
     evento["Última edição por (Telegram ID)"] = str(user_id)
     evento["Última edição por (Nome)"] = (user_nome or "").strip()
 
@@ -969,7 +969,7 @@ async def visualizar_confirmados(update: Update, context: ContextTypes.DEFAULT_T
         if tid:
             chave = tid
         else:
-            # fallback: use campos que identificam o membro, não a loja inteira
+            # alternativa: use campos que identificam o membro, não a loja inteira
             nome = str(c.get("Nome", "")).strip()
             grau = str(c.get("Grau", "")).strip()
             cargo = str(c.get("Cargo", "")).strip()

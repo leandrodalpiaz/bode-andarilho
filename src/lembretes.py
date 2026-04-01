@@ -108,7 +108,7 @@ async def enviar_lembretes_24h(bot: Bot):
         if not _mesmo_dia(data_evento, amanha):
             continue
 
-        # Gera ID do evento (preferencialmente da coluna ID Evento, fallback para compatibilidade)
+        # Gera o ID do evento (preferencialmente da coluna ID Evento, com alternativa de compatibilidade)
         id_evento = str(evento.get("ID Evento", "")).strip() or (data_evento + " — " + evento.get("Nome da loja", ""))
         confirmados = listar_confirmacoes_por_evento(id_evento)
 
@@ -230,7 +230,7 @@ async def enviar_lembretes_meio_dia(bot: Bot):
         if not _mesmo_dia(data_evento, hoje):
             continue
 
-        # Gera ID do evento (preferencialmente da coluna ID Evento, fallback para compatibilidade)
+        # Gera o ID do evento (preferencialmente da coluna ID Evento, com alternativa de compatibilidade)
         id_evento = str(evento.get("ID Evento", "")).strip() or (data_evento + " — " + evento.get("Nome da loja", ""))
         confirmados = listar_confirmacoes_por_evento(id_evento)
 

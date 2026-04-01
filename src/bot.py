@@ -27,7 +27,7 @@ from src.messages import APENAS_ADMIN, APENAS_SECRETARIO
 from src.sheets_supabase import buscar_membro, membro_esta_ativo
 from src.permissoes import get_nivel
 
-# ID do grupo principal lido em runtime (var definida no main e aqui como fallback de ambiente)
+# ID do grupo principal lido em tempo de execu??o (vari?vel definida no main e aqui como alternativa de ambiente)
 _GRUPO_TELEGRAM_ID_STR = os.getenv("GRUPO_PRINCIPAL_ID", "")
 _GRUPO_TELEGRAM_ID: Optional[int] = (
     int(_GRUPO_TELEGRAM_ID_STR) if _GRUPO_TELEGRAM_ID_STR.lstrip("-").isdigit() else None
@@ -476,7 +476,7 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from src.cadastro_evento import ev_cancelar
         await ev_cancelar(update, context)
     
-    # Fallback
+    # Alternativa
     else:
         await _enviar_ou_editar_mensagem(
             context, telegram_id, TIPO_RESULTADO,

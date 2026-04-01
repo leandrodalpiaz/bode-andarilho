@@ -399,7 +399,7 @@ CADASTRO_OPERACAO_CANCELADA = "Operação cancelada."
 # [CANAL] Privado
 CONFIRMACAO_SEM_CADASTRO = "Irmão, antes de confirmar sua presença, preciso registrar seu cadastro."
 
-# [CONTEXTO] Privado indisponível ao redirecionar para cadastro; fallback no grupo
+# [CONTEXTO] Privado indisponível ao redirecionar para cadastro; alternativa no grupo
 # [CANAL] Grupo
 CONFIRMACAO_FALLBACK_GRUPO_CADASTRO = (
     "📩 Não consegui te chamar no privado para iniciar o cadastro.\n\n"
@@ -472,7 +472,7 @@ CANCELAR_PRESENCA_SUCESSO_GRUPO = "✅ *Presença cancelada com sucesso!*"
 # [CANAL] Privado
 CANCELAR_PRESENCA_CONFIRMAR = "*Confirmar cancelamento da sua presença?*"
 
-# [CONTEXTO] Privado indisponível para cancelamento; fallback no grupo
+# [CONTEXTO] Privado indisponível para cancelamento; alternativa no grupo
 # [CANAL] Grupo
 CANCELAR_PRESENCA_FALLBACK_GRUPO = (
     "📩 Não consegui enviar a confirmação de cancelamento no privado.\n\n"
@@ -526,7 +526,7 @@ GRUPO_ONBOARDING_SEM_CADASTRO = (
     "Para começar de forma simples e segura, toque em *Iniciar cadastro* no privado."
 )
 
-# [CONTEXTO] Fallback no grupo quando privado indisponível; botão com link para privado
+# [CONTEXTO] Alternativa no grupo quando o privado estiver indisponível; botão com link para o privado
 # [CANAL] Grupo
 GRUPO_FALLBACK_ABRIR_PRIVADO = "📩 Para continuar, abra meu privado pelo botão abaixo."
 
@@ -567,7 +567,7 @@ GRUPO_ONBOARDING_NOVO_MEMBRO_TMPL = (
     "Toque no botão abaixo para começar:"
 )
 
-# [CONTEXTO] Fallback mínimo no grupo quando privado indisponível para novo membro;
+# [CONTEXTO] Alternativa mínima no grupo quando o privado estiver indisponível para novo membro;
 #            {nome} (auto-apagada em 30 s)
 # [CANAL] Grupo
 GRUPO_FALLBACK_NOVO_MEMBRO_TMPL = "Salve, {nome}! 🐐 Para se cadastrar, toque no botão abaixo."
