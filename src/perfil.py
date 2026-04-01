@@ -91,6 +91,7 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     oriente = membro.get("Oriente") or membro.get("oriente") or "Não informado"
     potencia = membro.get("Potência") or membro.get("potencia") or "Não informado"
     vm = membro.get("Venerável Mestre") or membro.get("veneravel_mestre") or membro.get("vm") or "Não"
+    mi = membro.get("Mestre Instalado") or membro.get("mestre_instalado") or membro.get("mi") or "Não"
     nivel = str(membro.get("Nivel") or "1")
 
     # Texto amigável para o nível de permissão
@@ -105,6 +106,7 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"*Nome:* {nome}\n"
         f"*Data de nascimento:* {data_nasc}\n"
         f"*Grau:* {grau}\n"
+        f"*Mestre Instalado:* {mi}\n"
         f"*Loja:* {loja}{numero_fmt}\n"
         f"*Oriente:* {oriente}\n"
         f"*Potência:* {potencia}\n"

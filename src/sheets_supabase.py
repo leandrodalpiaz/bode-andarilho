@@ -139,6 +139,7 @@ _MEMBROS_SHEETS_TO_DB: Dict[str, str] = {
     "Data de nascimento": "data_nascimento",
     "Número da loja":     "numero_loja",
     "Venerável Mestre":   "veneravel_mestre",
+    "Mestre Instalado":   "mestre_instalado",
     "Notificações":       "notificacoes",
     "Status":             "status",
 }
@@ -190,6 +191,7 @@ _CONFIRMACOES_SHEETS_TO_DB: Dict[str, str] = {
     "Data e hora":      "data_hora",
     "Número da loja":   "numero_loja",
     "Venerável Mestre": "veneravel_mestre",
+    "Mestre Instalado": "mestre_instalado",
 }
 _CONFIRMACOES_DB_TO_SHEETS: Dict[str, str] = {v: k for k, v in _CONFIRMACOES_SHEETS_TO_DB.items()}
 
@@ -524,6 +526,9 @@ def cadastrar_membro(dados: dict) -> bool:
             "veneravel_mestre": _norm_text(
                 dados.get("Venerável Mestre") or dados.get("veneravel_mestre") or dados.get("vm")
             ),
+            "mestre_instalado": _norm_text(
+                dados.get("Mestre Instalado") or dados.get("mestre_instalado") or dados.get("mi")
+            ),
             "nivel": _norm_intlike(dados.get("Nivel")) or "1",
             "status": "Ativo",
         }
@@ -581,6 +586,8 @@ def atualizar_membro(telegram_id: int, dados_atualizados: dict, preservar_nivel:
             "data_nasc":      "Data de nascimento",
             "vm":             "Venerável Mestre",
             "veneravel_mestre": "Venerável Mestre",
+            "mi":             "Mestre Instalado",
+            "mestre_instalado": "Mestre Instalado",
             "notificacoes":   "Notificações",
             "status":         "Status",
         }
@@ -806,6 +813,9 @@ def registrar_confirmacao(dados: dict) -> bool:
             "data_hora":        _now_str(segundos=True),
             "veneravel_mestre": _norm_text(
                 dados.get("veneravel_mestre") or dados.get("Venerável Mestre") or dados.get("vm")
+            ),
+            "mestre_instalado": _norm_text(
+                dados.get("mestre_instalado") or dados.get("Mestre Instalado") or dados.get("mi")
             ),
         }
 
@@ -1490,6 +1500,4 @@ async def buscar_eventos_no_periodo(data_inicio_str: str, data_fim_str: str) -> 
     except Exception as e:
         logger.error("Erro ao buscar eventos no período %s - %s: %s", data_inicio_str, data_fim_str, e)
         return []
-
-
 

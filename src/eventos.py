@@ -547,6 +547,14 @@ def _eh_vm(dados: dict) -> bool:
     return False
 
 
+def _eh_mi(dados: dict) -> bool:
+    for k in ("Mestre Instalado", "mestre_instalado", "mi"):
+        if k in dados:
+            raw = str(dados.get(k) or "").strip().lower()
+            return raw in ("sim", "s", "yes", "y", "1", "true")
+    return False
+
+
 def montar_linha_confirmado(dados_membro_ou_snapshot: dict) -> str:
     nome = (dados_membro_ou_snapshot.get("Nome") or dados_membro_ou_snapshot.get("nome") or "").strip()
     if _eh_vm(dados_membro_ou_snapshot) and nome:
@@ -554,6 +562,8 @@ def montar_linha_confirmado(dados_membro_ou_snapshot: dict) -> str:
 
     grau_raw = (dados_membro_ou_snapshot.get("Grau") or dados_membro_ou_snapshot.get("grau") or "").strip()
     grau = normalizar_grau_nome(grau_raw)
+    if _eh_mi(dados_membro_ou_snapshot) and grau == GRAU_MESTRE:
+        grau = f"{grau} (MI)"
 
     loja = (dados_membro_ou_snapshot.get("Loja") or dados_membro_ou_snapshot.get("loja") or "").strip()
     numero = (dados_membro_ou_snapshot.get("Número da loja") or dados_membro_ou_snapshot.get("numero_loja") or "")
@@ -1197,6 +1207,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         "potencia": membro.get("Potência", ""),
         "agape": f"{participacao_agape} ({desc_agape})",
         "veneravel_mestre": membro.get("Venerável Mestre", ""),
+        "mestre_instalado": membro.get("Mestre Instalado", ""),
     }
     registrar_confirmacao(dados_confirmacao)
 
@@ -1336,6 +1347,7 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
         "potencia": membro.get("Potência", ""),
         "agape": f"{participacao_agape} ({desc_agape})",
         "veneravel_mestre": membro.get("Venerável Mestre", ""),
+        "mestre_instalado": membro.get("Mestre Instalado", ""),
     }
     registrar_confirmacao(dados_confirmacao)
 

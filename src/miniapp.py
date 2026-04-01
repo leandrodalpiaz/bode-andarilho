@@ -101,16 +101,19 @@ def _limpar_rascunho(bucket: Dict[int, Dict[str, Any]], telegram_id: int) -> Non
 def _resumo_membro_md(dados: Dict[str, Any]) -> str:
     numero_loja = _norm_text(dados.get("numero_loja") or "0")
     numero_fmt = f" - Nº {_escape_md(numero_loja)}" if numero_loja and numero_loja != "0" else ""
+    potencia = dados.get("potencia_outra") if _norm_text(dados.get("potencia")) == "Outra" else dados.get("potencia", "")
     return (
         "🧾 *Confirme seu cadastro*\n\n"
         f"*Nome:* {_escape_md(dados.get('nome', ''))}\n"
         f"*Data de nascimento:* {_escape_md(dados.get('data_nasc', ''))}\n"
         f"*Grau:* {_escape_md(dados.get('grau', ''))}\n"
+        f"*Mestre Instalado:* {_escape_md(dados.get('mi', 'Não'))}\n"
         f"*Venerável Mestre:* {_escape_md(dados.get('vm', ''))}\n"
         f"*Loja:* {_escape_md(dados.get('loja', ''))}{numero_fmt}\n"
         f"*Oriente:* {_escape_md(dados.get('oriente', ''))}\n"
-        f"*Potência:* {_escape_md(dados.get('potencia', ''))}\n"
+        f"*Potência:* {_escape_md(potencia or '')}\n"
     )
+
 
 
 def _teclado_rascunho_membro() -> InlineKeyboardMarkup:
@@ -134,6 +137,7 @@ def _resumo_loja_md(dados: Dict[str, Any]) -> str:
         f"*Endereço:* {_escape_md(dados.get('endereco', ''))}\n"
         f"{linha_responsavel}"
     )
+
 
 
 def _teclado_rascunho_loja(dados: Dict[str, Any], nivel: str) -> InlineKeyboardMarkup:
@@ -175,37 +179,47 @@ def _extrair_dados_membro(body: Dict[str, Any]) -> Dict[str, Any]:
         "nome": _norm_text(body.get("nome"))[:200],
         "data_nasc": _norm_text(body.get("data_nasc"))[:10],
         "grau": _norm_text(body.get("grau"))[:50],
+        "mi": _norm_text(body.get("mi") or "Não")[:10],
         "vm": _norm_text(body.get("vm"))[:10],
         "loja": _norm_text(body.get("loja"))[:200],
         "numero_loja": _norm_text(body.get("numero_loja") or "0")[:10],
         "oriente": _norm_text(body.get("oriente"))[:200],
         "potencia": _norm_text(body.get("potencia"))[:200],
+        "potencia_outra": _norm_text(body.get("potencia_outra"))[:200],
     }
 
 
 def _validar_dados_membro(dados: Dict[str, Any]) -> Optional[str]:
-    if not all([dados["nome"], dados["data_nasc"], dados["grau"], dados["vm"], dados["loja"], dados["oriente"], dados["potencia"]]):
+    if not all([dados["nome"], dados["data_nasc"], dados["grau"], dados["mi"], dados["vm"], dados["loja"], dados["oriente"], dados["potencia"]]):
         return "Preencha todos os campos obrigatórios."
     try:
         datetime.strptime(dados["data_nasc"], "%d/%m/%Y")
     except ValueError:
         return "Data de nascimento inválida. Use DD/MM/AAAA."
-    if dados["grau"] not in {"Aprendiz", "Companheiro", "Mestre", "Mestre Instalado"}:
+    if dados["grau"] not in {"Aprendiz", "Companheiro", "Mestre"}:
         return "Grau inválido."
+    if dados["mi"] not in {"Sim", "Não"}:
+        return "Informe se o irmão é Mestre Instalado."
+    if dados["vm"] not in {"Sim", "Não"}:
+        return "Informe se o irmão é Venerável Mestre."
+    if dados["potencia"] == "Outra" and not dados["potencia_outra"]:
+        return "Informe a potência quando selecionar 'Outra'."
     return None
 
 
 def _payload_membro(telegram_id: int, dados: Dict[str, Any]) -> Dict[str, Any]:
+    potencia = dados["potencia_outra"] if dados.get("potencia") == "Outra" else dados["potencia"]
     return {
         "Telegram ID": str(telegram_id),
         "Nome": dados["nome"],
         "Data de nascimento": dados["data_nasc"],
         "Grau": dados["grau"],
         "Venerável Mestre": dados["vm"],
+        "Mestre Instalado": dados.get("mi", "Não"),
         "Loja": dados["loja"],
         "Número da loja": dados["numero_loja"],
         "Oriente": dados["oriente"],
-        "Potência": dados["potencia"],
+        "Potência": potencia,
         "Status": "Ativo",
         "Nivel": "1",
     }
@@ -272,6 +286,7 @@ def _extrair_dados_loja(body: Dict[str, Any]) -> Dict[str, Any]:
         "potencia": _norm_text(body.get("potencia"))[:200],
         "endereco": _norm_text(body.get("endereco"))[:400],
     }
+
 
 
 def _validar_dados_loja(dados: Dict[str, Any]) -> Optional[str]:
@@ -415,6 +430,7 @@ def _extrair_dados_evento(body: Dict[str, Any]) -> Dict[str, Any]:
         "potencia": _norm_text(body.get("potencia"))[:200],
         "endereco": _norm_text(body.get("endereco"))[:400],
     }
+
 
 
 def _validar_dados_evento(dados: Dict[str, Any]) -> Optional[str]:
@@ -690,6 +706,7 @@ def _resumo_evento_md(dados: Dict[str, Any]) -> str:
         f"*Endereço:* {_escape_md(dados.get('endereco', ''))}\n"
         f"{linha_resp}"
     )
+
 
 
 def _teclado_rascunho_evento(dados: Dict[str, Any], nivel: str, lojas_existentes: List[Dict[str, Any]]) -> InlineKeyboardMarkup:
@@ -1020,18 +1037,26 @@ def html_cadastro_membro() -> str:
   <div class="field">
     <label for="grau">Grau *</label>
     <select id="grau">
-      <option value="">Selecione…</option>
+      <option value="">Selecione...</option>
       <option>Aprendiz</option>
       <option>Companheiro</option>
       <option>Mestre</option>
-      <option>Mestre Instalado</option>
     </select>
     <div id="grau_err" class="err"></div>
   </div>
   <div class="field">
+    <label for="mi">Mestre Instalado? *</label>
+    <select id="mi">
+      <option value="">Selecione...</option>
+      <option value="Sim">Sim</option>
+      <option value="Não">Não</option>
+    </select>
+    <div id="mi_err" class="err"></div>
+  </div>
+  <div class="field">
     <label for="vm">Venerável Mestre? *</label>
     <select id="vm">
-      <option value="">Selecione…</option>
+      <option value="">Selecione...</option>
       <option value="Sim">Sim</option>
       <option value="Não">Não</option>
     </select>
@@ -1056,55 +1081,81 @@ def html_cadastro_membro() -> str:
   </div>
   <div class="field">
     <label for="potencia">Potência *</label>
-    <input id="potencia" type="text" placeholder="Ex.: GLESP">
+    <select id="potencia">
+      <option value="">Selecione...</option>
+      <option value="Grande Loja - RS">Grande Loja - RS</option>
+      <option value="GORGS">GORGS</option>
+      <option value="GOB-RS">GOB-RS</option>
+      <option value="Outra">Outra</option>
+    </select>
     <div id="potencia_err" class="err"></div>
+  </div>
+  <div class="field" id="potencia_outra_wrap" style="display:none">
+    <label for="potencia_outra">Informe a potência *</label>
+    <input id="potencia_outra" type="text" placeholder="Ex.: GLMMG">
+    <div id="potencia_outra_err" class="err"></div>
   </div>
 </div>
 """
     script = """
 maskDate(document.getElementById('data_nasc'));
+function syncPotenciaOutra(){
+  const wrap=document.getElementById('potencia_outra_wrap');
+  if(!wrap)return;
+  wrap.style.display=val('potencia')==='Outra'?'block':'none';
+  if(val('potencia')!=='Outra')clearErr('potencia_outra');
+}
 function validate(){
   let ok=true;
   ok=req('nome','Nome')&&ok;
   const dn=val('data_nasc');
   if(!parseDateBR(dn)){
-    setErr('data_nasc','Use uma data valida no formato DD/MM/AAAA.');ok=false;
+    setErr('data_nasc','Use uma data válida no formato DD/MM/AAAA.');ok=false;
   }else clearErr('data_nasc');
   ok=req('grau','Grau')&&ok;
+  ok=req('mi','Mestre Instalado')&&ok;
   ok=req('vm','Venerável Mestre')&&ok;
   ok=req('loja','Nome da loja')&&ok;
   ok=req('oriente','Oriente')&&ok;
   ok=req('potencia','Potência')&&ok;
+  if(val('potencia')==='Outra'){
+    ok=req('potencia_outra','Potência')&&ok;
+  }else{
+    clearErr('potencia_outra');
+  }
   return ok;
 }
+document.getElementById('potencia').addEventListener('change',syncPotenciaOutra);
+syncPotenciaOutra();
 if(tg && tg.MainButton){
-tg.MainButton.setText('Continuar para revisão');
-tg.MainButton.show();
-tg.MainButton.onClick(async()=>{
-  if(!validate())return;
-  try{
-    const r=await fetch('/api/rascunho_membro',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        init_data:tgInitData(),
-        nome:val('nome'),
-        data_nasc:val('data_nasc'),
-        grau:val('grau'),
-        vm:val('vm'),
-        loja:val('loja'),
-        numero_loja:val('numero_loja')||'0',
-        oriente:val('oriente'),
-        potencia:val('potencia')
-      })
-    });
-    const j=await r.json();
-    if(j.ok){closeMiniAppSafe();}
-    else{showToast(j.error||'Erro. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
-  }catch{showToast('Falha de conexão. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
-});
+  tg.MainButton.setText('Continuar para revisão');
+  tg.MainButton.show();
+  tg.MainButton.onClick(async()=>{
+    if(!validate())return;
+    try{
+      const r=await fetch('/api/rascunho_membro',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          init_data:tgInitData(),
+          nome:val('nome'),
+          data_nasc:val('data_nasc'),
+          grau:val('grau'),
+          mi:val('mi'),
+          vm:val('vm'),
+          loja:val('loja'),
+          numero_loja:val('numero_loja')||'0',
+          oriente:val('oriente'),
+          potencia:val('potencia'),
+          potencia_outra:val('potencia_outra')
+        })
+      });
+      const j=await r.json();
+      if(j.ok){closeMiniAppSafe();}
+      else{showToast(j.error||'Erro. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
+    }catch{showToast('Falha de conexão. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
+  });
 }
-
 (async()=>{
   try{
     const r=await fetch('/api/rascunho_membro',{
@@ -1117,11 +1168,14 @@ tg.MainButton.onClick(async()=>{
       if(j.draft.nome)document.getElementById('nome').value=j.draft.nome;
       if(j.draft.data_nasc)document.getElementById('data_nasc').value=j.draft.data_nasc;
       if(j.draft.grau)document.getElementById('grau').value=j.draft.grau;
+      if(j.draft.mi)document.getElementById('mi').value=j.draft.mi;
       if(j.draft.vm)document.getElementById('vm').value=j.draft.vm;
       if(j.draft.loja)document.getElementById('loja').value=j.draft.loja;
       if(j.draft.numero_loja)document.getElementById('numero_loja').value=j.draft.numero_loja;
       if(j.draft.oriente)document.getElementById('oriente').value=j.draft.oriente;
       if(j.draft.potencia)document.getElementById('potencia').value=j.draft.potencia;
+      if(j.draft.potencia_outra)document.getElementById('potencia_outra').value=j.draft.potencia_outra;
+      syncPotenciaOutra();
     }
   }catch(e){}
 })();
@@ -1129,9 +1183,6 @@ tg.MainButton.onClick(async()=>{
     return _html_wrap("Cadastro de Membro", body, script)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# HTML — CADASTRO DE LOJA
-# ─────────────────────────────────────────────────────────────────────────────
 
 def html_cadastro_loja() -> str:
     body = """
