@@ -173,7 +173,7 @@ from src.messages import (
     GRUPO_ONBOARDING_NOVO_MEMBRO_TMPL,
     GRUPO_FALLBACK_NOVO_MEMBRO_TMPL,
 )
-from src.ia_assistente import assistente_ia, assistente_ia_stats
+from src.ia_assistente import assistente_ia, assistente_ia_stats, assistente_ia_relatorio
 
 # ============================================
 # CONFIGURAÇÃO INICIAL
@@ -516,6 +516,7 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler(["ia", "assistente"], assistente_ia))
     app.add_handler(CommandHandler(["ia_stats", "assistente_stats"], assistente_ia_stats))
+    app.add_handler(CommandHandler(["ia_relatorio", "assistente_relatorio"], assistente_ia_relatorio))
     
     async def ping(update: Update, context):
         if update.message:

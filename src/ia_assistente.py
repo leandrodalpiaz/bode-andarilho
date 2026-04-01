@@ -21,6 +21,16 @@ BASE_IA_PATH = Path(__file__).resolve().parents[1] / "docs" / "ajuda_ia_base.yam
 logger = logging.getLogger(__name__)
 IA_AUDIT_BUFFER_MAX = 5000
 IA_AUDIT_BUFFER: Deque[Dict[str, str]] = deque(maxlen=IA_AUDIT_BUFFER_MAX)
+STOPWORDS_PT = {
+	"a", "ao", "aos", "as", "com", "como", "da", "das", "de", "do", "dos", "e", "em", "eu",
+	"me", "meu", "minha", "minhas", "meus", "na", "nas", "no", "nos", "o", "os", "ou",
+	"para", "por", "pra", "que", "se", "sem", "tem", "tenho", "uma", "um", "ver", "quero",
+	"qual", "quais", "onde", "porque", "por que", "posso", "preciso", "abrir", "bot", "ia",
+}
+TERMOS_SENSIVEIS_FILTRO = {
+	"admin", "banco", "chave", "credenciais", "cpf", "dados", "email", "endereco", "nascimento",
+	"secret", "senha", "supabase", "telefone", "token", "webhook",
+}
 
 
 @dataclass
@@ -206,6 +216,36 @@ def _classificar_intencao(texto: str, nivel: str, intencoes: List[IntentItem]) -
 	return melhor
 
 
+def _extrair_topic_hint(texto: str) -> str:
+	"""
+	Resume o tema em poucos tokens seguros para analise agregada.
+
+	- Remove stopwords.
+	- Remove termos claramente sensiveis.
+	- Nao preserva frase completa.
+	"""
+	tokens = re.findall(r"[a-z0-9_]+", _norm_text(texto))
+	seguros: List[str] = []
+	for token in tokens:
+		if len(token) < 3:
+			continue
+		if token in STOPWORDS_PT:
+			continue
+		if token in TERMOS_SENSIVEIS_FILTRO:
+			continue
+		if token.isdigit():
+			continue
+		seguros.append(token)
+
+	unicos: List[str] = []
+	for token in seguros:
+		if token not in unicos:
+			unicos.append(token)
+		if len(unicos) >= 4:
+			break
+	return " ".join(unicos)
+
+
 def _mascarar_user_id(user_id: int) -> str:
 	raw = str(user_id or "")
 	if not raw:
@@ -246,6 +286,7 @@ def _auditar_evento(
 			"intent_id": str(payload.get("intent_id", "")),
 			"reason": str(payload.get("reason", "")),
 			"action_type": str(payload.get("action_type", "")),
+			"topic_hint": str(payload.get("topic_hint", "")),
 		}
 	)
 
@@ -309,6 +350,137 @@ def _formatar_ranking(items: List[tuple], vazio: str) -> str:
 	return "\n".join(linhas)
 
 
+def _formatar_linhas(items: List[str], vazio: str) -> str:
+	if not items:
+		return vazio
+	return "\n".join(f"- {item}" for item in items)
+
+
+def _eventos_na_janela(janela_horas: int) -> List[Dict[str, str]]:
+	agora = datetime.now()
+	corte = agora - timedelta(hours=max(1, int(janela_horas)))
+	eventos: List[Dict[str, str]] = []
+	for item in IA_AUDIT_BUFFER:
+		try:
+			ts = datetime.fromisoformat(item.get("ts", ""))
+		except Exception:
+			continue
+		if ts >= corte:
+			eventos.append(item)
+	return eventos
+
+
+def _sugestoes_aprendizado(janela_horas: int = 168) -> Dict[str, object]:
+	eventos = _eventos_na_janela(janela_horas)
+	unmatched_topics = Counter(
+		e.get("topic_hint", "").strip()
+		for e in eventos
+		if e.get("event") == "unmatched" and e.get("topic_hint", "").strip()
+	)
+	matched_intents = Counter(
+		e.get("intent_id", "").strip()
+		for e in eventos
+		if e.get("event") == "intent_matched" and e.get("intent_id", "").strip()
+	)
+	block_reasons = Counter(
+		e.get("reason", "").strip()
+		for e in eventos
+		if e.get("event") == "blocked" and e.get("reason", "").strip()
+	)
+
+	sugestoes: List[str] = []
+	for topic, qtd in unmatched_topics.most_common(5):
+		if qtd < 2:
+			continue
+		sugestoes.append(
+			f"Criar ou ampliar intencao para tema recorrente: `{topic}` ({qtd} ocorrencias nao reconhecidas)."
+		)
+		sugestoes.append(
+			f"Avaliar FAQ/tutorial curto para `{topic}` e adicionar novos gatilhos no YAML."
+		)
+
+	for intent_id, qtd in matched_intents.most_common(5):
+		if qtd < 3:
+			continue
+		sugestoes.append(
+			f"Revisar UX da intencao `{intent_id}`: alta procura ({qtd} usos) sugere destaque maior no menu ou ajuda."
+		)
+
+	for reason, qtd in block_reasons.most_common(3):
+		if qtd < 2:
+			continue
+		sugestoes.append(
+			f"Bloqueio recorrente `{reason}` ({qtd} ocorrencias): reforcar texto explicativo ou tutorial de limites do assistente."
+		)
+
+	if not sugestoes:
+		sugestoes.append("Ainda ha pouco volume para sugestoes fortes. Continue coletando interacoes reais do piloto.")
+
+	return {
+		"janela_horas": janela_horas,
+		"top_unmatched_topics": unmatched_topics.most_common(5),
+		"top_matched_intents": matched_intents.most_common(5),
+		"top_block_reasons": block_reasons.most_common(5),
+		"sugestoes": sugestoes[:10],
+	}
+
+
+def _plano_semanal_aprendizado(janela_horas: int = 168) -> Dict[str, List[str]]:
+	dados = _sugestoes_aprendizado(janela_horas)
+	alta: List[str] = []
+	media: List[str] = []
+	monitorar: List[str] = []
+
+	for topic, qtd in dados["top_unmatched_topics"]:
+		if not topic:
+			continue
+		if qtd >= 4:
+			alta.append(
+				f"Criar ou ampliar intencao para `{topic}` e adicionar FAQ/tutorial curto ({qtd} nao reconhecidas)."
+			)
+		elif qtd >= 2:
+			media.append(
+				f"Revisar gatilhos e ajuda para `{topic}` ({qtd} nao reconhecidas)."
+			)
+		else:
+			monitorar.append(
+				f"Continuar observando tema `{topic}` antes de alterar o bot."
+			)
+
+	for intent_id, qtd in dados["top_matched_intents"]:
+		if not intent_id:
+			continue
+		if qtd >= 6:
+			media.append(
+				f"Dar mais destaque no menu/ajuda para `{intent_id}` ({qtd} usos reconhecidos)."
+			)
+		elif qtd >= 3:
+			monitorar.append(
+				f"Confirmar se a UX atual de `{intent_id}` esta clara para o usuario."
+			)
+
+	for reason, qtd in dados["top_block_reasons"]:
+		if not reason:
+			continue
+		if qtd >= 3:
+			alta.append(
+				f"Reforcar mensagem explicativa para bloqueio `{reason}` ({qtd} ocorrencias)."
+			)
+		elif qtd >= 2:
+			media.append(
+				f"Adicionar orientacao curta sobre limite de seguranca `{reason}`."
+			)
+
+	if not alta and not media and not monitorar:
+		monitorar.append("Pouco volume nesta semana. Continue coletando interacoes do piloto.")
+
+	return {
+		"alta": alta[:3],
+		"media": media[:4],
+		"monitorar": monitorar[:4],
+	}
+
+
 async def assistente_ia_stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	user_id = update.effective_user.id if update.effective_user else 0
 	nivel = get_nivel(user_id)
@@ -352,6 +524,50 @@ async def assistente_ia_stats(update: Update, context: ContextTypes.DEFAULT_TYPE
 	await navegar_para(update, context, "Observabilidade IA", texto, teclado)
 
 
+async def assistente_ia_relatorio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+	user_id = update.effective_user.id if update.effective_user else 0
+	nivel = get_nivel(user_id)
+	if nivel != "3":
+		await navegar_para(
+			update,
+			context,
+			"Aprendizado IA",
+			"⛔ Este relatorio e restrito ao nivel de administrador.",
+			InlineKeyboardMarkup([[InlineKeyboardButton("Menu principal", callback_data="menu_principal")]]),
+		)
+		return
+
+	dados = _sugestoes_aprendizado(168)
+	plano = _plano_semanal_aprendizado(168)
+	texto = (
+		"*Relatorio Semanal de Aprendizado da IA*\n\n"
+		"*Acoes recomendadas para esta semana*\n"
+		"*Alta prioridade*\n"
+		f"{_formatar_linhas(plano['alta'], '- Nenhuma acao critica agora')}\n\n"
+		"*Media prioridade*\n"
+		f"{_formatar_linhas(plano['media'], '- Nenhuma acao media agora')}\n\n"
+		"*Monitorar*\n"
+		f"{_formatar_linhas(plano['monitorar'], '- Sem pontos de monitoramento')}\n\n"
+		"*Base de evidencias (7d)*\n"
+		"*Temas nao reconhecidos mais recorrentes (7d)*\n"
+		f"{_formatar_ranking(dados['top_unmatched_topics'], '- Sem dados suficientes')}\n\n"
+		"*Intencoes mais usadas (7d)*\n"
+		f"{_formatar_ranking(dados['top_matched_intents'], '- Sem dados suficientes')}\n\n"
+		"*Motivos de bloqueio mais frequentes (7d)*\n"
+		f"{_formatar_ranking(dados['top_block_reasons'], '- Sem bloqueios relevantes')}\n\n"
+		"*Sugestoes brutas da analise*\n"
+		f"{_formatar_linhas(dados['sugestoes'], '- Sem sugestoes')}\n\n"
+		"_Aprovacao humana continua obrigatoria antes de alterar ajuda, YAML ou codigo._"
+	)
+	teclado = InlineKeyboardMarkup(
+		[
+			[InlineKeyboardButton("Menu principal", callback_data="menu_principal")],
+			[InlineKeyboardButton("Central de Ajuda", callback_data="menu_ajuda")],
+		]
+	)
+	await navegar_para(update, context, "Aprendizado IA", texto, teclado)
+
+
 def _teclado_acao(item: IntentItem) -> Optional[InlineKeyboardMarkup]:
 	if item.acao_tipo != "callback" or not item.acao_valor:
 		return None
@@ -370,7 +586,7 @@ async def assistente_ia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 	texto_entrada = " ".join(context.args or []).strip()
 	if not texto_entrada:
-		_auditar_evento("empty_input", user_id, nivel, texto_entrada)
+		_auditar_evento("empty_input", user_id, nivel, texto_entrada, topic_hint="")
 		teclado = InlineKeyboardMarkup(
 			[
 				[InlineKeyboardButton("Central de Ajuda", callback_data="menu_ajuda")],
@@ -395,7 +611,7 @@ async def assistente_ia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 			reason = "technical_sensitive_block"
 		elif "administrativas" in mensagem_bloqueio.lower():
 			reason = "permission_bypass_block"
-		_auditar_evento("blocked", user_id, nivel, texto_entrada, reason=reason)
+		_auditar_evento("blocked", user_id, nivel, texto_entrada, reason=reason, topic_hint="")
 		teclado = InlineKeyboardMarkup(
 			[
 				[InlineKeyboardButton("Central de Ajuda", callback_data="menu_ajuda")],
@@ -408,7 +624,7 @@ async def assistente_ia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 	intencoes = carregar_intencoes_base()
 	item = _classificar_intencao(texto_entrada, nivel, intencoes)
 	if not item:
-		_auditar_evento("unmatched", user_id, nivel, texto_entrada)
+		_auditar_evento("unmatched", user_id, nivel, texto_entrada, topic_hint=_extrair_topic_hint(texto_entrada))
 		teclado = InlineKeyboardMarkup(
 			[
 				[InlineKeyboardButton("Central de Ajuda", callback_data="menu_ajuda")],
@@ -433,5 +649,6 @@ async def assistente_ia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 		intent_id=item.intent_id,
 		action_type=item.acao_tipo,
 		action_value=item.acao_valor if item.acao_tipo == "callback" else "informacao",
+		topic_hint=_extrair_topic_hint(texto_entrada),
 	)
 	await navegar_para(update, context, "Assistente IA", item.resposta_oficial, teclado)

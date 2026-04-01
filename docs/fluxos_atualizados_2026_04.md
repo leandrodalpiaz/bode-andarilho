@@ -75,6 +75,16 @@ Arquivos conferidos:
   - top motivos de bloqueio
 - Nao exibe texto bruto do usuario nem dados pessoais.
 
+10. Relatorio de aprendizado operacional da IA
+- Comandos: `/ia_relatorio` e `/assistente_relatorio`.
+- Acesso restrito a administrador (nivel 3).
+- Agrupa temas nao reconhecidos usando `topic_hint` seguro, sem guardar frase original.
+- Sugere melhorias de:
+  - novas intencoes/gatilhos
+  - FAQ e tutoriais
+  - destaque de UX para funcoes muito procuradas
+- Toda mudanca continua dependente de aprovacao humana.
+
 ## Registro de handlers (estado atual)
 
 Principais grupos no `register_handlers(app)`:
@@ -111,10 +121,10 @@ Jobs ativos em `src/scheduler.py`:
 
 Situacao atual:
 - `src/ajuda/faq.py`, `nivel1.py`, `nivel2.py`, `nivel3.py`, `glossario.py` ativos.
-- `src/ajuda/tutoriais.py` ainda em placeholder.
+- `src/ajuda/tutoriais.py` agora contem tutoriais navegaveis por tema.
 
 Lacuna principal:
-- A secao de tutoriais ainda nao descreve os fluxos novos (mini app, onboarding grupo->privado, lembretes do membro, resumo em janela de silencio).
+- Ainda vale ampliar os tutoriais conforme surgirem duvidas reais do piloto.
 
 ## Recomendacao para IA
 
