@@ -24,6 +24,7 @@ from telegram.ext import (
 from src.sheets_supabase import (
     listar_lojas_visiveis,
     listar_secretarios_ativos,
+    listar_membros_por_loja,
     cadastrar_loja,
     excluir_loja,
 )
@@ -210,7 +211,8 @@ async def listar_lojas_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     texto = f"{titulo}\n\n"
-    for loja in lojas:
+    botoes_lojas = []
+    for i, loja in enumerate(lojas):
         sid = _norm_text(
             loja.get("Telegram ID do secretário responsável")
             or loja.get("secretario_responsavel_id")
@@ -230,8 +232,14 @@ async def listar_lojas_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             f"👤 Secretário responsável: {sname or sid or 'Não definido'}\n"
             f"━━━━━━━━━━━━━━━━\n"
         )
+        nome = loja.get("Nome da Loja", "Loja")
+        numero = loja.get("Número", "")
+        rotulo = f"👥 {nome}{' ' + str(numero) if numero and str(numero) != '0' else ''}"
+        if len(rotulo) > 34:
+            rotulo = rotulo[:31] + "..."
+        botoes_lojas.append([InlineKeyboardButton(rotulo, callback_data=f"loja_membros|{i}")])
 
-    teclado = InlineKeyboardMarkup([
+    teclado = InlineKeyboardMarkup(botoes_lojas + [
         [InlineKeyboardButton("➕ Cadastrar nova", callback_data="loja_cadastrar")],
         [InlineKeyboardButton("🔙 Voltar", callback_data="menu_lojas")],
     ])
@@ -242,6 +250,73 @@ async def listar_lojas_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         texto,
         teclado
     )
+
+
+async def ver_membros_da_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lista os membros vinculados à loja selecionada."""
+    query = update.callback_query
+    await _safe_answer(query)
+
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    lojas = listar_lojas_visiveis(user_id, nivel)
+
+    try:
+        indice = int((query.data or "").split("|")[1])
+    except Exception:
+        await query.edit_message_text(
+            "Não consegui localizar a loja selecionada.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="loja_listar")]])
+        )
+        return
+
+    if indice < 0 or indice >= len(lojas):
+        await query.edit_message_text(
+            "A loja selecionada não está mais disponível.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="loja_listar")]])
+        )
+        return
+
+    loja = lojas[indice]
+    membros = listar_membros_por_loja(
+        loja_id=loja.get("ID") or loja.get("id"),
+        nome_loja=loja.get("Nome da Loja"),
+        numero_loja=loja.get("Número"),
+    )
+
+    nome = loja.get("Nome da Loja", "Loja")
+    numero = loja.get("Número", "")
+    cabecalho = f"🏛 *{nome}*{' ' + str(numero) if numero and str(numero) != '0' else ''}"
+
+    if not membros:
+        texto = (
+            f"{cabecalho}\n\n"
+            "Ainda não encontrei membros vinculados a esta loja.\n\n"
+            "Se os irmãos já tiverem sido cadastrados manualmente, podemos vinculá-los nas próximas revisões."
+        )
+        teclado = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 Voltar às lojas", callback_data="loja_listar")],
+        ])
+        await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=teclado)
+        return
+
+    texto = f"{cabecalho}\n\n👥 *Membros vinculados:*\n\n"
+    for membro in membros[:40]:
+        nome_membro = membro.get("Nome", "Sem nome")
+        grau = membro.get("Grau", "Sem grau")
+        mi = _norm_text(membro.get("Mestre Instalado") or membro.get("mestre_instalado") or membro.get("mi"))
+        vm = _norm_text(membro.get("Venerável Mestre") or membro.get("veneravel_mestre") or membro.get("vm"))
+        prefixo = "VM " if vm.lower() == "sim" else ""
+        sufixo = " (MI)" if mi.lower() == "sim" and grau == "Mestre" else ""
+        texto += f"• {prefixo}{nome_membro} - {grau}{sufixo}\n"
+
+    if len(membros) > 40:
+        texto += f"\n... e mais {len(membros) - 40} cadastro(s)."
+
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Voltar às lojas", callback_data="loja_listar")],
+    ])
+    await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=teclado)
 
 
 # ============================================

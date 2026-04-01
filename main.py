@@ -146,6 +146,7 @@ from src.lojas import (
     cadastro_loja_handler,
     menu_lojas,
     listar_lojas_handler,
+    ver_membros_da_loja,
     excluir_loja_menu,
     confirmar_exclusao_loja,
     executar_exclusao_loja,
@@ -656,6 +657,7 @@ def register_handlers(app: Application) -> None:
     # ===== 10. CALLBACKS DE LOJAS =====
     app.add_handler(CallbackQueryHandler(menu_lojas, pattern=r"^menu_lojas$"))
     app.add_handler(CallbackQueryHandler(listar_lojas_handler, pattern=r"^loja_listar$"))
+    app.add_handler(CallbackQueryHandler(ver_membros_da_loja, pattern=r"^loja_membros\|"))
     # Handlers para exclusão de lojas (adicionados)
     app.add_handler(CallbackQueryHandler(excluir_loja_menu, pattern=r"^loja_excluir_menu$"))
     app.add_handler(CallbackQueryHandler(confirmar_exclusao_loja, pattern=r"^excluir_loja_\d+$"))

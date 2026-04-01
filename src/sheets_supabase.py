@@ -379,6 +379,34 @@ def listar_membros(include_inativos: bool = False) -> List[Dict[str, Any]]:
         return []
 
 
+def listar_membros_por_loja(
+    loja_id: Any = "",
+    nome_loja: Any = "",
+    numero_loja: Any = "",
+    include_inativos: bool = False,
+) -> List[Dict[str, Any]]:
+    """Lista membros vinculados a uma loja, com fallback para nome+número."""
+    membros = listar_membros(include_inativos=include_inativos) or []
+    alvo_id = _norm_text(loja_id)
+    alvo_nome = _norm_text(nome_loja)
+    alvo_numero = _norm_text(numero_loja or "0")
+
+    filtrados: List[Dict[str, Any]] = []
+    for membro in membros:
+        membro_loja_id = _norm_text(membro.get("ID da loja") or membro.get("loja_id"))
+        membro_nome = _norm_text(membro.get("Loja") or membro.get("loja"))
+        membro_numero = _norm_text(membro.get("Número da loja") or membro.get("numero_loja") or "0")
+
+        if alvo_id and membro_loja_id == alvo_id:
+            filtrados.append(membro)
+            continue
+
+        if not alvo_id and alvo_nome and membro_nome == alvo_nome and membro_numero == alvo_numero:
+            filtrados.append(membro)
+
+    return filtrados
+
+
 def buscar_membro(telegram_id: int) -> Optional[Dict[str, Any]]:
     """Retorna o dicionário com dados do membro. Otimizado com cache."""
     # Verifica o cache
