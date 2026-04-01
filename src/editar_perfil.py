@@ -1,199 +1,250 @@
-﻿# ============================================
-# BODE ANDARILHO - EDIÇÃO DE DADOS DO OBREIRO
-# ============================================
-# 
-# Este módulo permite que o Irmão realize ajustes em seu
-# próprio traçado (cadastro), garantindo a exatidão das
-# informações para a recepção nas Lojas.
-# 
-# Funcionalidades:
-# - Ajuste de dados (Nome, Grau, Loja, etc.)
-# - Validação fraterna dos valores inseridos
-# - Atualização segura e acobertada na base de dados
-# 
-# ============================================
-
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import (
+    CallbackQueryHandler,
+    CommandHandler,
     ContextTypes,
     ConversationHandler,
-    CommandHandler,
-    CallbackQueryHandler,
     MessageHandler,
     filters,
 )
 
-from src.sheets_supabase import buscar_membro, atualizar_membro
-from src.bot import (
-    navegar_para,
-    _enviar_ou_editar_mensagem,
-    TIPO_RESULTADO
-)
+from src.bot import TIPO_RESULTADO, _enviar_ou_editar_mensagem, navegar_para
+from src.miniapp import WEBAPP_URL_MEMBRO
+from src.perfil import mostrar_perfil
+from src.sheets_supabase import atualizar_membro, buscar_membro
 
 logger = logging.getLogger(__name__)
 
-# ============================================
-# CONFIGURAÇÕES DE ESTADO
-# ============================================
-
 SELECIONAR_CAMPO, NOVO_VALOR = range(2)
 
-# Mapeamento de colunas para termos maçônicos e amigáveis
 CAMPOS_EDITAVEIS_PERFIL = {
-    "nome": {"nome": "Nome Civil", "chave": "Nome"},
-    "data_nasc": {"nome": "Data de Nascimento", "chave": "Data de nascimento"},
-    "grau": {"nome": "Grau atual", "chave": "Grau"},
-    "loja": {"nome": "Augusta e Respeitável Loja", "chave": "Loja"},
-    "numero_loja": {"nome": "Número da Loja", "chave": "Número da loja"},
-    "oriente": {"nome": "Oriente", "chave": "Oriente"},
-    "potencia": {"nome": "Potência", "chave": "Potência"},
-    "veneravel_mestre": {"nome": "Venerável Mestre (Sim/Não)", "chave": "Venerável Mestre"},
+    "nome": {"nome": "Nome civil", "chave": "Nome", "modo": "texto"},
+    "data_nasc": {"nome": "Data de nascimento", "chave": "Data de nascimento", "modo": "texto"},
+    "grau": {"nome": "Grau", "chave": "Grau", "modo": "inline"},
+    "loja": {"nome": "Loja", "chave": "Loja", "modo": "texto"},
+    "numero_loja": {"nome": "Número da loja", "chave": "Número da loja", "modo": "texto"},
+    "oriente": {"nome": "Oriente", "chave": "Oriente", "modo": "texto"},
+    "potencia": {"nome": "Potência", "chave": "Potência", "modo": "inline"},
+    "mestre_instalado": {"nome": "Mestre Instalado", "chave": "Mestre Instalado", "modo": "inline"},
+    "veneravel_mestre": {"nome": "Venerável Mestre", "chave": "Venerável Mestre", "modo": "inline"},
 }
 
-# ============================================
-# INÍCIO DO AJUSTE DE CADASTRO
-# ============================================
+
+def _valor_campo(membro: dict, campo_id: str, campo_info: dict) -> str:
+    aliases = {
+        "mestre_instalado": ["Mestre Instalado", "mestre_instalado", "mi"],
+        "veneravel_mestre": ["Venerável Mestre", "veneravel_mestre", "vm"],
+        "data_nasc": ["Data de nascimento", "data_nasc"],
+        "numero_loja": ["Número da loja", "numero_loja"],
+        "potencia": ["Potência", "potencia"],
+        "grau": ["Grau", "grau"],
+        "loja": ["Loja", "loja"],
+        "oriente": ["Oriente", "oriente"],
+        "nome": ["Nome", "nome"],
+    }
+    for chave in aliases.get(campo_id, [campo_info["chave"]]):
+        valor = membro.get(chave)
+        if valor not in (None, ""):
+            return str(valor)
+    return "Não informado"
+
+
+def _teclado_inicio_edicao(membro: dict) -> InlineKeyboardMarkup:
+    campos_principais = [
+        "grau",
+        "mestre_instalado",
+        "veneravel_mestre",
+        "potencia",
+    ]
+    linhas = []
+    for campo_id in campos_principais:
+        campo_info = CAMPOS_EDITAVEIS_PERFIL[campo_id]
+        valor = _valor_campo(membro, campo_id, campo_info)
+        linhas.append([
+            InlineKeyboardButton(
+                f"🛠 {campo_info['nome']}: {valor[:24]}",
+                callback_data=f"editar_campo_perfil|{campo_id}",
+            )
+        ])
+    if WEBAPP_URL_MEMBRO:
+        linhas.append([
+            InlineKeyboardButton(
+                "🧾 Editar cadastro completo",
+                web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO),
+            )
+        ])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")])
+    return InlineKeyboardMarkup(linhas)
+
+
+def _teclado_opcoes_inline(campo_id: str) -> InlineKeyboardMarkup:
+    if campo_id == "grau":
+        opcoes = ["Aprendiz", "Companheiro", "Mestre"]
+    elif campo_id in {"mestre_instalado", "veneravel_mestre"}:
+        opcoes = ["Sim", "Não"]
+    elif campo_id == "potencia":
+        opcoes = ["Grande Loja - RS", "GORGS", "GOB-RS", "Outra"]
+    else:
+        opcoes = []
+    linhas = [[InlineKeyboardButton(valor, callback_data=f"editar_valor_perfil|{campo_id}|{valor}")] for valor in opcoes]
+    linhas.append([InlineKeyboardButton("🔙 Voltar", callback_data="editar_perfil")])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")])
+    return InlineKeyboardMarkup(linhas)
+
 
 async def editar_perfil_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Inicia o ajuste dos dados do Irmão.
-    """
     user_id = update.effective_user.id
     membro = buscar_membro(user_id)
-    
+
     if not membro:
         await _enviar_ou_editar_mensagem(
-            context, user_id, TIPO_RESULTADO,
-            "Saudações, Irmão. Identificamos que ainda não possuís cadastro. Por favor, utilize o comando /start para iniciar nossa caminhada."
+            context,
+            user_id,
+            TIPO_RESULTADO,
+            "Saudações, Irmão. Identificamos que ainda não possuís cadastro. Por favor, utilize o comando /start para iniciar nossa caminhada.",
         )
         return ConversationHandler.END
 
     context.user_data["perfil_dados"] = membro
-
-    botoes = []
-    for campo_id, campo_info in CAMPOS_EDITAVEIS_PERFIL.items():
-        valor_atual = membro.get(campo_info["chave"], "Não informado")
-        botoes.append([
-            InlineKeyboardButton(
-                f"📝 {campo_info['nome']}: {str(valor_atual)[:25]}",
-                callback_data=f"editar_campo_perfil|{campo_id}"
-            )
-        ])
-
-    botoes.append([InlineKeyboardButton("🔙 Retornar ao Menu", callback_data="menu_principal")])
-    teclado = InlineKeyboardMarkup(botoes)
-
     await navegar_para(
-        update, context,
+        update,
+        context,
         "Ajustar Cadastro",
-        "Estimado Irmão, selecione qual informação de seu cadastro desejas retificar para que nossos registros permaneçam exatos:",
-        teclado
+        "Escolha o ponto do cadastro que deseja ajustar. Para mudanças maiores, use a revisão completa no Mini App.",
+        _teclado_inicio_edicao(membro),
     )
     return SELECIONAR_CAMPO
 
-# ============================================
-# SELEÇÃO DO CAMPO A RETIFICAR
-# ============================================
 
 async def selecionar_campo_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Prepara o bot para receber a nova informação.
-    """
     query = update.callback_query
+    await query.answer()
     campo_id = query.data.split("|")[1]
     campo_info = CAMPOS_EDITAVEIS_PERFIL.get(campo_id)
-
     if not campo_info:
         return ConversationHandler.END
 
     context.user_data["editando_campo_perfil"] = campo_id
-    membro = context.user_data.get("perfil_dados", {})
-    valor_atual = membro.get(campo_info["chave"], "Vazio")
+    membro = buscar_membro(update.effective_user.id) or context.user_data.get("perfil_dados", {})
+    context.user_data["perfil_dados"] = membro
+    valor_atual = _valor_campo(membro, campo_id, campo_info)
+
+    if campo_info["modo"] == "inline":
+        await navegar_para(
+            update,
+            context,
+            f"Ajustar {campo_info['nome']}",
+            f"Valor atual: `{valor_atual}`\n\nEscolha abaixo como deseja atualizar este campo.",
+            _teclado_opcoes_inline(campo_id),
+        )
+        return SELECIONAR_CAMPO
 
     await navegar_para(
-        update, context,
+        update,
+        context,
         f"Retificar {campo_info['nome']}",
-        f"✏️ *Retificação de {campo_info['nome']}*\n\n"
-        f"Informação atual: `{valor_atual}`\n\n"
-        f"Por favor, escreva o novo dado abaixo (ou utilize /cancelar para manter como está):",
-        None
+        f"✏️ *Retificação de {campo_info['nome']}*\n\nInformação atual: `{valor_atual}`\n\nEscreva o novo dado abaixo ou utilize /cancelar para manter como está.",
+        None,
     )
     return NOVO_VALOR
 
-# ============================================
-# PROCESSAMENTO DA NOVA INFORMAÇÃO
-# ============================================
 
-async def receber_novo_valor_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Recebe o novo dado e o mantém acoberto no sistema.
-    """
-    novo_valor = update.message.text.strip()
-    campo_id = context.user_data.get("editando_campo_perfil")
+async def aplicar_valor_inline_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    _, campo_id, novo_valor = query.data.split("|", 2)
+    user_id = update.effective_user.id
+
+    if campo_id == "potencia" and novo_valor == "Outra":
+        context.user_data["editando_campo_perfil"] = campo_id
+        await navegar_para(
+            update,
+            context,
+            "Retificar Potência",
+            "Informe a potência desejada para manter o cadastro correto.",
+            None,
+        )
+        return NOVO_VALOR
+
     campo_info = CAMPOS_EDITAVEIS_PERFIL.get(campo_id)
-    
     if not campo_info:
         return ConversationHandler.END
 
-    # Validação simples para Venerável Mestre
-    if campo_id == "veneravel_mestre":
-        if novo_valor.lower() not in ["sim", "não", "s", "n"]:
-            await update.message.reply_text("Irmão, para este campo, por favor responda apenas com 'Sim' ou 'Não'.")
-            return NOVO_VALOR
-
-    user_id = update.effective_user.id
     sucesso = atualizar_membro(user_id, {campo_info["chave"]: novo_valor}, preservar_nivel=True)
+    if not sucesso:
+        await query.answer("Não consegui atualizar este dado agora.", show_alert=True)
+        return ConversationHandler.END
 
-    if sucesso:
-        await update.message.reply_text(
-            f"✅ Justo e Perfeito! O campo *{campo_info['nome']}* foi atualizado e permanece acoberto em nossos registros.\n\n"
-            f"Utilize o menu acima para navegar."
-        )
-    else:
-        await update.message.reply_text("Houve um percalço ao atualizar seus dados. Por favor, tente novamente em alguns instantes.")
-
-    # Limpeza de sessão
+    await query.edit_message_text(
+        f"✅ O campo *{campo_info['nome']}* foi atualizado com sucesso.\n\nUse o menu abaixo para seguir.",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("👤 Ver meu perfil", callback_data="meu_cadastro")],
+            [InlineKeyboardButton("✏️ Ajustar outro campo", callback_data="editar_perfil")],
+        ]),
+    )
     context.user_data.pop("editando_campo_perfil", None)
     context.user_data.pop("perfil_dados", None)
-
     return ConversationHandler.END
 
-# ============================================
-# CANCELAMENTO FRATERNO
-# ============================================
+
+async def receber_novo_valor_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    novo_valor = update.message.text.strip()
+    campo_id = context.user_data.get("editando_campo_perfil")
+    campo_info = CAMPOS_EDITAVEIS_PERFIL.get(campo_id)
+    if not campo_info:
+        return ConversationHandler.END
+
+    if campo_id in {"mestre_instalado", "veneravel_mestre"}:
+        normalizado = novo_valor.lower()
+        if normalizado in {"sim", "s"}:
+            novo_valor = "Sim"
+        elif normalizado in {"não", "nao", "n"}:
+            novo_valor = "Não"
+        else:
+            await update.message.reply_text("Irmão, para este campo, responda apenas com 'Sim' ou 'Não'.")
+            return NOVO_VALOR
+
+    sucesso = atualizar_membro(update.effective_user.id, {campo_info["chave"]: novo_valor}, preservar_nivel=True)
+    if sucesso:
+        await update.message.reply_text(
+            f"✅ O campo *{campo_info['nome']}* foi atualizado com sucesso.\n\nUse /start ou o menu acima para seguir.",
+            parse_mode="Markdown",
+        )
+    else:
+        await update.message.reply_text("Houve um percalço ao atualizar seus dados. Tente novamente em alguns instantes.")
+
+    context.user_data.pop("editando_campo_perfil", None)
+    context.user_data.pop("perfil_dados", None)
+    return ConversationHandler.END
+
 
 async def cancelar_edicao_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Interrompe o processo de edição.
-    """
     msg = "A retificação foi interrompida. Seus dados permanecem inalterados e acobertos."
-    
     if update.message:
         await update.message.reply_text(msg)
     elif update.callback_query:
+        await update.callback_query.answer()
         await _enviar_ou_editar_mensagem(context, update.effective_user.id, TIPO_RESULTADO, msg)
-    
     context.user_data.clear()
     return ConversationHandler.END
 
-# ============================================
-# HANDLER DE CONVERSAÇÃO
-# ============================================
 
 editar_perfil_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(editar_perfil_inicio, pattern="^editar_perfil$")],
     states={
         SELECIONAR_CAMPO: [
             CallbackQueryHandler(selecionar_campo_perfil, pattern=r"^editar_campo_perfil\|"),
-            CallbackQueryHandler(cancelar_edicao_perfil, pattern="^cancelar$")
+            CallbackQueryHandler(aplicar_valor_inline_perfil, pattern=r"^editar_valor_perfil\|"),
+            CallbackQueryHandler(cancelar_edicao_perfil, pattern="^cancelar$"),
+            CallbackQueryHandler(editar_perfil_inicio, pattern="^editar_perfil$"),
         ],
         NOVO_VALOR: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, receber_novo_valor_perfil)
+            MessageHandler(filters.TEXT & ~filters.COMMAND, receber_novo_valor_perfil),
         ],
     },
     fallbacks=[
