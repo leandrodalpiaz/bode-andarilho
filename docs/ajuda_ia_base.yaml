@@ -1,0 +1,205 @@
+version: "2026-04-01"
+fonte_principal:
+  - "main.py"
+  - "src/bot.py"
+  - "src/miniapp.py"
+  - "src/eventos.py"
+  - "src/eventos_secretario.py"
+  - "src/ajuda/*.py"
+politica:
+  nao_inventar_dados: true
+  nao_executar_acao_critica_sem_fluxo: true
+  manter_resposta_curta: true
+  usar_tom_fraterno: true
+  preferir_contexto_do_usuario: true
+campos_item:
+  - intent_id
+  - nivel_permitido
+  - gatilhos
+  - resposta_oficial
+  - acao_recomendada
+  - origem
+
+intencoes:
+  - intent_id: ver_sessoes
+    nivel_permitido: ["1", "2", "3"]
+    gatilhos: ["ver sessoes", "quais sessoes", "eventos da semana", "proximas sessoes"]
+    resposta_oficial: "Vou abrir as sessoes disponiveis para voce agora."
+    acao_recomendada:
+      tipo: callback
+      valor: "ver_eventos"
+    origem: ["src/eventos.py", "main.py"]
+
+  - intent_id: minhas_confirmacoes
+    nivel_permitido: ["1", "2", "3"]
+    gatilhos: ["minhas confirmacoes", "minhas presencas", "onde confirmei", "historico de visitas"]
+    resposta_oficial: "Vou abrir suas confirmacoes para voce ver as proximas e o historico."
+    acao_recomendada:
+      tipo: callback
+      valor: "minhas_confirmacoes"
+    origem: ["src/eventos.py", "main.py"]
+
+  - intent_id: meu_perfil
+    nivel_permitido: ["1", "2", "3"]
+    gatilhos: ["meu perfil", "meu cadastro", "dados do meu perfil", "editar perfil"]
+    resposta_oficial: "Vou abrir seu perfil para consulta e edicao dos dados."
+    acao_recomendada:
+      tipo: callback
+      valor: "meu_cadastro"
+    origem: ["src/bot.py"]
+
+  - intent_id: menu_lembretes_membro
+    nivel_permitido: ["1", "2", "3"]
+    gatilhos: ["meus lembretes", "ativar lembrete", "desativar lembrete", "lembrete de sessao"]
+    resposta_oficial: "Vou abrir o menu de lembretes para voce configurar."
+    acao_recomendada:
+      tipo: callback
+      valor: "menu_lembretes"
+    origem: ["src/membro_lembretes.py", "main.py"]
+
+  - intent_id: ajuda_geral
+    nivel_permitido: ["1", "2", "3"]
+    gatilhos: ["ajuda", "nao entendi", "como funciona", "duvida"]
+    resposta_oficial: "Vou abrir a Central de Ajuda para voce."
+    acao_recomendada:
+      tipo: callback
+      valor: "menu_ajuda"
+    origem: ["src/ajuda/menus.py", "main.py"]
+
+  - intent_id: glossario
+    nivel_permitido: ["1", "2", "3"]
+    gatilhos: ["glossario", "o que e agape", "o que e vm", "termos"]
+    resposta_oficial: "Vou abrir o glossario com os termos mais usados no bot."
+    acao_recomendada:
+      tipo: callback
+      valor: "ajuda_glossario"
+    origem: ["src/ajuda/glossario.py"]
+
+  - intent_id: faq
+    nivel_permitido: ["1", "2", "3"]
+    gatilhos: ["faq", "perguntas frequentes", "duvidas comuns"]
+    resposta_oficial: "Vou abrir as perguntas frequentes do seu nivel de acesso."
+    acao_recomendada:
+      tipo: callback
+      valor: "ajuda_faq"
+    origem: ["src/ajuda/faq.py"]
+
+  - intent_id: painel_secretario
+    nivel_permitido: ["2", "3"]
+    gatilhos: ["area do secretario", "painel do secretario", "menu secretario"]
+    resposta_oficial: "Vou abrir o Painel do Secretario."
+    acao_recomendada:
+      tipo: callback
+      valor: "area_secretario"
+    origem: ["src/eventos_secretario.py", "src/bot.py"]
+
+  - intent_id: cadastrar_evento
+    nivel_permitido: ["2", "3"]
+    gatilhos: ["cadastrar evento", "criar sessao", "publicar sessao"]
+    resposta_oficial: "Vou abrir o fluxo de cadastro de evento."
+    acao_recomendada:
+      tipo: callback
+      valor: "cadastrar_evento"
+    origem: ["src/cadastro_evento.py", "src/miniapp.py"]
+
+  - intent_id: meus_eventos
+    nivel_permitido: ["2", "3"]
+    gatilhos: ["meus eventos", "gerenciar eventos", "eventos que criei"]
+    resposta_oficial: "Vou listar seus eventos para gerenciamento."
+    acao_recomendada:
+      tipo: callback
+      valor: "meus_eventos"
+    origem: ["src/eventos_secretario.py"]
+
+  - intent_id: ver_confirmados_secretario
+    nivel_permitido: ["2", "3"]
+    gatilhos: ["ver confirmados", "lista de confirmados", "quem confirmou"]
+    resposta_oficial: "Vou abrir a lista de confirmados por evento."
+    acao_recomendada:
+      tipo: callback
+      valor: "ver_confirmados_secretario"
+    origem: ["src/eventos_secretario.py"]
+
+  - intent_id: menu_lojas
+    nivel_permitido: ["2", "3"]
+    gatilhos: ["minhas lojas", "cadastrar loja", "gerenciar loja"]
+    resposta_oficial: "Vou abrir o menu de lojas."
+    acao_recomendada:
+      tipo: callback
+      valor: "menu_lojas"
+    origem: ["src/lojas.py"]
+
+  - intent_id: notificacoes_secretario
+    nivel_permitido: ["2", "3"]
+    gatilhos: ["notificacoes secretario", "ativar notificacoes", "desativar notificacoes"]
+    resposta_oficial: "Vou abrir as configuracoes de notificacoes do secretario."
+    acao_recomendada:
+      tipo: callback
+      valor: "menu_notificacoes"
+    origem: ["src/admin_acoes.py", "main.py"]
+
+  - intent_id: area_admin
+    nivel_permitido: ["3"]
+    gatilhos: ["area admin", "painel admin", "administracao"]
+    resposta_oficial: "Vou abrir o Painel de Administracao."
+    acao_recomendada:
+      tipo: callback
+      valor: "area_admin"
+    origem: ["src/admin_acoes.py", "src/bot.py"]
+
+  - intent_id: admin_ver_membros
+    nivel_permitido: ["3"]
+    gatilhos: ["ver membros", "listar membros", "todos os membros"]
+    resposta_oficial: "Vou listar os membros cadastrados."
+    acao_recomendada:
+      tipo: callback
+      valor: "admin_ver_membros"
+    origem: ["src/admin_acoes.py", "main.py"]
+
+  - intent_id: explicar_agape
+    nivel_permitido: ["1", "2", "3"]
+    gatilhos: ["o que e agape", "com agape", "sem agape", "agape gratuito", "agape pago"]
+    resposta_oficial: "No bot, voce pode confirmar com ou sem agape conforme o tipo definido na sessao."
+    acao_recomendada:
+      tipo: informacao
+      valor: "explicacao_contextual"
+    origem: ["src/eventos.py", "src/cadastro_evento.py", "src/ajuda/faq.py"]
+
+  - intent_id: onboarding_grupo_privado
+    nivel_permitido: ["1", "2", "3"]
+    gatilhos: ["nao responde no grupo", "como iniciar no privado", "entrei no grupo e agora"]
+    resposta_oficial: "No grupo, use bode/menu/painel para ser direcionado ao privado e continuar com seguranca."
+    acao_recomendada:
+      tipo: informacao
+      valor: "onboarding_grupo_para_privado"
+    origem: ["main.py", "src/messages.py"]
+
+  - intent_id: erro_privado_indisponivel
+    nivel_permitido: ["1", "2", "3"]
+    gatilhos: ["bot nao abre privado", "nao consigo falar no privado", "fallback do grupo"]
+    resposta_oficial: "Se o privado estiver indisponivel, use o botao de abrir privado no proprio grupo e envie /start."
+    acao_recomendada:
+      tipo: informacao
+      valor: "orientacao_fallback"
+    origem: ["main.py", "src/messages.py"]
+
+  - intent_id: resumo_notificacoes_silencio
+    nivel_permitido: ["2", "3"]
+    gatilhos: ["janela de silencio", "confirmacoes de madrugada", "resumo de notificacoes"]
+    resposta_oficial: "Confirmacoes entre 22:00 e 07:00 sao acumuladas e enviadas em resumo apos esse periodo."
+    acao_recomendada:
+      tipo: informacao
+      valor: "regra_notificacao_secretario"
+    origem: ["src/eventos.py", "src/scheduler.py"]
+
+regras_de_roteamento:
+  sem_permissao:
+    mensagem: "Essa funcao depende de permissao de nivel mais alto."
+    acao: "oferecer_menu_disponivel"
+  baixa_confianca:
+    mensagem: "Posso te ajudar melhor se voce escolher uma destas opcoes."
+    acao: "mostrar_menu_principal"
+  acao_critica:
+    mensagem: "Para sua seguranca, essa acao so e feita pelo fluxo oficial do bot."
+    acao: "redirecionar_fluxo_estruturado"
+

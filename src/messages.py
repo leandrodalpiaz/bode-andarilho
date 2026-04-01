@@ -198,8 +198,8 @@ TEXTO_SOBRE_BODE = (
 
 TEXTO_TUTORIAIS_INICIAL = (
     "📚 *TUTORIAIS*\n\n"
-    "Aqui você encontrará guias detalhados para as principais funções do Bode Andarilho."
-    "\n\n*(Conteúdo dos tutoriais a ser adicionado posteriormente.)*"
+    "Aqui você encontra guias passo a passo para os fluxos mais importantes do Bode Andarilho."
+    "\n\nEscolha um tema para abrir o tutorial completo."
 )
 
 TEXTO_GLOSSARIO_INICIAL = (

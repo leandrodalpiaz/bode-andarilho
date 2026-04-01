@@ -28,7 +28,7 @@ from src.ajuda.nivel3 import (
 	guia_nivel3,
 )
 from src.ajuda.sobre import mostrar_sobre
-from src.ajuda.tutoriais import menu_tutoriais
+from src.ajuda.tutoriais import menu_tutoriais, mostrar_tutorial
 from src.bot import navegar_para
 from src.messages import TEXTO_MENU_AJUDA_PRINCIPAL
 from src.permissoes import get_nivel
@@ -67,6 +67,7 @@ ajuda_handlers = [
 	CallbackQueryHandler(menu_ajuda_principal, pattern=r"^menu_ajuda$"),
 	CallbackQueryHandler(ajuda_guia, pattern=r"^ajuda_guia$"),
 	CallbackQueryHandler(menu_tutoriais, pattern=r"^ajuda_tutoriais$"),
+	CallbackQueryHandler(mostrar_tutorial, pattern=r"^ajuda_tutorial\|"),
 	CallbackQueryHandler(mostrar_faq, pattern=r"^ajuda_faq$"),
 	CallbackQueryHandler(mostrar_glossario, pattern=r"^ajuda_glossario$"),
 	CallbackQueryHandler(mostrar_sobre, pattern=r"^ajuda_sobre$"),
