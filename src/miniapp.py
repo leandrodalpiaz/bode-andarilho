@@ -155,6 +155,19 @@ def _json_error(mensagem: str, status_code: int = 400) -> JSONResponse:
     return JSONResponse({"ok": False, "error": mensagem}, status_code=status_code)
 
 
+async def _usuario_esta_no_grupo(bot, telegram_id: int) -> bool:
+    """Verifica se o usuário ainda participa do grupo principal configurado."""
+    grupo_id = str(_GRUPO_PRINCIPAL_ID or "").strip()
+    if not grupo_id or not grupo_id.lstrip("-").isdigit():
+        return True
+    try:
+        member = await bot.get_chat_member(int(grupo_id), int(telegram_id))
+        return member.status in ("member", "administrator", "creator")
+    except Exception as e:
+        logger.warning("Falha ao verificar membro %s no grupo principal: %s", telegram_id, e)
+        return True
+
+
 async def _validar_requisicao_webapp(request: Request) -> tuple[Optional[dict], Optional[int], Optional[JSONResponse]]:
     bot_token: str = request.app.state.bot_token
     try:
@@ -231,6 +244,11 @@ async def api_rascunho_membro(request: Request) -> JSONResponse:
     body, telegram_id, erro = await _validar_requisicao_webapp(request)
     if erro:
         return erro
+    if not await _usuario_esta_no_grupo(request.app.state.telegram_app.bot, telegram_id):
+        return _json_error(
+            "Seu cadastro só pode ser concluído por quem está participando do grupo do Bode Andarilho no momento.",
+            403,
+        )
     if _norm_text((body or {}).get("action")).lower() == "get":
         return JSONResponse({"ok": True, "draft": _obter_rascunho(_RASCUNHOS_MEMBRO, telegram_id)})
     dados = _extrair_dados_membro(body or {})
@@ -249,6 +267,9 @@ async def draft_membro_confirmar(update: Update, context) -> None:
     query = update.callback_query
     await query.answer()
     telegram_id = int(update.effective_user.id)
+    if not await _usuario_esta_no_grupo(context.bot, telegram_id):
+        await query.answer("O cadastro só pode ser concluído por quem está no grupo no momento.", show_alert=True)
+        return
     dados = _obter_rascunho(_RASCUNHOS_MEMBRO, telegram_id)
     if not dados:
         await query.answer("Não encontrei um rascunho para confirmar.", show_alert=True)
@@ -1816,6 +1837,14 @@ async def api_cadastro_membro(request: Request) -> JSONResponse:
     telegram_id = user.get("id")
     if not telegram_id:
         return JSONResponse({"ok": False, "error": "Usuário não identificado."}, status_code=403)
+    if not await _usuario_esta_no_grupo(request.app.state.telegram_app.bot, int(telegram_id)):
+        return JSONResponse(
+            {
+                "ok": False,
+                "error": "Seu cadastro só pode ser concluído por quem está participando do grupo do Bode Andarilho no momento.",
+            },
+            status_code=403,
+        )
 
     # Sanitizar e validar campos
     nome       = (body.get("nome")       or "").strip()[:200]
