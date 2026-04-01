@@ -445,7 +445,7 @@ def _montar_resumo_evento_md(evento: Dict[str, Any], duplicado: Optional[Dict[st
         f"📅 *Data:* {data_txt}",
         f"🕕 *Hora:* {hora_txt}",
         f"📍 *Oriente:* {oriente}",
-        f"🔺 *Grau mínimo:* {grau}",
+        f"🔺 *Grau da sessão:* {grau}",
         f"🕯 *Tipo de sessão:* {tipo}",
         f"📜 *Rito:* {rito}",
         f"⚜️ *Potência:* {potencia}",
@@ -1004,7 +1004,7 @@ async def receber_horario(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "🔺 *Grau mínimo*",
+            "🔺 *Grau da sessão*",
             _teclado_graus(),
             limpar_conteudo=True
         )
@@ -1067,7 +1067,7 @@ async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "🔺 *Grau mínimo* (Aprendiz, Companheiro, Mestre)",
+            "🔺 *Grau da sessão* (Aprendiz, Companheiro, Mestre)",
             _teclado_graus(),
             limpar_conteudo=True
         )
@@ -1105,7 +1105,7 @@ async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await navegar_para(
         update, context,
         "Cadastro de Evento",
-        "🔺 *Grau mínimo*",
+        "🔺 *Grau da sessão*",
         _teclado_graus(),
         limpar_conteudo=True
     )
@@ -1639,7 +1639,7 @@ async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif estado == GRAU:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "🔺 *Grau mínimo*",
+            "🔺 *Grau da sessão*",
             _teclado_graus(),
             limpar_conteudo=True
         )

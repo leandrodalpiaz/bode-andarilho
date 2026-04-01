@@ -678,7 +678,7 @@ def _resumo_evento_md(dados: Dict[str, Any]) -> str:
         "📋 *Confirme a sessão antes de publicar*\n\n"
         f"*Data:* {_escape_md(dados.get('data', ''))}\n"
         f"*Horário:* {_escape_md(dados.get('horario', ''))}\n"
-        f"*Grau mínimo:* {_escape_md(dados.get('grau', ''))}\n"
+        f"*Grau da sessão:* {_escape_md(dados.get('grau', ''))}\n"
         f"*Tipo de sessão:* {_escape_md(dados.get('tipo_sessao', ''))}\n"
         f"*Traje:* {_escape_md(dados.get('traje', ''))}\n"
         f"*Ágape:* {_escape_md(dados.get('agape', ''))}\n"
@@ -1262,7 +1262,7 @@ def html_cadastro_evento() -> str:
     <div id="horario_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="grau">Grau mínimo *</label>
+    <label for="grau">Grau da sessão *</label>
     <select id="grau">
       <option value="">Selecione...</option>
       <option>Aprendiz</option>
@@ -1427,7 +1427,7 @@ function validate(){
     }
   }
   ok=req('horario','Horário')&&ok;
-  ok=req('grau','Grau mínimo')&&ok;
+  ok=req('grau','Grau da sessão')&&ok;
   ok=req('tipo_sessao','Tipo de sessão')&&ok;
   ok=req('traje','Traje')&&ok;
   ok=req('agape','Ágape')&&ok;

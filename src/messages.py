@@ -96,7 +96,7 @@ LEMBRETE_CORPO = (
     "📅 *Data:* {data}\n"
     "🕐 *Horário:* {horario}\n"
     "📍 *Local:* {local}\n"
-    "🔷 *Grau Mínimo:* {grau}\n"
+    "🔷 *Grau da Sessão:* {grau}\n"
     "👔 *Traje:* {traje}\n"
     "🍽️ *Ágape:* {agape}\n\n"
     "A sua presença fortalecerá a nossa Ordem! 🤝"
@@ -417,6 +417,13 @@ CONFIRMACAO_SESSAO_NAO_ENCONTRADA = "Sessão não encontrada. Tente confirmar no
 # [CONTEXTO] Membro já confirmado; exibido no fluxo pós-cadastro
 # [CANAL] Privado
 CONFIRMACAO_JA_CONFIRMADO_POS_CADASTRO = "Você já estava confirmado para esta sessão."
+
+# [CONTEXTO] Grau do irmão não corresponde ao grau da sessão; enviado no privado
+# [CANAL] Privado
+CONFIRMACAO_GRAU_INSUFICIENTE_TMPL = (
+    "Esta é uma Sessão de Grau {grau_sessao}, Irmão.\n"
+    "Confira seu grau cadastrado: {grau_cadastrado}."
+)
 
 # [CONTEXTO] Resposta ao secretário que confirma presença no próprio evento;
 #            {nome},{data},{loja},{numero_fmt},{horario},{participacao},{bloco_importancia}

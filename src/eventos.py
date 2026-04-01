@@ -54,6 +54,7 @@ from src.messages import (
     CONFIRMACAO_CALLBACK_ABRIR_PRIVADO_CADASTRO,
     CONFIRMACAO_SESSAO_NAO_ENCONTRADA,
     CONFIRMACAO_JA_CONFIRMADO_POS_CADASTRO,
+    CONFIRMACAO_GRAU_INSUFICIENTE_TMPL,
     CONFIRMACAO_SECRETARIO_TMPL,
     CONFIRMACAO_COM_AGAPE_TMPL,
     CONFIRMACAO_SEM_AGAPE_TMPL,
@@ -443,6 +444,27 @@ def normalizar_grau_nome(valor: str) -> str:
         return "Mestre Instalado"
 
     return (valor or "").strip()
+
+
+def _grau_base_para_hierarquia(valor: str) -> str:
+    grau = normalizar_grau_nome(valor)
+    if grau == "Mestre Instalado":
+        return GRAU_MESTRE
+    return grau
+
+
+def _hierarquia_grau(valor: str) -> int:
+    grau = _grau_base_para_hierarquia(valor)
+    ordem = {
+        GRAU_APRENDIZ: 1,
+        GRAU_COMPANHEIRO: 2,
+        GRAU_MESTRE: 3,
+    }
+    return ordem.get(grau, 999)
+
+
+def _pode_confirmar_presenca(grau_cadastrado: str, grau_sessao: str) -> bool:
+    return _hierarquia_grau(grau_cadastrado) >= _hierarquia_grau(grau_sessao)
 
 
 @functools.lru_cache(maxsize=1024)
@@ -1010,7 +1032,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         f"🕕 *Horário:* {hora}\n"
         f"🕯 *Tipo:* {tipo_sessao}\n"
         f"📜 *Rito:* {rito}\n"
-        f"🔺 *Grau mínimo:* {grau}\n"
+        f"🔺 *Grau da sessão:* {grau}\n"
         f"👔 *Traje:* {traje}\n"
         f"🍽 *Ágape:* {agape}\n"
     )
@@ -1131,6 +1153,27 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         )
         if update.effective_chat.type in ["group", "supergroup"]:
             await _responder_callback_seguro(query, "Você já confirmou. Verifique seu privado.")
+        return ConversationHandler.END
+
+    grau_cadastrado = normalizar_grau_nome(membro.get("Grau", ""))
+    grau_sessao = normalizar_grau_nome(evento.get("Grau", ""))
+    if not _pode_confirmar_presenca(grau_cadastrado, grau_sessao):
+        await _enviar_ou_editar_mensagem(
+            context,
+            user_id,
+            TIPO_RESULTADO,
+            CONFIRMACAO_GRAU_INSUFICIENTE_TMPL.format(
+                grau_sessao=grau_sessao or "não informado",
+                grau_cadastrado=grau_cadastrado or "não informado",
+            ),
+            InlineKeyboardMarkup([
+                [InlineKeyboardButton("👤 Ver meu cadastro", callback_data="meu_cadastro")],
+                [InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")],
+            ]),
+            limpar_conteudo=True
+        )
+        if update.effective_chat.type in ["group", "supergroup"]:
+            await _responder_callback_seguro(query, "Verifique seu privado.", show_alert=True)
         return ConversationHandler.END
 
     participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não"
