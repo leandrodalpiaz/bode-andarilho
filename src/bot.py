@@ -73,6 +73,7 @@ def menu_principal_teclado(nivel: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton("✅ Minhas Presenças", callback_data="minhas_confirmacoes")],
         [InlineKeyboardButton("👤 Meu Perfil", callback_data="meu_cadastro")],
         [InlineKeyboardButton("🔔 Meus Lembretes", callback_data="menu_lembretes")],
+        [InlineKeyboardButton("🤖 Assistente IA", callback_data="abrir_assistente_ia")],
         [InlineKeyboardButton("❓ Ajuda", callback_data="menu_ajuda")],
     ]
 
@@ -430,6 +431,15 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "menu_lembretes":
         from src.membro_lembretes import menu_lembretes_membro
         await menu_lembretes_membro(update, context)
+    elif data == "abrir_assistente_ia":
+        from src.ia_assistente import abrir_assistente_ia
+        await abrir_assistente_ia(update, context)
+    elif data == "abrir_assistente_stats":
+        from src.ia_assistente import assistente_ia_stats
+        await assistente_ia_stats(update, context)
+    elif data == "abrir_assistente_relatorio":
+        from src.ia_assistente import assistente_ia_relatorio
+        await assistente_ia_relatorio(update, context)
 
     # --- Gestão de Eventos e Visitas ---
     elif data in ("ver_eventos", "voltar_eventos"):

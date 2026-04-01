@@ -173,7 +173,12 @@ from src.messages import (
     GRUPO_ONBOARDING_NOVO_MEMBRO_TMPL,
     GRUPO_FALLBACK_NOVO_MEMBRO_TMPL,
 )
-from src.ia_assistente import assistente_ia, assistente_ia_stats, assistente_ia_relatorio
+from src.ia_assistente import (
+    assistente_ia,
+    assistente_ia_stats,
+    assistente_ia_relatorio,
+    assistente_ia_texto_livre,
+)
 
 # ============================================
 # CONFIGURAÇÃO INICIAL
@@ -705,6 +710,12 @@ def register_handlers(app: Application) -> None:
 
     # ===== 13. HANDLER GENÉRICO DE BOTÕES (CATCH-ALL) =====
     app.add_handler(CallbackQueryHandler(botao_handler))
+
+    # ===== 13.5 TEXTO LIVRE NO PRIVADO (ASSISTENTE IA SEM /COMANDO) =====
+    app.add_handler(MessageHandler(
+        filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND,
+        assistente_ia_texto_livre
+    ))
 
     # ===== 14. HANDLERS DE MENSAGENS EM GRUPO =====
     app.add_handler(MessageHandler(

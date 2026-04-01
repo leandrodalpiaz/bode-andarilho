@@ -85,6 +85,15 @@ Arquivos conferidos:
   - destaque de UX para funcoes muito procuradas
 - Toda mudanca continua dependente de aprovacao humana.
 
+11. UX sem barra (comando como fallback)
+- Menu principal agora inclui botao `Assistente IA`.
+- No privado, texto livre (sem `/ia`) e encaminhado ao assistente quando nao houver fluxo formal ativo.
+- No privado, as palavras `menu`, `painel` e `bode` reconstroem o painel principal sem precisar `/start`.
+- Admin pode acionar metricas e relatorio da IA tambem por linguagem natural no privado:
+  - "metricas ia"
+  - "relatorio ia"
+- Comandos com `/` continuam ativos apenas como plano B tecnico.
+
 ## Registro de handlers (estado atual)
 
 Principais grupos no `register_handlers(app)`:

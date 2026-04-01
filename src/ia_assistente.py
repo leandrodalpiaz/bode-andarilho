@@ -580,11 +580,10 @@ def _teclado_acao(item: IntentItem) -> Optional[InlineKeyboardMarkup]:
 	)
 
 
-async def assistente_ia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def _executar_assistente_ia(update: Update, context: ContextTypes.DEFAULT_TYPE, texto_entrada: str) -> None:
 	user_id = update.effective_user.id if update.effective_user else 0
 	nivel = get_nivel(user_id)
 
-	texto_entrada = " ".join(context.args or []).strip()
 	if not texto_entrada:
 		_auditar_evento("empty_input", user_id, nivel, texto_entrada, topic_hint="")
 		teclado = InlineKeyboardMarkup(
@@ -597,7 +596,7 @@ async def assistente_ia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 			update,
 			context,
 			"Assistente IA",
-			"Use `/ia` seguido da sua duvida. Exemplo: `/ia quais sessoes eu posso visitar essa semana?`",
+			"Escreva sua duvida normalmente aqui no privado. Exemplo: quais sessoes eu posso visitar essa semana?",
 			teclado,
 		)
 		return
@@ -652,3 +651,97 @@ async def assistente_ia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 		topic_hint=_extrair_topic_hint(texto_entrada),
 	)
 	await navegar_para(update, context, "Assistente IA", item.resposta_oficial, teclado)
+
+
+def _eh_pedido_stats_sem_comando(texto: str) -> bool:
+	t = _norm_text(texto)
+	return any(
+		chave in t
+		for chave in (
+			"ia stats",
+			"assistente stats",
+			"metricas ia",
+			"metricas do assistente",
+			"observabilidade ia",
+		)
+	)
+
+
+def _eh_pedido_relatorio_sem_comando(texto: str) -> bool:
+	t = _norm_text(texto)
+	return any(
+		chave in t
+		for chave in (
+			"ia relatorio",
+			"assistente relatorio",
+			"relatorio ia",
+			"relatorio do assistente",
+			"aprendizado ia",
+		)
+	)
+
+
+def _eh_chamada_menu_privado(texto: str) -> bool:
+	t = _norm_text(texto)
+	return t in {
+		"menu",
+		"painel",
+		"bode",
+		"menu principal",
+		"abrir menu",
+		"voltar menu",
+	}
+
+
+async def abrir_assistente_ia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+	nivel = get_nivel(update.effective_user.id if update.effective_user else 0)
+	linhas = [
+		[InlineKeyboardButton("Ver sessoes", callback_data="ver_eventos")],
+		[InlineKeyboardButton("Minhas confirmacoes", callback_data="minhas_confirmacoes")],
+		[InlineKeyboardButton("Meu perfil", callback_data="meu_cadastro")],
+		[InlineKeyboardButton("Central de Ajuda", callback_data="menu_ajuda")],
+		[InlineKeyboardButton("Voltar ao menu", callback_data="menu_principal")],
+	]
+	if nivel == "3":
+		linhas.insert(3, [InlineKeyboardButton("Metricas IA", callback_data="abrir_assistente_stats")])
+		linhas.insert(4, [InlineKeyboardButton("Relatorio IA", callback_data="abrir_assistente_relatorio")])
+
+	teclado = InlineKeyboardMarkup(linhas)
+	await navegar_para(
+		update,
+		context,
+		"Assistente IA",
+		"Escreva sua duvida em linguagem natural aqui no privado. Tambem pode usar os atalhos abaixo.",
+		teclado,
+	)
+
+
+async def assistente_ia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+	texto_entrada = " ".join(context.args or []).strip()
+	await _executar_assistente_ia(update, context, texto_entrada)
+
+
+async def assistente_ia_texto_livre(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+	if not update.message:
+		return
+	if update.effective_chat and update.effective_chat.type != "private":
+		return
+
+	texto = (update.message.text or "").strip()
+	if not texto:
+		return
+
+	if _eh_chamada_menu_privado(texto):
+		# Reusa o fluxo oficial de /start para reconstruir o painel no privado.
+		from src.bot import start
+		await start(update, context)
+		return
+
+	if _eh_pedido_stats_sem_comando(texto):
+		await assistente_ia_stats(update, context)
+		return
+	if _eh_pedido_relatorio_sem_comando(texto):
+		await assistente_ia_relatorio(update, context)
+		return
+
+	await _executar_assistente_ia(update, context, texto)
