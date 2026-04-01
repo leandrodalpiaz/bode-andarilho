@@ -215,6 +215,8 @@ async def api_rascunho_membro(request: Request) -> JSONResponse:
     body, telegram_id, erro = await _validar_requisicao_webapp(request)
     if erro:
         return erro
+    if _norm_text((body or {}).get("action")).lower() == "get":
+        return JSONResponse({"ok": True, "draft": _obter_rascunho(_RASCUNHOS_MEMBRO, telegram_id)})
     dados = _extrair_dados_membro(body or {})
     mensagem = _validar_dados_membro(dados)
     if mensagem:
@@ -296,6 +298,8 @@ async def api_rascunho_loja(request: Request) -> JSONResponse:
     body, telegram_id, erro = await _validar_requisicao_webapp(request)
     if erro:
         return erro
+    if _norm_text((body or {}).get("action")).lower() == "get":
+        return JSONResponse({"ok": True, "draft": _obter_rascunho(_RASCUNHOS_LOJA, telegram_id)})
     dados = _extrair_dados_loja(body or {})
     mensagem = _validar_dados_loja(dados)
     if mensagem:
@@ -500,6 +504,8 @@ async def api_rascunho_evento(request: Request) -> JSONResponse:
     body, telegram_id, erro = await _validar_requisicao_webapp(request)
     if erro:
         return erro
+    if _norm_text((body or {}).get("action")).lower() == "get":
+        return JSONResponse({"ok": True, "draft": _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)})
     dados = _extrair_dados_evento(body or {})
     mensagem = _validar_dados_evento(dados)
     if mensagem:
@@ -906,9 +912,11 @@ input::placeholder,textarea::placeholder{color:var(--hint)}
 """
 
 _JS_BASE = """
-const tg=window.Telegram.WebApp;
-tg.ready();
-tg.expand();
+const tg=(window.Telegram&&window.Telegram.WebApp)?window.Telegram.WebApp:null;
+if(tg){
+  try{tg.ready();}catch(e){}
+  try{tg.expand();}catch(e){}
+}
 function setPrimaryLoading(isLoading){
   const btn=document.getElementById('btn_publicar_evento');
   if(btn){
@@ -918,9 +926,19 @@ function setPrimaryLoading(isLoading){
 }
 function hideMainButtonSafe(){
   if(tg && tg.MainButton){
-    try{ tg.MainButton.offClick(publicarEvento); }catch(e){}
+    try{ tg.MainButton.hideProgress(); }catch(e){}
+    try{ tg.MainButton.disable(); }catch(e){}
     try{ tg.MainButton.hide(); }catch(e){}
   }
+}
+function closeMiniAppSafe(){
+  if(tg && typeof tg.close==='function'){
+    try{ tg.close(); return; }catch(e){}
+  }
+  try{ window.close(); }catch(e){}
+}
+function tgInitData(){
+  return (tg && tg.initData) ? tg.initData : '';
 }
 function showToast(msg,dur){
   const t=document.getElementById('toast');
@@ -943,12 +961,22 @@ function req(id,label){
   clearErr(id);return true;
 }
 function maskDate(el){
+  if(!el)return;
   el.addEventListener('input',function(){
     let s=this.value.replace(/\\D/g,'');
     if(s.length<=2)this.value=s;
     else if(s.length<=4)this.value=s.slice(0,2)+'/'+s.slice(2);
     else this.value=s.slice(0,2)+'/'+s.slice(2,4)+'/'+s.slice(4,8);
   });
+}
+function parseDateBR(texto){
+  const m=(texto||'').match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/);
+  if(!m)return null;
+  const dia=Number(m[1]), mes=Number(m[2]), ano=Number(m[3]);
+  const d=new Date(ano,mes-1,dia);
+  if(d.getFullYear()!==ano || d.getMonth()!==mes-1 || d.getDate()!==dia)return null;
+  d.setHours(0,0,0,0);
+  return d;
 }
 """
 
@@ -1039,8 +1067,8 @@ function validate(){
   let ok=true;
   ok=req('nome','Nome')&&ok;
   const dn=val('data_nasc');
-  if(!dn.match(/^\\d{2}\\/\\d{2}\\/\\d{4}$/)){
-    setErr('data_nasc','Use o formato DD/MM/AAAA.');ok=false;
+  if(!parseDateBR(dn)){
+    setErr('data_nasc','Use uma data valida no formato DD/MM/AAAA.');ok=false;
   }else clearErr('data_nasc');
   ok=req('grau','Grau')&&ok;
   ok=req('vm','Venerável Mestre')&&ok;
@@ -1049,6 +1077,7 @@ function validate(){
   ok=req('potencia','Potência')&&ok;
   return ok;
 }
+if(tg && tg.MainButton){
 tg.MainButton.setText('Continuar para revisão');
 tg.MainButton.show();
 tg.MainButton.onClick(async()=>{
@@ -1058,7 +1087,7 @@ tg.MainButton.onClick(async()=>{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        init_data:tg.initData,
+        init_data:tgInitData(),
         nome:val('nome'),
         data_nasc:val('data_nasc'),
         grau:val('grau'),
@@ -1070,17 +1099,18 @@ tg.MainButton.onClick(async()=>{
       })
     });
     const j=await r.json();
-    if(j.ok){tg.close();}
+    if(j.ok){closeMiniAppSafe();}
     else{showToast(j.error||'Erro. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
   }catch{showToast('Falha de conexão. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
 });
+}
 
 (async()=>{
   try{
     const r=await fetch('/api/rascunho_membro',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({init_data:tg.initData,action:'get'})
+      body:JSON.stringify({init_data:tgInitData(),action:'get'})
     });
     const j=await r.json();
     if(j.ok&&j.draft){
@@ -1152,6 +1182,7 @@ function validate(){
   ok=req('endereco','Endereço')&&ok;
   return ok;
 }
+if(tg && tg.MainButton){
 tg.MainButton.setText('Continuar para revisão');
 tg.MainButton.show();
 tg.MainButton.onClick(async()=>{
@@ -1161,7 +1192,7 @@ tg.MainButton.onClick(async()=>{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        init_data:tg.initData,
+        init_data:tgInitData(),
         nome:val('nome_loja'),
         numero:val('numero')||'0',
         oriente:val('oriente'),
@@ -1171,17 +1202,18 @@ tg.MainButton.onClick(async()=>{
       })
     });
     const j=await r.json();
-    if(j.ok){tg.close();}
+    if(j.ok){closeMiniAppSafe();}
     else{showToast(j.error||'Erro. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
   }catch{showToast('Falha de conexão. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
 });
+}
 
 (async()=>{
   try{
     const r=await fetch('/api/rascunho_loja',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({init_data:tg.initData,action:'get'})
+      body:JSON.stringify({init_data:tgInitData(),action:'get'})
     });
     const j=await r.json();
     if(j.ok&&j.draft){
@@ -1302,8 +1334,8 @@ def html_cadastro_evento() -> str:
 
 <div id="acoes_publicacao" class="actions">
   <div class="actions-stack">
-    <button id="btn_publicar_evento" type="button" class="btn-primary">Continuar para revisão</button>
-    <button id="btn_cancelar_evento" type="button" class="btn-secondary">Fechar</button>
+    <button id="btn_publicar_evento" type="button" class="btn-primary" onclick="publicarEvento()">Continuar para revisão</button>
+    <button id="btn_cancelar_evento" type="button" class="btn-secondary" onclick="closeMiniAppSafe()">Fechar</button>
   </div>
 </div>
 """
@@ -1322,7 +1354,7 @@ function norm(v){
     const r=await fetch('/api/lojas',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({init_data:tg.initData})
+      body:JSON.stringify({init_data:tgInitData()})
     });
     const j=await r.json();
     if(j.ok&&j.lojas&&j.lojas.length>0){
@@ -1342,7 +1374,7 @@ function norm(v){
     const rDraft=await fetch('/api/rascunho_evento',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({init_data:tg.initData,action:'get'})
+      body:JSON.stringify({init_data:tgInitData(),action:'get'})
     });
     const jDraft=await rDraft.json();
     if(jDraft.ok&&jDraft.draft){
@@ -1382,9 +1414,18 @@ document.getElementById('loja_sel').addEventListener('change',function(){
 function validate(){
   let ok=true;
   const dv=val('data_ev');
-  if(!dv.match(/^\\d{2}\\/\\d{2}\\/\\d{4}$/)){
-    setErr('data_ev','Use o formato DD/MM/AAAA.');ok=false;
-  }else clearErr('data_ev');
+  const dataEvento=parseDateBR(dv);
+  if(!dataEvento){
+    setErr('data_ev','Use uma data válida no formato DD/MM/AAAA.');ok=false;
+  }else{
+    const hoje=new Date();
+    hoje.setHours(0,0,0,0);
+    if(dataEvento<hoje){
+      setErr('data_ev','A data da sessão não pode estar no passado.');ok=false;
+    }else{
+      clearErr('data_ev');
+    }
+  }
   ok=req('horario','Horário')&&ok;
   ok=req('grau','Grau mínimo')&&ok;
   ok=req('tipo_sessao','Tipo de sessão')&&ok;
@@ -1398,24 +1439,6 @@ function validate(){
   return ok;
 }
 
-async function salvarLojaAtual(){
-  const dados=dadosLojaAtual();
-  const r=await fetch('/api/cadastro_loja',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      init_data:tg.initData,
-      nome:dados.nome,
-      numero:dados.numero,
-      oriente:dados.oriente,
-      rito:dados.rito,
-      potencia:dados.potencia,
-      endereco:dados.endereco
-    })
-  });
-  return await r.json();
-}
-
 async function publicarEvento(){
   if(enviandoEvento)return;
   if(!validate())return;
@@ -1426,7 +1449,7 @@ async function publicarEvento(){
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        init_data:tg.initData,
+        init_data:tgInitData(),
         data:val('data_ev'),
         horario:val('horario'),
         grau:val('grau'),
@@ -1444,7 +1467,7 @@ async function publicarEvento(){
     });
     const j=await r.json();
     if(j.ok){
-      tg.close();
+      closeMiniAppSafe();
     }
     else{
       showToast(j.error||'Erro. Tente novamente.');
@@ -1459,8 +1482,14 @@ async function publicarEvento(){
 }
 
 hideMainButtonSafe();
-document.getElementById('btn_publicar_evento').addEventListener('click',publicarEvento);
-document.getElementById('btn_cancelar_evento').addEventListener('click',()=>tg.close());
+const btnPublicar=document.getElementById('btn_publicar_evento');
+if(btnPublicar){
+  btnPublicar.addEventListener('click',publicarEvento);
+}
+const btnCancelar=document.getElementById('btn_cancelar_evento');
+if(btnCancelar){
+  btnCancelar.addEventListener('click',()=>closeMiniAppSafe());
+}
 """
     return _html_wrap("Cadastro de Evento", body, script)
 
@@ -1785,4 +1814,3 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
         logger.warning("Falha ao confirmar evento para %s: %s", telegram_id, e)
 
     return JSONResponse({"ok": True})
-
