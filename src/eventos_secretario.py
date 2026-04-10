@@ -672,6 +672,8 @@ async def confirmar_cancelamento(update: Update, context: ContextTypes.DEFAULT_T
 async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Executa o cancelamento do evento."""
     query = update.callback_query
+    if query:
+        await query.answer("Cancelando evento...")
     _, id_evento_cod = query.data.split("|", 1)
     id_evento = _decode_cb(id_evento_cod)
 
@@ -697,6 +699,9 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     evento["Status"] = "Cancelado"
+    evento["Cancelado em"] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    evento["Cancelado por (Telegram ID)"] = str(user_id)
+    evento["Cancelado por (Nome)"] = (update.effective_user.full_name or "").strip()
     _registrar_ultima_edicao(evento, user_id, update.effective_user.full_name or "")
     sucesso = atualizar_evento(0, evento)
     

@@ -451,9 +451,9 @@ def _coluna_ausente(exc: Exception, coluna: str) -> bool:
 
 
 def _extrair_coluna_ausente(exc: Exception) -> str:
-    """Extrai o nome da coluna ausente de erros PGRST204."""
+    """Extrai o nome da coluna ausente de erros de schema do PostgREST/Postgres."""
     txt = str(exc or "")
-    if "PGRST204" not in txt:
+    if "PGRST204" not in txt and "42703" not in txt and "does not exist" not in txt:
         return ""
 
     # Exemplos conhecidos:
@@ -466,6 +466,11 @@ def _extrair_coluna_ausente(exc: Exception) -> str:
     m = re.search(r"column\\s+'([^']+)'", txt)
     if m:
         return _norm_text(m.group(1))
+
+    m = re.search(r"column\\s+([a-zA-Z0-9_\\.]+)\\s+does not exist", txt)
+    if m:
+        col = m.group(1).split(".")[-1]
+        return _norm_text(col)
 
     return ""
 
@@ -1018,7 +1023,8 @@ def listar_lojas(telegram_id: int, include_todas: bool = False) -> List[Dict[str
             if not target:
                 return []
             # Mantém retrocompatibilidade: responsável novo OU telegram_id legado.
-            query = query.or_(f"secretario_responsavel_id.eq.{target},telegram_id.eq.{target}")
+            filtro_responsavel = f"secretario_responsavel_id.eq.{target},telegram_id.eq.{target}"
+            query = query.or_(filtro_responsavel)
 
         resp = query.execute()
         result = [_row_to_sheets("lojas", row) for row in (resp.data or [])]
@@ -1026,6 +1032,21 @@ def listar_lojas(telegram_id: int, include_todas: bool = False) -> List[Dict[str
         return result
 
     except Exception as e:
+        coluna = _extrair_coluna_ausente(e)
+        if not include_todas and coluna == "secretario_responsavel_id":
+            logger.warning(
+                "Coluna 'secretario_responsavel_id' ausente em 'lojas' — usando fallback legado por telegram_id."
+            )
+            try:
+                target = _norm_intlike(telegram_id)
+                if not target:
+                    return []
+                resp = supabase.table("lojas").select("*").eq("telegram_id", target).execute()
+                result = [_row_to_sheets("lojas", row) for row in (resp.data or [])]
+                _cache_lojas[cache_key] = (result, time.time())
+                return result
+            except Exception as e_fallback:
+                logger.error("Erro ao listar lojas no fallback legado: %s", e_fallback)
         logger.error("Erro ao listar lojas: %s", e)
         return []
 
