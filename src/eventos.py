@@ -566,14 +566,53 @@ def montar_linha_confirmado(dados_membro_ou_snapshot: dict) -> str:
         grau = f"{grau} (MI)"
 
     loja = (dados_membro_ou_snapshot.get("Loja") or dados_membro_ou_snapshot.get("loja") or "").strip()
-    numero = (dados_membro_ou_snapshot.get("Número da loja") or dados_membro_ou_snapshot.get("numero_loja") or "")
+    numero = (
+        dados_membro_ou_snapshot.get("Número da loja")
+        or dados_membro_ou_snapshot.get("NÃºmero da loja")
+        or dados_membro_ou_snapshot.get("numero_loja")
+        or ""
+    )
     numero = str(numero).strip()
 
     oriente = (dados_membro_ou_snapshot.get("Oriente") or dados_membro_ou_snapshot.get("oriente") or "").strip()
-    potencia = (dados_membro_ou_snapshot.get("Potência") or dados_membro_ou_snapshot.get("potencia") or "").strip()
+    potencia = (
+        dados_membro_ou_snapshot.get("Potência")
+        or dados_membro_ou_snapshot.get("Potęncia")
+        or dados_membro_ou_snapshot.get("PotÃªncia")
+        or dados_membro_ou_snapshot.get("potencia")
+        or ""
+    ).strip()
 
     loja_composta = f"{loja} {numero}".strip()
     return f"{nome} - {grau} - {loja_composta} - {oriente} - {potencia}"
+
+
+def _status_evento_normalizado(evento: Optional[dict]) -> str:
+    return str((evento or {}).get("Status", "") or "").strip().lower()
+
+
+def _data_hora_evento(evento: Optional[dict]) -> Optional[datetime]:
+    if not evento:
+        return None
+    data_base = parse_data_evento(evento.get("Data do evento", ""))
+    if not data_base:
+        return None
+    hh, mm = _parse_hora(evento.get("Hora", ""))
+    return data_base.replace(hour=hh, minute=mm, second=0, microsecond=0)
+
+
+def _motivo_bloqueio_confirmacao(evento: Optional[dict]) -> Optional[str]:
+    if not evento:
+        return EVENTO_NAO_ENCONTRADO
+
+    if _status_evento_normalizado(evento) == "cancelado":
+        return "⛔ Esta sessão foi cancelada e não aceita mais confirmações."
+
+    data_hora_evento = _data_hora_evento(evento)
+    if data_hora_evento and data_hora_evento < datetime.now():
+        return "⌛ Esta sessão já ocorreu e não aceita novas confirmações."
+
+    return None
 
 
 def _data_range_semana(ref: date) -> Tuple[date, date]:
@@ -1063,11 +1102,15 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     user_id = update.effective_user.id
     ja_confirmou = buscar_confirmacao(id_evento, user_id)
     botoes = []
+    motivo_bloqueio = _motivo_bloqueio_confirmacao(evento)
 
     if ja_confirmou:
         botoes.append([InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")])
-    else:
+    elif not motivo_bloqueio:
         botoes.extend(_teclado_confirmacao_evento(id_evento, agape))
+
+    if motivo_bloqueio:
+        texto += f"\n\n{motivo_bloqueio}"
 
     botoes.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")])
     
@@ -1119,6 +1162,21 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             EVENTO_NAO_ENCONTRADO,
             limpar_conteudo=True
         )
+        return ConversationHandler.END
+
+    motivo_bloqueio = _motivo_bloqueio_confirmacao(evento)
+    if motivo_bloqueio:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            motivo_bloqueio,
+            InlineKeyboardMarkup([
+                [InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")],
+                [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")],
+            ]),
+            limpar_conteudo=True
+        )
+        if update.effective_chat.type in ["group", "supergroup"]:
+            await _responder_callback_seguro(query, motivo_bloqueio, show_alert=True)
         return ConversationHandler.END
 
     if not membro:
@@ -1308,6 +1366,17 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
         await context.bot.send_message(
             chat_id=user_id,
             text=CONFIRMACAO_SESSAO_NAO_ENCONTRADA
+        )
+        return
+
+    motivo_bloqueio = _motivo_bloqueio_confirmacao(evento)
+    if motivo_bloqueio:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=motivo_bloqueio,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
+            ])
         )
         return
 
@@ -1547,10 +1616,10 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Grau": c.get("Grau", c.get("grau", "")),
                 "Nome": c.get("Nome", c.get("nome", "")),
                 "Loja": c.get("Loja", c.get("loja", "")),
-                "Número da loja": c.get("Número da loja", c.get("numero_loja", "")),
+                "Número da loja": c.get("Número da loja", c.get("numero_loja", c.get("NÃºmero da loja", ""))),
                 "Oriente": c.get("Oriente", c.get("oriente", "")),
-                "Potência": c.get("Potência", c.get("potencia", "")),
-                "Venerável Mestre": c.get("Venerável Mestre", c.get("veneravel_mestre", "")),
+                "Potência": c.get("Potência", c.get("potencia", c.get("PotÃªncia", ""))),
+                "Venerável Mestre": c.get("Venerável Mestre", c.get("veneravel_mestre", c.get("VenerÃ¡vel Mestre", ""))),
             }
             linhas.append(montar_linha_confirmado(snapshot))
 
