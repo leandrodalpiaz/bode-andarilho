@@ -457,17 +457,22 @@ def _extrair_coluna_ausente(exc: Exception) -> str:
         return ""
 
     # Exemplos conhecidos:
-    # - N?o foi poss?vel encontrar a coluna 'coluna' da tabela 'tabela' no cache de esquema
+    # - Could not find the 'coluna' column of 'tabela' in the schema cache
+    # - Não foi possível encontrar a coluna 'coluna' da tabela 'tabela' no cache de esquema
     # - ... "column 'coluna' ..."
-    m = re.search(r"'([^']+)'\\s+column", txt)
+    m = re.search(r"'([^']+)'\s+column", txt)
     if m:
         return _norm_text(m.group(1))
 
-    m = re.search(r"column\\s+'([^']+)'", txt)
+    m = re.search(r"coluna\s+'([^']+)'", txt, flags=re.IGNORECASE)
     if m:
         return _norm_text(m.group(1))
 
-    m = re.search(r"column\\s+([a-zA-Z0-9_\\.]+)\\s+does not exist", txt)
+    m = re.search(r"column\s+'([^']+)'", txt, flags=re.IGNORECASE)
+    if m:
+        return _norm_text(m.group(1))
+
+    m = re.search(r"column\s+([a-zA-Z0-9_\\.]+)\s+does not exist", txt, flags=re.IGNORECASE)
     if m:
         col = m.group(1).split(".")[-1]
         return _norm_text(col)
