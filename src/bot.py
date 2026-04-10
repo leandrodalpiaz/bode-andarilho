@@ -3,21 +3,22 @@
 # ============================================
 # 
 # Este módulo coordena a experiência do Obreiro no bot.
-# Implementa o sistema de "menu fixo" e mensagens de progresso:
+# A navegação privada foi simplificada para um painel ativo único:
 # 
-# 1. MENU PERMANENTE: Mantido no topo para acesso rápido às Colunas.
-# 2. CONTEXTO (📍): Indica em qual oficina ou sala o Ir.·. se encontra.
-# 3. RESULTADO: Exibe o conteúdo do trabalho ou a resposta da Grande Secretaria.
+# 1. UM PAINEL ATIVO: A tela corrente é sempre editada no lugar quando possível.
+# 2. NAVEGAÇÃO GLOBAL: As ações principais permanecem acessíveis por botões e atalhos.
+# 3. CONTEXTO VISÍVEL: Cada tela inclui um caminho curto e ações do contexto atual.
 # 
 # ============================================
 
 from __future__ import annotations
 
-import logging
 import hashlib
+import logging
 import os
-import time
-from typing import Dict, Optional
+import re
+import unicodedata
+from typing import Dict, Optional, Set
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
@@ -52,12 +53,43 @@ async def _verificar_membro_no_grupo(context, user_id: int) -> bool:
         return True  # Em caso de erro de API, não bloqueia o usuário por precaução
 
 
-_last_check_times = {} 
 estado_mensagens: Dict[int, dict] = {}
 
 TIPO_MENU = "menu"
 TIPO_CONTEXTO = "contexto"
 TIPO_RESULTADO = "resultado"
+
+ATALHOS_TEXTO_PRIVADO = {
+    "menu": "menu_principal",
+    "painel": "menu_principal",
+    "bode": "menu_principal",
+    "inicio": "menu_principal",
+    "início": "menu_principal",
+    "menu principal": "menu_principal",
+    "abrir menu": "menu_principal",
+    "voltar menu": "menu_principal",
+    "sessoes": "ver_eventos",
+    "sessões": "ver_eventos",
+    "ver sessoes": "ver_eventos",
+    "ver sessões": "ver_eventos",
+    "agenda": "ver_eventos",
+    "minhas presencas": "minhas_confirmacoes",
+    "minhas presenças": "minhas_confirmacoes",
+    "presencas": "minhas_confirmacoes",
+    "presenças": "minhas_confirmacoes",
+    "meu perfil": "meu_cadastro",
+    "perfil": "meu_cadastro",
+    "cadastro": "meu_cadastro",
+    "meus lembretes": "menu_lembretes",
+    "lembretes": "menu_lembretes",
+    "assistente ia": "abrir_assistente_ia",
+    "assistente": "abrir_assistente_ia",
+    "ia": "abrir_assistente_ia",
+    "ajuda": "menu_ajuda",
+    "central de ajuda": "menu_ajuda",
+    "organizar conversa": "limpar_historico",
+    "limpar conversa": "limpar_historico",
+}
 
 
 # ============================================
@@ -69,26 +101,95 @@ def menu_principal_teclado(nivel: str) -> InlineKeyboardMarkup:
     Gera o teclado do menu principal baseado no nível de acesso.
     """
     botoes = [
-        [InlineKeyboardButton("📅 Ver Sessões", callback_data="ver_eventos")],
-        [InlineKeyboardButton("✅ Minhas Presenças", callback_data="minhas_confirmacoes")],
-        [InlineKeyboardButton("👤 Meu Perfil", callback_data="meu_cadastro")],
-        [InlineKeyboardButton("🔔 Meus Lembretes", callback_data="menu_lembretes")],
-        [InlineKeyboardButton("🤖 Assistente IA", callback_data="abrir_assistente_ia")],
-        [InlineKeyboardButton("❓ Ajuda", callback_data="menu_ajuda")],
+        [
+            InlineKeyboardButton("📅 Sessões", callback_data="ver_eventos"),
+            InlineKeyboardButton("✅ Presenças", callback_data="minhas_confirmacoes"),
+        ],
+        [
+            InlineKeyboardButton("👤 Perfil", callback_data="meu_cadastro"),
+            InlineKeyboardButton("❓ Ajuda", callback_data="menu_ajuda"),
+        ],
+        [
+            InlineKeyboardButton("🔔 Lembretes", callback_data="menu_lembretes"),
+            InlineKeyboardButton("🤖 Assistente IA", callback_data="abrir_assistente_ia"),
+        ],
     ]
 
     # Secretários (Nível 2) e Admins (Nível 3)
     if nivel in ("2", "3"):
-        botoes.append([InlineKeyboardButton("📋 Painel do Secretário", callback_data="area_secretario")])
+        botoes.append([InlineKeyboardButton("📋 Área do Secretário", callback_data="area_secretario")])
 
     # Apenas Administradores (Nível 3)
     if nivel == "3":
-        botoes.append([InlineKeyboardButton("⚙️ Painel de Administração", callback_data="area_admin")])
+        botoes.append([InlineKeyboardButton("⚙️ Administração", callback_data="area_admin")])
 
-    # Opção de limpeza para manter o templo virtual em ordem
-    botoes.append([InlineKeyboardButton("🧹 Limpar Rastro de Mensagens", callback_data="limpar_historico")])
+    botoes.append([InlineKeyboardButton("🧹 Organizar conversa", callback_data="limpar_historico")])
 
     return InlineKeyboardMarkup(botoes)
+
+
+def _callbacks_inline(teclado: Optional[InlineKeyboardMarkup]) -> Set[str]:
+    callbacks: Set[str] = set()
+    if not isinstance(teclado, InlineKeyboardMarkup):
+        return callbacks
+    for linha in teclado.inline_keyboard:
+        for botao in linha:
+            callback_data = getattr(botao, "callback_data", None)
+            if callback_data:
+                callbacks.add(callback_data)
+    return callbacks
+
+
+def _teclado_com_inicio(teclado: Optional[InlineKeyboardMarkup], incluir_rodape_global: bool) -> Optional[InlineKeyboardMarkup]:
+    if not incluir_rodape_global:
+        return teclado
+
+    if teclado is None:
+        return InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Início", callback_data="menu_principal")]])
+
+    if not isinstance(teclado, InlineKeyboardMarkup):
+        return teclado
+
+    callbacks = _callbacks_inline(teclado)
+    if "menu_principal" in callbacks:
+        return teclado
+
+    linhas = [list(linha) for linha in teclado.inline_keyboard]
+    linhas.append([InlineKeyboardButton("🏠 Início", callback_data="menu_principal")])
+    return InlineKeyboardMarkup(linhas)
+
+
+def _normalizar_texto_atalho(texto: str) -> str:
+    base = unicodedata.normalize("NFKD", str(texto or ""))
+    base = "".join(ch for ch in base if not unicodedata.combining(ch))
+    base = re.sub(r"\s+", " ", base).strip().lower()
+    return base
+
+
+def _montar_tela_privada(caminho: str, conteudo: str) -> str:
+    caminho_txt = str(caminho or "").strip()
+    corpo = str(conteudo or "").strip()
+    if not caminho_txt:
+        return corpo
+    if not corpo:
+        return f"🧭 {caminho_txt}"
+    return f"🧭 {caminho_txt}\n\n{corpo}"
+
+
+def _texto_painel_inicial(membro: dict, observacao: str = "") -> str:
+    nome = str(membro.get("Nome", "") or "").strip()
+    linhas = [
+        "🐐 *Bode Andarilho*",
+        "",
+        f"Saudações, Ir.·. {nome}!" if nome else "Saudações fraternas!",
+        "",
+        "Escolha uma opção abaixo para continuar.",
+        "Se limpar a conversa, basta digitar /start para reconstruir este painel.",
+    ]
+    observacao = str(observacao or "").strip()
+    if observacao:
+        linhas.extend(["", observacao])
+    return "\n".join(linhas)
 
 
 # ============================================
@@ -118,21 +219,6 @@ async def _responder_callback_seguro(query, texto: Optional[str] = None):
         logger.warning("Falha ao responder callback: %s", e)
 
 
-async def _verificar_mensagem_existe(context, user_id: int, message_id: int) -> bool:
-    now = time.time()
-    if user_id in _last_check_times:
-        if now - _last_check_times[user_id] < 30:
-            return True
-    
-    try:
-        await context.bot.get_chat(user_id)
-        _last_check_times[user_id] = now
-        return True
-    except Exception:
-        _last_check_times.pop(user_id, None)
-        return False
-
-
 async def _enviar_ou_editar_mensagem(
     context, 
     user_id: int, 
@@ -140,45 +226,42 @@ async def _enviar_ou_editar_mensagem(
     texto: str, 
     teclado = None,
     parse_mode: str = "Markdown",
-    limpar_conteudo: bool = False
+    limpar_conteudo: bool = False,
+    incluir_rodape_global: bool = True,
 ) -> bool:
     global estado_mensagens
     
     if user_id not in estado_mensagens:
         estado_mensagens[user_id] = {}
-    
-    hash_atual = _gerar_hash_conteudo(texto, teclado)
+
+    teclado_final = _teclado_com_inicio(teclado, incluir_rodape_global)
+    hash_atual = _gerar_hash_conteudo(texto, teclado_final)
     dados_anteriores = estado_mensagens[user_id].get(tipo)
-    
-    if dados_anteriores and not limpar_conteudo:
-        mensagem_existe = await _verificar_mensagem_existe(context, user_id, dados_anteriores["message_id"])
-        
-        if not mensagem_existe:
+
+    if dados_anteriores and dados_anteriores.get("content_hash") == hash_atual:
+        return True
+
+    if dados_anteriores:
+        try:
+            await context.bot.edit_message_text(
+                chat_id=user_id,
+                message_id=dados_anteriores["message_id"],
+                text=texto,
+                parse_mode=parse_mode,
+                reply_markup=teclado_final
+            )
+            estado_mensagens[user_id][tipo]["content_hash"] = hash_atual
+            return True
+        except Exception as e:
+            logger.warning(f"[{tipo}] Falha ao editar para Ir.·. {user_id}: {e}")
             estado_mensagens[user_id].pop(tipo, None)
-        else:
-            if dados_anteriores.get("content_hash") == hash_atual:
-                return True
-            
-            try:
-                await context.bot.edit_message_text(
-                    chat_id=user_id,
-                    message_id=dados_anteriores["message_id"],
-                    text=texto,
-                    parse_mode=parse_mode,
-                    reply_markup=teclado
-                )
-                estado_mensagens[user_id][tipo]["content_hash"] = hash_atual
-                return True
-            except Exception as e:
-                logger.warning(f"[{tipo}] Falha ao editar para Ir.·. {user_id}: {e}")
-                estado_mensagens[user_id].pop(tipo, None)
-    
+
     try:
         msg = await context.bot.send_message(
             chat_id=user_id,
             text=texto,
             parse_mode=parse_mode,
-            reply_markup=teclado
+            reply_markup=teclado_final
         )
         
         if limpar_conteudo and tipo in estado_mensagens[user_id]:
@@ -220,6 +303,20 @@ async def _limpar_mensagens_anteriores(context, user_id: int, tipos: list = None
             estado_mensagens[user_id].pop(tipo, None)
 
 
+async def _executar_limpeza_historico(context, user_id: int, referencia_message_id: Optional[int]) -> int:
+    deletadas = 0
+    if not referencia_message_id:
+        return deletadas
+
+    for i in range(1, 101):
+        try:
+            await context.bot.delete_message(chat_id=user_id, message_id=referencia_message_id - i)
+            deletadas += 1
+        except Exception:
+            continue
+    return deletadas
+
+
 # ============================================
 # FLUXO DE NAVEGAÇÃO ENTRE COLUNAS
 # ============================================
@@ -247,33 +344,27 @@ async def criar_estrutura_inicial(context, user_id: int, membro: dict) -> bool:
         )
         return False
 
+    return await _mostrar_painel_principal(context, user_id, membro)
+
+
+async def _mostrar_painel_principal(
+    context,
+    user_id: int,
+    membro: dict,
+    observacao: str = "",
+) -> bool:
     nivel = get_nivel(user_id)
-    
-    # Menu Fixo (Portal de Entrada)
-    texto_menu = (
-        f"🐐 *Bode Andarilho*\n\n"
-        f"Saudações, Ir.·. {membro.get('Nome', '')}!\n\n"
-        "Escolha uma opção abaixo para seguir:"
+
+    await _limpar_mensagens_anteriores(context, user_id, [TIPO_MENU, TIPO_CONTEXTO])
+    return await _enviar_ou_editar_mensagem(
+        context,
+        user_id,
+        TIPO_RESULTADO,
+        _texto_painel_inicial(membro, observacao),
+        menu_principal_teclado(nivel),
+        limpar_conteudo=True,
+        incluir_rodape_global=False,
     )
-    sucesso = await _enviar_ou_editar_mensagem(
-        context, user_id, TIPO_MENU, texto_menu, menu_principal_teclado(nivel)
-    )
-    
-    if not sucesso:
-        return False
-    
-    # Contexto Inicial
-    await _enviar_ou_editar_mensagem(
-        context, user_id, TIPO_CONTEXTO, "📍 *Átrio / Menu Principal*"
-    )
-    
-    # Resultado Inicial
-    await _enviar_ou_editar_mensagem(
-        context, user_id, TIPO_RESULTADO,
-        "Tudo pronto por aqui. Use o menu acima para navegar pelo bot."
-    )
-    
-    return True
 
 
 async def navegar_para(
@@ -285,14 +376,13 @@ async def navegar_para(
     limpar_conteudo: bool = False
 ) -> bool:
     user_id = update.effective_user.id
-    
-    if caminho:
-        await _enviar_ou_editar_mensagem(
-            context, user_id, TIPO_CONTEXTO, f"📍 *{caminho}*"
-        )
-    
     return await _enviar_ou_editar_mensagem(
-        context, user_id, TIPO_RESULTADO, conteudo, teclado, limpar_conteudo=limpar_conteudo
+        context,
+        user_id,
+        TIPO_RESULTADO,
+        _montar_tela_privada(caminho, conteudo),
+        teclado,
+        limpar_conteudo=limpar_conteudo,
     )
 
 
@@ -302,15 +392,12 @@ async def voltar_ao_menu_principal(update: Update, context: ContextTypes.DEFAULT
     
     if not membro:
         return
-    
-    await _enviar_ou_editar_mensagem(
-        context, user_id, TIPO_CONTEXTO, "📍 *Átrio / Menu Principal*"
-    )
-    
-    await _enviar_ou_editar_mensagem(
-        context, user_id, TIPO_RESULTADO,
-        "Painel restaurado. Como posso ser útil agora, Ir.·.?",
-        limpar_conteudo=True
+
+    await _mostrar_painel_principal(
+        context,
+        user_id,
+        membro,
+        "Painel restaurado. Pode seguir por qualquer uma das opções abaixo.",
     )
 
 
@@ -320,26 +407,20 @@ async def limpar_historico(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await _responder_callback_seguro(query, "Limpando registros...")
     
     user_id = update.effective_user.id
-    deletadas = 0
-    
+    referencia_message_id = None
     try:
-        msg_id = update.callback_query.message.message_id
-        for i in range(1, 101):
-            try:
-                # Não apaga as mensagens do sistema de menu fixo (IDs guardados no estado)
-                # O algoritmo tenta apagar as mensagens avulsas (comandos de texto, etc)
-                await context.bot.delete_message(chat_id=user_id, message_id=msg_id - i)
-                deletadas += 1
-            except Exception:
-                continue
+        referencia_message_id = update.callback_query.message.message_id
     except Exception as e:
         logger.debug(f"Aviso de limpeza: {e}")
-    
-    await _enviar_ou_editar_mensagem(
-        context, user_id, TIPO_RESULTADO,
-        f"🧹 *Ordem Restaurada!* ({deletadas} mensagens removidas do histórico).",
-        limpar_conteudo=True
-    )
+
+    deletadas = await _executar_limpeza_historico(context, user_id, referencia_message_id)
+
+    membro = buscar_membro(user_id)
+    if not membro:
+        return
+
+    observacao = f"🧹 Conversa organizada. {deletadas} mensagem(ns) antigas foram removidas."
+    await _mostrar_painel_principal(context, user_id, membro, observacao)
 
 
 # ============================================
@@ -378,6 +459,86 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if veio_do_grupo:
             context.user_data["origem_grupo_cadastro"] = True
         await iniciar_cadastro(update, context)
+
+
+async def rotear_atalho_privado(update: Update, context: ContextTypes.DEFAULT_TYPE, texto: str) -> bool:
+    texto_normalizado = _normalizar_texto_atalho(texto)
+    destino = ATALHOS_TEXTO_PRIVADO.get(texto_normalizado)
+    if not destino:
+        user_id = update.effective_user.id if update.effective_user else 0
+        nivel = get_nivel(user_id) if user_id else "1"
+
+        if nivel in ("2", "3") and texto_normalizado in {"secretario", "area secretario"}:
+            destino = "area_secretario"
+        elif nivel == "3" and texto_normalizado in {"admin", "administracao", "area admin"}:
+            destino = "area_admin"
+
+    if not destino:
+        return False
+
+    if destino == "menu_principal":
+        await voltar_ao_menu_principal(update, context)
+    elif destino == "limpar_historico":
+        membro = buscar_membro(update.effective_user.id if update.effective_user else 0)
+        if membro:
+            deletadas = await _executar_limpeza_historico(
+                context,
+                update.effective_user.id,
+                update.message.message_id if update.message else None,
+            )
+            await _mostrar_painel_principal(
+                context,
+                update.effective_user.id,
+                membro,
+                f"🧹 Conversa organizada. {deletadas} mensagem(ns) antigas foram removidas.",
+            )
+        else:
+            await start(update, context)
+    elif destino == "ver_eventos":
+        from src.eventos import mostrar_eventos
+        await mostrar_eventos(update, context)
+    elif destino == "minhas_confirmacoes":
+        from src.eventos import minhas_confirmacoes
+        await minhas_confirmacoes(update, context)
+    elif destino == "meu_cadastro":
+        from src.perfil import mostrar_perfil
+        await mostrar_perfil(update, context)
+    elif destino == "menu_lembretes":
+        from src.membro_lembretes import menu_lembretes_membro
+        await menu_lembretes_membro(update, context)
+    elif destino == "menu_ajuda":
+        from src.ajuda.menus import menu_ajuda_principal
+        await menu_ajuda_principal(update, context)
+    elif destino == "abrir_assistente_ia":
+        from src.ia_assistente import abrir_assistente_ia
+        await abrir_assistente_ia(update, context)
+    elif destino == "area_secretario":
+        from src.eventos_secretario import exibir_menu_secretario
+        await exibir_menu_secretario(update, context)
+    elif destino == "area_admin":
+        from src.admin_acoes import exibir_menu_admin
+        await exibir_menu_admin(update, context)
+    else:
+        return False
+
+    return True
+
+
+async def texto_privado_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+    if update.effective_chat and update.effective_chat.type != "private":
+        return
+
+    texto = (update.message.text or "").strip()
+    if not texto:
+        return
+
+    if await rotear_atalho_privado(update, context, texto):
+        return
+
+    from src.ia_assistente import assistente_ia_texto_livre
+    await assistente_ia_texto_livre(update, context)
 
 
 # ============================================
@@ -498,10 +659,12 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 __all__ = [
     'start',
     'botao_handler',
+    'texto_privado_router',
     'menu_principal_teclado',
     'criar_estrutura_inicial',
     'navegar_para',
     'voltar_ao_menu_principal',
+    'rotear_atalho_privado',
     '_enviar_ou_editar_mensagem',
     'TIPO_MENU',
     'TIPO_CONTEXTO',

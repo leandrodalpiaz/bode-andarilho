@@ -96,6 +96,60 @@ def _teclado_opcoes_inline(campo_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(linhas)
 
 
+def _teclado_texto_edicao() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Voltar", callback_data="editar_perfil")],
+        [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")],
+    ])
+
+
+def _teclado_pos_edicao() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("👤 Ver meu perfil", callback_data="meu_cadastro")],
+        [InlineKeyboardButton("✏️ Ajustar outro campo", callback_data="editar_perfil")],
+    ])
+
+
+def _mensagem_prompt_campo(campo_info: dict, valor_atual: str, observacao: str = "") -> str:
+    linhas = [
+        f"✏️ *Retificação de {campo_info['nome']}*",
+        "",
+        f"Informação atual: `{valor_atual}`",
+        "",
+        "Escreva o novo dado abaixo ou use os botões para voltar.",
+    ]
+    observacao = str(observacao or "").strip()
+    if observacao:
+        linhas.extend(["", observacao])
+    return "\n".join(linhas)
+
+
+async def _mostrar_prompt_campo_texto(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    campo_id: str,
+    observacao: str = "",
+):
+    campo_info = CAMPOS_EDITAVEIS_PERFIL.get(campo_id)
+    if not campo_info:
+        return ConversationHandler.END
+
+    membro = buscar_membro(update.effective_user.id) or context.user_data.get("perfil_dados", {})
+    context.user_data["perfil_dados"] = membro
+    context.user_data["editando_campo_perfil"] = campo_id
+    valor_atual = _valor_campo(membro, campo_id, campo_info)
+
+    await navegar_para(
+        update,
+        context,
+        f"Retificar {campo_info['nome']}",
+        _mensagem_prompt_campo(campo_info, valor_atual, observacao),
+        _teclado_texto_edicao(),
+        limpar_conteudo=True,
+    )
+    return NOVO_VALOR
+
+
 async def editar_perfil_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     membro = buscar_membro(user_id)
@@ -143,14 +197,7 @@ async def selecionar_campo_perfil(update: Update, context: ContextTypes.DEFAULT_
         )
         return SELECIONAR_CAMPO
 
-    await navegar_para(
-        update,
-        context,
-        f"Retificar {campo_info['nome']}",
-        f"✏️ *Retificação de {campo_info['nome']}*\n\nInformação atual: `{valor_atual}`\n\nEscreva o novo dado abaixo ou utilize /cancelar para manter como está.",
-        None,
-    )
-    return NOVO_VALOR
+    return await _mostrar_prompt_campo_texto(update, context, campo_id)
 
 
 async def aplicar_valor_inline_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -160,15 +207,12 @@ async def aplicar_valor_inline_perfil(update: Update, context: ContextTypes.DEFA
     user_id = update.effective_user.id
 
     if campo_id == "potencia" and novo_valor == "Outra":
-        context.user_data["editando_campo_perfil"] = campo_id
-        await navegar_para(
+        return await _mostrar_prompt_campo_texto(
             update,
             context,
-            "Retificar Potência",
+            campo_id,
             "Informe a potência desejada para manter o cadastro correto.",
-            None,
         )
-        return NOVO_VALOR
 
     campo_info = CAMPOS_EDITAVEIS_PERFIL.get(campo_id)
     if not campo_info:
@@ -179,13 +223,13 @@ async def aplicar_valor_inline_perfil(update: Update, context: ContextTypes.DEFA
         await query.answer("Não consegui atualizar este dado agora.", show_alert=True)
         return ConversationHandler.END
 
-    await query.edit_message_text(
+    await _enviar_ou_editar_mensagem(
+        context,
+        user_id,
+        TIPO_RESULTADO,
         f"✅ O campo *{campo_info['nome']}* foi atualizado com sucesso.\n\nUse o menu abaixo para seguir.",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("👤 Ver meu perfil", callback_data="meu_cadastro")],
-            [InlineKeyboardButton("✏️ Ajustar outro campo", callback_data="editar_perfil")],
-        ]),
+        _teclado_pos_edicao(),
+        limpar_conteudo=True,
     )
     context.user_data.pop("editando_campo_perfil", None)
     context.user_data.pop("perfil_dados", None)
@@ -206,17 +250,30 @@ async def receber_novo_valor_perfil(update: Update, context: ContextTypes.DEFAUL
         elif normalizado in {"não", "nao", "n"}:
             novo_valor = "Não"
         else:
-            await update.message.reply_text("Irmão, para este campo, responda apenas com 'Sim' ou 'Não'.")
-            return NOVO_VALOR
+            return await _mostrar_prompt_campo_texto(
+                update,
+                context,
+                campo_id,
+                "Irmão, para este campo, responda apenas com *Sim* ou *Não*.",
+            )
 
     sucesso = atualizar_membro(update.effective_user.id, {campo_info["chave"]: novo_valor}, preservar_nivel=True)
     if sucesso:
-        await update.message.reply_text(
-            f"✅ O campo *{campo_info['nome']}* foi atualizado com sucesso.\n\nUse /start ou o menu acima para seguir.",
-            parse_mode="Markdown",
+        await _enviar_ou_editar_mensagem(
+            context,
+            update.effective_user.id,
+            TIPO_RESULTADO,
+            f"✅ O campo *{campo_info['nome']}* foi atualizado com sucesso.\n\nUse o menu abaixo para seguir.",
+            _teclado_pos_edicao(),
+            limpar_conteudo=True,
         )
     else:
-        await update.message.reply_text("Houve um percalço ao atualizar seus dados. Tente novamente em alguns instantes.")
+        return await _mostrar_prompt_campo_texto(
+            update,
+            context,
+            campo_id,
+            "Houve um percalço ao atualizar seus dados. Tente novamente em alguns instantes.",
+        )
 
     context.user_data.pop("editando_campo_perfil", None)
     context.user_data.pop("perfil_dados", None)
@@ -225,11 +282,19 @@ async def receber_novo_valor_perfil(update: Update, context: ContextTypes.DEFAUL
 
 async def cancelar_edicao_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = "A retificação foi interrompida. Seus dados permanecem inalterados e acobertos."
-    if update.message:
-        await update.message.reply_text(msg)
-    elif update.callback_query:
+    if update.callback_query:
         await update.callback_query.answer()
-        await _enviar_ou_editar_mensagem(context, update.effective_user.id, TIPO_RESULTADO, msg)
+    await _enviar_ou_editar_mensagem(
+        context,
+        update.effective_user.id,
+        TIPO_RESULTADO,
+        msg,
+        InlineKeyboardMarkup([
+            [InlineKeyboardButton("👤 Ver meu perfil", callback_data="meu_cadastro")],
+            [InlineKeyboardButton("🏠 Início", callback_data="menu_principal")],
+        ]),
+        limpar_conteudo=True,
+    )
     context.user_data.clear()
     return ConversationHandler.END
 

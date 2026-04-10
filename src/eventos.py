@@ -1337,11 +1337,13 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
         ])
 
-    await context.bot.send_message(
-        chat_id=user_id,
-        text=resposta,
-        parse_mode="Markdown",
-        reply_markup=teclado
+    await _enviar_ou_editar_mensagem(
+        context,
+        user_id,
+        TIPO_RESULTADO,
+        resposta,
+        teclado,
+        limpar_conteudo=True,
     )
     await enviar_dica_contextual(update, context, "confirmacao_presenca")
 
@@ -1363,20 +1365,26 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
     eventos = listar_eventos() or []
     evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
     if not evento:
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=CONFIRMACAO_SESSAO_NAO_ENCONTRADA
+        await _enviar_ou_editar_mensagem(
+            context,
+            user_id,
+            TIPO_RESULTADO,
+            CONFIRMACAO_SESSAO_NAO_ENCONTRADA,
+            limpar_conteudo=True,
         )
         return
 
     motivo_bloqueio = _motivo_bloqueio_confirmacao(evento)
     if motivo_bloqueio:
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=motivo_bloqueio,
-            reply_markup=InlineKeyboardMarkup([
+        await _enviar_ou_editar_mensagem(
+            context,
+            user_id,
+            TIPO_RESULTADO,
+            motivo_bloqueio,
+            InlineKeyboardMarkup([
                 [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
-            ])
+            ]),
+            limpar_conteudo=True,
         )
         return
 
@@ -1385,13 +1393,16 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
         return
 
     if buscar_confirmacao(id_evento, user_id):
-        await context.bot.send_message(
-            chat_id=user_id,
-            text=CONFIRMACAO_JA_CONFIRMADO_POS_CADASTRO,
-            reply_markup=InlineKeyboardMarkup([
+        await _enviar_ou_editar_mensagem(
+            context,
+            user_id,
+            TIPO_RESULTADO,
+            CONFIRMACAO_JA_CONFIRMADO_POS_CADASTRO,
+            InlineKeyboardMarkup([
                 [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")],
                 [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")],
-            ])
+            ]),
+            limpar_conteudo=True,
         )
         return
 
@@ -1448,14 +1459,16 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
             participacao=texto_participacao,
         )
 
-    await context.bot.send_message(
-        chat_id=user_id,
-        text=resposta,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup([
+    await _enviar_ou_editar_mensagem(
+        context,
+        user_id,
+        TIPO_RESULTADO,
+        resposta,
+        InlineKeyboardMarkup([
             [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")],
             [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")],
-        ])
+        ]),
+        limpar_conteudo=True,
     )
     await enviar_dica_contextual(update, context, "confirmacao_presenca")
 
@@ -1526,11 +1539,13 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("🔙 Não, voltar", callback_data=f"evento|{_encode_cb(id_evento)}")
             ]])
             try:
-                await context.bot.send_message(
-                    chat_id=user_id,
-                    text=CANCELAR_PRESENCA_CONFIRMAR,
-                    parse_mode="Markdown",
-                    reply_markup=teclado
+                await _enviar_ou_editar_mensagem(
+                    context,
+                    user_id,
+                    TIPO_RESULTADO,
+                    CANCELAR_PRESENCA_CONFIRMAR,
+                    teclado,
+                    limpar_conteudo=True,
                 )
                 await _responder_callback_seguro(query, CANCELAR_PRESENCA_CALLBACK_INSTRUCOES)
             except Forbidden:
@@ -1638,25 +1653,36 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     botoes.append([InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")])
 
-    # COMPORTAMENTO ORIGINAL: SEMPRE envia nova mensagem
-    msg = await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=texto,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(botoes),
-    )
+    reply_markup = InlineKeyboardMarkup(botoes)
 
-    # No grupo, a lista completa é temporária para evitar poluição visual.
-    # O resumo é independente e permanece visível.
-    if update.effective_chat and update.effective_chat.type in ("group", "supergroup"):
-        asyncio.create_task(
-            _auto_delete_message(
-                context,
-                update.effective_chat.id,
-                msg.message_id,
-                delay=15,
-            )
+    if update.effective_chat and update.effective_chat.type == "private":
+        await _enviar_ou_editar_mensagem(
+            context,
+            update.effective_user.id,
+            TIPO_RESULTADO,
+            texto,
+            reply_markup,
+            limpar_conteudo=True,
         )
+    else:
+        msg = await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=texto,
+            parse_mode="Markdown",
+            reply_markup=reply_markup,
+        )
+
+        # No grupo, a lista completa é temporária para evitar poluição visual.
+        # O resumo é independente e permanece visível.
+        if update.effective_chat and update.effective_chat.type in ("group", "supergroup"):
+            asyncio.create_task(
+                _auto_delete_message(
+                    context,
+                    update.effective_chat.id,
+                    msg.message_id,
+                    delay=15,
+                )
+            )
 
 
 # ============================================
@@ -1885,6 +1911,9 @@ async def fechar_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not query:
         return
     await query.answer()
+    if update.effective_chat and update.effective_chat.type == "private":
+        await voltar_ao_menu_principal(update, context)
+        return
     try:
         await query.delete_message()
     except Exception:

@@ -81,6 +81,7 @@ from src.bot import (
     botao_handler,
     menu_principal_teclado,
     start,
+    texto_privado_router,
     _enviar_ou_editar_mensagem,
     TIPO_RESULTADO,
 )
@@ -177,7 +178,6 @@ from src.ia_assistente import (
     assistente_ia,
     assistente_ia_stats,
     assistente_ia_relatorio,
-    assistente_ia_texto_livre,
 )
 
 # ============================================
@@ -711,10 +711,10 @@ def register_handlers(app: Application) -> None:
     # ===== 13. HANDLER GENÉRICO DE BOTÕES (CATCH-ALL) =====
     app.add_handler(CallbackQueryHandler(botao_handler))
 
-    # ===== 13.5 TEXTO LIVRE NO PRIVADO (ASSISTENTE IA SEM /COMANDO) =====
+    # ===== 13.5 TEXTO LIVRE NO PRIVADO =====
     app.add_handler(MessageHandler(
         filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND,
-        assistente_ia_texto_livre
+        texto_privado_router
     ))
 
     # ===== 14. HANDLERS DE MENSAGENS EM GRUPO =====

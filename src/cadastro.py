@@ -38,7 +38,6 @@ from telegram.ext import (
 )
 
 from src.messages import (
-    CADASTRO_CANCELADO,
     CADASTRO_CONCLUIDO,
     ERRO_GENERICO,
     CADASTRO_REDIRECIONAR_PRIVADO,
@@ -63,7 +62,6 @@ from src.messages import (
     CADASTRO_DADOS_PENDENTES,
     CADASTRO_FALHA_SALVAR,
     CADASTRO_PROMPT_CONFIRMAR,
-    CADASTRO_OPERACAO_CANCELADA,
 )
 from src.sheets_supabase import buscar_membro, cadastrar_membro
 from src.bot import (
@@ -306,6 +304,53 @@ async def _navegar_etapa(
     return estado
 
 
+def _caminho_etapa(estado: int) -> str:
+    return "Confirmar Cadastro" if estado == CONFIRMAR else "Cadastro"
+
+
+def _teclado_etapa(estado: int) -> InlineKeyboardMarkup:
+    if estado == GRAU:
+        return _teclado_grau()
+    if estado == VM:
+        return _teclado_vm()
+    if estado == CONFIRMAR:
+        return _teclado_confirmar()
+    return _teclado_nav(max(NOME, estado - 1))
+
+
+def _conteudo_etapa(
+    context: ContextTypes.DEFAULT_TYPE,
+    estado: int,
+    retomada: bool = False,
+) -> str:
+    if estado == CONFIRMAR:
+        return CADASTRO_REVISAO_FINAL_TMPL.format(resumo=_resumo_cadastro(context))
+    return _texto_etapa(estado, retomada=retomada)
+
+
+async def _reexibir_etapa(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    estado: int,
+    mensagem: str = "",
+    retomada: bool = False,
+) -> int:
+    conteudo = _conteudo_etapa(context, estado, retomada=retomada)
+    mensagem = str(mensagem or "").strip()
+    if mensagem:
+        conteudo = f"{mensagem}\n\n{conteudo}" if conteudo else mensagem
+
+    await navegar_para(
+        update,
+        context,
+        _caminho_etapa(estado),
+        conteudo,
+        _teclado_etapa(estado),
+        limpar_conteudo=True,
+    )
+    return estado
+
+
 def _validar_data_nasc(texto: str) -> bool:
     """Valida se a data está no formato DD/MM/AAAA."""
     s = (texto or "").strip()
@@ -398,24 +443,25 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         teclado_inicio = _teclado_inicio(cadastrado, forcar_revalidacao, cadastro_parcial)
 
-        if update.callback_query:
-            await update.callback_query.edit_message_text(
-                texto,
-                parse_mode="Markdown",
-                reply_markup=teclado_inicio
-            )
-        elif update.message:
-            await update.message.reply_text(
-                texto,
-                parse_mode="Markdown",
-                reply_markup=teclado_inicio
-            )
+        await _enviar_ou_editar_mensagem(
+            context,
+            update.effective_user.id,
+            TIPO_RESULTADO,
+            texto,
+            teclado_inicio,
+            limpar_conteudo=True,
+        )
         return ConversationHandler.END
         
     except Exception as e:
         logger.error(f"Erro em cadastro_start: {e}\n{traceback.format_exc()}")
-        if update.message:
-            await update.message.reply_text(ERRO_GENERICO)
+        await _enviar_ou_editar_mensagem(
+            context,
+            update.effective_user.id,
+            TIPO_RESULTADO,
+            ERRO_GENERICO,
+            limpar_conteudo=True,
+        )
         return ConversationHandler.END
 
 
@@ -511,11 +557,7 @@ async def receber_nome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe e valida o nome."""
     nome = (update.message.text or "").strip()
     if len(nome) < 3:
-        await update.message.reply_text(
-            CADASTRO_ERRO_NOME_CURTO,
-            parse_mode="Markdown",
-        )
-        return NOME
+        return await _reexibir_etapa(update, context, NOME, CADASTRO_ERRO_NOME_CURTO)
 
     context.user_data["cadastro_nome"] = nome
     return await _navegar_etapa(update, context, DATA_NASC)
@@ -525,11 +567,7 @@ async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe e valida a data de nascimento."""
     texto = (update.message.text or "").strip()
     if not _validar_data_nasc(texto):
-        await update.message.reply_text(
-            CADASTRO_ERRO_DATA_NASC,
-            parse_mode="Markdown",
-        )
-        return DATA_NASC
+        return await _reexibir_etapa(update, context, DATA_NASC, CADASTRO_ERRO_DATA_NASC)
 
     context.user_data["cadastro_data_nasc"] = texto
     return await _navegar_etapa(update, context, GRAU)
@@ -539,8 +577,7 @@ async def receber_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o nome da loja."""
     loja = (update.message.text or "").strip()
     if len(loja) < 2:
-        await update.message.reply_text(CADASTRO_ERRO_LOJA, parse_mode="Markdown")
-        return LOJA
+        return await _reexibir_etapa(update, context, LOJA, CADASTRO_ERRO_LOJA)
 
     context.user_data["cadastro_loja"] = loja
     return await _navegar_etapa(update, context, NUMERO_LOJA)
@@ -550,8 +587,7 @@ async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Recebe o número da loja."""
     numero = (update.message.text or "").strip()
     if not _validar_numero_loja(numero):
-        await update.message.reply_text(CADASTRO_ERRO_NUMERO_LOJA)
-        return NUMERO_LOJA
+        return await _reexibir_etapa(update, context, NUMERO_LOJA, CADASTRO_ERRO_NUMERO_LOJA)
 
     context.user_data["cadastro_numero_loja"] = numero
     return await _navegar_etapa(update, context, ORIENTE)
@@ -561,8 +597,7 @@ async def receber_oriente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o oriente."""
     oriente = (update.message.text or "").strip()
     if len(oriente) < 2:
-        await update.message.reply_text(CADASTRO_ERRO_ORIENTE, parse_mode="Markdown")
-        return ORIENTE
+        return await _reexibir_etapa(update, context, ORIENTE, CADASTRO_ERRO_ORIENTE)
 
     context.user_data["cadastro_oriente"] = oriente
     return await _navegar_etapa(update, context, POTENCIA)
@@ -572,8 +607,7 @@ async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe a potência."""
     potencia = (update.message.text or "").strip()
     if len(potencia) < 2:
-        await update.message.reply_text(CADASTRO_ERRO_POTENCIA, parse_mode="Markdown")
-        return POTENCIA
+        return await _reexibir_etapa(update, context, POTENCIA, CADASTRO_ERRO_POTENCIA)
 
     context.user_data["cadastro_potencia"] = potencia
     return await _navegar_etapa(update, context, CONFIRMAR)
@@ -624,20 +658,10 @@ async def set_grau_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         _, grau = query.data.split("|", 1)
     except Exception:
-        await _enviar_ou_editar_mensagem(
-            context, update.effective_user.id, TIPO_RESULTADO,
-            CADASTRO_ERRO_GRAU_INVALIDO,
-            _teclado_grau()
-        )
-        return GRAU
+        return await _reexibir_etapa(update, context, GRAU, CADASTRO_ERRO_GRAU_INVALIDO)
 
     if grau not in GRAUS_OPCOES:
-        await _enviar_ou_editar_mensagem(
-            context, update.effective_user.id, TIPO_RESULTADO,
-            CADASTRO_ERRO_GRAU_SELECIONE,
-            _teclado_grau()
-        )
-        return GRAU
+        return await _reexibir_etapa(update, context, GRAU, CADASTRO_ERRO_GRAU_SELECIONE)
 
     context.user_data["cadastro_grau"] = grau
     return await _navegar_etapa(update, context, VM)
@@ -651,20 +675,10 @@ async def set_vm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         _, vm = query.data.split("|", 1)
     except Exception:
-        await _enviar_ou_editar_mensagem(
-            context, update.effective_user.id, TIPO_RESULTADO,
-            CADASTRO_ERRO_VM_INVALIDO,
-            _teclado_vm()
-        )
-        return VM
+        return await _reexibir_etapa(update, context, VM, CADASTRO_ERRO_VM_INVALIDO)
 
     if vm not in (VM_SIM, VM_NAO):
-        await _enviar_ou_editar_mensagem(
-            context, update.effective_user.id, TIPO_RESULTADO,
-            CADASTRO_ERRO_VM_INVALIDO,
-            _teclado_vm()
-        )
-        return VM
+        return await _reexibir_etapa(update, context, VM, CADASTRO_ERRO_VM_INVALIDO)
 
     context.user_data["cadastro_vm"] = vm
     return await _navegar_etapa(update, context, LOJA)
@@ -754,12 +768,7 @@ async def receber_confirmacao_texto(update: Update, context: ContextTypes.DEFAUL
     if texto in {"confirmar", "confirmo", "ok", "sim"}:
         return await _finalizar_cadastro(update, context)
 
-    await update.message.reply_text(
-        CADASTRO_PROMPT_CONFIRMAR,
-        parse_mode="Markdown",
-    )
-    await _mostrar_confirmacao(update, context)
-    return CONFIRMAR
+    return await _reexibir_etapa(update, context, CONFIRMAR, CADASTRO_PROMPT_CONFIRMAR)
 
 
 async def confirmar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -811,16 +820,16 @@ async def cancelar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if update.callback_query:
             await _responder_callback_seguro(update.callback_query)
-            await navegar_para(
-                update, context,
-                "Cadastro",
-                CADASTRO_OPERACAO_CANCELADA,
-                InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")
-                ]])
-            )
-        elif update.message:
-            await update.message.reply_text(CADASTRO_CANCELADO)
+
+        await navegar_para(
+            update, context,
+            "Cadastro",
+            "Cadastro cancelado. Quando desejar retomar, basta voltar ao início.",
+            InlineKeyboardMarkup([[
+                InlineKeyboardButton("🏠 Início", callback_data="menu_principal")
+            ]]),
+            limpar_conteudo=True,
+        )
     except Exception as e:
         logger.error(f"Erro em cancelar_cadastro: {e}\n{traceback.format_exc()}")
 

@@ -1,0 +1,193 @@
+<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"><title>Cadastro de Membro - Bode Andarilho</title><script src="https://telegram.org/js/telegram-web-app.js"></script><style>
+:root{
+  --bg:var(--tg-theme-bg-color,#fff);
+  --text:var(--tg-theme-text-color,#000);
+  --hint:var(--tg-theme-hint-color,#888);
+  --link:var(--tg-theme-link-color,#2481cc);
+  --btn:var(--tg-theme-button-color,#2481cc);
+  --btn-text:var(--tg-theme-button-text-color,#fff);
+  --sec:var(--tg-theme-secondary-bg-color,#f1f1f1);
+  --border:rgba(128,128,128,.2);
+  --select-bg:var(--tg-theme-secondary-bg-color,#f1f1f1);
+  --select-text:var(--tg-theme-text-color,#000);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  background:var(--bg);color:var(--text);
+  color-scheme:light dark;
+  min-height:100vh;padding:12px 12px 84px;
+}
+h1{font-size:17px;font-weight:700;margin-bottom:14px}
+.card{background:var(--sec);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+.card-title{font-size:12px;font-weight:600;color:var(--hint);
+  text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px}
+.field{margin-bottom:14px}
+.field:last-child{margin-bottom:0}
+label{display:block;font-size:13px;color:var(--hint);margin-bottom:3px;font-weight:500}
+input,textarea{
+  width:100%;background:transparent;border:none;
+  border-bottom:1px solid var(--border);padding:6px 0;
+  font-size:16px;color:var(--text);outline:none;font-family:inherit;
+  -webkit-appearance:none;appearance:none;
+}
+select{
+  width:100%;background-color:var(--select-bg);border:none;
+  border-bottom:1px solid var(--border);padding:6px 0;
+  font-size:16px;color:var(--select-text);outline:none;font-family:inherit;
+  -webkit-appearance:none;appearance:none;
+}
+select{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath fill='%23888' d='M5 6L0 0h10z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 2px center;
+  background-size:10px 6px;padding-right:20px;
+}
+option{background-color:var(--bg);color:var(--text)}
+select:focus{border-bottom:1px solid var(--btn)}
+textarea{
+  border:1px solid var(--border);border-radius:8px;
+  padding:8px;resize:none;min-height:64px;
+}
+input::placeholder,textarea::placeholder{color:var(--hint)}
+.err{color:#ff3b30;font-size:12px;margin-top:3px;display:none}
+.err.on{display:block}
+.toast{
+  position:fixed;bottom:76px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.75);color:#fff;padding:8px 18px;
+  border-radius:20px;font-size:14px;display:none;z-index:99;
+  white-space:nowrap;max-width:80vw;overflow:hidden;text-overflow:ellipsis;
+}
+.toast.on{display:block}
+.info{font-size:12px;color:var(--hint);margin-top:3px}
+</style></head><body><h1>Cadastro de Membro</h1>
+<div class="card">
+  <div class="card-title">Identificação</div>
+  <div class="field">
+    <label for="nome">Nome completo *</label>
+    <input id="nome" type="text" placeholder="Como consta no quadro da loja" autocomplete="name">
+    <div id="nome_err" class="err"></div>
+  </div>
+  <div class="field">
+    <label for="data_nasc">Data de nascimento * <span class="info">(DD/MM/AAAA)</span></label>
+    <input id="data_nasc" type="text" placeholder="25/03/1985" maxlength="10" inputmode="numeric">
+    <div id="data_nasc_err" class="err"></div>
+  </div>
+  <div class="field">
+    <label for="grau">Grau *</label>
+    <select id="grau">
+      <option value="">Selecione...</option>
+      <option>Aprendiz</option>
+      <option>Companheiro</option>
+      <option>Mestre</option>
+      <option>Mestre Instalado</option>
+    </select>
+    <div id="grau_err" class="err"></div>
+  </div>
+  <div class="field">
+    <label for="vm">Venerável Mestre? *</label>
+    <select id="vm">
+      <option value="">Selecione...</option>
+      <option value="Sim">Sim</option>
+      <option value="Não">Não</option>
+    </select>
+    <div id="vm_err" class="err"></div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">Sua Loja</div>
+  <div class="field">
+    <label for="loja">Nome da loja *</label>
+    <input id="loja" type="text" placeholder="Ex.: Luz da Fraternidade">
+    <div id="loja_err" class="err"></div>
+  </div>
+  <div class="field">
+    <label for="numero_loja">Número <span class="info">(0 se não houver)</span></label>
+    <input id="numero_loja" type="text" value="0" inputmode="numeric" maxlength="8">
+  </div>
+  <div class="field">
+    <label for="oriente">Oriente *</label>
+    <input id="oriente" type="text" placeholder="Ex.: São Paulo / SP">
+    <div id="oriente_err" class="err"></div>
+  </div>
+  <div class="field">
+    <label for="potencia">Potência *</label>
+    <input id="potencia" type="text" placeholder="Ex.: GLESP">
+    <div id="potencia_err" class="err"></div>
+  </div>
+</div>
+<div id="toast" class="toast"></div><script>
+const tg=window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+function showToast(msg,dur){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('on');
+  clearTimeout(t._tid);
+  t._tid=setTimeout(()=>t.classList.remove('on'),dur||3000);
+}
+function setErr(id,msg){
+  const e=document.getElementById(id+'_err');
+  if(e){e.textContent=msg;e.classList.add('on');}
+}
+function clearErr(id){
+  const e=document.getElementById(id+'_err');
+  if(e) e.classList.remove('on');
+}
+function val(id){return((document.getElementById(id)||{}).value||'').trim();}
+function req(id,label){
+  const v=val(id);
+  if(!v){setErr(id,label+' é obrigatório.');return false;}
+  clearErr(id);return true;
+}
+function maskDate(el){
+  el.addEventListener('input',function(){
+    let s=this.value.replace(/\D/g,'');
+    if(s.length<=2)this.value=s;
+    else if(s.length<=4)this.value=s.slice(0,2)+'/'+s.slice(2);
+    else this.value=s.slice(0,2)+'/'+s.slice(2,4)+'/'+s.slice(4,8);
+  });
+}
+
+maskDate(document.getElementById('data_nasc'));
+function validate(){
+  let ok=true;
+  ok=req('nome','Nome')&&ok;
+  const dn=val('data_nasc');
+  if(!dn.match(/^\d{2}\/\d{2}\/\d{4}$/)){
+    setErr('data_nasc','Use o formato DD/MM/AAAA.');ok=false;
+  }else clearErr('data_nasc');
+  ok=req('grau','Grau')&&ok;
+  ok=req('vm','Venerável Mestre')&&ok;
+  ok=req('loja','Nome da loja')&&ok;
+  ok=req('oriente','Oriente')&&ok;
+  ok=req('potencia','Potência')&&ok;
+  return ok;
+}
+tg.MainButton.setText('Confirmar Cadastro');
+tg.MainButton.show();
+tg.MainButton.onClick(async()=>{
+  if(!validate())return;
+  tg.MainButton.showProgress(false);
+  tg.MainButton.disable();
+  try{
+    const r=await fetch('/api/cadastro_membro',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        init_data:tg.initData,
+        nome:val('nome'),
+        data_nasc:val('data_nasc'),
+        grau:val('grau'),
+        vm:val('vm'),
+        loja:val('loja'),
+        numero_loja:val('numero_loja')||'0',
+        oriente:val('oriente'),
+        potencia:val('potencia')
+      })
+    });
+    const j=await r.json();
+    if(j.ok){tg.close();}
+    else{showToast(j.error||'Erro. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
+  }catch{showToast('Falha de conexão. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
+});
+</script></body></html>

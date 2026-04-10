@@ -1714,22 +1714,18 @@ async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def ev_cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cancela o cadastro."""
     query = update.callback_query
-    user_id = update.effective_user.id
     
     if query:
         await query.answer()
-        await navegar_para(
-            update, context,
-            "Cadastro Cancelado",
-            "Cadastro cancelado. Use o menu acima para voltar.",
-            InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")
-            ]]),
-            limpar_conteudo=True
-        )
-    else:
-        if update.message:
-            await update.message.reply_text("Cadastro cancelado. Use /start para voltar ao menu principal.")
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento",
+        "Cadastro cancelado. Você pode voltar ao início quando desejar.",
+        InlineKeyboardMarkup([[
+            InlineKeyboardButton("🏠 Início", callback_data="menu_principal")
+        ]]),
+        limpar_conteudo=True
+    )
 
     _limpar_contexto_evento(context)
     return ConversationHandler.END
@@ -1745,8 +1741,15 @@ async def cancelar_publicacao(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def cancelar_cadastro_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cancela via comando /cancelar."""
-    if update.message:
-        await update.message.reply_text("Cadastro de evento cancelado. Use /start para voltar ao menu principal.")
+    await navegar_para(
+        update, context,
+        "Cadastro de Evento",
+        "Cadastro de evento cancelado. Você pode voltar ao início quando desejar.",
+        InlineKeyboardMarkup([[
+            InlineKeyboardButton("🏠 Início", callback_data="menu_principal")
+        ]]),
+        limpar_conteudo=True
+    )
     _limpar_contexto_evento(context)
     return ConversationHandler.END
 
