@@ -1,13 +1,13 @@
 # Bode Andarilho
 
-Bot Telegram para gerenciamento de eventos, confirmacoes e membros, com backend em Python e persistencia em Supabase.
+Bot Telegram para gerenciamento de eventos, confirmações e membros, com backend em Python e persistência em Supabase.
 
-## Documentacao principal
+## Documentação principal
 
-- Documentacao tecnica: `docs/documentacao_tecnica.md`
-- Fluxos atualizados (estado real do codigo): `docs/fluxos_atualizados_2026_04.md`
+- Documentação técnica: `docs/documentacao_tecnica.md`
+- Fluxos atualizados (estado real do código): `docs/fluxos_atualizados_2026_04.md`
 - Base estruturada para camada de IA: `docs/ajuda_ia_base.yaml`
-- Guia de manutencao de ajuda + IA: `docs/manutencao_ajuda_e_ia.md`
+- Guia de manutenção de ajuda + IA: `docs/manutencao_ajuda_e_ia.md`
 
 ## Stack
 
@@ -17,13 +17,13 @@ Bot Telegram para gerenciamento de eventos, confirmacoes e membros, com backend 
 - Supabase (PostgreSQL)
 - APScheduler
 
-## Execucao
+## Execução
 
 ```bash
 python main.py
 ```
 
-## Observacao
+## Observação
 
-A migracao de Google Sheets para Supabase foi concluida em 10/03/2026.
-Consulte a secao de migracao em `docs/documentacao_tecnica.md`.
+A migração de Google Sheets para Supabase foi concluída em 10/03/2026.
+Consulte a seção de migração em `docs/documentacao_tecnica.md`.
