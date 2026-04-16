@@ -39,6 +39,8 @@ from src.sheets_supabase import (
     set_notificacao_status,
     listar_eventos,
     obter_secretario_responsavel_evento,
+    listar_lojas_visiveis,
+    listar_membros_por_loja,
 )
 from src.permissoes import get_nivel
 from src.miniapp import WEBAPP_URL_EVENTO
@@ -79,6 +81,30 @@ CAMPOS_EDITAVEIS = {
     "veneravel_mestre": {"nome": "Venerável Mestre (Sim/Não)", "chave": "Venerável Mestre", "nivel_minimo": "2"},
     "nivel": {"nome": "Nível (1,2,3)", "chave": "Nivel", "nivel_minimo": "3"},  # Apenas admin pode editar nível
 }
+
+
+# ============================================
+# FUNÇÃO AUXILIAR: IDs de membros da loja do secretário
+# ============================================
+
+def _obter_ids_membros_da_loja(user_id: int) -> set:
+    """Retorna set de Telegram IDs dos membros das lojas do secretário."""
+    lojas = listar_lojas_visiveis(user_id, "2")
+    ids: set = set()
+    for loja in lojas:
+        loja_id = loja.get("ID") or loja.get("id")
+        nome = loja.get("Nome da Loja") or loja.get("nome_loja") or ""
+        numero = loja.get("Número") or loja.get("numero") or ""
+        membros_loja = listar_membros_por_loja(
+            loja_id=loja_id, nome_loja=nome, numero_loja=numero
+        )
+        for m in membros_loja:
+            tid_raw = m.get("Telegram ID")
+            try:
+                ids.add(int(float(tid_raw)))
+            except (TypeError, ValueError):
+                continue
+    return ids
 
 
 # ============================================
@@ -622,6 +648,11 @@ async def editar_membro_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return ConversationHandler.END
 
+    # Para secretário (nível 2): filtrar apenas membros da própria loja
+    membros_da_loja_ids = None
+    if nivel == "2":
+        membros_da_loja_ids = _obter_ids_membros_da_loja(user_id)
+
     botoes = []
     for membro in membros:
         membro_id = membro.get("Telegram ID")
@@ -636,6 +667,11 @@ async def editar_membro_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
 
         if nivel == "2" and membro_nivel != "1":
             continue
+
+        # Secretário: restringir por escopo de loja
+        if nivel == "2" and membros_da_loja_ids is not None:
+            if tid not in membros_da_loja_ids:
+                continue
 
         texto_botao = f"{nome} (Nível {membro_nivel})"
         if cargo:

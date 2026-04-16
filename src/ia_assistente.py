@@ -15,6 +15,13 @@ from telegram.ext import ContextTypes
 
 from src.bot import navegar_para
 from src.permissoes import get_nivel
+from src.ia_multinivel import (
+	IAResult,
+	classificar_intencao_multinivel,
+	complementar_evento_com_resposta,
+	validar_escopo_loja_secretario,
+	CAMPOS_EDITAVEIS_IA,
+)
 
 
 BASE_IA_PATH = Path(__file__).resolve().parents[1] / "docs" / "ajuda_ia_base.yaml"
@@ -620,37 +627,177 @@ async def _executar_assistente_ia(update: Update, context: ContextTypes.DEFAULT_
 		await navegar_para(update, context, "Assistente IA", mensagem_bloqueio, teclado)
 		return
 
-	intencoes = carregar_intencoes_base()
-	item = _classificar_intencao(texto_entrada, nivel, intencoes)
-	if not item:
-		_auditar_evento("unmatched", user_id, nivel, texto_entrada, topic_hint=_extrair_topic_hint(texto_entrada))
-		teclado = InlineKeyboardMarkup(
-			[
-				[InlineKeyboardButton("Central de Ajuda", callback_data="menu_ajuda")],
-				[InlineKeyboardButton("Menu principal", callback_data="menu_principal")],
-			]
-		)
-		await navegar_para(
-			update,
-			context,
-			"Assistente IA",
-			"Nao consegui identificar com seguranca sua intencao. Posso te guiar pela Central de Ajuda ou abrir o menu principal.",
-			teclado,
-		)
+	# ── 1) Verificar se é continuação de criação de evento multi-turno ──
+	pending = context.user_data.get("ia_evento_pendente")
+	if pending and isinstance(pending, dict):
+		await _tratar_complemento_evento(update, context, texto_entrada, user_id, nivel, pending)
 		return
 
-	teclado = _teclado_acao(item)
-	_auditar_evento(
-		"intent_matched",
-		user_id,
-		nivel,
-		texto_entrada,
-		intent_id=item.intent_id,
-		action_type=item.acao_tipo,
-		action_value=item.acao_valor if item.acao_tipo == "callback" else "informacao",
-		topic_hint=_extrair_topic_hint(texto_entrada),
+	# ── 2) Classificador multinível (antes do YAML base) ──────────────
+	lojas_sec = _obter_lojas_do_ator(user_id, nivel)
+	ia_result = classificar_intencao_multinivel(texto_entrada, nivel, lojas_sec)
+
+	if ia_result.intent and ia_result.confidence in ("high", "medium"):
+		await _despachar_ia_result(update, context, texto_entrada, user_id, nivel, ia_result)
+		return
+
+	# ── 3) Fallback YAML base (classificador original) ────────────────
+	intencoes = carregar_intencoes_base()
+	item = _classificar_intencao(texto_entrada, nivel, intencoes)
+	if item:
+		teclado = _teclado_acao(item)
+		_auditar_evento(
+			"intent_matched",
+			user_id,
+			nivel,
+			texto_entrada,
+			intent_id=item.intent_id,
+			action_type=item.acao_tipo,
+			action_value=item.acao_valor if item.acao_tipo == "callback" else "informacao",
+			topic_hint=_extrair_topic_hint(texto_entrada),
+		)
+		await navegar_para(update, context, "Assistente IA", item.resposta_oficial, teclado)
+		return
+
+	# ── 4) Sem match → fallback original ──────────────────────────────
+	_auditar_evento("unmatched", user_id, nivel, texto_entrada, topic_hint=_extrair_topic_hint(texto_entrada))
+	teclado = InlineKeyboardMarkup(
+		[
+			[InlineKeyboardButton("Central de Ajuda", callback_data="menu_ajuda")],
+			[InlineKeyboardButton("Menu principal", callback_data="menu_principal")],
+		]
 	)
-	await navegar_para(update, context, "Assistente IA", item.resposta_oficial, teclado)
+	await navegar_para(
+		update,
+		context,
+		"Assistente IA",
+		"Nao consegui identificar com seguranca sua intencao. Posso te guiar pela Central de Ajuda ou abrir o menu principal.",
+		teclado,
+	)
+
+
+def _obter_lojas_do_ator(user_id: int, nivel: str) -> Optional[List[Dict[str, str]]]:
+	"""Carrega lojas do ator para alimentar classificador, somente se relevante."""
+	if nivel not in ("2", "3"):
+		return None
+	try:
+		from src.sheets_supabase import listar_lojas_visiveis
+		return listar_lojas_visiveis(user_id, nivel) or []
+	except Exception as e:
+		logger.warning("Falha ao carregar lojas para IA multinivel: %s", e)
+		return []
+
+
+async def _despachar_ia_result(
+	update: Update,
+	context: ContextTypes.DEFAULT_TYPE,
+	texto_entrada: str,
+	user_id: int,
+	nivel: str,
+	result: IAResult,
+) -> None:
+	"""Despacha o resultado do classificador multinível."""
+	# Bloqueio
+	if result.blocked:
+		_auditar_evento(
+			"blocked", user_id, nivel, texto_entrada,
+			reason=result.block_reason,
+			intent_id=result.intent,
+			topic_hint=_extrair_topic_hint(texto_entrada),
+		)
+		teclado = InlineKeyboardMarkup(
+			[[InlineKeyboardButton("Menu principal", callback_data=result.target_callback or "menu_principal")]]
+		)
+		await navegar_para(update, context, "Assistente IA", result.preview_text, teclado)
+		return
+
+	# Criação de evento com dados faltantes → iniciar multi-turno
+	if result.intent == "criar_evento_natural" and result.disambiguation:
+		context.user_data["ia_evento_pendente"] = result.entities
+		_auditar_evento(
+			"intent_matched", user_id, nivel, texto_entrada,
+			intent_id="criar_evento_natural",
+			action_type="multi_turno",
+			topic_hint=_extrair_topic_hint(texto_entrada),
+		)
+		texto_resposta = result.preview_text + "\n\n" + result.disambiguation
+		teclado = InlineKeyboardMarkup(
+			[[InlineKeyboardButton("❌ Cancelar", callback_data="ia_cancelar_evento")]]
+		)
+		await navegar_para(update, context, "Assistente IA > Criar Evento", texto_resposta, teclado)
+		return
+
+	# Criação de evento completa → preview + confirmação
+	if result.intent == "criar_evento_natural" and result.target_callback == "ia_confirmar_evento":
+		context.user_data["ia_evento_pendente"] = result.entities
+		_auditar_evento(
+			"intent_matched", user_id, nivel, texto_entrada,
+			intent_id="criar_evento_natural",
+			action_type="preview_confirm",
+			topic_hint=_extrair_topic_hint(texto_entrada),
+		)
+		teclado = InlineKeyboardMarkup([
+			[InlineKeyboardButton("✅ Confirmar e publicar", callback_data="ia_confirmar_evento")],
+			[InlineKeyboardButton("✏️ Editar dados", callback_data="ia_editar_evento")],
+			[InlineKeyboardButton("❌ Cancelar", callback_data="ia_cancelar_evento")],
+		])
+		await navegar_para(update, context, "Assistente IA > Criar Evento", result.preview_text, teclado)
+		return
+
+	# Navegação / callback direto
+	if result.target_callback:
+		_auditar_evento(
+			"intent_matched", user_id, nivel, texto_entrada,
+			intent_id=result.intent,
+			action_type="callback",
+			action_value=result.target_callback,
+			topic_hint=_extrair_topic_hint(texto_entrada),
+		)
+		teclado = InlineKeyboardMarkup([
+			[InlineKeyboardButton("Abrir agora", callback_data=result.target_callback)],
+			[InlineKeyboardButton("Central de Ajuda", callback_data="menu_ajuda")],
+			[InlineKeyboardButton("Menu principal", callback_data="menu_principal")],
+		])
+		await navegar_para(update, context, "Assistente IA", result.preview_text, teclado)
+		return
+
+
+async def _tratar_complemento_evento(
+	update: Update,
+	context: ContextTypes.DEFAULT_TYPE,
+	texto: str,
+	user_id: int,
+	nivel: str,
+	entities_anterior: Dict[str, str],
+) -> None:
+	"""Trata a resposta de continuação da criação de evento."""
+	lojas_sec = _obter_lojas_do_ator(user_id, nivel)
+	result = complementar_evento_com_resposta(entities_anterior, texto, lojas_sec)
+
+	if result.disambiguation:
+		# Ainda faltam dados
+		context.user_data["ia_evento_pendente"] = result.entities
+		texto_resp = result.preview_text + "\n\n" + result.disambiguation
+		teclado = InlineKeyboardMarkup(
+			[[InlineKeyboardButton("❌ Cancelar", callback_data="ia_cancelar_evento")]]
+		)
+		await navegar_para(update, context, "Assistente IA > Criar Evento", texto_resp, teclado)
+		return
+
+	# Completo → preview + confirmar
+	context.user_data["ia_evento_pendente"] = result.entities
+	_auditar_evento(
+		"intent_matched", user_id, nivel, texto,
+		intent_id="criar_evento_natural",
+		action_type="preview_confirm",
+		topic_hint=_extrair_topic_hint(texto),
+	)
+	teclado = InlineKeyboardMarkup([
+		[InlineKeyboardButton("✅ Confirmar e publicar", callback_data="ia_confirmar_evento")],
+		[InlineKeyboardButton("✏️ Editar dados", callback_data="ia_editar_evento")],
+		[InlineKeyboardButton("❌ Cancelar", callback_data="ia_cancelar_evento")],
+	])
+	await navegar_para(update, context, "Assistente IA > Criar Evento", result.preview_text, teclado)
 
 
 def _eh_pedido_stats_sem_comando(texto: str) -> bool:
@@ -745,3 +892,176 @@ async def assistente_ia_texto_livre(update: Update, context: ContextTypes.DEFAUL
 		return
 
 	await _executar_assistente_ia(update, context, texto)
+
+
+# ============================================
+# CALLBACKS DE CRIAÇÃO DE EVENTO POR LINGUAGEM NATURAL
+# ============================================
+
+async def ia_confirmar_evento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+	"""Confirma e publica o evento criado por linguagem natural, delegando ao fluxo existente."""
+	query = update.callback_query
+	if query:
+		await query.answer()
+
+	user_id = update.effective_user.id
+	nivel = get_nivel(user_id)
+	entities = context.user_data.pop("ia_evento_pendente", None)
+
+	if not entities or not isinstance(entities, dict):
+		await navegar_para(
+			update, context, "Assistente IA",
+			"Nenhum rascunho de evento encontrado. Tente novamente.",
+			InlineKeyboardMarkup([[InlineKeyboardButton("Menu principal", callback_data="menu_principal")]]),
+		)
+		return
+
+	if nivel not in ("2", "3"):
+		await navegar_para(
+			update, context, "Assistente IA",
+			"⛔ Apenas secretários e administradores podem cadastrar eventos.",
+			InlineKeyboardMarkup([[InlineKeyboardButton("Menu principal", callback_data="menu_principal")]]),
+		)
+		return
+
+	# Popula context.user_data com os campos do evento no formato esperado pelo fluxo oficial
+	_popular_contexto_evento(context, entities, user_id, update.effective_user.full_name or "")
+
+	# Reutiliza o builder e publicador oficiais do cadastro de evento
+	try:
+		from src.cadastro_evento import _montar_evento_dict, _publicar_e_finalizar, listar_eventos, _encontrar_duplicado
+
+		evento = _montar_evento_dict(context)
+		eventos_existentes = listar_eventos() or []
+		dup = _encontrar_duplicado(evento, eventos_existentes)
+
+		if dup:
+			from src.cadastro_evento import _montar_resumo_evento_md
+			texto = _montar_resumo_evento_md(evento, duplicado=dup)
+			texto += "\n\n⚠️ Evento duplicado detectado! Deseja publicar mesmo assim?"
+			teclado = InlineKeyboardMarkup([
+				[InlineKeyboardButton("⚠️ Publicar mesmo assim", callback_data="ia_forcar_evento")],
+				[InlineKeyboardButton("❌ Cancelar", callback_data="ia_cancelar_evento")],
+			])
+			context.user_data["ia_evento_pendente"] = entities
+			await navegar_para(update, context, "Assistente IA > Criar Evento", texto, teclado)
+			return
+
+		await _publicar_e_finalizar(update, context, evento)
+		from src.cadastro_evento import _limpar_contexto_evento
+		_limpar_contexto_evento(context)
+	except Exception as e:
+		logger.error("Erro ao publicar evento por IA: %s", e)
+		await navegar_para(
+			update, context, "Assistente IA",
+			f"❌ Erro ao publicar evento: {e}",
+			InlineKeyboardMarkup([[InlineKeyboardButton("Menu principal", callback_data="menu_principal")]]),
+		)
+
+
+async def ia_forcar_evento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+	"""Publica evento mesmo com duplicidade."""
+	query = update.callback_query
+	if query:
+		await query.answer()
+
+	user_id = update.effective_user.id
+	entities = context.user_data.pop("ia_evento_pendente", None)
+
+	if not entities:
+		await navegar_para(
+			update, context, "Assistente IA",
+			"Nenhum rascunho de evento encontrado.",
+			InlineKeyboardMarkup([[InlineKeyboardButton("Menu principal", callback_data="menu_principal")]]),
+		)
+		return
+
+	_popular_contexto_evento(context, entities, user_id, update.effective_user.full_name or "")
+
+	try:
+		from src.cadastro_evento import _montar_evento_dict, _publicar_e_finalizar, _limpar_contexto_evento
+		evento = _montar_evento_dict(context)
+		await _publicar_e_finalizar(update, context, evento, forcar=True)
+		_limpar_contexto_evento(context)
+	except Exception as e:
+		logger.error("Erro ao forçar publicação de evento por IA: %s", e)
+		await navegar_para(
+			update, context, "Assistente IA",
+			f"❌ Erro ao publicar evento: {e}",
+			InlineKeyboardMarkup([[InlineKeyboardButton("Menu principal", callback_data="menu_principal")]]),
+		)
+
+
+async def ia_editar_evento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+	"""Abre o fluxo oficial de cadastro de evento para edição manual."""
+	query = update.callback_query
+	if query:
+		await query.answer()
+
+	# Mantém o rascunho mas redireciona para o fluxo conversacional oficial
+	context.user_data.pop("ia_evento_pendente", None)
+	from src.bot import navegar_para as _nav
+	await _nav(
+		update, context, "Assistente IA",
+		"Vou abrir o fluxo de cadastro manual para você ajustar os dados.",
+		InlineKeyboardMarkup([
+			[InlineKeyboardButton("📝 Abrir cadastro manual", callback_data="cadastrar_evento")],
+			[InlineKeyboardButton("Menu principal", callback_data="menu_principal")],
+		]),
+	)
+
+
+async def ia_cancelar_evento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+	"""Cancela a criação de evento por linguagem natural."""
+	query = update.callback_query
+	if query:
+		await query.answer()
+
+	context.user_data.pop("ia_evento_pendente", None)
+	await navegar_para(
+		update, context, "Assistente IA",
+		"Criação de evento cancelada.",
+		InlineKeyboardMarkup([[InlineKeyboardButton("Menu principal", callback_data="menu_principal")]]),
+	)
+
+
+def _popular_contexto_evento(
+	context: ContextTypes.DEFAULT_TYPE,
+	entities: Dict[str, str],
+	user_id: int,
+	user_name: str,
+) -> None:
+	"""Popula context.user_data com dados extraídos para reutilizar _montar_evento_dict."""
+	import os
+	GRUPO_PRINCIPAL_ID = os.getenv("GRUPO_PRINCIPAL_ID", "-1003721338228")
+
+	context.user_data["novo_evento_data"] = entities.get("data", "")
+	context.user_data["novo_evento_horario"] = entities.get("hora", "")
+	context.user_data["novo_evento_nome_loja"] = entities.get("nome_loja", "")
+	context.user_data["novo_evento_numero_loja"] = entities.get("numero_loja", "")
+	context.user_data["novo_evento_oriente"] = entities.get("oriente", "")
+	context.user_data["novo_evento_grau"] = entities.get("grau", "Aprendiz")
+	context.user_data["novo_evento_tipo_sessao"] = entities.get("tipo_sessao", "")
+	context.user_data["novo_evento_rito"] = entities.get("rito", "")
+	context.user_data["novo_evento_potencia"] = entities.get("potencia", "")
+	context.user_data["novo_evento_traje"] = entities.get("traje", "")
+	context.user_data["novo_evento_endereco"] = entities.get("endereco", "")
+	context.user_data["novo_evento_loja_id"] = entities.get("loja_id", "")
+
+	# Ágape
+	agape = entities.get("agape", "nao")
+	context.user_data["novo_evento_agape"] = agape
+	context.user_data["novo_evento_agape_tipo"] = entities.get("agape_tipo", "")
+
+	# Observações
+	obs = entities.get("observacoes", "")
+	context.user_data["novo_evento_observacoes_tem"] = "sim" if obs else "nao"
+	context.user_data["novo_evento_observacoes_texto"] = obs
+
+	# Auditoria
+	context.user_data["novo_evento_secretario_responsavel_id"] = str(user_id)
+	context.user_data["novo_evento_telegram_id_secretario"] = str(user_id)
+	context.user_data["novo_evento_secretario_responsavel_nome"] = user_name
+	context.user_data["novo_evento_criado_por_id"] = str(user_id)
+	context.user_data["novo_evento_criado_por_nome"] = user_name
+	context.user_data["novo_evento_telegram_id_grupo"] = GRUPO_PRINCIPAL_ID

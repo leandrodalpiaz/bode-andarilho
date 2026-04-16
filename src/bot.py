@@ -602,6 +602,20 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from src.ia_assistente import assistente_ia_relatorio
         await assistente_ia_relatorio(update, context)
 
+    # --- Callbacks IA Multinível (criação de evento por linguagem natural) ---
+    elif data == "ia_confirmar_evento":
+        from src.ia_assistente import ia_confirmar_evento
+        await ia_confirmar_evento(update, context)
+    elif data == "ia_forcar_evento":
+        from src.ia_assistente import ia_forcar_evento
+        await ia_forcar_evento(update, context)
+    elif data == "ia_editar_evento":
+        from src.ia_assistente import ia_editar_evento
+        await ia_editar_evento(update, context)
+    elif data == "ia_cancelar_evento":
+        from src.ia_assistente import ia_cancelar_evento
+        await ia_cancelar_evento(update, context)
+
     # --- Gestão de Eventos e Visitas ---
     elif data in ("ver_eventos", "voltar_eventos"):
         from src.eventos import mostrar_eventos
