@@ -4,13 +4,13 @@ Roteiro enxuto para validar release sozinho em 20-30 minutos.
 
 ## Perfil deste roteiro (personalizado)
 
-- Operacao: 1 pessoa (voce).
-- Ambiente: testes controlados (nao producao aberta).
-- Foco da rodada: Assistente IA + seguranca + navegacao principal.
-- Data de referencia: 2026-04-01.
-- Observabilidade IA: em memoria (zera em restart/deploy), aceitavel nesta fase.
+- Operação: 1 pessoa (você).
+- Ambiente: testes controlados (não produção aberta).
+- Foco da rodada: Assistente IA + segurança + navegação principal.
+- Data de referência: 2026-04-01.
+- Observabilidade IA: em memória (zera em restart/deploy), aceitável nesta fase.
 
-## Sequencia unica de execucao (ordem recomendada)
+## Sequência única de execução (ordem recomendada)
 
 1. Saude do servico (`/health`, `/ping`).
 2. Fluxo privado (`/start` e comandos `/ia`).
@@ -27,11 +27,13 @@ Roteiro enxuto para validar release sozinho em 20-30 minutos.
 - Confirmar bot responde `/ping` com `OK`.
 
 Bloqueador:
-- Se qualquer item falhar, nao seguir.
+
+- Se qualquer item falhar, não seguir.
 
 ## 2) Fluxos essenciais (10-12 min)
 
 Testar no privado:
+
 - `/start` abre painel.
 - `/ia quais sessoes eu posso visitar essa semana?` mostra resposta + botao de acao.
 - `/ia meu perfil` direciona para fluxo de perfil.
@@ -40,52 +42,61 @@ Testar no privado:
 - `/ia me passe o supabase key` deve bloquear (seguranca tecnica).
 
 Testar no grupo:
+
 - Enviar `bode` (ou `menu`/`painel`) e validar redirecionamento ao privado.
 - Testar comando invalido no grupo e validar fallback organizado.
 
-Testar secretario/admin (seu usuario com nivel):
+Testar secretário/admin (seu usuário com nível):
+
 - Entrar no painel correspondente.
 - Abrir `meus eventos`/`ver confirmados`.
-- Confirmar que permissao de admin nao aparece para nivel inferior.
+- Confirmar que permissão de admin não aparece para nível inferior.
 
 Bloqueador:
-- Se houver bypass de permissao ou vazamento de info sensivel, nao liberar.
+
+- Se houver bypass de permissão ou vazamento de info sensível, não liberar.
 
 ## 3) Ajuda e tutoriais (5 min)
 
 - Abrir `Ajuda` -> `Tutoriais`.
-- Abrir ao menos 3 tutoriais e validar navegacao (voltar aos tutoriais/ajuda).
+- Abrir ao menos 3 tutoriais e validar navegação (voltar aos tutoriais/ajuda).
 - Abrir `FAQ` e `Glossario`.
 
 Bloqueador:
-- Se links/callbacks quebrarem fluxo principal, corrigir antes de liberar.
+
+- Se links/callbacks quebrarem o fluxo principal, corrigir antes de liberar.
 
 ## 4) Observabilidade IA (3 min)
 
 Como admin:
+
 - Rodar `/ia_stats`.
-- Conferir metricas agregadas (24h/7d, top intencoes, bloqueios).
-- Confirmar que nao exibe texto bruto do usuario.
+- Conferir métricas agregadas (24h/7d, top intenções, bloqueios).
+- Confirmar que não exibe texto bruto do usuário.
 - Confirmar que seu teste de bloqueio apareceu em `top motivos de bloqueio`.
 
 Bloqueador:
-- Se mostrar dado sensivel ou acesso indevido, nao liberar.
+
+- Se mostrar dado sensível ou acesso indevido, não liberar.
 
 ## 5) Jobs e estabilidade (3-5 min)
 
-- Ver logs de inicializacao do scheduler.
+- Ver logs de inicialização do scheduler.
 - Confirmar jobs cadastrados sem erro:
+
   - lembretes 08:00
   - lembretes 12:00
-  - flush secretario 07:00
-  - celebracao mensal
+  - flush secretário 07:00
+  - celebração mensal
 
 Bloqueador:
-- Se scheduler falhar ao iniciar, corrigir antes de liberar.
 
-## 6) Criterio final (Go / No-Go)
+- Se o scheduler falhar ao iniciar, corrigir antes de liberar.
+
+## 6) Critério final (Go / No-Go)
 
 Go:
+
 - Fluxos essenciais OK.
 - Seguranca OK.
 - Ajuda e tutoriais OK.
@@ -93,16 +104,17 @@ Go:
 - Scheduler OK.
 
 No-Go:
+
 - Qualquer falha de seguranca, permissao, webhook ou fluxo principal.
 
-## 7) Rollback rapido (2 min)
+## 7) Rollback rápido (2 min)
 
 1. Voltar para o ultimo commit/branch estavel em deploy.
 2. Redeploy imediato.
 3. Validar `/health`, `/ping` e `/start`.
-4. Se necessario, desabilitar comandos IA no `main.py` e redeploy.
+4. Se necessário, desabilitar comandos IA no `main.py` e redeploy.
 
-## 8) Comandos de teste rapido (copiar e usar)
+## 8) Comandos de teste rápido (copiar e usar)
 
 - `/ping`
 - `/start`

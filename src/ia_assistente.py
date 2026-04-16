@@ -671,7 +671,7 @@ async def _executar_assistente_ia(update: Update, context: ContextTypes.DEFAULT_
 		update,
 		context,
 		"Assistente IA",
-		"Nao consegui identificar com seguranca sua intencao. Posso te guiar pela Central de Ajuda ou abrir o menu principal.",
+		"Não consegui identificar com segurança sua intenção. Posso te guiar pela Central de Ajuda ou abrir o menu principal.",
 		teclado,
 	)
 

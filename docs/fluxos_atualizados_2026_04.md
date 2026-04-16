@@ -1,10 +1,11 @@
 # Fluxos Atualizados do Bode Andarilho (2026-04-01)
 
-Este documento complementa `docs/documentacao_tecnica.md` com os fluxos que estao ativos no codigo atual e que impactam diretamente navegacao, onboarding e suporte com IA.
+Este documento complementa `docs/documentacao_tecnica.md` com os fluxos que estão ativos no código atual e que impactam diretamente navegação, onboarding e suporte com IA.
 
-## Escopo validado no codigo
+## Escopo validado no código
 
 Arquivos conferidos:
+
 - `main.py`
 - `src/bot.py`
 - `src/miniapp.py`
@@ -15,113 +16,146 @@ Arquivos conferidos:
 - `src/membro_lembretes.py`
 - `src/ajuda/*.py`
 
-## Novidades de fluxo que ja estao em producao
+## Novidades de fluxo que já estão em produção
 
 1. Onboarding de grupo para privado com fallback
+
 - O bot responde a `bode`, `menu` e `painel` no grupo.
-- Se o privado estiver disponivel, abre fluxo no privado.
-- Se o privado nao estiver disponivel, envia fallback no grupo com botao de deep link.
-- Entrada e saida de membro no grupo atualizam status de cadastro (ativo/inativo).
+- Se o privado estiver disponível, abre fluxo no privado.
+- Se o privado não estiver disponível, envia fallback no grupo com botão de deep link.
+- Entrada e saída de membro no grupo atualizam status de cadastro (ativo/inativo).
 
-2. Verificacao de participacao no grupo antes de liberar painel
-- Antes de montar painel no privado, o bot valida se o usuario ainda esta no grupo principal.
-- Se nao estiver, bloqueia acesso e orienta retorno ao grupo.
+1. Verificação de participação no grupo antes de liberar painel
 
-3. Fluxo hibrido com Telegram Mini App
+- Antes de montar painel no privado, o bot valida se o usuário ainda está no grupo principal.
+- Se não estiver, bloqueia acesso e orienta retorno ao grupo.
+
+1. Fluxo híbrido com Telegram Mini App
+
 - Cadastro de membro, loja e evento pode ser feito por formulario web.
-- Fluxo possui rascunho + confirmacao por callback (`draft_*`).
+- Fluxo possui rascunho + confirmação por callback (`draft_*`).
 - Cadastro via mini app valida `initData` assinado do Telegram.
 - `telegram_id` vem apenas do `initData` validado.
 
-4. Cadastro e publicacao de evento com sincronizacao de card no grupo
+1. Cadastro e publicação de evento com sincronização de card no grupo
+
 - Evento pode ser criado por fluxo conversacional ou mini app.
-- Publicacao no grupo grava `Telegram Message ID do grupo` para sincronizacoes futuras.
-- Edicoes/cancelamentos/refazer evento sincronizam card de grupo quando possivel.
+- Publicação no grupo grava `Telegram Message ID do grupo` para sincronizações futuras.
+- Edições/cancelamentos/refazer evento sincronizam card de grupo quando possível.
 
-5. Confirmacao com opcao de agape
-- Teclado de confirmacao varia conforme tipo de agape do evento:
-  - com agape gratuito
-  - com agape pago
-  - com agape generico
-  - sem agape (confirmacao simples)
+1. Confirmação com opção de ágape
 
-6. Janela de silencio para notificacoes do secretario
-- Confirmacoes feitas entre 22:00 e 07:00 sao acumuladas.
-- Resumo consolidado e enviado fora da janela de silencio.
-- Job dedicado no scheduler faz flush diario as 07:00.
+- Teclado de confirmação varia conforme tipo de ágape do evento:
 
-7. Lembretes do proprio membro no menu principal
+  - com ágape gratuito
+  - com ágape pago
+  - com ágape genérico
+  - sem ágape (confirmação simples)
+
+1. Janela de silêncio para notificações do secretário
+
+- Confirmações feitas entre 22:00 e 07:00 são acumuladas.
+- Resumo consolidado é enviado fora da janela de silêncio.
+- Job dedicado no scheduler faz flush diário às 07:00.
+
+1. Lembretes do próprio membro no menu principal
+
 - Menu principal possui `Meus Lembretes`.
-- Membro ativa/desativa lembretes privados sem depender do secretario.
+- Membro ativa/desativa lembretes privados sem depender do secretário.
 
-8. Assistente IA inicial com guardrails
+1. Assistente IA inicial com guardrails
+
 - Comandos: `/ia` e `/assistente`.
-- Classificacao de intencao baseada em `docs/ajuda_ia_base.yaml`.
-- IA apenas sugere fluxo e aciona callbacks existentes (nao executa acao administrativa direta).
-- Criacao de sessao por linguagem natural para niveis 2 e 3:
-  - entende pedido livre como "sessao de aprendiz sexta as 20h"
+- Classificação de intenção baseada em `docs/ajuda_ia_base.yaml`.
+- IA apenas sugere fluxo e aciona callbacks existentes (não executa ação administrativa direta).
+- Criação de sessão por linguagem natural para níveis 2 e 3:
+
+  - entende pedido livre como "sessão de aprendiz sexta às 20h"
   - monta rascunho parcial ou completo
   - se faltar dado, entra em complemento multi-turno
-  - exige confirmacao final antes de publicar
-- Regra de loja na criacao por IA:
-  - secretario: usa automaticamente a loja vinculada ao perfil
-  - admin: usa a loja da frase quando existir; se nao existir, solicita a loja do evento
-- Bloqueios explicitos para:
-  - dados pessoais de terceiros
-  - informacao tecnica sensivel (tokens, secrets, credenciais)
-  - tentativas de bypass de permissoes administrativas
+  - exige confirmação final antes de publicar
 
-9. Painel de observabilidade da IA (agregado)
+- Regra de loja na criação por IA:
+
+  - secretário: usa automaticamente a loja vinculada ao perfil
+  - admin: usa a loja da frase quando existir; se não existir, solicita a loja do evento
+
+- Bloqueios explícitos para:
+
+  - dados pessoais de terceiros
+  - informação técnica sensível (tokens, secrets, credenciais)
+  - tentativas de bypass de permissões administrativas
+
+1. Painel de observabilidade da IA (agregado)
+
 - Comandos: `/ia_stats` e `/assistente_stats`.
 - Acesso restrito a administrador (nivel 3).
-- Exibe metricas agregadas de 24h e 7d:
-  - total de interacoes
-  - taxa de intencao reconhecida
-  - bloqueios de seguranca
-  - nao reconhecidas
-  - top intencoes
-  - top motivos de bloqueio
-- Nao exibe texto bruto do usuario nem dados pessoais.
+- Exibe métricas agregadas de 24h e 7d:
 
-10. Relatorio de aprendizado operacional da IA
+  - total de interações
+  - taxa de intenção reconhecida
+  - bloqueios de segurança
+  - não reconhecidas
+  - top intenções
+  - top motivos de bloqueio
+
+- Não exibe texto bruto do usuário nem dados pessoais.
+
+1. Relatório de aprendizado operacional da IA
+
 - Comandos: `/ia_relatorio` e `/assistente_relatorio`.
 - Acesso restrito a administrador (nivel 3).
-- Agrupa temas nao reconhecidos usando `topic_hint` seguro, sem guardar frase original.
+- Agrupa temas não reconhecidos usando `topic_hint` seguro, sem guardar frase original.
 - Sugere melhorias de:
-  - novas intencoes/gatilhos
-  - FAQ e tutoriais
-  - destaque de UX para funcoes muito procuradas
-- Toda mudanca continua dependente de aprovacao humana.
 
-11. UX sem barra (comando como fallback)
-- Menu principal agora inclui botao `Assistente IA`.
-- No privado, texto livre (sem `/ia`) e encaminhado ao assistente quando nao houver fluxo formal ativo.
+  - novas intenções/gatilhos
+  - FAQ e tutoriais
+  - destaque de UX para funções muito procuradas
+
+- Toda mudança continua dependente de aprovação humana.
+
+1. UX sem barra (comando como fallback)
+
+- Menu principal agora inclui botão `Assistente IA`.
+- No privado, texto livre (sem `/ia`) é encaminhado ao assistente quando não houver fluxo formal ativo.
 - No privado, as palavras `menu`, `painel` e `bode` reconstroem o painel principal sem precisar `/start`.
-- Admin pode acionar metricas e relatorio da IA tambem por linguagem natural no privado:
+- Admin pode acionar métricas e relatório da IA também por linguagem natural no privado:
+
   - "metricas ia"
   - "relatorio ia"
-- Comandos com `/` continuam ativos apenas como plano B tecnico.
+
+- Comandos com `/` continuam ativos apenas como plano B técnico.
 
 ## Registro de handlers (estado atual)
 
 Principais grupos no `register_handlers(app)`:
+
 - Conversation handlers:
-  - confirmacao de presenca
+
+  - confirmação de presença
   - cadastro de evento
   - promover/rebaixar/editar membro
   - editar perfil
-  - editar evento do secretario
+  - editar evento do secretário
   - cadastro de loja
+
 - Command handlers:
+
   - `/start`
   - `/ping`
+
 - Callbacks de ajuda:
+
   - via `src/ajuda/menus.py`
-- Callbacks hibridos do mini app:
+
+- Callbacks híbridos do mini app:
+
   - `draft_membro_*`
   - `draft_loja_*`
   - `draft_evento_*`
+
 - Handlers de grupo:
+
   - `ChatMemberHandler(novo_membro_grupo_handler)`
   - `MessageHandler` para palavra-chave de entrada (`bode|menu|painel`)
   - `MessageHandler` para texto e comandos no grupo
@@ -129,26 +163,31 @@ Principais grupos no `register_handlers(app)`:
 ## Scheduler (estado atual)
 
 Jobs ativos em `src/scheduler.py`:
-- `job_lembretes_24h` - diario 08:00
-- `job_lembretes_meio_dia` - diario 12:00
-- `job_celebracao_mensal` - dia 1 as 09:00
-- `job_flush_notificacoes_secretario` - diario 07:00
+
+- `job_lembretes_24h` - diário 08:00
+- `job_lembretes_meio_dia` - diário 12:00
+- `job_celebracao_mensal` - dia 1 às 09:00
+- `job_flush_notificacoes_secretario` - diário 07:00
 
 ## Ajuda atual e lacunas
 
-Situacao atual:
+Situação atual:
+
 - `src/ajuda/faq.py`, `nivel1.py`, `nivel2.py`, `nivel3.py`, `glossario.py` ativos.
-- `src/ajuda/tutoriais.py` agora contem tutoriais navegaveis por tema.
+- `src/ajuda/tutoriais.py` agora contém tutoriais navegáveis por tema.
 
 Lacuna principal:
-- Ainda vale ampliar os tutoriais conforme surgirem duvidas reais do piloto.
 
-## Recomendacao para IA
+- Ainda vale ampliar os tutoriais conforme surgirem dúvidas reais do piloto.
+
+## Recomendação para IA
 
 Para evitar respostas inventadas:
-- IA deve consultar uma base estruturada por intencao.
-- Cada intencao precisa apontar para acao real de sistema (callback/fluxo).
+
+- IA deve consultar uma base estruturada por intenção.
+- Cada intenção precisa apontar para ação real de sistema (callback/fluxo).
 - Respostas devem ser curtas, com tom fraterno, sem autonomia administrativa.
 
 Base proposta:
+
 - `docs/ajuda_ia_base.yaml`

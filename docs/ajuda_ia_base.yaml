@@ -24,7 +24,7 @@ intencoes:
   - intent_id: ver_sessoes
     nivel_permitido: ["1", "2", "3"]
     gatilhos: ["ver sessoes", "quais sessoes", "eventos da semana", "proximas sessoes"]
-    resposta_oficial: "Vou abrir as sessoes disponiveis para voce agora."
+    resposta_oficial: "Vou abrir as sessões disponíveis para você agora."
     acao_recomendada:
       tipo: callback
       valor: "ver_eventos"
@@ -33,7 +33,7 @@ intencoes:
   - intent_id: minhas_confirmacoes
     nivel_permitido: ["1", "2", "3"]
     gatilhos: ["minhas confirmacoes", "minhas presencas", "onde confirmei", "historico de visitas"]
-    resposta_oficial: "Vou abrir suas confirmacoes para voce ver as proximas e o historico."
+    resposta_oficial: "Vou abrir suas confirmações para você ver as próximas e o histórico."
     acao_recomendada:
       tipo: callback
       valor: "minhas_confirmacoes"
@@ -42,7 +42,7 @@ intencoes:
   - intent_id: meu_perfil
     nivel_permitido: ["1", "2", "3"]
     gatilhos: ["meu perfil", "meu cadastro", "dados do meu perfil", "editar perfil"]
-    resposta_oficial: "Vou abrir seu perfil para consulta e edicao dos dados."
+    resposta_oficial: "Vou abrir seu perfil para consulta e edição dos dados."
     acao_recomendada:
       tipo: callback
       valor: "meu_cadastro"
@@ -51,7 +51,7 @@ intencoes:
   - intent_id: menu_lembretes_membro
     nivel_permitido: ["1", "2", "3"]
     gatilhos: ["meus lembretes", "ativar lembrete", "desativar lembrete", "lembrete de sessao"]
-    resposta_oficial: "Vou abrir o menu de lembretes para voce configurar."
+    resposta_oficial: "Vou abrir o menu de lembretes para você configurar."
     acao_recomendada:
       tipo: callback
       valor: "menu_lembretes"
@@ -60,7 +60,7 @@ intencoes:
   - intent_id: ajuda_geral
     nivel_permitido: ["1", "2", "3"]
     gatilhos: ["ajuda", "nao entendi", "como funciona", "duvida"]
-    resposta_oficial: "Vou abrir a Central de Ajuda para voce."
+    resposta_oficial: "Vou abrir a Central de Ajuda para você."
     acao_recomendada:
       tipo: callback
       valor: "menu_ajuda"
@@ -78,7 +78,7 @@ intencoes:
   - intent_id: faq
     nivel_permitido: ["1", "2", "3"]
     gatilhos: ["faq", "perguntas frequentes", "duvidas comuns"]
-    resposta_oficial: "Vou abrir as perguntas frequentes do seu nivel de acesso."
+    resposta_oficial: "Vou abrir as perguntas frequentes do seu nível de acesso."
     acao_recomendada:
       tipo: callback
       valor: "ajuda_faq"
@@ -87,7 +87,7 @@ intencoes:
   - intent_id: painel_secretario
     nivel_permitido: ["2", "3"]
     gatilhos: ["area do secretario", "painel do secretario", "menu secretario"]
-    resposta_oficial: "Vou abrir o Painel do Secretario."
+    resposta_oficial: "Vou abrir o Painel do Secretário."
     acao_recomendada:
       tipo: callback
       valor: "area_secretario"
@@ -141,7 +141,7 @@ intencoes:
   - intent_id: notificacoes_secretario
     nivel_permitido: ["2", "3"]
     gatilhos: ["notificacoes secretario", "ativar notificacoes", "desativar notificacoes"]
-    resposta_oficial: "Vou abrir as configuracoes de notificacoes do secretario."
+    resposta_oficial: "Vou abrir as configurações de notificações do secretário."
     acao_recomendada:
       tipo: callback
       valor: "menu_notificacoes"
@@ -150,7 +150,7 @@ intencoes:
   - intent_id: area_admin
     nivel_permitido: ["3"]
     gatilhos: ["area admin", "painel admin", "administracao"]
-    resposta_oficial: "Vou abrir o Painel de Administracao."
+    resposta_oficial: "Vou abrir o Painel de Administração."
     acao_recomendada:
       tipo: callback
       valor: "area_admin"
@@ -168,7 +168,7 @@ intencoes:
   - intent_id: explicar_agape
     nivel_permitido: ["1", "2", "3"]
     gatilhos: ["o que e agape", "com agape", "sem agape", "agape gratuito", "agape pago"]
-    resposta_oficial: "No bot, voce pode confirmar com ou sem agape conforme o tipo definido na sessao."
+    resposta_oficial: "No bot, você pode confirmar com ou sem ágape conforme o tipo definido na sessão."
     acao_recomendada:
       tipo: informacao
       valor: "explicacao_contextual"
@@ -177,7 +177,7 @@ intencoes:
   - intent_id: onboarding_grupo_privado
     nivel_permitido: ["1", "2", "3"]
     gatilhos: ["nao responde no grupo", "como iniciar no privado", "entrei no grupo e agora"]
-    resposta_oficial: "No grupo, use bode/menu/painel para ser direcionado ao privado e continuar com seguranca."
+    resposta_oficial: "No grupo, use bode/menu/painel para ser direcionado ao privado e continuar com segurança."
     acao_recomendada:
       tipo: informacao
       valor: "onboarding_grupo_para_privado"
@@ -186,7 +186,7 @@ intencoes:
   - intent_id: erro_privado_indisponivel
     nivel_permitido: ["1", "2", "3"]
     gatilhos: ["bot nao abre privado", "nao consigo falar no privado", "fallback do grupo"]
-    resposta_oficial: "Se o privado estiver indisponivel, use o botao de abrir privado no proprio grupo e envie /start."
+    resposta_oficial: "Se o privado estiver indisponível, use o botão de abrir privado no próprio grupo e envie /start."
     acao_recomendada:
       tipo: informacao
       valor: "orientacao_fallback"
@@ -195,7 +195,7 @@ intencoes:
   - intent_id: resumo_notificacoes_silencio
     nivel_permitido: ["2", "3"]
     gatilhos: ["janela de silencio", "confirmacoes de madrugada", "resumo de notificacoes"]
-    resposta_oficial: "Confirmacoes entre 22:00 e 07:00 sao acumuladas e enviadas em resumo apos esse periodo."
+    resposta_oficial: "Confirmações entre 22:00 e 07:00 são acumuladas e enviadas em resumo após esse período."
     acao_recomendada:
       tipo: informacao
       valor: "regra_notificacao_secretario"
@@ -206,9 +206,9 @@ regras_de_roteamento:
     mensagem: "Essa funcao depende de permissao de nivel mais alto."
     acao: "oferecer_menu_disponivel"
   baixa_confianca:
-    mensagem: "Posso te ajudar melhor se voce escolher uma destas opcoes."
+    mensagem: "Posso te ajudar melhor se você escolher uma destas opções."
     acao: "mostrar_menu_principal"
   acao_critica:
-    mensagem: "Para sua seguranca, essa acao so e feita pelo fluxo oficial do bot."
+    mensagem: "Para sua segurança, essa ação só é feita pelo fluxo oficial do bot."
     acao: "redirecionar_fluxo_estruturado"
 

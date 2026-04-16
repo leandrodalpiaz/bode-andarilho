@@ -27,4 +27,3 @@ python main.py
 
 A migracao de Google Sheets para Supabase foi concluida em 10/03/2026.
 Consulte a secao de migracao em `docs/documentacao_tecnica.md`.
-
