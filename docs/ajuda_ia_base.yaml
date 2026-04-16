@@ -95,12 +95,21 @@ intencoes:
 
   - intent_id: cadastrar_evento
     nivel_permitido: ["2", "3"]
-    gatilhos: ["cadastrar evento", "criar sessao", "publicar sessao"]
-    resposta_oficial: "Vou abrir o fluxo de cadastro de evento."
+    gatilhos: ["cadastrar evento", "criar sessao", "publicar sessao", "sessao de aprendiz", "sessao magna", "sessao com agape"]
+    resposta_oficial: "Você pode descrever a sessão de forma natural. Vou montar o rascunho e, se faltar algum dado, eu peço apenas o necessário antes da confirmação."
     acao_recomendada:
-      tipo: callback
-      valor: "cadastrar_evento"
-    origem: ["src/cadastro_evento.py", "src/miniapp.py"]
+      tipo: informacao
+      valor: "orientacao_criacao_sessao"
+    origem: ["src/cadastro_evento.py", "src/miniapp.py", "src/ia_multinivel.py", "src/ia_assistente.py"]
+
+  - intent_id: como_criar_sessao
+    nivel_permitido: ["2", "3"]
+    gatilhos: ["como criar sessao", "como cadastrar sessao", "exemplos de sessao", "como falar com a ia para criar sessao"]
+    resposta_oficial: "Você pode descrever a sessão de forma natural, incluindo grau, data, horário, ágape e tipo de sessão. Se faltar algum dado, eu pergunto apenas o necessário."
+    acao_recomendada:
+      tipo: informacao
+      valor: "orientacao_criacao_sessao"
+    origem: ["src/ajuda/nivel2.py", "src/ajuda/tutoriais.py", "src/ia_multinivel.py"]
 
   - intent_id: meus_eventos
     nivel_permitido: ["2", "3"]

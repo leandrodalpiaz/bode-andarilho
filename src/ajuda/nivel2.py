@@ -9,7 +9,7 @@ async def guia_nivel2(update, context):
 	texto += "*1. Cadastrar Nova Loja:*\n"
 	texto += "   Na 'Área do Secretário', clique em '🏛️ Minhas lojas' > '➕ Cadastrar nova loja' para pré-cadastrar os dados fixos da sua loja e agilizar a criação de eventos.\n\n"
 	texto += "*2. Criar uma Sessão:*\n"
-	texto += "   Na 'Área do Secretário', clique em '📌 Cadastrar evento'. Você pode usar os dados de uma loja pré-cadastrada como atalho. O bot publicará a sessão automaticamente no grupo.\n\n"
+	texto += "   Você pode criar a sessão pelo fluxo oficial ou descrevendo a sessão de forma natural no Assistente IA. Se faltar data, horário, grau ou outro dado, o bot pergunta para completar antes da publicação.\n\n"
 	texto += "*3. Gerenciar Meus Eventos:*\n"
 	texto += "   Em '📋 Meus eventos', você pode ver os eventos que criou e acessar opções como '📊 Resumo da sessão', '✏️ Editar evento', '👥 Ver confirmados', '📋 Copiar lista de confirmados' e '❌ Cancelar evento'.\n\n"
 	texto += "*4. Ver Lista de Confirmados:*\n"
@@ -51,10 +51,11 @@ async def ajuda_nivel2_cadastrar_loja(update, context):
 async def ajuda_nivel2_criar_sessao(update, context):
 	texto = (
 		"*Como Criar uma Sessão (Evento):*\n\n"
-		"1. Na 'Área do Secretário', clique em '📌 Cadastrar evento'.\n"
-		"2. Se você já tem lojas cadastradas, o bot perguntará se deseja usar uma delas como atalho para preencher alguns dados automaticamente.\n"
-        "3. Siga as perguntas do bot, fornecendo detalhes como data, horário, grau mínimo, tipo de sessão, traje, ágape e ordem do dia / observações.\n"
-		"4. Após revisar o resumo, clique em '✅ Confirmar publicação'. O evento será publicado no grupo da loja."
+		"1. Você pode criar a sessão pelo fluxo oficial em '📌 Cadastrar evento' ou descrevendo a sessão de forma natural no Assistente IA.\n"
+		"2. Exemplos válidos: 'Sessão de aprendiz dia 15/11 às 20h', 'Sessão de companheiro com ágape pago' ou 'Sessão magna de iniciação dia 10/01 às 20h'.\n"
+		"3. Se faltar alguma informação, o bot perguntará apenas o que falta para completar o rascunho.\n"
+		"4. Quando tudo estiver completo, revise o resumo e confirme a publicação.\n"
+		"5. Na IA, a loja do secretário é usada automaticamente. Você não precisa informar a loja na frase, salvo se quiser usar o fluxo manual de cadastro."
 	)
 	teclado = InlineKeyboardMarkup(
 		[[InlineKeyboardButton("🔙 Voltar ao Guia do Secretário", callback_data="ajuda_guia")]]

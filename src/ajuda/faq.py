@@ -58,6 +58,14 @@ FAQ_NIVEL1 = [
 
 FAQ_NIVEL2 = [
 	(
+		"*Posso criar sessão falando de forma natural?*",
+		"Sim. Você pode descrever a sessão em linguagem natural no Assistente IA, por exemplo informando grau, data, horário e ágape na mesma frase. Se faltar algum dado, o bot pergunta apenas o que falta antes da confirmação.",
+	),
+	(
+		"*Como a loja funciona quando eu crio uma sessão pela IA?*",
+		"Para secretário, a loja vinculada ao perfil é usada automaticamente na IA. Para administrador, se a frase não trouxer a loja, o bot pedirá explicitamente a loja do evento antes de continuar.",
+	),
+	(
 		"*Esqueci de incluir o ágape ao cadastrar um evento, como corrigir?*",
 		"Você pode *editar o evento* e corrigir a informação. Mas lembre-se: ao editar, todas as confirmações atuais serão removidas. Os irmãos precisarão confirmar novamente.",
 	),
@@ -71,7 +79,7 @@ FAQ_NIVEL2 = [
 	),
 	(
 		"*Posso usar o mesmo cadastro de loja para vários eventos?*",
-		"*Sim!* Por isso é tão útil cadastrar sua loja. Na hora de criar um novo evento, você escolhe a loja e os dados (nome, número, rito, potência, endereço) são preenchidos automaticamente.",
+		"*Sim!* Por isso é tão útil cadastrar sua loja. No fluxo oficial, ela pode ser usada como atalho. Na IA, o secretário já aproveita automaticamente a loja vinculada ao perfil.",
 	),
 	(
 		"*Como faço para o endereço abrir no mapa?*",
@@ -95,11 +103,15 @@ FAQ_NIVEL2 = [
 	),
 	(
 		"*O bot parou de responder no meio do cadastro de um evento*",
-		"Isso pode acontecer se você demorou muito para responder (mais de 24 horas). O cadastro expira por segurança. Basta começar de novo clicando em *'📌 Cadastrar evento'*.",
+		"Isso pode acontecer se você demorou muito para responder (mais de 24 horas). O cadastro expira por segurança. Basta começar de novo pelo fluxo oficial ou refazer o pedido no Assistente IA.",
 	),
 ]
 
 FAQ_NIVEL3 = [
+	(
+		"*Como criar sessão pela IA sendo administrador?*",
+		"Você também pode descrever a sessão em linguagem natural. Se informar a loja na frase, o bot usa essa loja. Se não informar, o bot pedirá explicitamente a loja do evento antes de montar o rascunho.",
+	),
 	(
 		"*Como promover um membro a secretário?*",
 		"Na Área do Administrador, use a função 'Promover/Rebaixar' e siga as instruções.",
@@ -118,7 +130,7 @@ FAQ_NIVEL3 = [
 	),
 	(
 		"*Como o sistema de permissões funciona?*",
-		"O bot consulta a coluna 'Nível' na aba 'Membros' da planilha Google Sheets para determinar as funcionalidades acessíveis a cada usuário (1=comum, 2=secretário, 3=admin).",
+		"O bot consulta o cadastro do membro para determinar as funcionalidades acessíveis a cada usuário (1=comum, 2=secretário, 3=admin).",
 	),
 ]
 

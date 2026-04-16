@@ -40,25 +40,59 @@ _TUTORIAIS = {
 		),
 	},
 	"cadastro_evento": {
-		"titulo": "Tutorial: Cadastrar e publicar sessao",
+		"titulo": "Tutorial: Criar sessao com linguagem natural",
 		"texto": (
-			"*Fluxo do secretario para nova sessao*\n\n"
-			"1. Abra `Painel do Secretario`.\n"
-			"2. Use `Cadastrar evento`.\n"
-			"3. Preencha data, hora, grau, tipo, traje, agape e observacoes.\n"
-			"4. Revise e confirme publicacao.\n"
-			"5. O bot publica no grupo e sincroniza o card quando houver edicao."
+			"*Como criar uma sessao*\n\n"
+			"Voce pode criar uma sessao descrevendo de forma simples, como se estivesse falando.\n\n"
+			"O bot entende frases naturais e organiza o evento automaticamente.\n\n"
+			"*Sessoes economicas por grau*\n\n"
+			"*Aprendiz (1o grau)*\n"
+			"• Sessao de aprendiz dia 15/11 as 20h\n"
+			"• Sessao economica de 1o grau dia 10/12 as 19h30\n"
+			"• Sessao grau 1 sexta as 20h\n\n"
+			"*Companheiro (2o grau)*\n"
+			"• Sessao de companheiro dia 22/11 as 20h\n"
+			"• Sessao economica de 2o grau com agape\n"
+			"• Sessao grau 2 amanha as 20h\n\n"
+			"*Mestre (3o grau)*\n"
+			"• Sessao de mestre dia 05/12 as 20h\n"
+			"• Sessao economica de 3o grau com agape pago\n"
+			"• Sessao grau 3 sexta as 20h\n\n"
+			"*Sessoes com agape*\n\n"
+			"• Sessao de aprendiz dia 15/11 as 20h com agape\n"
+			"• Sessao de companheiro com agape pago\n"
+			"• Sessao de mestre sexta as 20h com agape livre\n\n"
+			"*Sessoes magnas*\n\n"
+			"• Sessao magna de iniciacao dia 10/01 as 20h\n"
+			"• Sessao magna de elevacao dia 15/11 as 20h\n"
+			"• Sessao magna de exaltacao sexta as 20h\n"
+			"• Sessao magna de instalacao dia 05/12 as 19h\n\n"
+			"*Sessoes magnas com nomes*\n\n"
+			"Se voce incluir nomes, o bot coloca automaticamente como observacao ou ordem do dia.\n"
+			"• Sessao magna de iniciacao do Joao e Pedro dia 10/01 as 20h\n"
+			"• Iniciacao dos profanos Carlos e Andre dia 15/12 as 20h\n"
+			"• Sessao magna de elevacao do irmao Jose dia 20/11 as 20h\n\n"
+			"*Exemplos livres*\n\n"
+			"• Sessao dia 15/11 aprendiz as 20h\n"
+			"• Sessao sexta companheiro com agape pago\n"
+			"• Criar sessao de mestre amanha as 20h\n"
+			"• Sessao amanha as 20h\n\n"
+			"*Se faltar informacao*\n\n"
+			"Se faltar data, horario, grau ou outro dado, o bot pergunta apenas o necessario para completar.\n\n"
+			"*Regra de loja*\n\n"
+			"• Secretario: a loja vinculada ao perfil e usada automaticamente na IA.\n"
+			"• Admin: se a frase nao trouxer loja, o bot vai pedir a loja do evento."
 		),
 	},
 	"miniapp_rascunho": {
 		"titulo": "Tutorial: Mini App e rascunhos",
 		"texto": (
 			"*Como funciona o fluxo hibrido com Mini App*\n\n"
-			"1. Abra formulario web de membro, loja ou evento.\n"
+			"1. Abra formulario web de membro, loja ou evento quando esse fluxo estiver disponivel para o seu perfil.\n"
 			"2. Envie os dados para salvar rascunho.\n"
 			"3. Revise o resumo no chat.\n"
 			"4. Confirme no bot pelos botoes `draft_*`.\n\n"
-			"O cadastro/publicacao so conclui apos confirmacao final no fluxo oficial."
+			"No cadastro de evento, o Mini App e mantido para secretario. Administrador segue o fluxo guiado do bot para esse ponto."
 		),
 	},
 	"notificacoes_silencio": {
@@ -80,7 +114,7 @@ async def menu_tutoriais(update, context):
 			[InlineKeyboardButton("1) Comecar no bot (grupo e privado)", callback_data="ajuda_tutorial|onboarding")],
 			[InlineKeyboardButton("2) Confirmar presenca com ou sem agape", callback_data="ajuda_tutorial|confirmacao_agape")],
 			[InlineKeyboardButton("3) Minhas confirmacoes e historico", callback_data="ajuda_tutorial|minhas_confirmacoes")],
-			[InlineKeyboardButton("4) Cadastrar e publicar sessao (secretario)", callback_data="ajuda_tutorial|cadastro_evento")],
+			[InlineKeyboardButton("4) Criar sessao com linguagem natural", callback_data="ajuda_tutorial|cadastro_evento")],
 			[InlineKeyboardButton("5) Mini App: rascunho e confirmacao", callback_data="ajuda_tutorial|miniapp_rascunho")],
 			[InlineKeyboardButton("6) Notificacoes e janela de silencio", callback_data="ajuda_tutorial|notificacoes_silencio")],
 			[InlineKeyboardButton("Voltar a Central de Ajuda", callback_data="menu_ajuda")],

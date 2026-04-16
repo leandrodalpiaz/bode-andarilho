@@ -350,16 +350,12 @@ def _classificar_criacao_evento(
     if agape_tipo:
         entities["agape_tipo"] = agape_tipo
 
-    # Tentar extrair loja pelo nome encontrado no texto
-    loja_match = _match_loja_no_texto(texto, lojas_do_secretario)
-    if loja_match:
-        entities["nome_loja"] = loja_match.get("Nome da Loja", "")
-        entities["numero_loja"] = str(loja_match.get("Número", ""))
-        entities["oriente"] = loja_match.get("Oriente da Loja", "") or loja_match.get("Oriente", "")
-        entities["rito"] = loja_match.get("Rito", "")
-        entities["potencia"] = loja_match.get("Potência", "")
-        entities["endereco"] = loja_match.get("Endereço", "")
-        entities["loja_id"] = str(loja_match.get("ID") or loja_match.get("id") or "")
+    if nivel == "2":
+        _aplicar_loja_em_entities(_obter_loja_padrao_secretario(lojas_do_secretario), entities)
+    else:
+        # Admin: usa a loja apenas se ela vier explicitamente na mensagem.
+        loja_match = _match_loja_no_texto(texto, lojas_do_secretario)
+        _aplicar_loja_em_entities(loja_match, entities)
 
     # Extrair campos soltos do texto: tipo_sessao, rito, potencia, traje, observacoes
     _extrair_campos_evento_extras(texto, entities)
@@ -372,13 +368,36 @@ def _classificar_criacao_evento(
     if faltantes:
         result.confidence = "medium"
         result.preview_text = _montar_preview_evento_parcial(entities, faltantes)
-        result.disambiguation = _perguntar_campos_faltantes(faltantes)
+        result.disambiguation = _perguntar_campos_faltantes(faltantes, nivel)
         result.target_callback = ""  # aguarda mais dados
     else:
         result.preview_text = _montar_preview_evento_completo(entities)
         result.target_callback = "ia_confirmar_evento"
 
     return result
+
+
+def _obter_loja_padrao_secretario(
+    lojas_do_secretario: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[Dict[str, Any]]:
+    if not lojas_do_secretario:
+        return None
+    return lojas_do_secretario[0]
+
+
+def _aplicar_loja_em_entities(
+    loja: Optional[Dict[str, Any]],
+    entities: Dict[str, str],
+) -> None:
+    if not loja:
+        return
+    entities["nome_loja"] = loja.get("Nome da Loja", "")
+    entities["numero_loja"] = str(loja.get("Número", ""))
+    entities["oriente"] = loja.get("Oriente da Loja", "") or loja.get("Oriente", "")
+    entities["rito"] = loja.get("Rito", "")
+    entities["potencia"] = loja.get("Potência", "")
+    entities["endereco"] = loja.get("Endereço", "")
+    entities["loja_id"] = str(loja.get("ID") or loja.get("id") or "")
 
 
 def _match_loja_no_texto(
@@ -417,10 +436,17 @@ _NOMES_CAMPO_AMIGAVEL = {
 }
 
 
-def _perguntar_campos_faltantes(faltantes: List[str]) -> str:
+def _perguntar_campos_faltantes(faltantes: List[str], nivel: str = "") -> str:
     if not faltantes:
         return ""
+    if nivel == "3" and faltantes == ["nome_loja"]:
+        return "Como você não possui loja vinculada, informe a loja do evento."
     partes = [_NOMES_CAMPO_AMIGAVEL.get(c, c) for c in faltantes]
+    if nivel == "3" and "nome_loja" in faltantes:
+        partes = [
+            "loja do evento" if campo == "nome_loja" else _NOMES_CAMPO_AMIGAVEL.get(campo, campo)
+            for campo in faltantes
+        ]
     if len(partes) == 1:
         return f"Para criar o evento, preciso saber: {partes[0]}."
     return "Para criar o evento, preciso saber:\n" + "\n".join(f"• {p}" for p in partes)
@@ -807,6 +833,7 @@ def _classificar_navegacao(t: str, nivel: str) -> Optional[IAResult]:
 def complementar_evento_com_resposta(
     entities_anterior: Dict[str, str],
     texto_resposta: str,
+    nivel: str = "",
     lojas_do_secretario: Optional[List[Dict[str, Any]]] = None,
 ) -> IAResult:
     """
@@ -828,15 +855,11 @@ def complementar_evento_com_resposta(
             entities["hora"] = hora
 
     if not entities.get("nome_loja"):
-        loja = _match_loja_no_texto(texto_resposta, lojas_do_secretario)
-        if loja:
-            entities["nome_loja"] = loja.get("Nome da Loja", "")
-            entities["numero_loja"] = str(loja.get("Número", ""))
-            entities["oriente"] = loja.get("Oriente da Loja", "") or loja.get("Oriente", "")
-            entities["rito"] = loja.get("Rito", "")
-            entities["potencia"] = loja.get("Potência", "")
-            entities["endereco"] = loja.get("Endereço", "")
-            entities["loja_id"] = str(loja.get("ID") or loja.get("id") or "")
+        if nivel == "2":
+            _aplicar_loja_em_entities(_obter_loja_padrao_secretario(lojas_do_secretario), entities)
+        else:
+            loja = _match_loja_no_texto(texto_resposta, lojas_do_secretario)
+            _aplicar_loja_em_entities(loja, entities)
 
     if not entities.get("grau"):
         grau = _extrair_grau(texto_resposta)
@@ -861,7 +884,7 @@ def complementar_evento_com_resposta(
     if faltantes:
         result.confidence = "medium"
         result.preview_text = _montar_preview_evento_parcial(entities, faltantes)
-        result.disambiguation = _perguntar_campos_faltantes(faltantes)
+        result.disambiguation = _perguntar_campos_faltantes(faltantes, nivel)
     else:
         result.confidence = "high"
         result.preview_text = _montar_preview_evento_completo(entities)

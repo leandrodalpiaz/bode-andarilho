@@ -58,6 +58,14 @@ Arquivos conferidos:
 - Comandos: `/ia` e `/assistente`.
 - Classificacao de intencao baseada em `docs/ajuda_ia_base.yaml`.
 - IA apenas sugere fluxo e aciona callbacks existentes (nao executa acao administrativa direta).
+- Criacao de sessao por linguagem natural para niveis 2 e 3:
+  - entende pedido livre como "sessao de aprendiz sexta as 20h"
+  - monta rascunho parcial ou completo
+  - se faltar dado, entra em complemento multi-turno
+  - exige confirmacao final antes de publicar
+- Regra de loja na criacao por IA:
+  - secretario: usa automaticamente a loja vinculada ao perfil
+  - admin: usa a loja da frase quando existir; se nao existir, solicita a loja do evento
 - Bloqueios explicitos para:
   - dados pessoais de terceiros
   - informacao tecnica sensivel (tokens, secrets, credenciais)

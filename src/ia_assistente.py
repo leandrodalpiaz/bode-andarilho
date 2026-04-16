@@ -772,7 +772,7 @@ async def _tratar_complemento_evento(
 ) -> None:
 	"""Trata a resposta de continuação da criação de evento."""
 	lojas_sec = _obter_lojas_do_ator(user_id, nivel)
-	result = complementar_evento_com_resposta(entities_anterior, texto, lojas_sec)
+	result = complementar_evento_com_resposta(entities_anterior, texto, nivel, lojas_sec)
 
 	if result.disambiguation:
 		# Ainda faltam dados
