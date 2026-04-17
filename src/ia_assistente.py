@@ -711,19 +711,21 @@ async def _despachar_ia_result(
 		await navegar_para(update, context, "Assistente IA", result.preview_text, teclado)
 		return
 
-	# Criação de evento com dados faltantes → iniciar multi-turno
+
+	# Criação de evento com dados faltantes → mostrar preview e opções de ação
 	if result.intent == "criar_evento_natural" and result.disambiguation:
 		context.user_data["ia_evento_pendente"] = result.entities
 		_auditar_evento(
 			"intent_matched", user_id, nivel, texto_entrada,
 			intent_id="criar_evento_natural",
-			action_type="multi_turno",
+			action_type="multi_turno_preview",
 			topic_hint=_extrair_topic_hint(texto_entrada),
 		)
-		texto_resposta = result.preview_text + "\n\n" + result.disambiguation
-		teclado = InlineKeyboardMarkup(
-			[[InlineKeyboardButton("❌ Cancelar", callback_data="ia_cancelar_evento")]]
-		)
+		texto_resposta = result.preview_text + "\n\n" + "⚠️ Dados faltantes: " + result.disambiguation + "\n\nVocê pode editar/completar os dados no formulário."
+		teclado = InlineKeyboardMarkup([
+			[InlineKeyboardButton("✏️ Editar/completar dados", callback_data="ia_editar_evento")],
+			[InlineKeyboardButton("❌ Cancelar", callback_data="ia_cancelar_evento")],
+		])
 		await navegar_para(update, context, "Assistente IA > Criar Evento", texto_resposta, teclado)
 		return
 
@@ -774,13 +776,15 @@ async def _tratar_complemento_evento(
 	lojas_sec = _obter_lojas_do_ator(user_id, nivel)
 	result = complementar_evento_com_resposta(entities_anterior, texto, nivel, lojas_sec)
 
+
 	if result.disambiguation:
-		# Ainda faltam dados
+		# Ainda faltam dados: mostrar preview e opções de ação
 		context.user_data["ia_evento_pendente"] = result.entities
-		texto_resp = result.preview_text + "\n\n" + result.disambiguation
-		teclado = InlineKeyboardMarkup(
-			[[InlineKeyboardButton("❌ Cancelar", callback_data="ia_cancelar_evento")]]
-		)
+		texto_resp = result.preview_text + "\n\n" + "⚠️ Dados faltantes: " + result.disambiguation + "\n\nVocê pode editar/completar os dados no formulário."
+		teclado = InlineKeyboardMarkup([
+			[InlineKeyboardButton("✏️ Editar/completar dados", callback_data="ia_editar_evento")],
+			[InlineKeyboardButton("❌ Cancelar", callback_data="ia_cancelar_evento")],
+		])
 		await navegar_para(update, context, "Assistente IA > Criar Evento", texto_resp, teclado)
 		return
 
@@ -993,22 +997,41 @@ async def ia_forcar_evento(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 async def ia_editar_evento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-	"""Abre o fluxo oficial de cadastro de evento para edição manual."""
+	"""Abre o mini app de evento para edição/complementação, com dados já preenchidos."""
 	query = update.callback_query
 	if query:
 		await query.answer()
 
-	# Mantém o rascunho mas redireciona para o fluxo conversacional oficial
-	context.user_data.pop("ia_evento_pendente", None)
-	from src.bot import navegar_para as _nav
-	await _nav(
-		update, context, "Assistente IA",
-		"Vou abrir o fluxo de cadastro manual para você ajustar os dados.",
-		InlineKeyboardMarkup([
-			[InlineKeyboardButton("📝 Abrir cadastro manual", callback_data="cadastrar_evento")],
-			[InlineKeyboardButton("Menu principal", callback_data="menu_principal")],
-		]),
-	)
+	# Recupera os dados do evento pendente
+	entities = context.user_data.get("ia_evento_pendente", None)
+	if not entities or not isinstance(entities, dict):
+		await navegar_para(
+			update, context, "Assistente IA",
+			"Nenhum rascunho de evento encontrado. Tente novamente.",
+			InlineKeyboardMarkup([[InlineKeyboardButton("Menu principal", callback_data="menu_principal")]]),
+		)
+		return
+
+	# Salva os dados no rascunho do mini app para pré-preenchimento
+	try:
+		from src.miniapp import _salvar_rascunho, _RASCUNHOS_EVENTO, WEBAPP_URL_EVENTO
+		telegram_id = update.effective_user.id if update.effective_user else 0
+		_salvar_rascunho(_RASCUNHOS_EVENTO, telegram_id, entities)
+		await navegar_para(
+			update, context, "Assistente IA",
+			"Abra o formulário para editar/completar os dados da sessão. Após salvar, retorne aqui para publicar.",
+			InlineKeyboardMarkup([
+				[InlineKeyboardButton("📝 Editar/completar formulário", web_app=WebAppInfo(url=WEBAPP_URL_EVENTO))],
+				[InlineKeyboardButton("Menu principal", callback_data="menu_principal")],
+			]),
+		)
+	except Exception as e:
+		logger.error("Erro ao abrir mini app para edição: %s", e)
+		await navegar_para(
+			update, context, "Assistente IA",
+			f"Erro ao abrir formulário de edição: {e}",
+			InlineKeyboardMarkup([[InlineKeyboardButton("Menu principal", callback_data="menu_principal")]]),
+		)
 
 
 async def ia_cancelar_evento(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
