@@ -353,6 +353,9 @@ def montar_teclado_publicacao_evento(evento: dict) -> Optional[InlineKeyboardMar
     url_local = _normalizar_url_local(endereco_raw)
     linhas = _teclado_confirmacao_evento(id_evento, agape)
     linhas.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")])
+    # Cancelamento é visível para todos (teclado inline é global no Telegram).
+    # Se o usuário não estiver confirmado, o handler responde com um toast amigável.
+    linhas.append([InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar_card|{_encode_cb(id_evento)}")])
     if url_local:
         linhas.append([InlineKeyboardButton("📍 Abrir no mapa", url=url_local)])
     return InlineKeyboardMarkup(linhas)
@@ -1257,18 +1260,20 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             )
         return ConversationHandler.END
 
-    # Verificar confirmação existente (agora cacheada)
+    # Verificar confirmação existente (evita duplicidade e dá feedback amigável).
     if buscar_confirmacao_em_eventos(ids_aliases, user_id):
+        if update.effective_chat.type in ["group", "supergroup"]:
+            await _responder_callback_seguro(query, "Irmão, você já confirmou presença.")
+            return ConversationHandler.END
+
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            JA_CONFIRMOU,
+            "Irmão, você já confirmou presença.",
             InlineKeyboardMarkup([[
-                InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")
+                InlineKeyboardButton("👥 Ver lista", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")
             ]]),
             limpar_conteudo=True
         )
-        if update.effective_chat.type in ["group", "supergroup"]:
-            await _responder_callback_seguro(query, "Você já confirmou. Verifique seu privado.")
         return ConversationHandler.END
 
     grau_cadastrado = normalizar_grau_nome(membro.get("Grau", ""))
@@ -1395,7 +1400,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
         ])
 
-    await _enviar_ou_editar_mensagem(
+    sucesso_privado = await _enviar_ou_editar_mensagem(
         context,
         user_id,
         TIPO_RESULTADO,
@@ -1406,7 +1411,19 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     await enviar_dica_contextual(update, context, "confirmacao_presenca")
 
     if update.effective_chat.type in ["group", "supergroup"]:
-        await _responder_callback_seguro(query, "✅ Presença confirmada! Verifique seu privado.")
+        if sucesso_privado:
+            await _responder_callback_seguro(query, "✅ Presença confirmada!")
+        else:
+            link_privado = _link_privado_bot(context, "start")
+            try:
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text="✅ Presença confirmada.\n\nNão consegui te enviar no privado. Abra o bot para ver os detalhes.",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📩 Abrir privado do bot", url=link_privado)]]),
+                )
+            except Exception as e:
+                logger.debug("Falha ao enviar fallback no grupo após confirmação: %s", e)
+            await _responder_callback_seguro(query, "Abra o privado do bot para ver os detalhes.", show_alert=True)
 
     return ConversationHandler.END
 
@@ -1421,7 +1438,14 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
         return
 
     eventos = listar_eventos() or []
-    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    evento = next(
+        (
+            ev
+            for ev in eventos
+            if normalizar_id_evento(ev) == id_evento or _id_evento_legado(ev) == id_evento
+        ),
+        None,
+    )
     if not evento:
         await _enviar_ou_editar_mensagem(
             context,
@@ -1580,80 +1604,44 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 cancelou = True
 
         if cancelou:
-            # Feedback visual IMEDIATO
-            if update.effective_chat.type in ["group", "supergroup"]:
-                # No grupo: apaga a lista e mostra mensagem de confirmação
+            if update.effective_chat and update.effective_chat.type in ("group", "supergroup"):
+                await _responder_callback_seguro(query, "✅ Presença cancelada.")
                 try:
-                    await query.delete_message()
+                    await _enviar_ou_editar_mensagem(
+                        context, user_id, TIPO_RESULTADO,
+                        PRESENCA_CANCELADA,
+                        InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]]),
+                        limpar_conteudo=True
+                    )
                 except Exception as e:
-                    logger.debug(f"Aviso ao deletar mensagem de cancelamento: {e}")
-                
-                # Envia mensagem de confirmação no grupo
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=CANCELAR_PRESENCA_SUCESSO_GRUPO,
-                    parse_mode="Markdown"
-                )
+                    logger.debug("Falha ao avisar cancelamento no privado: %s", e)
             else:
-                # No privado: edita a mensagem com confirmação
                 await _enviar_ou_editar_mensagem(
                     context, user_id, TIPO_RESULTADO,
                     PRESENCA_CANCELADA,
-                    InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]
-                    ]),
+                    InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]]),
                     limpar_conteudo=True
                 )
-            await query.answer("✅ Presença cancelada!")
         else:
-            await _enviar_ou_editar_mensagem(
-                context, user_id, TIPO_RESULTADO,
-                NAO_CONFIRMOU,
-                limpar_conteudo=True
-            )
+            if update.effective_chat and update.effective_chat.type in ("group", "supergroup"):
+                await _responder_callback_seguro(query, "Irmão, você ainda não confirmou sua presença.")
+            else:
+                await _enviar_ou_editar_mensagem(
+                    context, user_id, TIPO_RESULTADO,
+                    NAO_CONFIRMOU,
+                    limpar_conteudo=True
+                )
         return
 
-    # CASO 2: Pedido de cancelamento (passo 1)
-    if data.startswith("cancelar|"):
+    # CASO 2: Pedido de cancelamento (1 clique)
+    if data.startswith("cancelar|") or data.startswith("cancelar_card|"):
         _, id_evento_cod = data.split("|", 1)
         id_evento = _decode_cb(id_evento_cod)
         user_id = update.effective_user.id
 
         logger.info(f"Processando pedido de cancelamento: evento {id_evento}, usuário {user_id}")
 
-        # Se estiver em grupo, redireciona para o privado para confirmação
-        if update.effective_chat.type in ["group", "supergroup"]:
-            teclado = InlineKeyboardMarkup([[
-                InlineKeyboardButton("✅ Sim, cancelar", callback_data=f"confirma_cancelar|{_encode_cb(id_evento)}"),
-                InlineKeyboardButton("🔙 Não, voltar", callback_data=f"evento|{_encode_cb(id_evento)}")
-            ]])
-            try:
-                await _enviar_ou_editar_mensagem(
-                    context,
-                    user_id,
-                    TIPO_RESULTADO,
-                    CANCELAR_PRESENCA_CONFIRMAR,
-                    teclado,
-                    limpar_conteudo=True,
-                )
-                await _responder_callback_seguro(query, CANCELAR_PRESENCA_CALLBACK_INSTRUCOES)
-            except Forbidden:
-                link_privado = _link_privado_bot(context, "start")
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=CANCELAR_PRESENCA_FALLBACK_GRUPO,
-                    reply_markup=InlineKeyboardMarkup(
-                        [[InlineKeyboardButton("📩 Abrir privado do bot", url=link_privado)]]
-                    ),
-                )
-                await _responder_callback_seguro(
-                    query,
-                    CANCELAR_PRESENCA_CALLBACK_ABRIR_PRIVADO,
-                    show_alert=True,
-                )
-            return
-
-        # Se estiver no privado, já pode cancelar direto
+        # Cancela direto (grupo e privado)
         eventos = listar_eventos() or []
         evento = next(
             (
@@ -1665,10 +1653,81 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         ids_aliases = _ids_evento_aliases(id_evento, evento)
 
+        if not buscar_confirmacao_em_eventos(ids_aliases, user_id):
+            if update.effective_chat and update.effective_chat.type in ("group", "supergroup"):
+                await _responder_callback_seguro(query, "Irmão, você ainda não confirmou sua presença.")
+                return
+
+            await _enviar_ou_editar_mensagem(
+                context, user_id, TIPO_RESULTADO,
+                "Irmão, você ainda não confirmou sua presença.",
+                InlineKeyboardMarkup([[InlineKeyboardButton("👥 Ver lista", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")]]),
+                limpar_conteudo=True
+            )
+            return
+
         cancelou = False
         for eid in ids_aliases:
             if cancelar_confirmacao(eid, user_id):
                 cancelou = True
+
+        if update.effective_chat and update.effective_chat.type in ("group", "supergroup"):
+            await _responder_callback_seguro(query, "✅ Presença cancelada.")
+
+            # Se o clique foi na lista de confirmados, tenta atualizar a mensagem silenciosamente.
+            try:
+                texto_atual = (getattr(query.message, "text", None) or "").strip()
+                if texto_atual.startswith("*CONFIRMADOS"):
+                    nome_loja = str((evento or {}).get("Nome da loja", "") or "").strip()
+                    data_evento = str((evento or {}).get("Data do evento", "") or "").strip()
+                    titulo = "CONFIRMADOS" if not nome_loja else f"CONFIRMADOS - {nome_loja}"
+
+                    confirmacoes = listar_confirmacoes_por_eventos(ids_aliases) or []
+                    linhas: List[str] = []
+                    for c in confirmacoes:
+                        tid = _tid_to_int(c.get("Telegram ID") or c.get("telegram_id"))
+                        membro = buscar_membro(tid) if tid is not None else None
+                        if membro:
+                            linhas.append(montar_linha_confirmado(membro))
+                        else:
+                            snapshot = {
+                                "Grau": c.get("Grau", c.get("grau", "")),
+                                "Nome": c.get("Nome", c.get("nome", "")),
+                                "Loja": c.get("Loja", c.get("loja", "")),
+                                "Número da loja": c.get("Número da loja", c.get("numero_loja", c.get("NÃƒÂºmero da loja", ""))),
+                                "Oriente": c.get("Oriente", c.get("oriente", "")),
+                                "Potência": c.get("Potência", c.get("potencia", c.get("PotÃƒÂªncia", ""))),
+                                "Venerável Mestre": c.get("Venerável Mestre", c.get("veneravel_mestre", c.get("VenerÃƒÂ¡vel Mestre", ""))),
+                            }
+                            linhas.append(montar_linha_confirmado(snapshot))
+
+                    corpo = "Nenhuma presença confirmada até o momento." if not linhas else "\n".join(linhas)
+                    texto = f"*{titulo}*\n{data_evento}\n\n{corpo}"
+
+                    agape_evento = str((evento or {}).get("Ágape", "") or "")
+                    botoes = []
+                    botoes.extend(_teclado_confirmacao_evento(id_evento, agape_evento))
+                    botoes.append([InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")])
+
+                    await query.edit_message_text(
+                        text=texto,
+                        parse_mode="Markdown",
+                        reply_markup=InlineKeyboardMarkup(botoes),
+                    )
+            except Exception as e:
+                logger.debug("Falha ao atualizar lista de confirmados após cancelamento: %s", e)
+
+            # Informa no privado sem pedir confirmação (silencioso no grupo)
+            try:
+                await _enviar_ou_editar_mensagem(
+                    context, user_id, TIPO_RESULTADO,
+                    PRESENCA_CANCELADA,
+                    InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")]]),
+                    limpar_conteudo=True
+                )
+            except Exception as e:
+                logger.debug("Falha ao avisar cancelamento no privado: %s", e)
+            return
 
         if cancelou:
             await _enviar_ou_editar_mensagem(

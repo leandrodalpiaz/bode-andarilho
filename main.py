@@ -592,6 +592,9 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(
         cancelar_presenca, pattern=r"^cancelar\|"
     ))
+    app.add_handler(CallbackQueryHandler(
+        cancelar_presenca, pattern=r"^cancelar_card\|"
+    ))
     # Handler para fechar a lista de confirmados
     app.add_handler(CallbackQueryHandler(
         fechar_mensagem, pattern=r"^fechar_mensagem$"

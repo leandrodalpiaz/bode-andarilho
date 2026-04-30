@@ -554,7 +554,14 @@ async def copiar_lista_confirmados(update: Update, context: ContextTypes.DEFAULT
     id_evento = _decode_cb(id_evento_cod)
 
     eventos = listar_eventos() or []
-    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    evento = next(
+        (
+            ev
+            for ev in eventos
+            if normalizar_id_evento(ev) == id_evento or _id_evento_legado(ev) == id_evento
+        ),
+        None,
+    )
 
     if not evento:
         await _enviar_ou_editar_mensagem(
@@ -664,7 +671,14 @@ async def confirmar_cancelamento(update: Update, context: ContextTypes.DEFAULT_T
     id_evento = _decode_cb(id_evento_cod)
 
     eventos = listar_eventos() or []
-    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    evento = next(
+        (
+            ev
+            for ev in eventos
+            if normalizar_id_evento(ev) == id_evento or _id_evento_legado(ev) == id_evento
+        ),
+        None,
+    )
 
     if not evento:
         await _enviar_ou_editar_mensagem(
@@ -712,7 +726,14 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
     id_evento = _decode_cb(id_evento_cod)
 
     eventos = listar_eventos() or []
-    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    evento = next(
+        (
+            ev
+            for ev in eventos
+            if normalizar_id_evento(ev) == id_evento or _id_evento_legado(ev) == id_evento
+        ),
+        None,
+    )
 
     if not evento:
         await _enviar_ou_editar_mensagem(
@@ -982,7 +1003,14 @@ async def visualizar_confirmados(update: Update, context: ContextTypes.DEFAULT_T
     
     # Buscar evento
     eventos = listar_eventos() or []
-    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    evento = next(
+        (
+            ev
+            for ev in eventos
+            if normalizar_id_evento(ev) == id_evento or _id_evento_legado(ev) == id_evento
+        ),
+        None,
+    )
     
     if not evento:
         await query.answer("Evento não encontrado.", show_alert=True)
@@ -1172,7 +1200,14 @@ async def confirmar_refazer_evento(update: Update, context: ContextTypes.DEFAULT
     id_evento = _decode_cb(id_evento_cod)
 
     eventos = listar_eventos() or []
-    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    evento = next(
+        (
+            ev
+            for ev in eventos
+            if normalizar_id_evento(ev) == id_evento or _id_evento_legado(ev) == id_evento
+        ),
+        None,
+    )
 
     if not evento:
         await _enviar_ou_editar_mensagem(
@@ -1222,7 +1257,14 @@ async def executar_refazer_evento(update: Update, context: ContextTypes.DEFAULT_
     id_evento = _decode_cb(id_evento_cod)
 
     eventos = listar_eventos() or []
-    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    evento = next(
+        (
+            ev
+            for ev in eventos
+            if normalizar_id_evento(ev) == id_evento or _id_evento_legado(ev) == id_evento
+        ),
+        None,
+    )
 
     if not evento:
         await _enviar_ou_editar_mensagem(
