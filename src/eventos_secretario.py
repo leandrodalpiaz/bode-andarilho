@@ -35,7 +35,7 @@ from telegram.ext import (
 from src.sheets_supabase import (
     listar_eventos,
     buscar_membro,
-    listar_confirmacoes_por_evento,
+    listar_confirmacoes_por_eventos,
     cancelar_todas_confirmacoes,
     atualizar_evento,
     obter_secretario_responsavel_evento,
@@ -72,6 +72,22 @@ from src.messages import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _id_evento_legado(evento: dict) -> str:
+    return f"{evento.get('Data do evento', '')} — {evento.get('Nome da loja', '')}"
+
+
+def _ids_evento_aliases(id_evento: str, evento: dict) -> list[str]:
+    ids = [str(id_evento or "").strip(), str(normalizar_id_evento(evento) or "").strip(), _id_evento_legado(evento)]
+    out: list[str] = []
+    for raw in ids:
+        s = str(raw or "").strip()
+        if not s or s.lower() == "nan":
+            continue
+        if s not in out:
+            out.append(s)
+    return out
 
 # ============================================
 # CONSTANTES E CONFIGURAÇÕES
@@ -160,7 +176,11 @@ async def _notificar_confirmados_evento(
     confirmacoes: Optional[list] = None,
 ) -> None:
     """Notifica no privado os irmãos que já confirmaram presença no evento."""
-    confirmacoes = confirmacoes if confirmacoes is not None else (listar_confirmacoes_por_evento(id_evento) or [])
+    confirmacoes = (
+        confirmacoes
+        if confirmacoes is not None
+        else (listar_confirmacoes_por_eventos(_ids_evento_aliases(id_evento, evento)) or [])
+    )
     if not confirmacoes:
         return
 
@@ -361,7 +381,14 @@ async def menu_gerenciar_evento(update: Update, context: ContextTypes.DEFAULT_TY
     id_evento = _decode_cb(id_evento_cod)
 
     eventos = listar_eventos() or []
-    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    evento = next(
+        (
+            ev
+            for ev in eventos
+            if normalizar_id_evento(ev) == id_evento or _id_evento_legado(ev) == id_evento
+        ),
+        None,
+    )
 
     if not evento:
         await _enviar_ou_editar_mensagem(
@@ -416,7 +443,14 @@ async def resumo_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE)
     id_evento = _decode_cb(id_evento_cod)
 
     eventos = listar_eventos() or []
-    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    evento = next(
+        (
+            ev
+            for ev in eventos
+            if normalizar_id_evento(ev) == id_evento or _id_evento_legado(ev) == id_evento
+        ),
+        None,
+    )
 
     if not evento:
         await _enviar_ou_editar_mensagem(
@@ -436,7 +470,7 @@ async def resumo_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return
 
-    confirmacoes = listar_confirmacoes_por_evento(id_evento) or []
+    confirmacoes = listar_confirmacoes_por_eventos(_ids_evento_aliases(id_evento, evento)) or []
     
     total = len(confirmacoes)
     com_agape = 0
@@ -540,7 +574,7 @@ async def copiar_lista_confirmados(update: Update, context: ContextTypes.DEFAULT
         )
         return
 
-    confirmacoes = listar_confirmacoes_por_evento(id_evento) or []
+    confirmacoes = listar_confirmacoes_por_eventos(_ids_evento_aliases(id_evento, evento)) or []
     
     nome_loja = evento.get("Nome da loja", "")
     numero = evento.get("Número da loja", "")
@@ -707,8 +741,10 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
     
     if sucesso:
         evento["_aviso_resumo"] = "horário alterado ou evento cancelado"
-        confirmacoes_antes = listar_confirmacoes_por_evento(id_evento) or []
-        cancelar_todas_confirmacoes(id_evento)
+        ids_aliases = _ids_evento_aliases(id_evento, evento)
+        confirmacoes_antes = listar_confirmacoes_por_eventos(ids_aliases) or []
+        for eid in ids_aliases:
+            cancelar_todas_confirmacoes(eid)
         await sincronizar_resumo_evento_grupo(context, evento)
         await _notificar_confirmados_evento(
             context,
@@ -962,7 +998,7 @@ async def visualizar_confirmados(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
     
     # Buscar confirmações
-    confirmacoes = listar_confirmacoes_por_evento(id_evento) or []
+    confirmacoes = listar_confirmacoes_por_eventos(_ids_evento_aliases(id_evento, evento)) or []
     # DEBUG: log how many confirmations were found
     logger.debug(f"confirmacoes para evento {id_evento}: {len(confirmacoes)}")
     

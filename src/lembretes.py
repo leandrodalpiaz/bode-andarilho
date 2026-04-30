@@ -22,7 +22,7 @@ from os import getenv
 from telegram import Bot
 from src.sheets_supabase import (
     listar_eventos,
-    listar_confirmacoes_por_evento,
+    listar_confirmacoes_por_eventos,
     buscar_membro,
     buscar_confirmacoes_no_periodo,
     buscar_eventos_no_periodo,
@@ -109,8 +109,9 @@ async def enviar_lembretes_24h(bot: Bot):
             continue
 
         # Gera o ID do evento (preferencialmente da coluna ID Evento, com alternativa de compatibilidade)
-        id_evento = str(evento.get("ID Evento", "")).strip() or (data_evento + " — " + evento.get("Nome da loja", ""))
-        confirmados = listar_confirmacoes_por_evento(id_evento)
+        legado = data_evento + " — " + str(evento.get("Nome da loja", "") or "")
+        id_evento = str(evento.get("ID Evento", "")).strip() or legado
+        confirmados = listar_confirmacoes_por_eventos([id_evento, legado])
 
         nome_loja = evento.get("Nome da loja", "")
         numero_loja = evento.get("Número da loja", "")
@@ -231,8 +232,9 @@ async def enviar_lembretes_meio_dia(bot: Bot):
             continue
 
         # Gera o ID do evento (preferencialmente da coluna ID Evento, com alternativa de compatibilidade)
-        id_evento = str(evento.get("ID Evento", "")).strip() or (data_evento + " — " + evento.get("Nome da loja", ""))
-        confirmados = listar_confirmacoes_por_evento(id_evento)
+        legado = data_evento + " — " + str(evento.get("Nome da loja", "") or "")
+        id_evento = str(evento.get("ID Evento", "")).strip() or legado
+        confirmados = listar_confirmacoes_por_eventos([id_evento, legado])
 
         nome_loja = evento.get("Nome da loja", "")
         numero_loja = evento.get("Número da loja", "")

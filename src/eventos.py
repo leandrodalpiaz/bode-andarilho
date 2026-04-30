@@ -34,6 +34,8 @@ from src.sheets_supabase import (
     cancelar_confirmacao,
     buscar_confirmacao,
     listar_confirmacoes_por_evento,
+    listar_confirmacoes_por_eventos,
+    buscar_confirmacao_em_eventos,
     atualizar_evento,
     get_notificacao_status,
     listar_notificacoes_secretario_pendentes,
@@ -525,6 +527,29 @@ def normalizar_id_evento(ev: dict) -> str:
     if id_planilha and id_planilha.lower() != "nan":
         return id_planilha
     return f"{ev.get('Data do evento', '')} — {ev.get('Nome da loja', '')}"
+
+
+def _id_evento_legado(ev: dict) -> str:
+    """ID determinístico legado (usado antes de existir `ID Evento`)."""
+    return f"{ev.get('Data do evento', '')} — {ev.get('Nome da loja', '')}"
+
+
+def _ids_evento_aliases(id_evento: str, evento: Optional[dict]) -> List[str]:
+    ids: List[str] = []
+    if id_evento:
+        ids.append(str(id_evento))
+    if evento:
+        ids.append(normalizar_id_evento(evento))
+        ids.append(_id_evento_legado(evento))
+
+    out: List[str] = []
+    for raw in ids:
+        s = str(raw or "").strip()
+        if not s or s.lower() == "nan":
+            continue
+        if s not in out:
+            out.append(s)
+    return out
 
 
 def _tid_to_int(value: Any) -> Optional[int]:
@@ -1040,7 +1065,14 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     id_evento = _decode_cb(id_evento_cod)
 
     eventos = listar_eventos() or []
-    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    evento = next(
+        (
+            ev
+            for ev in eventos
+            if normalizar_id_evento(ev) == id_evento or _id_evento_legado(ev) == id_evento
+        ),
+        None,
+    )
 
     if not evento:
         await _enviar_ou_editar_mensagem(
@@ -1100,7 +1132,8 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
         texto += f"\n\n📌 *Ordem do dia / observações:* {obs}"
 
     user_id = update.effective_user.id
-    ja_confirmou = buscar_confirmacao(id_evento, user_id)
+    ids_aliases = _ids_evento_aliases(id_evento, evento)
+    ja_confirmou = buscar_confirmacao_em_eventos(ids_aliases, user_id)
     botoes = []
     motivo_bloqueio = _motivo_bloqueio_confirmacao(evento)
 
@@ -1146,7 +1179,14 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     
     def buscar_eventos_sync():
         eventos = listar_eventos() or []
-        return next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+        return next(
+            (
+                ev
+                for ev in eventos
+                if normalizar_id_evento(ev) == id_evento or _id_evento_legado(ev) == id_evento
+            ),
+            None,
+        )
     
     def buscar_membro_sync():
         return buscar_membro(user_id)
@@ -1163,6 +1203,14 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             limpar_conteudo=True
         )
         return ConversationHandler.END
+
+    # Compatibilidade: aceita confirmações antigas gravadas com ID legado.
+    ids_aliases = _ids_evento_aliases(id_evento, evento)
+
+    # Canoniza o ID para gravação e callbacks futuros (quando existir `ID Evento`).
+    id_evento_canon = normalizar_id_evento(evento)
+    if id_evento_canon and id_evento_canon != id_evento:
+        id_evento = id_evento_canon
 
     motivo_bloqueio = _motivo_bloqueio_confirmacao(evento)
     if motivo_bloqueio:
@@ -1210,7 +1258,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         return ConversationHandler.END
 
     # Verificar confirmação existente (agora cacheada)
-    if buscar_confirmacao(id_evento, user_id):
+    if buscar_confirmacao_em_eventos(ids_aliases, user_id):
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             JA_CONFIRMOU,
@@ -1267,7 +1315,17 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         "veneravel_mestre": membro.get("Venerável Mestre", ""),
         "mestre_instalado": membro.get("Mestre Instalado", ""),
     }
-    registrar_confirmacao(dados_confirmacao)
+    ok = registrar_confirmacao(dados_confirmacao)
+    if not ok:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⚠️ Não consegui registrar sua confirmação agora. Tente novamente em instantes.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")]]),
+            limpar_conteudo=True,
+        )
+        if update.effective_chat.type in ["group", "supergroup"]:
+            await _responder_callback_seguro(query, "Falha ao confirmar. Tente novamente.", show_alert=True)
+        return ConversationHandler.END
 
     # Verificar se o usuário é o secretário do evento
     secretario_id = evento.get("Telegram ID do secretário", "")
@@ -1392,7 +1450,12 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
     if not membro:
         return
 
-    if buscar_confirmacao(id_evento, user_id):
+    ids_aliases = _ids_evento_aliases(id_evento, evento)
+    id_evento_canon = normalizar_id_evento(evento)
+    if id_evento_canon and id_evento_canon != id_evento:
+        id_evento = id_evento_canon
+
+    if buscar_confirmacao_em_eventos(ids_aliases, user_id):
         await _enviar_ou_editar_mensagem(
             context,
             user_id,
@@ -1429,7 +1492,17 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
         "veneravel_mestre": membro.get("Venerável Mestre", ""),
         "mestre_instalado": membro.get("Mestre Instalado", ""),
     }
-    registrar_confirmacao(dados_confirmacao)
+    ok = registrar_confirmacao(dados_confirmacao)
+    if not ok:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⚠️ Não consegui registrar sua confirmação agora. Tente novamente em instantes.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")]]),
+            limpar_conteudo=True,
+        )
+        if update.effective_chat.type in ["group", "supergroup"]:
+            await _responder_callback_seguro(query, "Falha ao confirmar. Tente novamente.", show_alert=True)
+        return
 
     await notificar_secretario(context, evento, membro, tipo_agape)
 
@@ -1490,7 +1563,23 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         logger.info(f"Processando confirmação de cancelamento: evento {id_evento}, usuário {user_id}")
 
-        if cancelar_confirmacao(id_evento, user_id):
+        eventos = listar_eventos() or []
+        evento = next(
+            (
+                ev
+                for ev in eventos
+                if normalizar_id_evento(ev) == id_evento or _id_evento_legado(ev) == id_evento
+            ),
+            None,
+        )
+        ids_aliases = _ids_evento_aliases(id_evento, evento)
+
+        cancelou = False
+        for eid in ids_aliases:
+            if cancelar_confirmacao(eid, user_id):
+                cancelou = True
+
+        if cancelou:
             # Feedback visual IMEDIATO
             if update.effective_chat.type in ["group", "supergroup"]:
                 # No grupo: apaga a lista e mostra mensagem de confirmação
@@ -1565,7 +1654,23 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         # Se estiver no privado, já pode cancelar direto
-        if cancelar_confirmacao(id_evento, user_id):
+        eventos = listar_eventos() or []
+        evento = next(
+            (
+                ev
+                for ev in eventos
+                if normalizar_id_evento(ev) == id_evento or _id_evento_legado(ev) == id_evento
+            ),
+            None,
+        )
+        ids_aliases = _ids_evento_aliases(id_evento, evento)
+
+        cancelou = False
+        for eid in ids_aliases:
+            if cancelar_confirmacao(eid, user_id):
+                cancelou = True
+
+        if cancelou:
             await _enviar_ou_editar_mensagem(
                 context, user_id, TIPO_RESULTADO,
                 PRESENCA_CANCELADA,
@@ -1600,7 +1705,7 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
-    await query.answer("👥 Buscando lista de confirmados...")
+    await _responder_callback_seguro(query, "👥 Buscando lista de confirmados...")
 
     _, id_evento_cod = query.data.split("|", 1)
     id_evento = _decode_cb(id_evento_cod)
@@ -1617,7 +1722,10 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data_evento = str(evento.get("Data do evento", "") or "").strip()
         titulo = f"CONFIRMADOS - {nome_loja}"
 
-    confirmacoes = listar_confirmacoes_por_evento(id_evento) or []
+    ids_aliases = _ids_evento_aliases(id_evento, evento)
+    confirmacoes = listar_confirmacoes_por_eventos(ids_aliases) or []
+    if len(ids_aliases) > 1:
+        logger.debug("Confirmacoes por alias de evento %s -> %s itens", ids_aliases, len(confirmacoes))
 
     linhas: List[str] = []
     for c in confirmacoes:
@@ -1642,7 +1750,7 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = f"*{titulo}*\n{data_evento}\n\n{corpo}"
 
     user_id = update.effective_user.id
-    ja_confirmou = buscar_confirmacao(id_evento, user_id)
+    ja_confirmou = buscar_confirmacao_em_eventos(ids_aliases, user_id)
 
     botoes = []
     if ja_confirmou:
@@ -1714,7 +1822,7 @@ async def minhas_confirmacoes_futuro(update: Update, context: ContextTypes.DEFAU
     confirmados = []
     for ev in eventos:
         id_evento = normalizar_id_evento(ev)
-        if buscar_confirmacao(id_evento, user_id):
+        if buscar_confirmacao_em_eventos([id_evento, _id_evento_legado(ev)], user_id):
             data_str = ev.get("Data do evento", "")
             try:
                 data_evento = datetime.strptime(data_str, "%d/%m/%Y").date()
@@ -1760,7 +1868,7 @@ async def minhas_confirmacoes_historico(update: Update, context: ContextTypes.DE
     confirmados = []
     for ev in eventos:
         id_evento = normalizar_id_evento(ev)
-        if buscar_confirmacao(id_evento, user_id):
+        if buscar_confirmacao_em_eventos([id_evento, _id_evento_legado(ev)], user_id):
             data_str = ev.get("Data do evento", "")
             try:
                 data_evento = datetime.strptime(data_str, "%d/%m/%Y").date()
@@ -1821,7 +1929,11 @@ async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE
     potencia = str(evento.get("Potência", "") or "").strip()
 
     user_id = update.effective_user.id
-    confirmacao = buscar_confirmacao(id_evento, user_id)
+    ids_aliases = _ids_evento_aliases(id_evento, evento)
+    id_evento_canon = normalizar_id_evento(evento)
+    if id_evento_canon and id_evento_canon != id_evento:
+        id_evento = id_evento_canon
+    confirmacao = buscar_confirmacao_em_eventos(ids_aliases, user_id)
     agape_info = ""
     if confirmacao:
         agape = confirmacao.get("Ágape", "")
@@ -1855,7 +1967,14 @@ async def detalhes_historico(update: Update, context: ContextTypes.DEFAULT_TYPE)
     id_evento = _decode_cb(id_evento_cod)
 
     eventos = listar_eventos() or []
-    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    evento = next(
+        (
+            ev
+            for ev in eventos
+            if normalizar_id_evento(ev) == id_evento or _id_evento_legado(ev) == id_evento
+        ),
+        None,
+    )
 
     if not evento:
         await _enviar_ou_editar_mensagem(
@@ -1874,7 +1993,11 @@ async def detalhes_historico(update: Update, context: ContextTypes.DEFAULT_TYPE)
     potencia = str(evento.get("Potência", "") or "").strip()
 
     user_id = update.effective_user.id
-    confirmacao = buscar_confirmacao(id_evento, user_id)
+    ids_aliases = _ids_evento_aliases(id_evento, evento)
+    id_evento_canon = normalizar_id_evento(evento)
+    if id_evento_canon and id_evento_canon != id_evento:
+        id_evento = id_evento_canon
+    confirmacao = buscar_confirmacao_em_eventos(ids_aliases, user_id)
     agape_info = ""
     if confirmacao:
         agape = confirmacao.get("Ágape", "")

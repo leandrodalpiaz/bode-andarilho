@@ -860,7 +860,26 @@ def registrar_confirmacao(dados: dict) -> bool:
             ),
         }
 
-        supabase.table("confirmacoes").insert(row).execute()
+        # Insere com fallback para instalações que não tenham algumas colunas (schema cache / migração parcial).
+        # Ex.: "Could not find the 'mestre_instalado' column of 'confirmacoes' in the schema cache"
+        tentativa = dict(row)
+        for _ in range(5):
+            try:
+                supabase.table("confirmacoes").insert(tentativa).execute()
+                break
+            except Exception as inner:
+                msg = str(inner)
+                import re
+
+                m = re.search(r"Could not find the '([^']+)' column", msg)
+                if not m:
+                    raise
+                col = m.group(1)
+                if col in tentativa:
+                    tentativa.pop(col, None)
+                    continue
+                # Se a coluna não existir no payload, não há como corrigir via retry
+                raise
 
         # Invalida o cache
         cache_key = (id_evento, int(float(telegram_id)))
@@ -939,6 +958,77 @@ def listar_confirmacoes_por_evento(id_evento: str) -> List[dict]:
     except Exception as e:
         logger.error("Erro ao listar confirmações: %s", e)
         return []
+
+
+def listar_confirmacoes_por_eventos(ids_evento: List[str]) -> List[dict]:
+    """Retorna confirmações para múltiplos IDs de evento (compatibilidade com IDs legados)."""
+    try:
+        ids_norm = [_norm_text(i) for i in (ids_evento or [])]
+        ids_norm = [i for i in ids_norm if i]
+        if not ids_norm:
+            return []
+
+        # Evita query inválida e reduz payload
+        ids_norm = list(dict.fromkeys(ids_norm))
+
+        resp = (
+            supabase.table("confirmacoes")
+            .select("*")
+            .in_("id_evento", ids_norm)
+            .execute()
+        )
+        return [_row_to_sheets("confirmacoes", row) for row in (resp.data or [])]
+
+    except Exception as e:
+        logger.error("Erro ao listar confirmações (multi-id): %s", e)
+        return []
+
+
+def buscar_confirmacao_em_eventos(
+    ids_evento: List[str],
+    telegram_id: int,
+    usar_cache: bool = True,
+) -> Optional[dict]:
+    """Busca confirmação do usuário em qualquer um dos IDs de evento informados."""
+    ids_norm = [_norm_text(i) for i in (ids_evento or [])]
+    ids_norm = [i for i in ids_norm if i]
+    if not ids_norm:
+        return None
+
+    ids_norm = list(dict.fromkeys(ids_norm))
+
+    cache_key = (tuple(ids_norm), telegram_id)
+    if usar_cache and cache_key in _cache_confirmacoes:
+        cached, timestamp = _cache_confirmacoes[cache_key]
+        if time.time() - timestamp < _ttl_confirmacoes:
+            return cached
+
+    try:
+        tid = _norm_intlike(telegram_id)
+        if not tid:
+            _cache_confirmacoes[cache_key] = (None, time.time())
+            return None
+
+        resp = (
+            supabase.table("confirmacoes")
+            .select("*")
+            .in_("id_evento", ids_norm)
+            .eq("telegram_id", tid)
+            .limit(1)
+            .execute()
+        )
+
+        if not resp.data:
+            _cache_confirmacoes[cache_key] = (None, time.time())
+            return None
+
+        result = _row_to_sheets("confirmacoes", resp.data[0])
+        _cache_confirmacoes[cache_key] = (result, time.time())
+        return result
+
+    except Exception as e:
+        logger.error("Erro ao buscar confirmação (multi-id): %s", e)
+        return None
 
 
 def cancelar_todas_confirmacoes(id_evento: str) -> bool:
