@@ -884,6 +884,28 @@ def registrar_confirmacao(dados: dict) -> bool:
         # Invalida o cache
         cache_key = (id_evento, int(float(telegram_id)))
         _cache_confirmacoes.pop(cache_key, None)
+
+        # Invalida caches multi-id do mesmo usuário que possam conter este evento.
+        try:
+            tid_int = int(float(telegram_id))
+            target_evento = _norm_text(id_evento)
+            keys_to_remove = []
+            for k in _cache_confirmacoes:
+                try:
+                    if (
+                        isinstance(k, tuple)
+                        and len(k) == 2
+                        and isinstance(k[0], tuple)
+                        and k[1] == tid_int
+                        and target_evento in k[0]
+                    ):
+                        keys_to_remove.append(k)
+                except Exception:
+                    continue
+            for k in keys_to_remove:
+                _cache_confirmacoes.pop(k, None)
+        except Exception:
+            pass
         return True
 
     except Exception as e:
@@ -937,6 +959,23 @@ def cancelar_confirmacao(id_evento: str, telegram_id: int) -> bool:
         # Invalida o cache
         cache_key = (id_evento, telegram_id)
         _cache_confirmacoes.pop(cache_key, None)
+
+        # Invalida caches multi-id que incluam este evento + usuário (ex.: (tuple(ids), tid)).
+        keys_to_remove = []
+        for k in _cache_confirmacoes:
+            try:
+                if (
+                    isinstance(k, tuple)
+                    and len(k) == 2
+                    and isinstance(k[0], tuple)
+                    and k[1] == telegram_id
+                    and target_evento in k[0]
+                ):
+                    keys_to_remove.append(k)
+            except Exception:
+                continue
+        for k in keys_to_remove:
+            _cache_confirmacoes.pop(k, None)
         return True
 
     except Exception as e:
@@ -1041,7 +1080,20 @@ def cancelar_todas_confirmacoes(id_evento: str) -> bool:
         supabase.table("confirmacoes").delete().eq("id_evento", target_evento).execute()
 
         # Invalida o cache de todas as entradas relacionadas ao evento
-        keys_to_remove = [k for k in _cache_confirmacoes if k[0] == id_evento]
+        keys_to_remove = []
+        for k in _cache_confirmacoes:
+            try:
+                if k[0] == id_evento:
+                    keys_to_remove.append(k)
+                elif (
+                    isinstance(k, tuple)
+                    and len(k) == 2
+                    and isinstance(k[0], tuple)
+                    and target_evento in k[0]
+                ):
+                    keys_to_remove.append(k)
+            except Exception:
+                continue
         for k in keys_to_remove:
             _cache_confirmacoes.pop(k, None)
 
