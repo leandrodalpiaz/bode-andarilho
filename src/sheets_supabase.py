@@ -283,7 +283,7 @@ def _safe_cache_int(value: Any) -> int:
 
 
 # =========================
-# Fun??es auxiliares internas
+# Funções auxiliares internas
 # =========================
 
 def _now_str(segundos: bool = True) -> str:
@@ -870,7 +870,7 @@ def registrar_confirmacao(dados: dict) -> bool:
         if not id_evento or not telegram_id:
             return False
 
-        # FOR?A: ignora o cache para evitar condi??es de corrida
+        # FORÇA: ignora o cache para evitar condições de corrida
         if buscar_confirmacao(id_evento, int(float(telegram_id)), usar_cache=False):
             return False
 

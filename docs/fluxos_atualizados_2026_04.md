@@ -1,6 +1,6 @@
 # Fluxos Atualizados do Bode Andarilho (2026-05-12)
 
-Este documento complementa `docs/documentacao_tecnica.md` com os fluxos que estao ativos no codigo atual e que impactam diretamente navegacao, onboarding e suporte com IA.
+Este documento complementa `docs/documentacao_tecnica.md` com os fluxos que estão ativos no código atual e que impactam diretamente navegação, onboarding e suporte com IA.
 
 ## Escopo validado no codigo
 
@@ -17,72 +17,72 @@ Arquivos de maior impacto para fluxo:
 - `src/potencias.py`
 - `src/ajuda/*.py`
 
-## Diretriz de UX (homologacao)
+## Diretriz de UX (homologação)
 
-- O fluxo conversacional e secundario.
-- Sempre que possivel, cadastros e edicoes devem ocorrer via Mini App (formularios) para reduzir erro de digitacao e manter padronizacao.
+- O fluxo conversacional é secundário.
+- Sempre que possível, cadastros e edições devem ocorrer via Mini App (formulários) para reduzir erro de digitação e manter padronização.
 
 ## Onboarding grupo -> privado
 
 1. No grupo, o bot responde a palavras de entrada (ex.: `bode`, `menu`, `painel`).
-2. Quando possivel, direciona o usuario ao privado para operacoes sensiveis/menus.
-3. Quando o privado estiver indisponivel, envia fallback no grupo com deep link.
+2. Quando possível, direciona o usuário ao privado para operações sensíveis/menus.
+3. Quando o privado estiver indisponível, envia fallback no grupo com deep link.
 
-## Mini App (formularios)
+## Mini App (formulários)
 
-O Mini App e usado para:
+O Mini App é usado para:
 
-- cadastro/edicao de membro
-- cadastro/edicao de loja
-- cadastro/edicao de evento (sessao)
+- cadastro/edição de membro
+- cadastro/edição de loja
+- cadastro/edição de evento (sessão)
 
 Regras:
 
-- `telegram_id` vem do `initData` validado, nao do payload do cliente.
-- Campos com padroes (ex.: potencia) sao validados no backend.
+- `telegram_id` vem do `initData` validado, não do payload do cliente.
+- Campos com padrões (ex.: potência) são validados no backend.
 
-## Cadastro e publicacao de evento (sessao)
+## Cadastro e publicação de evento (sessão)
 
 Fluxo preferencial:
 
-1. Secretario abre o Mini App de cadastro de evento.
-2. Preenche dados (a partir da loja vinculada, quando aplicavel).
-3. O bot gera uma previa visual no privado (foto + botoes).
-4. Ao aprovar, o bot salva e publica no grupo com a mesma logica de callbacks existente.
+1. Secretário abre o Mini App de cadastro de evento.
+2. Preenche dados (a partir da loja vinculada, quando aplicável).
+3. O bot gera uma prévia visual no privado (foto + botões).
+4. Ao aprovar, o bot salva e publica no grupo com a mesma lógica de callbacks existente.
 
 Fallback:
 
-- Se renderizacao/envio de foto falhar, o bot publica em texto (o modelo antigo).
+- Se renderização/envio de foto falhar, o bot publica em texto (o modelo antigo).
 
-## Publicacao no grupo (camada visual)
+## Publicação no grupo (camada visual)
 
-Regra de decisao:
+Regra de decisão:
 
 1. `card_especial_url` -> publica card especial
 2. template (loja ou default) -> renderiza e publica card
-3. caso contrario -> texto fallback
+3. caso contrário -> texto fallback
 
-Padrao:
+Padrão:
 
-- caption curta (ex.: "Confirme sua presenca pelos botoes abaixo.")
-- botoes inline reais do Telegram abaixo da imagem
+- caption curta (ex.: "Confirme sua presença pelos botões abaixo.")
+- botões inline reais do Telegram abaixo da imagem
 
-## Potencias (normalizacao)
+## Potências (normalização)
 
-Padrao oficial:
+Padrão oficial:
 
 - `potencia`: `GOB`, `CMSB`, `COMAB`
-- `potencia_complemento`: texto livre obrigatorio (ex.: `GOB-RS`, `GLMERGS`, `GORGS`)
+- `potencia_complemento`: texto livre obrigatório (ex.: `GOB-RS`, `GLMERGS`, `GORGS`)
 
 O Mini App aplica a regra e o backend valida.
 
 ## IA e Ajuda
 
-A camada de IA nao executa acoes administrativas diretamente.
+A camada de IA não executa ações administrativas diretamente.
 Ela recomenda fluxos/callbacks oficiais e direciona para o Mini App quando apropriado.
 
 Base:
 
 - `docs/ajuda_ia_base.yaml`
-- conteudo exibido pelo bot: `src/ajuda/*.py`
+- conteúdo exibido pelo bot: `src/ajuda/*.py`
 

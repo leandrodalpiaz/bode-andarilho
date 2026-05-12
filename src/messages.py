@@ -3,7 +3,7 @@
 # ============================================
 # 
 # Este arquivo centraliza todas as mensagens textuais do bot.
-# O tom é fraterno, comedido e utiliza terminologia maçónica
+# O tom é fraterno, comedido e utiliza terminologia maçônica
 # para fortalecer os laços entre os obreiros.
 # 
 # ============================================
@@ -30,7 +30,7 @@ MENU_PRINCIPAL = "Por favor, selecione a oficina ou a ação desejada no menu ab
 
 CADASTRO_CONCLUIDO = (
     "✅ *Cadastro realizado a contento!*\n\n"
-    "Os seus dados foram registados. Agora, use /start para aceder ao "
+    "Os seus dados foram registrados. Agora, use /start para acessar o "
     "Painel do Obreiro e ver as sessões disponíveis."
 )
 
@@ -62,12 +62,12 @@ PRESENCA_CONFIRMADA = (
 
 PRESENCA_CANCELADA = (
     "❌ A sua presença foi removida da lista.\n\n"
-    "Caso os seus planos mudem e possa estar connosco, a sua confirmação será bem-vinda."
+    "Caso os seus planos mudem e possa estar conosco, a sua confirmação será bem-vinda."
 )
 
-JA_CONFIRMOU = "Identificámos que já confirmou presença para este trabalho."
+JA_CONFIRMOU = "Identificamos que já confirmou presença para este trabalho."
 
-NAO_CONFIRMOU = "Não encontramos registo da sua confirmação para esta sessão."
+NAO_CONFIRMOU = "Não encontramos registro da sua confirmação para esta sessão."
 
 
 # ============================================
@@ -105,7 +105,7 @@ LEMBRETE_CORPO = (
 LEMBRETE_MEIO_DIA_TITULO = "🕛 *MEIO-DIA EM PONTO!*"
 
 LEMBRETE_MEIO_DIA_CORPO = (
-    "Ir.·. {nome}, o sol está no seu zénite. Hoje é dia de trabalho!\n\n"
+    "Ir.·. {nome}, o sol está no seu zênite. Hoje é dia de trabalho!\n\n"
     "🏛 *Loja {loja} nº {numero}*\n"
     "📍 {local}\n"
     "🕕 {horario}\n\n"
@@ -253,10 +253,10 @@ CADASTRO_REDIRECIONAR_PRIVADO = (
 # [CONTEXTO] Cadastro estava inativo após saída do grupo; solicita revalidação
 # [CANAL] Privado
 CADASTRO_REVALIDACAO_NECESSARIA = (
-    "🔄 *Revalidacao de cadastro necessaria*\n\n"
-    "Identificamos que seu cadastro estava inativo por saida do grupo.\n"
+    "🔄 *Revalidação de cadastro necessária*\n\n"
+    "Identificamos que seu cadastro estava inativo por saída do grupo.\n"
     "Para voltar ao uso normal, atualize seus dados agora.\n\n"
-    "_Isso garante informacoes atuais para administracao e secretaria._"
+    "_Isso garante informações atuais para administração e secretaria._"
 )
 
 # [CONTEXTO] Membro possui dados parcialmente preenchidos; pode continuar ou recomeçar

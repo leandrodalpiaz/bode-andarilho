@@ -1,16 +1,16 @@
 # Bode Andarilho
 
-Bot Telegram para gerenciamento de eventos/sessoes, confirmacoes e membros, com backend em Python e persistencia em Supabase.
+Bot Telegram para gerenciamento de eventos/sessões, confirmações e membros, com backend em Python e persistência em Supabase.
 
-O bot preserva a logica existente de confirmacao/cancelamento/ver confirmados, e evolui a camada de apresentacao:
-eventos podem ser publicados no grupo como imagem (card) com os botoes inline do Telegram abaixo.
+O bot preserva a lógica existente de confirmação/cancelamento/ver confirmados, e evolui a camada de apresentação:
+eventos podem ser publicados no grupo como imagem (card) com os botões inline do Telegram abaixo.
 
-## Documentacao principal
+## Documentação principal
 
-- Documentacao tecnica: `docs/documentacao_tecnica.md`
-- Fluxos atualizados (estado real do codigo): `docs/fluxos_atualizados_2026_04.md`
+- Documentação técnica: `docs/documentacao_tecnica.md`
+- Fluxos atualizados (estado real do código): `docs/fluxos_atualizados_2026_04.md`
 - Base estruturada para camada de IA/ajuda: `docs/ajuda_ia_base.yaml`
-- Guia de manutencao de ajuda + IA: `docs/manutencao_ajuda_e_ia.md`
+- Guia de manutenção de ajuda + IA: `docs/manutencao_ajuda_e_ia.md`
 
 ## Stack
 
@@ -19,9 +19,9 @@ eventos podem ser publicados no grupo como imagem (card) com os botoes inline do
 - Starlette + uvicorn (webhook)
 - Supabase (PostgreSQL + Storage)
 - APScheduler
-- Pillow (renderizacao de cards)
+- Pillow (renderização de cards)
 
-## Execucao
+## Execução
 
 ```bash
 python main.py
@@ -29,15 +29,15 @@ python main.py
 
 ## Assets (camada visual)
 
-- Template padrao do sistema: `assets/templates/default_event_card.png`
+- Template padrão do sistema: `assets/templates/default_event_card.png`
 - Selos de grau (carimbos): `assets/stamps/`
-- Selos de potencia (GOB/CMSB/COMAB): `assets/potencias/`
-- Fontes versionadas usadas no card padrao: `assets/fonts/`
+- Selos de potência (GOB/CMSB/COMAB): `assets/potencias/`
+- Fontes versionadas usadas no card padrão: `assets/fonts/`
 
-## Migracoes Supabase
+## Migrações Supabase
 
-Os scripts SQL ficam em `docs/` e devem ser aplicados no ambiente quando necessario:
+Os scripts SQL ficam em `docs/` e devem ser aplicados no ambiente quando necessário:
 
 - `docs/supabase_event_cards.sql` (colunas de camada visual do evento/loja)
-- `docs/supabase_potencias_normalizadas.sql` (normalizacao de potencia + complemento)
+- `docs/supabase_potencias_normalizadas.sql` (normalização de potência + complemento)
 
