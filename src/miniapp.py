@@ -45,6 +45,7 @@ from src.sheets_supabase import (
     cadastrar_evento,
     cadastrar_loja,
     listar_lojas,
+    buscar_loja_por_nome_numero,
     listar_secretarios_ativos,
 )
 from src.permissoes import get_nivel
@@ -149,6 +150,15 @@ def _teclado_rascunho_loja(dados: Dict[str, Any], nivel: str) -> InlineKeyboardM
     linhas.append([_botao_editar_webapp("✏️ Editar loja", WEBAPP_URL_LOJA)])
     linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="draft_loja_cancelar")])
     return InlineKeyboardMarkup(linhas)
+
+
+def _teclado_template_loja_pos_cadastro(loja_id: str = "") -> InlineKeyboardMarkup:
+    cb_upload = f"loja_template_pos|{loja_id}" if loja_id else "loja_template_menu"
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🖼 Enviar template agora", callback_data=cb_upload)],
+        [InlineKeyboardButton("⏭ Usar padrão por enquanto", callback_data="loja_template_pular")],
+        [InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")],
+    ])
 
 
 def _json_error(mensagem: str, status_code: int = 400) -> JSONResponse:
@@ -422,10 +432,17 @@ async def draft_loja_confirmar(update: Update, context) -> None:
         await query.answer("Não consegui registrar a loja agora.", show_alert=True)
         return
     _limpar_rascunho(_RASCUNHOS_LOJA, telegram_id)
+    loja = buscar_loja_por_nome_numero(dados.get("nome", ""), dados.get("numero", ""))
+    loja_id = _norm_text((loja or {}).get("ID") or (loja or {}).get("id"))
     nome_esc = _escape_md(dados.get("nome", ""))
     await query.edit_message_text(
-        text=f"✅ *Loja cadastrada\\!*\n\n🏛 *{nome_esc}* foi registrada com sucesso e já pode ser usada nos próximos eventos\\.",
+        text=(
+            f"? *Loja cadastrada\\!*\n\n"
+            f"?? *{nome_esc}* foi registrada com sucesso e j? pode ser usada nos pr?ximos eventos\\.\n\n"
+            "Deseja enviar o template visual oficial desta Loja agora?"
+        ),
         parse_mode="MarkdownV2",
+        reply_markup=_teclado_template_loja_pos_cadastro(loja_id),
     )
 
 
@@ -1071,7 +1088,7 @@ def _html_wrap(title: str, body: str, script: str) -> str:
 def html_cadastro_membro() -> str:
     body = """
 <div class="card">
-  <div class="info">Após preencher, o bot enviará um resumo no chat para confirmação final.</div>
+  <div class="info">Após preencher, o bot enviará um resumo no chat para confirmação final. O template visual é opcional e poderá ser enviado depois.</div>
 </div>
 <div id="lojas_membro_card" class="card" style="display:none">
   <div class="card-title">Sua Loja</div>

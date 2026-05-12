@@ -7,8 +7,12 @@ from __future__ import annotations
 
 import logging
 import asyncio
+import json
+import mimetypes
+from io import BytesIO
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from PIL import Image
 
 from src.miniapp import WEBAPP_URL_LOJA  # noqa: E402
 from telegram.error import BadRequest
@@ -27,7 +31,11 @@ from src.sheets_supabase import (
     listar_membros_por_loja,
     cadastrar_loja,
     excluir_loja,
+    atualizar_template_visual_loja,
+    buscar_loja_por_nome_numero,
+    upload_storage_publico,
 )
+from src.evento_midia import BUCKET_EVENT_CARDS
 from src.permissoes import get_nivel
 
 from src.bot import (
@@ -40,7 +48,7 @@ from src.bot import (
 logger = logging.getLogger(__name__)
 
 # Estados da conversação para cadastro de loja
-NOME, NUMERO, ORIENTE, RITO, POTENCIA, ENDERECO, RESPONSAVEL, CONFIRMAR = range(8)
+NOME, NUMERO, ORIENTE, RITO, POTENCIA, ENDERECO, RESPONSAVEL, CONFIRMAR, TEMPLATE_ESCOLHER, TEMPLATE_UPLOAD = range(10)
 
 
 # ============================================
@@ -109,6 +117,15 @@ def _teclado_selecionar_secretario(secretarios: list[dict]) -> InlineKeyboardMar
     return InlineKeyboardMarkup(botoes)
 
 
+def _teclado_template_pos_cadastro(loja_id: str = "") -> InlineKeyboardMarkup:
+    cb_upload = f"loja_template_pos|{loja_id}" if loja_id else "loja_template_menu"
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🖼 Enviar template agora", callback_data=cb_upload)],
+        [InlineKeyboardButton("⏭ Usar padrão por enquanto", callback_data="loja_template_pular")],
+        [InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")],
+    ])
+
+
 async def _finalizar_mensagem_cadastro(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -168,6 +185,7 @@ async def menu_lojas(update: Update, context: ContextTypes.DEFAULT_TYPE):
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("➕ Cadastrar nova loja", callback_data="loja_cadastrar")],
         [InlineKeyboardButton(rotulo_lista, callback_data="loja_listar")],
+        [InlineKeyboardButton("🖼 Configurar template visual", callback_data="loja_template_menu")],
         [InlineKeyboardButton("❌ Excluir loja", callback_data="loja_excluir_menu")],
         [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")],
         [InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")],
@@ -205,7 +223,7 @@ async def listar_lojas_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await navegar_para(
             update, context,
             "Gerenciamento de Lojas > Minhas Lojas",
-            f"{titulo}\n\nNenhuma loja cadastrada.",
+            f"{titulo}\n\nNenhuma loja cadastrada ainda.\n\nCadastre a primeira Loja. O template visual pode ser enviado depois, e enquanto isso o sistema usará o modelo padrão.",
             teclado
         )
         return
@@ -222,6 +240,7 @@ async def listar_lojas_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             loja.get("Nome do secretário responsável")
             or loja.get("secretario_responsavel_nome")
         )
+        template_status = "próprio" if _norm_text(loja.get("Template sessão URL") or loja.get("template_sessao_url")) else "padrão do sistema"
         texto += (
             f"🏛 *{loja.get('Nome da Loja')}*"
             f"{' ' + str(loja.get('Número')) if loja.get('Número') else ''}\n"
@@ -229,6 +248,7 @@ async def listar_lojas_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             f"📜 Rito: {loja.get('Rito')}\n"
             f"⚜️ Potência: {loja.get('Potência')}\n"
             f"📍 Endereço: {loja.get('Endereço')}\n"
+            f"🖼 Template: {template_status}\n"
             f"👤 Secretário responsável: {sname or sid or 'Não definido'}\n"
             f"━━━━━━━━━━━━━━━━\n"
         )
@@ -456,6 +476,156 @@ async def executar_exclusao_loja(update: Update, context: ContextTypes.DEFAULT_T
             InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")
         ]])
     )
+
+
+async def configurar_template_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lista lojas para escolher qual receberá template visual."""
+    query = update.callback_query
+    await _safe_answer(query)
+
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    lojas = listar_lojas_visiveis(user_id, nivel)
+    if not lojas:
+        await navegar_para(
+            update,
+            context,
+            "Template Visual",
+            "Antes de configurar um template, cadastre sua primeira Loja.\n\nSe o secretário ainda não tiver arte pronta, tudo bem: o sistema usará o template padrão.",
+            InlineKeyboardMarkup([
+                [InlineKeyboardButton("➕ Cadastrar primeira loja", callback_data="loja_cadastrar")],
+                [InlineKeyboardButton("🔙 Voltar", callback_data="menu_lojas")],
+            ]),
+        )
+        return ConversationHandler.END
+
+    context.user_data["lojas_template_visual"] = lojas
+    botoes = []
+    for i, loja in enumerate(lojas[:30]):
+        nome = loja.get("Nome da Loja", "Loja")
+        numero = loja.get("Número", "")
+        botoes.append([InlineKeyboardButton(f"🖼 {nome}{' ' + str(numero) if numero else ''}", callback_data=f"loja_template|{i}")])
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="menu_lojas")])
+    await navegar_para(
+        update,
+        context,
+        "Template Visual",
+        "Escolha a loja que receberá o template oficial de sessões:",
+        InlineKeyboardMarkup(botoes),
+        limpar_conteudo=True,
+    )
+    return TEMPLATE_ESCOLHER
+
+
+async def iniciar_upload_template_loja_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await _safe_answer(query)
+    data = query.data or ""
+    loja_id = data.split("|", 1)[1] if "|" in data else ""
+    if not _norm_text(loja_id):
+        await query.answer("Não encontrei a loja para configurar.", show_alert=True)
+        return ConversationHandler.END
+    context.user_data["loja_template_visual_id"] = _norm_text(loja_id)
+    await query.edit_message_text(
+        "Envie o template oficial da Loja como imagem (foto ou documento PNG/JPG/WEBP).\n\nSe preferir deixar para depois, use /cancelar e a Loja continuará usando o template padrão.",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_cadastro_loja")]]),
+    )
+    return TEMPLATE_UPLOAD
+
+
+async def pular_template_pos_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query:
+        await _safe_answer(query)
+        await query.edit_message_text(
+            "Tudo certo. A Loja ficará usando o template padrão do sistema por enquanto.\n\nVocê pode trocar depois em Minhas lojas > Configurar template visual.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")]]),
+        )
+    return ConversationHandler.END
+
+
+async def escolher_template_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await _safe_answer(query)
+    try:
+        idx = int((query.data or "").split("|", 1)[1])
+    except Exception:
+        return TEMPLATE_ESCOLHER
+    lojas = context.user_data.get("lojas_template_visual", [])
+    if idx < 0 or idx >= len(lojas):
+        await query.edit_message_text("Loja não encontrada.")
+        return ConversationHandler.END
+    loja = lojas[idx]
+    context.user_data["loja_template_visual_id"] = str(loja.get("ID") or loja.get("id") or "")
+    context.user_data["loja_template_visual_nome"] = str(loja.get("Nome da Loja") or "Loja")
+    await query.edit_message_text(
+        "Envie o template oficial da Loja como imagem (foto ou documento PNG/JPG/WEBP).",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_cadastro_loja")]]),
+    )
+    return TEMPLATE_UPLOAD
+
+
+async def receber_template_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    if not msg:
+        return TEMPLATE_UPLOAD
+    loja_id = _norm_text(context.user_data.get("loja_template_visual_id"))
+    if not loja_id:
+        await msg.reply_text("Não encontrei a loja selecionada. Recomece a configuração.")
+        return ConversationHandler.END
+
+    tg_file = None
+    filename = "template.jpg"
+    content_type = "image/jpeg"
+    if msg.photo:
+        tg_file = await msg.photo[-1].get_file()
+    elif msg.document and (msg.document.mime_type or "").startswith("image/"):
+        tg_file = await msg.document.get_file()
+        filename = msg.document.file_name or filename
+        content_type = msg.document.mime_type or mimetypes.guess_type(filename)[0] or "image/jpeg"
+
+    if not tg_file:
+        await msg.reply_text("Envie uma imagem válida como foto ou documento.")
+        return TEMPLATE_UPLOAD
+
+    raw = await tg_file.download_as_bytearray()
+    try:
+        img = Image.open(BytesIO(raw))
+        img.verify()
+    except Exception:
+        await msg.reply_text("Não consegui validar a imagem. Envie PNG, JPG ou WEBP.")
+        return TEMPLATE_UPLOAD
+
+    ext = (filename.rsplit(".", 1)[-1].lower() if "." in filename else "jpg")
+    if ext not in {"jpg", "jpeg", "png", "webp"}:
+        ext = "jpg"
+    url = upload_storage_publico(BUCKET_EVENT_CARDS, f"lojas/{loja_id}/template.{ext}", bytes(raw), content_type)
+    if not url:
+        await msg.reply_text("Não consegui salvar o template no Supabase Storage. Verifique o bucket event-cards.")
+        return TEMPLATE_UPLOAD
+
+    layout = {
+        "area_texto": {
+            "alinhamento": "center",
+            "cor_texto": "#2b1a0c",
+            "fundo_translucido": True,
+        }
+    }
+    ok = atualizar_template_visual_loja(loja_id, {
+        "Template sessão URL": url,
+        "Layout config JSON": json.dumps(layout, ensure_ascii=False),
+        "Cor texto padrão": "#2b1a0c",
+        "Status template": "Ativo",
+    })
+    texto = "✅ Template visual configurado com sucesso." if ok else "Template enviado, mas falhei ao atualizar a Loja."
+    await msg.reply_text(
+        texto,
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")]]),
+    )
+    context.user_data.pop("lojas_template_visual", None)
+    context.user_data.pop("loja_template_visual_id", None)
+    context.user_data.pop("loja_template_visual_nome", None)
+    return ConversationHandler.END
 
 
 # ============================================
@@ -714,11 +884,14 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
 
     if sucesso:
         logger.info(f"Loja cadastrada com sucesso para usuário {user_id}: {dados.get('nome')}")
-        texto = "✅ *Loja cadastrada com sucesso!*\n\nAgora você pode usar este cadastro como atalho ao criar novos eventos."
-        teclado = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")],
-            [InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")]
-        ])
+        loja = buscar_loja_por_nome_numero(dados.get("nome", ""), dados.get("numero", ""))
+        loja_id = _norm_text((loja or {}).get("ID") or (loja or {}).get("id"))
+        texto = (
+            "✅ *Loja cadastrada com sucesso!*\n\n"
+            "Agora você pode usar este cadastro como atalho ao criar novos eventos.\n\n"
+            "Deseja enviar o template visual oficial desta Loja agora?"
+        )
+        teclado = _teclado_template_pos_cadastro(loja_id)
     else:
         logger.error(f"Erro ao cadastrar loja para usuário {user_id}: {dados.get('nome')}")
         texto = "❌ *Erro ao cadastrar loja.*\n\nTente novamente mais tarde."
@@ -732,6 +905,9 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
     context.user_data.pop("secretarios_disponiveis_loja", None)
     context.user_data.pop("nova_loja_nivel", None)
     context.user_data.pop("nova_loja_operador_id", None)
+    context.user_data.pop("lojas_template_visual", None)
+    context.user_data.pop("loja_template_visual_id", None)
+    context.user_data.pop("loja_template_visual_nome", None)
     return ConversationHandler.END
 
 
@@ -766,7 +942,12 @@ async def cancelar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_T
 # ============================================
 
 cadastro_loja_handler = ConversationHandler(
-    entry_points=[CallbackQueryHandler(cadastrar_loja_inicio, pattern="^loja_cadastrar$")],
+    entry_points=[
+        CallbackQueryHandler(cadastrar_loja_inicio, pattern="^loja_cadastrar$"),
+        CallbackQueryHandler(configurar_template_menu, pattern="^loja_template_menu$"),
+        CallbackQueryHandler(iniciar_upload_template_loja_id, pattern=r"^loja_template_pos\|"),
+        CallbackQueryHandler(pular_template_pos_cadastro, pattern="^loja_template_pular$"),
+    ],
     states={
         NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_nome_loja)],
         NUMERO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_numero_loja)],
@@ -782,6 +963,14 @@ cadastro_loja_handler = ConversationHandler(
             CallbackQueryHandler(confirmar_cadastro_loja, pattern="^confirmar_cadastro_loja$"),
             CallbackQueryHandler(cancelar_cadastro_loja, pattern="^cancelar_cadastro_loja$"),
             CallbackQueryHandler(cadastrar_loja_inicio, pattern="^loja_cadastrar$"),
+        ],
+        TEMPLATE_ESCOLHER: [
+            CallbackQueryHandler(escolher_template_loja, pattern=r"^loja_template\|"),
+            CallbackQueryHandler(cancelar_cadastro_loja, pattern="^cancelar_cadastro_loja$"),
+        ],
+        TEMPLATE_UPLOAD: [
+            MessageHandler(filters.ChatType.PRIVATE & (filters.PHOTO | filters.Document.IMAGE), receber_template_loja),
+            CallbackQueryHandler(cancelar_cadastro_loja, pattern="^cancelar_cadastro_loja$"),
         ],
     },
     fallbacks=[

@@ -11,6 +11,7 @@ httpx==0.28.1
 # Supabase
 supabase==2.28.0
 websockets==15.0.1
+Pillow==11.3.0
 
 # Dependencias indiretas
 certifi==2026.1.4

@@ -98,6 +98,7 @@ from src.eventos import (
     minhas_confirmacoes_historico,
     mostrar_eventos_por_data,
     mostrar_eventos_por_grau,
+    mostrar_eventos_por_rito,
     detalhes_confirmado,
     detalhes_historico,
     confirmacao_presenca_handler,
@@ -554,6 +555,9 @@ def register_handlers(app: Application) -> None:
     ))
     app.add_handler(CallbackQueryHandler(
         mostrar_eventos_por_grau, pattern=r"^grau\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        mostrar_eventos_por_rito, pattern=r"^rito\|"
     ))
     app.add_handler(CallbackQueryHandler(
         mostrar_detalhes_evento, pattern=r"^evento\|"

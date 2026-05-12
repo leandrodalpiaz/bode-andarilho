@@ -626,6 +626,9 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("grau|"):
         from src.eventos import mostrar_eventos_por_grau
         await mostrar_eventos_por_grau(update, context)
+    elif data.startswith("rito|"):
+        from src.eventos import mostrar_eventos_por_rito
+        await mostrar_eventos_por_rito(update, context)
     elif data.startswith("evento|"):
         from src.eventos import mostrar_detalhes_evento
         await mostrar_detalhes_evento(update, context)

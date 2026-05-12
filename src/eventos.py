@@ -73,6 +73,7 @@ from src.bot import (
     _enviar_ou_editar_mensagem,
     TIPO_RESULTADO
 )
+from src.evento_midia import editar_ou_republicar_evento_visual, publicar_evento_no_grupo
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +191,7 @@ TOKEN_PROXIMA_SEMANA = "proxima_semana"
 TOKEN_MES_ATUAL = "mes_atual"
 TOKEN_PROXIMOS_MESES = "proximos_meses"
 TOKEN_POR_GRAU_MENU = "por_grau"
+TOKEN_POR_RITO_MENU = "por_rito"
 
 # Graus
 GRAU_APRENDIZ = "Aprendiz"
@@ -373,11 +375,12 @@ async def sincronizar_resumo_evento_grupo(context: ContextTypes.DEFAULT_TYPE, ev
             logger.warning("Não foi possível sincronizar card do evento %s: grupo_id ausente.", id_evento)
             return False
         try:
-            nova_msg = await context.bot.send_message(
-                chat_id=grupo_id,
-                text=montar_texto_publicacao_evento(evento),
-                parse_mode="Markdown",
-                reply_markup=montar_teclado_publicacao_evento(evento),
+            nova_msg, tipo_msg = await publicar_evento_no_grupo(
+                context,
+                grupo_id,
+                evento,
+                montar_texto_publicacao_evento(evento),
+                montar_teclado_publicacao_evento(evento),
             )
             registrar_post_evento_grupo(id_evento, grupo_id, nova_msg.message_id)
 
@@ -385,6 +388,7 @@ async def sincronizar_resumo_evento_grupo(context: ContextTypes.DEFAULT_TYPE, ev
             atualizado = atualizar_evento(0, {
                 "ID Evento": id_evento,
                 "Telegram Message ID do grupo": str(nova_msg.message_id),
+                "Telegram tipo mensagem grupo": tipo_msg,
             })
             if not atualizado:
                 logger.warning(
@@ -404,14 +408,14 @@ async def sincronizar_resumo_evento_grupo(context: ContextTypes.DEFAULT_TYPE, ev
         return await _publicar_novo_card()
 
     try:
-        await context.bot.edit_message_text(
-            chat_id=grupo_id,
-            message_id=msg_id,
-            text=montar_texto_publicacao_evento(evento),
-            parse_mode="Markdown",
-            reply_markup=montar_teclado_publicacao_evento(evento),
+        return await editar_ou_republicar_evento_visual(
+            context,
+            grupo_id,
+            msg_id,
+            evento,
+            montar_texto_publicacao_evento(evento),
+            montar_teclado_publicacao_evento(evento),
         )
-        return True
     except BadRequest as e:
         if "message is not modified" in str(e).lower():
             return True
@@ -734,6 +738,53 @@ def _filtrar_por_grau(eventos: List[dict], grau_nome: str) -> Tuple[str, List[di
     return titulo, _eventos_ordenados(filtrados)
 
 
+def _normalizar_rito(valor: Any) -> str:
+    rito = str(valor or "").strip()
+    if not rito or rito.lower() == "nan":
+        return ""
+    aliases = {
+        "reaa": "REAA",
+        "r.e.a.a.": "REAA",
+        "rito escoces antigo e aceito": "REAA",
+        "rito escocês antigo e aceito": "REAA",
+        "york": "York",
+        "rito de york": "York",
+        "adonhiramita": "Adonhiramita",
+        "brasileiro": "Brasileiro",
+        "moderno": "Moderno",
+        "schroeder": "Schroeder",
+        "schröeder": "Schroeder",
+        "escoces retificado": "Escocês Retificado",
+        "escocês retificado": "Escocês Retificado",
+        "memphis-misraim": "Memphis-Misraim",
+        "memphis misraim": "Memphis-Misraim",
+    }
+    chave = rito.lower().replace(".", "").strip()
+    return aliases.get(chave, aliases.get(rito.lower(), rito))
+
+
+def _ritos_disponiveis(eventos: List[dict]) -> List[str]:
+    ritos: List[str] = []
+    for ev in eventos:
+        rito = _normalizar_rito(ev.get("Rito") or ev.get("rito"))
+        if rito and rito not in ritos:
+            ritos.append(rito)
+    return sorted(ritos, key=lambda x: x.lower())
+
+
+def _filtrar_por_rito(eventos: List[dict], rito_nome: str) -> Tuple[str, List[dict]]:
+    alvo = _normalizar_rito(rito_nome)
+    titulo = f"Sessões — Rito — {alvo}"
+
+    filtrados = []
+    for ev in eventos:
+        rito = _normalizar_rito(ev.get("Rito") or ev.get("rito"))
+        if rito.lower() == alvo.lower():
+            filtrados.append(ev)
+
+    return titulo, _eventos_ordenados(filtrados)
+
+
 def _formatar_data_curta(ev: dict) -> str:
     dt = parse_data_evento(ev.get("Data do evento", ""))
     if not dt:
@@ -894,6 +945,7 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📅 Este mês", callback_data=f"data|{TOKEN_MES_ATUAL}")],
         [InlineKeyboardButton("📅 Próximos meses", callback_data=f"data|{TOKEN_PROXIMOS_MESES}")],
         [InlineKeyboardButton("🔺 Por grau", callback_data=f"data|{TOKEN_POR_GRAU_MENU}")],
+        [InlineKeyboardButton("📜 Por rito", callback_data=f"data|{TOKEN_POR_RITO_MENU}")],
         [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
     ])
 
@@ -982,6 +1034,30 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         )
         return
 
+    if token_or_data == TOKEN_POR_RITO_MENU:
+        eventos = listar_eventos() or []
+        ritos = _ritos_disponiveis(eventos)
+        if not ritos:
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "*Sessões por Rito*\n\nAinda não há ritos vinculados às sessões disponíveis.",
+                InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
+            )
+            return
+
+        botoes = [
+            [InlineKeyboardButton(f"📜 {rito}", callback_data=f"rito|{TOKEN_POR_RITO_MENU}|{_encode_cb(rito)}")]
+            for rito in ritos[:MAX_EVENTOS_LISTA]
+        ]
+        botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")])
+        await navegar_para(
+            update, context,
+            "Ver Sessões > Por Rito",
+            "📜 *Selecione o rito:*",
+            InlineKeyboardMarkup(botoes)
+        )
+        return
+
     eventos = listar_eventos() or []
 
     if token_or_data in (TOKEN_SEMANA_ATUAL, TOKEN_PROXIMA_SEMANA, TOKEN_MES_ATUAL, TOKEN_PROXIMOS_MESES):
@@ -1053,6 +1129,48 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
         await navegar_para(
             update, context,
             f"Ver Sessões > Por Grau > {grau}",
+            f"*{titulo}*\n\nSelecione uma sessão:",
+            InlineKeyboardMarkup(botoes)
+        )
+
+
+async def mostrar_eventos_por_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    partes = query.data.split("|", 2)
+    if len(partes) < 3:
+        return
+
+    _, data_or_menu, rito_cod = partes
+    rito = _decode_cb(rito_cod)
+    eventos = listar_eventos() or []
+
+    if data_or_menu == TOKEN_POR_RITO_MENU:
+        titulo, filtrados = _filtrar_por_rito(eventos, rito)
+
+        if not filtrados:
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                f"*{titulo}*\n\nNão há sessões para este rito no momento.",
+                InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 Voltar", callback_data=f"data|{TOKEN_POR_RITO_MENU}")
+                ]])
+            )
+            return
+
+        filtrados = filtrados[:MAX_EVENTOS_LISTA]
+        botoes = []
+        for ev in filtrados:
+            id_evento = normalizar_id_evento(ev)
+            botoes.append([InlineKeyboardButton(
+                _linha_botao_evento(ev),
+                callback_data=f"evento|{_encode_cb(id_evento)}"
+            )])
+
+        botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data=f"data|{TOKEN_POR_RITO_MENU}")])
+
+        await navegar_para(
+            update, context,
+            f"Ver Sessões > Por Rito > {_normalizar_rito(rito)}",
             f"*{titulo}*\n\nSelecione uma sessão:",
             InlineKeyboardMarkup(botoes)
         )

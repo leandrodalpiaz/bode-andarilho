@@ -176,6 +176,11 @@ _EVENTOS_SHEETS_TO_DB: Dict[str, str] = {
     "Cancelado em":                 "cancelado_em",
     "Cancelado por (Telegram ID)":  "cancelado_por_id",
     "Cancelado por (Nome)":         "cancelado_por_nome",
+    "Modo visual":                  "modo_visual",
+    "Card especial URL":            "card_especial_url",
+    "Card renderizado URL":         "card_renderizado_url",
+    "Card file_id Telegram":        "card_file_id_telegram",
+    "Telegram tipo mensagem grupo": "telegram_tipo_mensagem_grupo",
 }
 _EVENTOS_DB_TO_SHEETS: Dict[str, str] = {v: k for k, v in _EVENTOS_SHEETS_TO_DB.items()}
 
@@ -227,6 +232,27 @@ _LOJAS_DB_TO_SHEETS: Dict[str, str] = {
     "vinculo_atualizado_em": "Vínculo atualizado em",
     "vinculo_atualizado_por_id": "Vínculo atualizado por (Telegram ID)",
 }
+
+_LOJAS_SHEETS_TO_DB.update({
+    "Template sessão URL": "template_sessao_url",
+    "Layout config JSON": "layout_config_json",
+    "Cor texto padrão": "cor_texto_padrao",
+    "Fonte padrão": "fonte_padrao",
+    "Cor selo grau": "cor_selo_grau",
+    "Cor selo rito": "cor_selo_rito",
+    "Cor selo potência": "cor_selo_potencia",
+    "Status template": "status_template",
+})
+_LOJAS_DB_TO_SHEETS.update({v: k for k, v in {
+    "Template sessão URL": "template_sessao_url",
+    "Layout config JSON": "layout_config_json",
+    "Cor texto padrão": "cor_texto_padrao",
+    "Fonte padrão": "fonte_padrao",
+    "Cor selo grau": "cor_selo_grau",
+    "Cor selo rito": "cor_selo_rito",
+    "Cor selo potência": "cor_selo_potencia",
+    "Status template": "status_template",
+}.items()})
 
 _SHEET_NAME_TO_TABLE: Dict[str, str] = {
     "Membros":       "membros",
@@ -1357,6 +1383,44 @@ def atualizar_secretario_responsavel_loja(
     except Exception as e:
         logger.error("Erro ao atualizar secretário responsável da loja %s: %s", lid, e)
         return False
+
+
+def atualizar_template_visual_loja(loja_id: Any, dados: Dict[str, Any]) -> bool:
+    """Atualiza configurações visuais da loja."""
+    lid = _norm_text(loja_id)
+    if not lid:
+        return False
+
+    row = _sheets_to_row("lojas", dados)
+    row.pop("id", None)
+    for k in list(row.keys()):
+        if row[k] is None:
+            row[k] = ""
+
+    try:
+        _update_com_fallback_colunas("lojas", "id", lid, row)
+        _cache_lojas.clear()
+        return True
+    except Exception as e:
+        logger.error("Erro ao atualizar template visual da loja %s: %s", lid, e)
+        return False
+
+
+def upload_storage_publico(bucket: str, path: str, content: bytes, content_type: str = "application/octet-stream") -> Optional[str]:
+    """Faz upload para Supabase Storage e retorna URL pública."""
+    if not bucket or not path or not content:
+        return None
+    try:
+        storage = supabase.storage.from_(bucket)
+        try:
+            storage.remove([path])
+        except Exception:
+            pass
+        storage.upload(path, content, {"content-type": content_type, "upsert": "true"})
+        return storage.get_public_url(path)
+    except Exception as e:
+        logger.error("Erro ao subir arquivo para Storage (%s/%s): %s", bucket, path, e)
+        return None
 
 
 def excluir_loja(telegram_id: int, loja: dict) -> bool:

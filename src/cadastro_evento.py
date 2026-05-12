@@ -20,10 +20,13 @@ from __future__ import annotations
 import os
 import re
 import logging
+import mimetypes
+from io import BytesIO
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from PIL import Image
 
 from src.miniapp import WEBAPP_URL_EVENTO  # noqa: E402
 from telegram.ext import (
@@ -47,6 +50,8 @@ from src.eventos import (
     montar_teclado_publicacao_evento,
     registrar_post_evento_grupo,
 )
+from src.evento_midia import BUCKET_EVENT_CARDS, enviar_previa_evento, publicar_evento_no_grupo
+from src.sheets_supabase import upload_storage_publico
 from src.ajuda.dicas import enviar_dica_contextual
 from src.permissoes import get_nivel
 from src.bot import (
@@ -90,7 +95,8 @@ MAX_TEXTO = 250
     OBSERVACOES_TEXTO,
     ENDERECO,
     CONFIRMAR,
-) = range(20)
+    TROCAR_CARD,
+) = range(21)
 
 # Opções fixas
 GRAUS_OPCOES = [
@@ -367,6 +373,11 @@ def _montar_evento_dict(context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Any]:
         "Última edição por (Nome)": criado_por_nome,
         "Status": "Ativo",
         "Endereço da sessão": context.user_data.get("novo_evento_endereco", ""),
+        "Modo visual": context.user_data.get("novo_evento_modo_visual", "template_loja"),
+        "Card especial URL": context.user_data.get("novo_evento_card_especial_url", ""),
+        "Card renderizado URL": "",
+        "Card file_id Telegram": "",
+        "Telegram tipo mensagem grupo": "",
     }
 
 
@@ -488,6 +499,88 @@ def _teclado_confirmacao(tem_duplicado: bool) -> InlineKeyboardMarkup:
     linhas.append([InlineKeyboardButton("🔄 Refazer", callback_data="refazer_cadastro")])
     linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_publicacao")])
     return InlineKeyboardMarkup(linhas)
+
+
+def _teclado_previa_visual(tem_duplicado: bool) -> InlineKeyboardMarkup:
+    linhas = []
+    if tem_duplicado:
+        linhas.append([InlineKeyboardButton("⚠️ Publicar mesmo assim", callback_data="confirmar_publicacao_forcar")])
+    else:
+        linhas.append([InlineKeyboardButton("✅ Publicar no grupo", callback_data="confirmar_publicacao")])
+    linhas.append([InlineKeyboardButton("✏️ Editar dados", callback_data="refazer_cadastro")])
+    linhas.append([InlineKeyboardButton("🖼 Trocar card", callback_data="trocar_card_evento")])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_publicacao")])
+    return InlineKeyboardMarkup(linhas)
+
+
+async def _enviar_previa_publicacao(update: Update, context: ContextTypes.DEFAULT_TYPE, evento: Dict[str, Any], dup: Optional[Dict[str, Any]] = None):
+    await enviar_previa_evento(
+        context,
+        update.effective_user.id,
+        evento,
+        _teclado_previa_visual(tem_duplicado=dup is not None),
+        _montar_resumo_evento_md(evento, duplicado=dup),
+    )
+
+
+async def trocar_card_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query:
+        await query.answer()
+    await _enviar_ou_editar_mensagem(
+        context,
+        update.effective_user.id,
+        TIPO_RESULTADO,
+        "Envie agora a imagem pronta do card especial como foto ou documento.",
+        InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_publicacao")]]),
+        limpar_conteudo=True,
+    )
+    return TROCAR_CARD
+
+
+async def receber_card_especial(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    if not msg:
+        return TROCAR_CARD
+
+    tg_file = None
+    filename = "card.jpg"
+    content_type = "image/jpeg"
+    if msg.photo:
+        tg_file = await msg.photo[-1].get_file()
+    elif msg.document and (msg.document.mime_type or "").startswith("image/"):
+        tg_file = await msg.document.get_file()
+        filename = msg.document.file_name or filename
+        content_type = msg.document.mime_type or mimetypes.guess_type(filename)[0] or "image/jpeg"
+
+    if not tg_file:
+        await msg.reply_text("Envie uma imagem válida como foto ou documento.")
+        return TROCAR_CARD
+
+    raw = await tg_file.download_as_bytearray()
+    try:
+        Image.open(BytesIO(raw)).verify()
+    except Exception:
+        await msg.reply_text("Não consegui validar essa imagem. Envie PNG, JPG ou WEBP.")
+        return TROCAR_CARD
+
+    ext = os.path.splitext(filename)[1].lower() or ".jpg"
+    if ext not in (".jpg", ".jpeg", ".png", ".webp"):
+        ext = ".jpg"
+    path = f"eventos/drafts/{update.effective_user.id}/especial{ext}"
+    url = upload_storage_publico(BUCKET_EVENT_CARDS, path, bytes(raw), content_type)
+    if not url:
+        await msg.reply_text("Não consegui salvar o card no Storage. Tente novamente.")
+        return TROCAR_CARD
+
+    context.user_data["novo_evento_modo_visual"] = "card_especial"
+    context.user_data["novo_evento_card_especial_url"] = url
+
+    evento = _montar_evento_dict(context)
+    eventos_existentes = listar_eventos() or []
+    dup = _encontrar_duplicado(evento, eventos_existentes)
+    await _enviar_previa_publicacao(update, context, evento, dup)
+    return CONFIRMAR
 
 
 def _teclado_pos_publicacao(id_evento: str, agape_evento: str) -> InlineKeyboardMarkup:
@@ -1351,13 +1444,7 @@ async def receber_observacoes_tem(update: Update, context: ContextTypes.DEFAULT_
         eventos_existentes = listar_eventos() or []
         dup = _encontrar_duplicado(evento, eventos_existentes)
         
-        await navegar_para(
-            update, context,
-            "Cadastro de Evento",
-            _montar_resumo_evento_md(evento, duplicado=dup),
-            _teclado_confirmacao(tem_duplicado=dup is not None),
-            limpar_conteudo=True
-        )
+        await _enviar_previa_publicacao(update, context, evento, dup)
         return CONFIRMAR
     else:
         await navegar_para(
@@ -1382,13 +1469,7 @@ async def receber_observacoes_texto(update: Update, context: ContextTypes.DEFAUL
         eventos_existentes = listar_eventos() or []
         dup = _encontrar_duplicado(evento, eventos_existentes)
         
-        await navegar_para(
-            update, context,
-            "Cadastro de Evento",
-            _montar_resumo_evento_md(evento, duplicado=dup),
-            _teclado_confirmacao(tem_duplicado=dup is not None),
-            limpar_conteudo=True
-        )
+        await _enviar_previa_publicacao(update, context, evento, dup)
         return CONFIRMAR
     else:
         await navegar_para(
@@ -1423,13 +1504,7 @@ async def receber_endereco(update: Update, context: ContextTypes.DEFAULT_TYPE):
     eventos_existentes = listar_eventos() or []
     dup = _encontrar_duplicado(evento, eventos_existentes)
 
-    await navegar_para(
-        update, context,
-        "Cadastro de Evento",
-        _montar_resumo_evento_md(evento, duplicado=dup),
-        _teclado_confirmacao(tem_duplicado=dup is not None),
-        limpar_conteudo=True
-    )
+    await _enviar_previa_publicacao(update, context, evento, dup)
     return CONFIRMAR
 
 
@@ -1510,11 +1585,12 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
     texto_grupo = montar_texto_publicacao_evento(evento)
 
     try:
-        msg_publicada = await context.bot.send_message(
-            chat_id=grupo_id_int,
-            text=texto_grupo,
-            parse_mode="Markdown",
-            reply_markup=montar_teclado_publicacao_evento(evento),
+        msg_publicada, tipo_msg = await publicar_evento_no_grupo(
+            context,
+            grupo_id_int,
+            evento,
+            texto_grupo,
+            montar_teclado_publicacao_evento(evento),
         )
     except Exception as e:
         await _enviar_ou_editar_mensagem(
@@ -1531,6 +1607,7 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
     evento_sync = {
         "ID Evento": id_evento,
         "Telegram Message ID do grupo": str(msg_publicada.message_id),
+        "Telegram tipo mensagem grupo": tipo_msg,
     }
     if not atualizar_evento(0, evento_sync):
         logger.warning("Evento %s publicado, mas não foi possível salvar Telegram Message ID do grupo.", id_evento)
@@ -1850,7 +1927,13 @@ cadastro_evento_handler = ConversationHandler(
         CONFIRMAR: [
             CallbackQueryHandler(confirmar_publicacao, pattern=r"^confirmar_publicacao$"),
             CallbackQueryHandler(confirmar_publicacao_forcar, pattern=r"^confirmar_publicacao_forcar$"),
+            CallbackQueryHandler(trocar_card_evento, pattern=r"^trocar_card_evento$"),
             CallbackQueryHandler(refazer_cadastro, pattern=r"^refazer_cadastro$"),
+            CallbackQueryHandler(cancelar_publicacao, pattern=r"^cancelar_publicacao$"),
+            CallbackQueryHandler(ev_cancelar, pattern=r"^ev_cancelar$"),
+        ],
+        TROCAR_CARD: [
+            MessageHandler(filters.ChatType.PRIVATE & (filters.PHOTO | filters.Document.IMAGE), receber_card_especial),
             CallbackQueryHandler(cancelar_publicacao, pattern=r"^cancelar_publicacao$"),
             CallbackQueryHandler(ev_cancelar, pattern=r"^ev_cancelar$"),
         ],
