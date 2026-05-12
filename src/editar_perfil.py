@@ -87,7 +87,7 @@ def _teclado_opcoes_inline(campo_id: str) -> InlineKeyboardMarkup:
     elif campo_id in {"mestre_instalado", "veneravel_mestre"}:
         opcoes = ["Sim", "Não"]
     elif campo_id == "potencia":
-        opcoes = ["Grande Loja - RS", "GORGS", "GOB-RS", "Outra"]
+        opcoes = ["GOB", "CMSB", "COMAB"]
     else:
         opcoes = []
     linhas = [[InlineKeyboardButton(valor, callback_data=f"editar_valor_perfil|{campo_id}|{valor}")] for valor in opcoes]

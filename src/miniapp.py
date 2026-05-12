@@ -1,9 +1,9 @@
-# src/miniapp.py
+﻿# src/miniapp.py
 # ============================================
 # BODE ANDARILHO - TELEGRAM MINI APP
 # ============================================
 #
-# Fornece formulários web para cadastro de membros, eventos e lojas,
+# Fornece formulÃ¡rios web para cadastro de membros, eventos e lojas,
 # servidos diretamente pelo Starlette no Render.
 #
 # Rotas Starlette registradas em main.py:
@@ -15,11 +15,11 @@
 #   POST /api/cadastro_loja       <- api_cadastro_loja()
 #   POST /api/lojas               <- api_listar_lojas()
 #
-# Segurança:
-#   Toda submissão inclui o initData do Telegram WebApp SDK.
+# SeguranÃ§a:
+#   Toda submissÃ£o inclui o initData do Telegram WebApp SDK.
 #   O servidor verifica a assinatura HMAC-SHA256 antes de processar.
-#   O telegram_id é extraído **exclusivamente** do initData verificado,
-#   nunca do corpo da requisição.
+#   O telegram_id Ã© extraÃ­do **exclusivamente** do initData verificado,
+#   nunca do corpo da requisiÃ§Ã£o.
 # ============================================
 
 from __future__ import annotations
@@ -56,12 +56,19 @@ from src.eventos import (
     montar_teclado_publicacao_evento,
     registrar_post_evento_grupo,
 )
+from src.potencias import (
+    POTENCIAS_PRINCIPAIS,
+    formatar_potencia,
+    normalizar_potencia,
+    potencia_requer_complemento,
+    validar_potencia,
+)
 
 logger = logging.getLogger(__name__)
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # URLS DOS WEBAPPS (lidas do ambiente em import-time)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def _webapp_base_url() -> str:
     raw = (os.getenv("RENDER_EXTERNAL_URL", "") or "").strip().rstrip("/")
     lowered = raw.lower()
@@ -71,7 +78,7 @@ def _webapp_base_url() -> str:
         logger.warning("Mini App desativada: RENDER_EXTERNAL_URL precisa usar HTTPS. Valor atual: %s", raw)
         return ""
     if "seu-app.onrender.com" in lowered or "example.com" in lowered:
-        logger.warning("Mini App desativada: RENDER_EXTERNAL_URL ainda está com placeholder. Valor atual: %s", raw)
+        logger.warning("Mini App desativada: RENDER_EXTERNAL_URL ainda estÃ¡ com placeholder. Valor atual: %s", raw)
         return ""
     return raw
 
@@ -106,43 +113,62 @@ def _limpar_rascunho(bucket: Dict[int, Dict[str, Any]], telegram_id: int) -> Non
     bucket.pop(int(telegram_id), None)
 
 
+def _normalizar_dados_potencia(dados: Dict[str, Any]) -> Dict[str, Any]:
+    payload = dict(dados)
+    principal, complemento = normalizar_potencia(
+        payload.get("potencia"),
+        payload.get("potencia_complemento") or payload.get("potencia_outra"),
+    )
+    payload["potencia"] = principal
+    payload["potencia_complemento"] = complemento
+    payload["potencia_outra"] = complemento
+    return payload
+
+
+def _potencia_resumo(dados: Dict[str, Any]) -> str:
+    return formatar_potencia(
+        dados.get("potencia"),
+        dados.get("potencia_complemento") or dados.get("potencia_outra"),
+    )
+
+
 def _resumo_membro_md(dados: Dict[str, Any]) -> str:
     numero_loja = _norm_text(dados.get("numero_loja") or "0")
-    numero_fmt = f" - Nº {_escape_md(numero_loja)}" if numero_loja and numero_loja != "0" else ""
-    potencia = dados.get("potencia_outra") if _norm_text(dados.get("potencia")) == "Outra" else dados.get("potencia", "")
+    numero_fmt = f" - NÂº {_escape_md(numero_loja)}" if numero_loja and numero_loja != "0" else ""
+    potencia = _potencia_resumo(dados)
     return (
-        "🧾 *Confirme seu cadastro*\n\n"
+        "ðŸ§¾ *Confirme seu cadastro*\n\n"
         f"*Nome:* {_escape_md(dados.get('nome', ''))}\n"
         f"*Data de nascimento:* {_escape_md(dados.get('data_nasc', ''))}\n"
         f"*Grau:* {_escape_md(dados.get('grau', ''))}\n"
-        f"*Mestre Instalado:* {_escape_md(dados.get('mi', 'Não'))}\n"
-        f"*Venerável Mestre:* {_escape_md(dados.get('vm', ''))}\n"
+        f"*Mestre Instalado:* {_escape_md(dados.get('mi', 'NÃ£o'))}\n"
+        f"*VenerÃ¡vel Mestre:* {_escape_md(dados.get('vm', ''))}\n"
         f"*Loja:* {_escape_md(dados.get('loja', ''))}{numero_fmt}\n"
         f"*Oriente:* {_escape_md(dados.get('oriente', ''))}\n"
-        f"*Potência:* {_escape_md(potencia or '')}\n"
+        f"*PotÃªncia:* {_escape_md(potencia or '')}\n"
     )
 
 
 
 def _teclado_rascunho_membro() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Confirmar cadastro", callback_data="draft_membro_confirmar")],
-        [_botao_editar_webapp("✏️ Editar dados", WEBAPP_URL_MEMBRO)],
-        [InlineKeyboardButton("❌ Cancelar", callback_data="draft_membro_cancelar")],
+        [InlineKeyboardButton("âœ… Confirmar cadastro", callback_data="draft_membro_confirmar")],
+        [_botao_editar_webapp("âœï¸ Editar dados", WEBAPP_URL_MEMBRO)],
+        [InlineKeyboardButton("âŒ Cancelar", callback_data="draft_membro_cancelar")],
     ])
 
 
 def _resumo_loja_md(dados: Dict[str, Any]) -> str:
     responsavel = _norm_text(dados.get("secretario_responsavel_nome") or dados.get("secretario_responsavel_id"))
-    linha_responsavel = f"*Secretário responsável:* {_escape_md(responsavel)}\n" if responsavel else ""
+    linha_responsavel = f"*SecretÃ¡rio responsÃ¡vel:* {_escape_md(responsavel)}\n" if responsavel else ""
     return (
-        "🏛️ *Confirme os dados da loja*\n\n"
+        "ðŸ›ï¸ *Confirme os dados da loja*\n\n"
         f"*Nome:* {_escape_md(dados.get('nome', ''))}\n"
-        f"*Número:* {_escape_md(dados.get('numero', '0'))}\n"
+        f"*NÃºmero:* {_escape_md(dados.get('numero', '0'))}\n"
         f"*Oriente:* {_escape_md(dados.get('oriente', ''))}\n"
         f"*Rito:* {_escape_md(dados.get('rito', ''))}\n"
-        f"*Potência:* {_escape_md(dados.get('potencia', ''))}\n"
-        f"*Endereço:* {_escape_md(dados.get('endereco', ''))}\n"
+        f"*PotÃªncia:* {_escape_md(_potencia_resumo(dados))}\n"
+        f"*EndereÃ§o:* {_escape_md(dados.get('endereco', ''))}\n"
         f"{linha_responsavel}"
     )
 
@@ -151,20 +177,20 @@ def _resumo_loja_md(dados: Dict[str, Any]) -> str:
 def _teclado_rascunho_loja(dados: Dict[str, Any], nivel: str) -> InlineKeyboardMarkup:
     linhas: List[List[InlineKeyboardButton]] = []
     if str(nivel) == "3" and not _norm_text(dados.get("secretario_responsavel_id")):
-        linhas.append([InlineKeyboardButton("👤 Definir secretário responsável", callback_data="draft_loja_escolher_secretario")])
+        linhas.append([InlineKeyboardButton("ðŸ‘¤ Definir secretÃ¡rio responsÃ¡vel", callback_data="draft_loja_escolher_secretario")])
     else:
-        linhas.append([InlineKeyboardButton("✅ Confirmar loja", callback_data="draft_loja_confirmar")])
-    linhas.append([_botao_editar_webapp("✏️ Editar loja", WEBAPP_URL_LOJA)])
-    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="draft_loja_cancelar")])
+        linhas.append([InlineKeyboardButton("âœ… Confirmar loja", callback_data="draft_loja_confirmar")])
+    linhas.append([_botao_editar_webapp("âœï¸ Editar loja", WEBAPP_URL_LOJA)])
+    linhas.append([InlineKeyboardButton("âŒ Cancelar", callback_data="draft_loja_cancelar")])
     return InlineKeyboardMarkup(linhas)
 
 
 def _teclado_template_loja_pos_cadastro(loja_id: str = "") -> InlineKeyboardMarkup:
     cb_upload = f"loja_template_pos|{loja_id}" if loja_id else "loja_template_menu"
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🖼 Enviar template agora", callback_data=cb_upload)],
-        [InlineKeyboardButton("⏭ Usar padrão por enquanto", callback_data="loja_template_pular")],
-        [InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")],
+        [InlineKeyboardButton("ðŸ–¼ Enviar template agora", callback_data=cb_upload)],
+        [InlineKeyboardButton("â­ Usar padrÃ£o por enquanto", callback_data="loja_template_pular")],
+        [InlineKeyboardButton("ðŸ›ï¸ Gerenciar lojas", callback_data="menu_lojas")],
     ])
 
 
@@ -173,7 +199,7 @@ def _json_error(mensagem: str, status_code: int = 400) -> JSONResponse:
 
 
 async def _usuario_esta_no_grupo(bot, telegram_id: int) -> bool:
-    """Verifica se o usuário ainda participa do grupo principal configurado."""
+    """Verifica se o usuÃ¡rio ainda participa do grupo principal configurado."""
     grupo_id = str(_GRUPO_PRINCIPAL_ID or "").strip()
     if not grupo_id or not grupo_id.lstrip("-").isdigit():
         return True
@@ -190,68 +216,69 @@ async def _validar_requisicao_webapp(request: Request) -> tuple[Optional[dict], 
     try:
         body: dict = await request.json()
     except Exception:
-        return None, None, _json_error("JSON inválido.", 400)
+        return None, None, _json_error("JSON invÃ¡lido.", 400)
 
     init_data = (body.get("init_data") or "").strip()
     user = verify_telegram_webapp_data(init_data, bot_token)
     if not user:
-        return None, None, _json_error("Não autorizado.", 403)
+        return None, None, _json_error("NÃ£o autorizado.", 403)
 
     telegram_id = user.get("id")
     if not telegram_id:
-        return None, None, _json_error("Usuário não identificado.", 403)
+        return None, None, _json_error("UsuÃ¡rio nÃ£o identificado.", 403)
 
     return body, int(telegram_id), None
 
 
 def _extrair_dados_membro(body: Dict[str, Any]) -> Dict[str, Any]:
-    return {
+    return _normalizar_dados_potencia({
         "loja_id": _norm_text(body.get("loja_id"))[:80],
         "nome": _norm_text(body.get("nome"))[:200],
         "data_nasc": _norm_text(body.get("data_nasc"))[:10],
         "grau": _norm_text(body.get("grau"))[:50],
-        "mi": _norm_text(body.get("mi") or "Não")[:10],
+        "mi": _norm_text(body.get("mi") or "NÃ£o")[:10],
         "vm": _norm_text(body.get("vm"))[:10],
         "loja": _norm_text(body.get("loja"))[:200],
         "numero_loja": _norm_text(body.get("numero_loja") or "0")[:10],
         "oriente": _norm_text(body.get("oriente"))[:200],
         "potencia": _norm_text(body.get("potencia"))[:200],
-        "potencia_outra": _norm_text(body.get("potencia_outra"))[:200],
-    }
+        "potencia_outra": _norm_text(body.get("potencia_outra") or body.get("potencia_complemento"))[:200],
+    })
 
 
 def _validar_dados_membro(dados: Dict[str, Any]) -> Optional[str]:
     if not all([dados["nome"], dados["data_nasc"], dados["grau"], dados["mi"], dados["vm"], dados["loja"], dados["oriente"], dados["potencia"]]):
-        return "Preencha todos os campos obrigatórios."
+        return "Preencha todos os campos obrigatÃ³rios."
     try:
         datetime.strptime(dados["data_nasc"], "%d/%m/%Y")
     except ValueError:
-        return "Data de nascimento inválida. Use DD/MM/AAAA."
+        return "Data de nascimento invÃ¡lida. Use DD/MM/AAAA."
     if dados["grau"] not in {"Aprendiz", "Companheiro", "Mestre"}:
-        return "Grau inválido."
-    if dados["mi"] not in {"Sim", "Não"}:
-        return "Informe se o irmão é Mestre Instalado."
-    if dados["vm"] not in {"Sim", "Não"}:
-        return "Informe se o irmão é Venerável Mestre."
-    if dados["potencia"] == "Outra" and not dados["potencia_outra"]:
-        return "Informe a potência quando selecionar 'Outra'."
+        return "Grau invÃ¡lido."
+    if dados["mi"] not in {"Sim", "NÃ£o"}:
+        return "Informe se o irmÃ£o Ã© Mestre Instalado."
+    if dados["vm"] not in {"Sim", "NÃ£o"}:
+        return "Informe se o irmÃ£o Ã© VenerÃ¡vel Mestre."
+    if not validar_potencia(dados["potencia"], dados.get("potencia_complemento")):
+        return "Informe a potÃªncia principal e o complemento."
     return None
 
 
 def _payload_membro(telegram_id: int, dados: Dict[str, Any]) -> Dict[str, Any]:
-    potencia = dados["potencia_outra"] if dados.get("potencia") == "Outra" else dados["potencia"]
+    potencia, potencia_complemento = normalizar_potencia(dados.get("potencia"), dados.get("potencia_complemento"))
     return {
         "Telegram ID": str(telegram_id),
         "ID da loja": dados.get("loja_id", ""),
         "Nome": dados["nome"],
         "Data de nascimento": dados["data_nasc"],
         "Grau": dados["grau"],
-        "Venerável Mestre": dados["vm"],
-        "Mestre Instalado": dados.get("mi", "Não"),
+        "VenerÃ¡vel Mestre": dados["vm"],
+        "Mestre Instalado": dados.get("mi", "NÃ£o"),
         "Loja": dados["loja"],
-        "Número da loja": dados["numero_loja"],
+        "NÃºmero da loja": dados["numero_loja"],
         "Oriente": dados["oriente"],
-        "Potência": potencia,
+        "PotÃªncia": potencia,
+        "PotÃªncia complemento": potencia_complemento,
         "Status": "Ativo",
         "Nivel": "1",
     }
@@ -263,7 +290,7 @@ async def api_rascunho_membro(request: Request) -> JSONResponse:
         return erro
     if not await _usuario_esta_no_grupo(request.app.state.telegram_app.bot, telegram_id):
         return _json_error(
-            "Seu cadastro só pode ser concluído por quem está participando do grupo do Bode Andarilho no momento.",
+            "Seu cadastro sÃ³ pode ser concluÃ­do por quem estÃ¡ participando do grupo do Bode Andarilho no momento.",
             403,
         )
     if _norm_text((body or {}).get("action")).lower() == "get":
@@ -285,25 +312,25 @@ async def draft_membro_confirmar(update: Update, context) -> None:
     await query.answer()
     telegram_id = int(update.effective_user.id)
     if not await _usuario_esta_no_grupo(context.bot, telegram_id):
-        await query.answer("O cadastro só pode ser concluído por quem está no grupo no momento.", show_alert=True)
+        await query.answer("O cadastro sÃ³ pode ser concluÃ­do por quem estÃ¡ no grupo no momento.", show_alert=True)
         return
     dados = _obter_rascunho(_RASCUNHOS_MEMBRO, telegram_id)
     if not dados:
-        await query.answer("Não encontrei um rascunho para confirmar.", show_alert=True)
+        await query.answer("NÃ£o encontrei um rascunho para confirmar.", show_alert=True)
         return
     ja_existe = buscar_membro(telegram_id)
     ok = cadastrar_membro(_payload_membro(telegram_id, dados))
     if not ok:
-        await query.answer("Não consegui concluir o cadastro agora.", show_alert=True)
+        await query.answer("NÃ£o consegui concluir o cadastro agora.", show_alert=True)
         return
     _limpar_rascunho(_RASCUNHOS_MEMBRO, telegram_id)
     nome_esc = _escape_md(dados.get("nome", ""))
     if ja_existe:
-        texto = f"✅ *Cadastro atualizado\\!*\n\nSaudações, Ir\\.·\\. {nome_esc}\\. Seus dados foram atualizados\\."
+        texto = f"âœ… *Cadastro atualizado\\!*\n\nSaudaÃ§Ãµes, Ir\\.Â·\\. {nome_esc}\\. Seus dados foram atualizados\\."
     else:
         texto = (
-            f"✅ *Cadastro realizado a contento\\!*\n\n"
-            f"Bem\\-vindo ao Bode Andarilho, Ir\\.·\\. {nome_esc}\\!\n"
+            f"âœ… *Cadastro realizado a contento\\!*\n\n"
+            f"Bem\\-vindo ao Bode Andarilho, Ir\\.Â·\\. {nome_esc}\\!\n"
             "Use /start para acessar o Painel do Obreiro\\."
         )
     await query.edit_message_text(text=texto, parse_mode="MarkdownV2")
@@ -318,20 +345,23 @@ async def draft_membro_cancelar(update: Update, context) -> None:
 
 
 def _extrair_dados_loja(body: Dict[str, Any]) -> Dict[str, Any]:
-    return {
+    return _normalizar_dados_potencia({
         "nome": _norm_text(body.get("nome"))[:200],
         "numero": _norm_text(body.get("numero") or "0")[:10],
         "oriente": _norm_text(body.get("oriente"))[:200],
         "rito": _norm_text(body.get("rito"))[:200],
         "potencia": _norm_text(body.get("potencia"))[:200],
+        "potencia_outra": _norm_text(body.get("potencia_outra") or body.get("potencia_complemento"))[:200],
         "endereco": _norm_text(body.get("endereco"))[:400],
-    }
+    })
 
 
 
 def _validar_dados_loja(dados: Dict[str, Any]) -> Optional[str]:
     if not all([dados["nome"], dados["oriente"], dados["rito"], dados["potencia"], dados["endereco"]]):
-        return "Preencha todos os campos obrigatórios."
+        return "Preencha todos os campos obrigatÃ³rios."
+    if not validar_potencia(dados["potencia"], dados.get("potencia_complemento")):
+        return "Informe a potÃªncia principal e o complemento."
     return None
 
 
@@ -342,6 +372,7 @@ def _payload_loja(dados: Dict[str, Any], executor_id: int) -> Dict[str, Any]:
         "oriente": dados["oriente"],
         "rito": dados["rito"],
         "potencia": dados["potencia"],
+        "potencia_complemento": dados.get("potencia_complemento", ""),
         "endereco": dados["endereco"],
         "secretario_responsavel_id": _norm_text(dados.get("secretario_responsavel_id")) or str(executor_id),
         "secretario_responsavel_nome": _norm_text(dados.get("secretario_responsavel_nome")),
@@ -373,14 +404,14 @@ async def draft_loja_escolher_secretario(update: Update, context) -> None:
     telegram_id = int(update.effective_user.id)
     dados = _obter_rascunho(_RASCUNHOS_LOJA, telegram_id)
     if not dados:
-        await query.answer("Não encontrei um rascunho de loja.", show_alert=True)
+        await query.answer("NÃ£o encontrei um rascunho de loja.", show_alert=True)
         return
     secretarios = listar_secretarios_ativos() or []
     if not secretarios:
-        await query.answer("Nenhum secretário ativo foi encontrado.", show_alert=True)
+        await query.answer("Nenhum secretÃ¡rio ativo foi encontrado.", show_alert=True)
         return
     await query.edit_message_text(
-        "Escolha o secretário responsável por esta loja:",
+        "Escolha o secretÃ¡rio responsÃ¡vel por esta loja:",
         reply_markup=_teclado_secretarios("draft_loja_set_secretario", secretarios),
     )
 
@@ -391,7 +422,7 @@ async def draft_loja_set_secretario(update: Update, context) -> None:
     telegram_id = int(update.effective_user.id)
     dados = _obter_rascunho(_RASCUNHOS_LOJA, telegram_id)
     if not dados:
-        await query.answer("Não encontrei um rascunho de loja.", show_alert=True)
+        await query.answer("NÃ£o encontrei um rascunho de loja.", show_alert=True)
         return
     _, secretario_id = (query.data or "").split("|", 1)
     secretario = next((sec for sec in (listar_secretarios_ativos() or []) if _norm_text(sec.get("telegram_id")) == secretario_id), None)
@@ -412,7 +443,7 @@ async def draft_loja_set_secretario_cancelar(update: Update, context) -> None:
     telegram_id = int(update.effective_user.id)
     dados = _obter_rascunho(_RASCUNHOS_LOJA, telegram_id)
     if not dados:
-        await query.edit_message_text("Tudo certo. A seleção do secretário foi cancelada.")
+        await query.edit_message_text("Tudo certo. A seleÃ§Ã£o do secretÃ¡rio foi cancelada.")
         return
     nivel = str(get_nivel(telegram_id))
     await query.edit_message_text(
@@ -428,15 +459,15 @@ async def draft_loja_confirmar(update: Update, context) -> None:
     telegram_id = int(update.effective_user.id)
     dados = _obter_rascunho(_RASCUNHOS_LOJA, telegram_id)
     if not dados:
-        await query.answer("Não encontrei um rascunho de loja.", show_alert=True)
+        await query.answer("NÃ£o encontrei um rascunho de loja.", show_alert=True)
         return
     nivel = str(get_nivel(telegram_id))
     if nivel == "3" and not _norm_text(dados.get("secretario_responsavel_id")):
-        await query.answer("Defina primeiro o secretário responsável.", show_alert=True)
+        await query.answer("Defina primeiro o secretÃ¡rio responsÃ¡vel.", show_alert=True)
         return
     ok = cadastrar_loja(telegram_id, _payload_loja(dados, telegram_id))
     if not ok:
-        await query.answer("Não consegui registrar a loja agora.", show_alert=True)
+        await query.answer("NÃ£o consegui registrar a loja agora.", show_alert=True)
         return
     _limpar_rascunho(_RASCUNHOS_LOJA, telegram_id)
     loja = buscar_loja_por_nome_numero(dados.get("nome", ""), dados.get("numero", ""))
@@ -462,7 +493,7 @@ async def draft_loja_cancelar(update: Update, context) -> None:
 
 
 def _extrair_dados_evento(body: Dict[str, Any]) -> Dict[str, Any]:
-    return {
+    return _normalizar_dados_potencia({
         "loja_id": _norm_text(body.get("loja_id"))[:80],
         "data": _norm_text(body.get("data"))[:10],
         "horario": _norm_text(body.get("horario"))[:5],
@@ -479,9 +510,9 @@ def _extrair_dados_evento(body: Dict[str, Any]) -> Dict[str, Any]:
         "rito": _norm_text(body.get("rito"))[:200],
         "rito_outro": _norm_text(body.get("rito_outro"))[:200],
         "potencia": _norm_text(body.get("potencia"))[:200],
-        "potencia_outra": _norm_text(body.get("potencia_outra"))[:200],
+        "potencia_outra": _norm_text(body.get("potencia_outra") or body.get("potencia_complemento"))[:200],
         "endereco": _norm_text(body.get("endereco"))[:400],
-    }
+    })
 
 
 
@@ -492,28 +523,26 @@ def _validar_dados_evento(dados: Dict[str, Any]) -> Optional[str]:
         dados["rito"], dados["potencia"], dados["endereco"],
     ]
     if not all(obrigatorios):
-        return "Preencha todos os campos obrigatórios."
+        return "Preencha todos os campos obrigatÃ³rios."
     dt = _parse_data_ddmmyyyy(dados["data"])
     if not dt:
-        return "Data inválida. Use DD/MM/AAAA."
+        return "Data invÃ¡lida. Use DD/MM/AAAA."
     if dt < datetime.now().replace(hour=0, minute=0, second=0, microsecond=0):
-        return "A data não pode ser no passado."
+        return "A data nÃ£o pode ser no passado."
     if dados["grau"] not in {"Aprendiz", "Companheiro", "Mestre", "Outro"}:
-        return "Grau da sessão inválido."
+        return "Grau da sessÃ£o invÃ¡lido."
     if dados["grau"] == "Outro" and not dados["grau_outro"]:
-        return "Informe o grau da sessão quando selecionar 'Outro'."
-    if dados["traje"] not in {"Traje maçônico", "Livre", "Outro"}:
-        return "Traje inválido."
+        return "Informe o grau da sessÃ£o quando selecionar 'Outro'."
+    if dados["traje"] not in {"Traje maÃ§Ã´nico", "Livre", "Outro"}:
+        return "Traje invÃ¡lido."
     if dados["traje"] == "Outro" and not dados["traje_outro"]:
         return "Informe o traje quando selecionar 'Outro'."
-    if dados["rito"] not in {"REAA", "Schroeder", "Adonhiramita", "Brasileiro", "York", "Moderno", "Escocês Retificado", "Memphis-Misraim", "Outro"}:
-        return "Rito inválido."
+    if dados["rito"] not in {"REAA", "Schroeder", "Adonhiramita", "Brasileiro", "York", "Moderno", "EscocÃªs Retificado", "Memphis-Misraim", "Outro"}:
+        return "Rito invÃ¡lido."
     if dados["rito"] == "Outro" and not dados["rito_outro"]:
         return "Informe o rito quando selecionar 'Outro'."
-    if dados["potencia"] not in {"Grande Loja - RS", "GORGS", "GOB-RS", "Outra"}:
-        return "Potência inválida."
-    if dados["potencia"] == "Outra" and not dados["potencia_outra"]:
-        return "Informe a potência quando selecionar 'Outra'."
+    if not validar_potencia(dados["potencia"], dados.get("potencia_complemento")):
+        return "Informe a potÃªncia principal e o complemento."
     return None
 
 
@@ -522,26 +551,27 @@ def _payload_evento(dados: Dict[str, Any], secretario_id: str) -> Dict[str, Any]
     grau = dados["grau_outro"] if dados.get("grau") == "Outro" else dados["grau"]
     traje = dados["traje_outro"] if dados.get("traje") == "Outro" else dados["traje"]
     rito = dados["rito_outro"] if dados.get("rito") == "Outro" else dados["rito"]
-    potencia = dados["potencia_outra"] if dados.get("potencia") == "Outra" else dados["potencia"]
+    potencia, potencia_complemento = normalizar_potencia(dados.get("potencia"), dados.get("potencia_complemento"))
     return {
         "ID da loja": dados.get("loja_id", ""),
         "Data do evento": dados["data"],
         "Dia da semana": dt.strftime("%A") if dt else "",
         "Hora": dados["horario"],
         "Nome da loja": dados["nome_loja"],
-        "Número da loja": dados["numero_loja"],
+        "NÃºmero da loja": dados["numero_loja"],
         "Oriente": dados["oriente"],
         "Grau": grau,
-        "Tipo de sessão": dados["tipo_sessao"],
+        "Tipo de sessÃ£o": dados["tipo_sessao"],
         "Rito": rito,
-        "Potência": potencia,
-        "Traje obrigatório": traje,
-        "Ágape": dados["agape"],
-        "Observações": dados["observacoes"],
+        "PotÃªncia": potencia,
+        "PotÃªncia complemento": potencia_complemento,
+        "Traje obrigatÃ³rio": traje,
+        "Ãgape": dados["agape"],
+        "ObservaÃ§Ãµes": dados["observacoes"],
         "Telegram ID do grupo": _GRUPO_PRINCIPAL_ID,
-        "Telegram ID do secretário": secretario_id,
+        "Telegram ID do secretÃ¡rio": secretario_id,
         "Status": "Ativo",
-        "Endereço da sessão": dados["endereco"],
+        "EndereÃ§o da sessÃ£o": dados["endereco"],
         "Modo visual": "template_loja",
         "Card especial URL": "",
         "Card renderizado URL": "",
@@ -554,32 +584,32 @@ def _texto_publicacao_evento(dados: Dict[str, Any]) -> str:
     dt = _parse_data_ddmmyyyy(dados.get("data", ""))
     dia_semana = {
         "Monday": "segunda",
-        "Tuesday": "terça",
+        "Tuesday": "terÃ§a",
         "Wednesday": "quarta",
         "Thursday": "quinta",
         "Friday": "sexta",
-        "Saturday": "sábado",
+        "Saturday": "sÃ¡bado",
         "Sunday": "domingo",
     }.get(dt.strftime("%A"), "") if dt else ""
     numero_loja = _norm_text(dados.get("numero_loja") or "0")
     numero_fmt = f" {numero_loja}" if numero_loja and numero_loja != "0" else ""
     return "\n".join([
-        "NOVA SESSÃO",
+        "NOVA SESSÃƒO",
         "",
-        f"{dados.get('data', '')} ({dia_semana}) • {dados.get('horario', '')}" if dia_semana else f"{dados.get('data', '')} • {dados.get('horario', '')}",
+        f"{dados.get('data', '')} ({dia_semana}) â€¢ {dados.get('horario', '')}" if dia_semana else f"{dados.get('data', '')} â€¢ {dados.get('horario', '')}",
         f"Grau: {dados.get('grau', '')}",
         "",
         "LOJA",
         f"{dados.get('nome_loja', '')}{numero_fmt}",
         f"{dados.get('oriente', '')} - {dados.get('potencia', '')}",
         "",
-        "SESSÃO",
+        "SESSÃƒO",
         f"Tipo: {dados.get('tipo_sessao', '')}",
         f"Rito: {dados.get('rito', '')}",
         f"Traje: {dados.get('traje', '')}",
-        f"Ágape: {dados.get('agape', '')}",
+        f"Ãgape: {dados.get('agape', '')}",
         "",
-        "ORDEM DO DIA / OBSERVAÇÕES",
+        "ORDEM DO DIA / OBSERVAÃ‡Ã•ES",
         dados.get("observacoes") or "-",
         "",
         f"Local: {dados.get('endereco', '')}",
@@ -626,14 +656,14 @@ async def draft_evento_escolher_secretario(update: Update, context) -> None:
     telegram_id = int(update.effective_user.id)
     dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
     if not dados:
-        await query.answer("Não encontrei um rascunho de evento.", show_alert=True)
+        await query.answer("NÃ£o encontrei um rascunho de evento.", show_alert=True)
         return
     secretarios = listar_secretarios_ativos() or []
     if not secretarios:
-        await query.answer("Nenhum secretário ativo foi encontrado.", show_alert=True)
+        await query.answer("Nenhum secretÃ¡rio ativo foi encontrado.", show_alert=True)
         return
     await query.edit_message_text(
-        "Escolha o secretário responsável por esta sessão:",
+        "Escolha o secretÃ¡rio responsÃ¡vel por esta sessÃ£o:",
         reply_markup=_teclado_secretarios("draft_evento_set_secretario", secretarios),
     )
 
@@ -644,7 +674,7 @@ async def draft_evento_set_secretario(update: Update, context) -> None:
     telegram_id = int(update.effective_user.id)
     dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
     if not dados:
-        await query.answer("Não encontrei um rascunho de evento.", show_alert=True)
+        await query.answer("NÃ£o encontrei um rascunho de evento.", show_alert=True)
         return
     _, secretario_id = (query.data or "").split("|", 1)
     secretario = next((sec for sec in (listar_secretarios_ativos() or []) if _norm_text(sec.get("telegram_id")) == secretario_id), None)
@@ -666,7 +696,7 @@ async def draft_evento_set_secretario_cancelar(update: Update, context) -> None:
     telegram_id = int(update.effective_user.id)
     dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
     if not dados:
-        await query.edit_message_text("Tudo certo. A escolha do secretário foi cancelada.")
+        await query.edit_message_text("Tudo certo. A escolha do secretÃ¡rio foi cancelada.")
         return
     nivel = str(get_nivel(telegram_id))
     lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
@@ -682,12 +712,12 @@ async def _confirmar_evento(update: Update, context, salvar_loja: bool) -> None:
     telegram_id = int(update.effective_user.id)
     dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
     if not dados:
-        await query.answer("Não encontrei um rascunho de evento.", show_alert=True)
+        await query.answer("NÃ£o encontrei um rascunho de evento.", show_alert=True)
         return
     nivel = str(get_nivel(telegram_id))
     secretario_id = _norm_text(dados.get("secretario_responsavel_id")) or str(telegram_id)
     if nivel == "3" and not _norm_text(dados.get("secretario_responsavel_id")):
-        await query.answer("Defina primeiro o secretário responsável.", show_alert=True)
+        await query.answer("Defina primeiro o secretÃ¡rio responsÃ¡vel.", show_alert=True)
         return
     lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
     if salvar_loja and _evento_tem_loja_nova(dados, lojas_existentes):
@@ -706,21 +736,21 @@ async def _confirmar_evento(update: Update, context, salvar_loja: bool) -> None:
             },
         )
         if not ok_loja:
-            await query.answer("Não consegui salvar a loja vinculada a esta sessão.", show_alert=True)
+            await query.answer("NÃ£o consegui salvar a loja vinculada a esta sessÃ£o.", show_alert=True)
             return
     evento = _payload_evento(dados, secretario_id)
     id_evento = cadastrar_evento(evento)
     if not id_evento:
-        await query.answer("Não consegui registrar a sessão agora.", show_alert=True)
+        await query.answer("NÃ£o consegui registrar a sessÃ£o agora.", show_alert=True)
         return
     try:
         await _publicar_evento_no_grupo(context, id_evento, evento)
     except Exception as e:
         logger.warning("Falha ao publicar evento %s no grupo: %s", id_evento, e)
-        await query.answer("A sessão foi salva, mas não consegui publicar no grupo.", show_alert=True)
+        await query.answer("A sessÃ£o foi salva, mas nÃ£o consegui publicar no grupo.", show_alert=True)
         return
     _limpar_rascunho(_RASCUNHOS_EVENTO, telegram_id)
-    await query.edit_message_text("✅ Sessão publicada com sucesso no grupo.")
+    await query.edit_message_text("âœ… SessÃ£o publicada com sucesso no grupo.")
 
 
 async def draft_evento_confirmar_com_loja(update: Update, context) -> None:
@@ -740,7 +770,7 @@ async def draft_evento_cancelar(update: Update, context) -> None:
     await query.answer()
     telegram_id = int(update.effective_user.id)
     _limpar_rascunho(_RASCUNHOS_EVENTO, telegram_id)
-    await query.edit_message_text("Tudo certo. O rascunho da sessão foi cancelado.")
+    await query.edit_message_text("Tudo certo. O rascunho da sessÃ£o foi cancelado.")
 
 
 def _teclado_secretarios(prefixo: str, secretarios: List[Dict[str, Any]]) -> InlineKeyboardMarkup:
@@ -749,8 +779,8 @@ def _teclado_secretarios(prefixo: str, secretarios: List[Dict[str, Any]]) -> Inl
         sid = _norm_text(sec.get("telegram_id"))
         nome = _norm_text(sec.get("nome") or sid)
         if sid:
-            linhas.append([InlineKeyboardButton(f"👤 {nome}", callback_data=f"{prefixo}|{sid}")])
-    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data=f"{prefixo}_cancelar")])
+            linhas.append([InlineKeyboardButton(f"ðŸ‘¤ {nome}", callback_data=f"{prefixo}|{sid}")])
+    linhas.append([InlineKeyboardButton("âŒ Cancelar", callback_data=f"{prefixo}_cancelar")])
     return InlineKeyboardMarkup(linhas)
 
 
@@ -763,7 +793,7 @@ def _evento_tem_loja_nova(dados: Dict[str, Any], lojas_existentes: List[Dict[str
     for loja in lojas_existentes:
         if (
             _norm_text(loja.get("Nome da Loja")) == nome
-            and _norm_text(loja.get("Número") or "0") == numero
+            and _norm_text(loja.get("NÃºmero") or "0") == numero
             and _norm_text(loja.get("Rito")) == rito
         ):
             return False
@@ -774,27 +804,27 @@ def _resumo_evento_md(dados: Dict[str, Any]) -> str:
     numero_loja = _norm_text(dados.get("numero_loja") or "0")
     numero_fmt = f" {_escape_md(numero_loja)}" if numero_loja and numero_loja != "0" else ""
     responsavel = _norm_text(dados.get("secretario_responsavel_nome") or dados.get("secretario_responsavel_id"))
-    linha_resp = f"*Secretário responsável:* {_escape_md(responsavel)}\n" if responsavel else ""
+    linha_resp = f"*SecretÃ¡rio responsÃ¡vel:* {_escape_md(responsavel)}\n" if responsavel else ""
     obs = _norm_text(dados.get("observacoes"))
-    linha_obs = f"*Ordem do dia / observações:* {_escape_md(obs)}\n" if obs else ""
+    linha_obs = f"*Ordem do dia / observaÃ§Ãµes:* {_escape_md(obs)}\n" if obs else ""
     grau = dados.get("grau_outro") if _norm_text(dados.get("grau")) == "Outro" else dados.get("grau", "")
     traje = dados.get("traje_outro") if _norm_text(dados.get("traje")) == "Outro" else dados.get("traje", "")
     rito = dados.get("rito_outro") if _norm_text(dados.get("rito")) == "Outro" else dados.get("rito", "")
-    potencia = dados.get("potencia_outra") if _norm_text(dados.get("potencia")) == "Outra" else dados.get("potencia", "")
+    potencia = _potencia_resumo(dados)
     return (
-        "📋 *Confirme a sessão antes de publicar*\n\n"
+        "ðŸ“‹ *Confirme a sessÃ£o antes de publicar*\n\n"
         f"*Data:* {_escape_md(dados.get('data', ''))}\n"
-        f"*Horário:* {_escape_md(dados.get('horario', ''))}\n"
-        f"*Grau da sessão:* {_escape_md(grau or '')}\n"
-        f"*Tipo de sessão:* {_escape_md(dados.get('tipo_sessao', ''))}\n"
+        f"*HorÃ¡rio:* {_escape_md(dados.get('horario', ''))}\n"
+        f"*Grau da sessÃ£o:* {_escape_md(grau or '')}\n"
+        f"*Tipo de sessÃ£o:* {_escape_md(dados.get('tipo_sessao', ''))}\n"
         f"*Traje:* {_escape_md(traje or '')}\n"
-        f"*Ágape:* {_escape_md(dados.get('agape', ''))}\n"
+        f"*Ãgape:* {_escape_md(dados.get('agape', ''))}\n"
         f"{linha_obs}"
         f"*Loja:* {_escape_md(dados.get('nome_loja', ''))}{numero_fmt}\n"
         f"*Oriente:* {_escape_md(dados.get('oriente', ''))}\n"
         f"*Rito:* {_escape_md(rito or '')}\n"
-        f"*Potência:* {_escape_md(potencia or '')}\n"
-        f"*Endereço:* {_escape_md(dados.get('endereco', ''))}\n"
+        f"*PotÃªncia:* {_escape_md(potencia or '')}\n"
+        f"*EndereÃ§o:* {_escape_md(dados.get('endereco', ''))}\n"
         f"{linha_resp}"
     )
 
@@ -803,15 +833,15 @@ def _resumo_evento_md(dados: Dict[str, Any]) -> str:
 def _teclado_rascunho_evento(dados: Dict[str, Any], nivel: str, lojas_existentes: List[Dict[str, Any]]) -> InlineKeyboardMarkup:
     linhas: List[List[InlineKeyboardButton]] = []
     if str(nivel) == "3" and not _norm_text(dados.get("secretario_responsavel_id")):
-        linhas.append([InlineKeyboardButton("👤 Definir secretário responsável", callback_data="draft_evento_escolher_secretario")])
+        linhas.append([InlineKeyboardButton("ðŸ‘¤ Definir secretÃ¡rio responsÃ¡vel", callback_data="draft_evento_escolher_secretario")])
     else:
         if _evento_tem_loja_nova(dados, lojas_existentes):
-            linhas.append([InlineKeyboardButton("✅ Publicar e salvar loja", callback_data="draft_evento_confirmar_com_loja")])
-            linhas.append([InlineKeyboardButton("✅ Publicar sem salvar loja", callback_data="draft_evento_confirmar_sem_loja")])
+            linhas.append([InlineKeyboardButton("âœ… Publicar e salvar loja", callback_data="draft_evento_confirmar_com_loja")])
+            linhas.append([InlineKeyboardButton("âœ… Publicar sem salvar loja", callback_data="draft_evento_confirmar_sem_loja")])
         else:
-            linhas.append([InlineKeyboardButton("✅ Publicar no grupo", callback_data="draft_evento_confirmar_sem_loja")])
-    linhas.append([_botao_editar_webapp("✏️ Editar formulário", WEBAPP_URL_EVENTO)])
-    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="draft_evento_cancelar")])
+            linhas.append([InlineKeyboardButton("âœ… Publicar no grupo", callback_data="draft_evento_confirmar_sem_loja")])
+    linhas.append([_botao_editar_webapp("âœï¸ Editar formulÃ¡rio", WEBAPP_URL_EVENTO)])
+    linhas.append([InlineKeyboardButton("âŒ Cancelar", callback_data="draft_evento_cancelar")])
     return InlineKeyboardMarkup(linhas)
 
 
@@ -854,22 +884,22 @@ async def _enviar_resumo_rascunho_evento(bot, telegram_id: int) -> None:
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# VERIFICAÇÃO DE SEGURANÇA (HMAC-SHA256 — padrão Telegram Mini App)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# VERIFICAÃ‡ÃƒO DE SEGURANÃ‡A (HMAC-SHA256 â€” padrÃ£o Telegram Mini App)
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def verify_telegram_webapp_data(init_data: str, bot_token: str) -> Optional[dict]:
     """
     Verifica a assinatura do initData conforme:
     https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
 
-    Retorna o dict do usuário Telegram se válido; None caso contrário.
-    Rejeita tokens com mais de 24 h (proteção contra replay attacks).
+    Retorna o dict do usuÃ¡rio Telegram se vÃ¡lido; None caso contrÃ¡rio.
+    Rejeita tokens com mais de 24 h (proteÃ§Ã£o contra replay attacks).
     """
     if not init_data or not bot_token:
         return None
     try:
-        # parse_qsl URL-decodifica os valores automaticamente — obrigatório para
+        # parse_qsl URL-decodifica os valores automaticamente â€” obrigatÃ³rio para
         # que o data_check_string bata com o que o Telegram assinou.
         params: Dict[str, str] = dict(parse_qsl(init_data, strict_parsing=False))
 
@@ -877,13 +907,13 @@ def verify_telegram_webapp_data(init_data: str, bot_token: str) -> Optional[dict
         if not hash_value:
             return None
 
-        # auth_date não pode ser muito antigo (24 h)
+        # auth_date nÃ£o pode ser muito antigo (24 h)
         auth_date = int(params.get("auth_date", 0))
         if time.time() - auth_date > 86400:
             logger.warning("initData expirado (auth_date=%s)", auth_date)
             return None
 
-        # String de verificação: pares chave=valor ordenados por chave, separados por \n
+        # String de verificaÃ§Ã£o: pares chave=valor ordenados por chave, separados por \n
         data_check = "\n".join(f"{k}={v}" for k, v in sorted(params.items()))
 
         # Chave secreta: HMAC-SHA256("WebAppData", bot_token)
@@ -891,20 +921,20 @@ def verify_telegram_webapp_data(init_data: str, bot_token: str) -> Optional[dict
         expected = hmac.new(secret, data_check.encode("utf-8"), digestmod=hashlib.sha256).hexdigest()
 
         if not hmac.compare_digest(expected, hash_value):
-            logger.warning("Assinatura initData inválida.")
+            logger.warning("Assinatura initData invÃ¡lida.")
             return None
 
-        # parse_qsl já decodificou o valor de "user"; só precisa fazer o parse JSON
+        # parse_qsl jÃ¡ decodificou o valor de "user"; sÃ³ precisa fazer o parse JSON
         return json.loads(params.get("user", "{}"))
 
     except Exception as e:
-        logger.warning("Erro na verificação initData: %s", e)
+        logger.warning("Erro na verificaÃ§Ã£o initData: %s", e)
         return None
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # FUN??ES AUXILIARES INTERNAS
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _parse_data_ddmmyyyy(texto: str) -> Optional[datetime]:
     try:
@@ -926,24 +956,24 @@ def _escape_md(s: str) -> str:
 
 
 def _teclado_pos_publicacao(id_evento: str, agape_str: str) -> InlineKeyboardMarkup:
-    """Teclado de confirmação de presença publicado no grupo (mesmo padrão do fluxo conversacional)."""
+    """Teclado de confirmaÃ§Ã£o de presenÃ§a publicado no grupo (mesmo padrÃ£o do fluxo conversacional)."""
     tipo = (agape_str or "").lower()
     linhas: List[List[InlineKeyboardButton]] = []
     if "gratuito" in tipo:
-        linhas.append([InlineKeyboardButton("🍽 Participar com ágape (gratuito)", callback_data=f"confirmar|{id_evento}|gratuito")])
-        linhas.append([InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento}|sem")])
+        linhas.append([InlineKeyboardButton("ðŸ½ Participar com Ã¡gape (gratuito)", callback_data=f"confirmar|{id_evento}|gratuito")])
+        linhas.append([InlineKeyboardButton("ðŸš« Participar sem Ã¡gape", callback_data=f"confirmar|{id_evento}|sem")])
     elif "pago" in tipo:
-        linhas.append([InlineKeyboardButton("🍽 Participar com ágape (pago)", callback_data=f"confirmar|{id_evento}|pago")])
-        linhas.append([InlineKeyboardButton("🚫 Participar sem ágape", callback_data=f"confirmar|{id_evento}|sem")])
+        linhas.append([InlineKeyboardButton("ðŸ½ Participar com Ã¡gape (pago)", callback_data=f"confirmar|{id_evento}|pago")])
+        linhas.append([InlineKeyboardButton("ðŸš« Participar sem Ã¡gape", callback_data=f"confirmar|{id_evento}|sem")])
     else:
-        linhas.append([InlineKeyboardButton("✅ Confirmar presença", callback_data=f"confirmar|{id_evento}|sem")])
-    linhas.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{id_evento}")])
+        linhas.append([InlineKeyboardButton("âœ… Confirmar presenÃ§a", callback_data=f"confirmar|{id_evento}|sem")])
+    linhas.append([InlineKeyboardButton("ðŸ‘¥ Ver confirmados", callback_data=f"ver_confirmados|{id_evento}")])
     return InlineKeyboardMarkup(linhas)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # ESTILOS E JS BASE COMPARTILHADOS
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 _CSS = """
 :root{
@@ -1029,7 +1059,7 @@ function setPrimaryLoading(isLoading){
   const btn=document.getElementById('btn_publicar_evento');
   if(btn){
     btn.disabled=!!isLoading;
-    btn.textContent=isLoading?'Enviando...':'Continuar para revisão';
+    btn.textContent=isLoading?'Enviando...':'Continuar para revisÃ£o';
   }
 }
 function hideMainButtonSafe(){
@@ -1065,7 +1095,7 @@ function clearErr(id){
 function val(id){return((document.getElementById(id)||{}).value||'').trim();}
 function req(id,label){
   const v=val(id);
-  if(!v){setErr(id,label+' é obrigatório.');return false;}
+  if(!v){setErr(id,label+' Ã© obrigatÃ³rio.');return false;}
   clearErr(id);return true;
 }
 function maskDate(el){
@@ -1093,10 +1123,10 @@ def _html_wrap(title: str, body: str, script: str) -> str:
         f'<!DOCTYPE html><html lang="pt-BR">'
         f'<head><meta charset="UTF-8">'
         f'<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">'
-        f'<title>{title} — Bode Andarilho</title>'
+        f'<title>{title} â€” Bode Andarilho</title>'
         f'<script src="https://telegram.org/js/telegram-web-app.js"></script>'
         f'<style>{_CSS}</style></head>'
-        f'<body><h1>🐐 {title}</h1>'
+        f'<body><h1>ðŸ {title}</h1>'
         f'{body}'
         f'<div id="toast" class="toast"></div>'
         f'<script>{_JS_BASE}{script}</script>'
@@ -1104,14 +1134,14 @@ def _html_wrap(title: str, body: str, script: str) -> str:
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# HTML — CADASTRO DE MEMBRO
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# HTML â€” CADASTRO DE MEMBRO
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def html_cadastro_membro() -> str:
     body = """
 <div class="card">
-  <div class="info">Após preencher, o bot enviará um resumo no chat para confirmação final. O template visual é opcional e poderá ser enviado depois.</div>
+  <div class="info">ApÃ³s preencher, o bot enviarÃ¡ um resumo no chat para confirmaÃ§Ã£o final. O template visual Ã© opcional e poderÃ¡ ser enviado depois.</div>
 </div>
 <div id="lojas_membro_card" class="card" style="display:none">
   <div class="card-title">Sua Loja</div>
@@ -1120,11 +1150,11 @@ def html_cadastro_membro() -> str:
     <select id="loja_sel_membro">
       <option value="">Preencher manualmente...</option>
     </select>
-    <div class="info">Se preferir, você pode seguir com o preenchimento manual logo abaixo.</div>
+    <div class="info">Se preferir, vocÃª pode seguir com o preenchimento manual logo abaixo.</div>
   </div>
 </div>
 <div class="card">
-  <div class="card-title">Identificação</div>
+  <div class="card-title">IdentificaÃ§Ã£o</div>
   <div class="field">
     <label for="nome">Nome completo *</label>
     <input id="nome" type="text" placeholder="Como consta no quadro da loja" autocomplete="name">
@@ -1150,16 +1180,16 @@ def html_cadastro_membro() -> str:
     <select id="mi">
       <option value="">Selecione...</option>
       <option value="Sim">Sim</option>
-      <option value="Não">Não</option>
+      <option value="NÃ£o">NÃ£o</option>
     </select>
     <div id="mi_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="vm">Venerável Mestre? *</label>
+    <label for="vm">VenerÃ¡vel Mestre? *</label>
     <select id="vm">
       <option value="">Selecione...</option>
       <option value="Sim">Sim</option>
-      <option value="Não">Não</option>
+      <option value="NÃ£o">NÃ£o</option>
     </select>
     <div id="vm_err" class="err"></div>
   </div>
@@ -1172,28 +1202,27 @@ def html_cadastro_membro() -> str:
     <div id="loja_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="numero_loja">Número <span class="info">(0 se não houver)</span></label>
+    <label for="numero_loja">NÃºmero <span class="info">(0 se nÃ£o houver)</span></label>
     <input id="numero_loja" type="text" value="0" inputmode="numeric" maxlength="8">
   </div>
   <div class="field">
     <label for="oriente">Oriente *</label>
-    <input id="oriente" type="text" placeholder="Ex.: São Paulo / SP">
+    <input id="oriente" type="text" placeholder="Ex.: SÃ£o Paulo / SP">
     <div id="oriente_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="potencia">Potência *</label>
+    <label for="potencia">PotÃªncia *</label>
     <select id="potencia">
       <option value="">Selecione...</option>
-      <option value="Grande Loja - RS">Grande Loja - RS</option>
-      <option value="GORGS">GORGS</option>
-      <option value="GOB-RS">GOB-RS</option>
-      <option value="Outra">Outra</option>
+      <option value="GOB">GOB</option>
+      <option value="CMSB">CMSB</option>
+      <option value="COMAB">COMAB</option>
     </select>
     <div id="potencia_err" class="err"></div>
   </div>
   <div class="field" id="potencia_outra_wrap" style="display:none">
-    <label for="potencia_outra">Informe a potência *</label>
-    <input id="potencia_outra" type="text" placeholder="Ex.: GLMMG">
+    <label for="potencia_outra">Complemento da potÃªncia *</label>
+    <input id="potencia_outra" type="text" placeholder="Ex.: GOB-RS, GLMERGS, GORGS">
     <div id="potencia_outra_err" class="err"></div>
   </div>
 </div>
@@ -1207,8 +1236,8 @@ let lojaMembroId='';
 function syncPotenciaOutra(){
   const wrap=document.getElementById('potencia_outra_wrap');
   if(!wrap)return;
-  wrap.style.display=val('potencia')==='Outra'?'block':'none';
-  if(val('potencia')!=='Outra')clearErr('potencia_outra');
+  wrap.style.display=['GOB','CMSB','COMAB'].includes(val('potencia'))?'block':'none';
+  if(!['GOB','CMSB','COMAB'].includes(val('potencia')))clearErr('potencia_outra');
 }
 function definirLojaManual(){
   lojaMembroSelecionada=false;
@@ -1226,13 +1255,8 @@ function aplicarLojaMembro(loja){
   if(loja.potencia){
     const select=document.getElementById('potencia');
     const existe=Array.from(select.options).some(o=>o.value===loja.potencia);
-    if(existe){
-      select.value=loja.potencia;
-      document.getElementById('potencia_outra').value='';
-    }else{
-      select.value='Outra';
-      document.getElementById('potencia_outra').value=loja.potencia;
-    }
+    select.value=existe?loja.potencia:'';
+    document.getElementById('potencia_outra').value=loja.potencia_complemento||'';
     syncPotenciaOutra();
   }
 }
@@ -1241,19 +1265,15 @@ function validate(){
   ok=req('nome','Nome')&&ok;
   const dn=val('data_nasc');
   if(!parseDateBR(dn)){
-    setErr('data_nasc','Use uma data válida no formato DD/MM/AAAA.');ok=false;
+    setErr('data_nasc','Use uma data vÃ¡lida no formato DD/MM/AAAA.');ok=false;
   }else clearErr('data_nasc');
   ok=req('grau','Grau')&&ok;
   ok=req('mi','Mestre Instalado')&&ok;
-  ok=req('vm','Venerável Mestre')&&ok;
+  ok=req('vm','VenerÃ¡vel Mestre')&&ok;
   ok=req('loja','Nome da loja')&&ok;
   ok=req('oriente','Oriente')&&ok;
-  ok=req('potencia','Potência')&&ok;
-  if(val('potencia')==='Outra'){
-    ok=req('potencia_outra','Potência')&&ok;
-  }else{
-    clearErr('potencia_outra');
-  }
+  ok=req('potencia','PotÃªncia')&&ok;
+  ok=req('potencia_outra','Complemento da potÃªncia')&&ok;
   return ok;
 }
 document.getElementById('potencia').addEventListener('change',syncPotenciaOutra);
@@ -1273,7 +1293,7 @@ document.getElementById('loja_sel_membro').addEventListener('change',function(){
   aplicarLojaMembro(loja);
 });
 if(tg && tg.MainButton){
-  tg.MainButton.setText('Continuar para revisão');
+  tg.MainButton.setText('Continuar para revisÃ£o');
   tg.MainButton.show();
   tg.MainButton.onClick(async()=>{
     if(!validate())return;
@@ -1299,7 +1319,7 @@ if(tg && tg.MainButton){
       const j=await r.json();
       if(j.ok){closeMiniAppSafe();}
       else{showToast(j.error||'Erro. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
-    }catch{showToast('Falha de conexão. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
+    }catch{showToast('Falha de conexÃ£o. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
   });
 }
 (async()=>{
@@ -1340,7 +1360,7 @@ if(tg && tg.MainButton){
       if(j.draft.numero_loja)document.getElementById('numero_loja').value=j.draft.numero_loja;
       if(j.draft.oriente)document.getElementById('oriente').value=j.draft.oriente;
       if(j.draft.potencia)document.getElementById('potencia').value=j.draft.potencia;
-      if(j.draft.potencia_outra)document.getElementById('potencia_outra').value=j.draft.potencia_outra;
+      if(j.draft.potencia_complemento||j.draft.potencia_outra)document.getElementById('potencia_outra').value=j.draft.potencia_complemento||j.draft.potencia_outra;
       if(j.draft.loja_id && lojasMembroCarregadas.length){
         const idx=lojasMembroCarregadas.findIndex((l)=>(l.id||'').toString()===j.draft.loja_id.toString());
         if(idx>=0){
@@ -1360,7 +1380,7 @@ if(tg && tg.MainButton){
 def html_cadastro_loja() -> str:
     body = """
 <div class="card">
-  <div class="info">Após preencher, o bot enviará um resumo no chat para confirmação final.</div>
+  <div class="info">ApÃ³s preencher, o bot enviarÃ¡ um resumo no chat para confirmaÃ§Ã£o final.</div>
 </div>
 <div class="card">
   <div class="card-title">Dados da Loja</div>
@@ -1370,29 +1390,39 @@ def html_cadastro_loja() -> str:
     <div id="nome_loja_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="numero">Número <span class="info">(0 se não houver)</span></label>
+    <label for="numero">NÃºmero <span class="info">(0 se nÃ£o houver)</span></label>
     <input id="numero" type="text" value="0" inputmode="numeric" maxlength="8">
   </div>
   <div class="field">
     <label for="oriente">Oriente *</label>
-    <input id="oriente" type="text" placeholder="Ex.: São Paulo / SP">
+    <input id="oriente" type="text" placeholder="Ex.: SÃ£o Paulo / SP">
     <div id="oriente_err" class="err"></div>
   </div>
   <div class="field">
     <label for="rito">Rito *</label>
-    <input id="rito" type="text" placeholder="Ex.: Brasileiro / Escocês / York">
+    <input id="rito" type="text" placeholder="Ex.: Brasileiro / EscocÃªs / York">
     <div id="rito_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="potencia">Potência *</label>
-    <input id="potencia" type="text" placeholder="Ex.: GLESP">
+    <label for="potencia">PotÃªncia *</label>
+    <select id="potencia">
+      <option value="">Selecione...</option>
+      <option value="GOB">GOB</option>
+      <option value="CMSB">CMSB</option>
+      <option value="COMAB">COMAB</option>
+    </select>
     <div id="potencia_err" class="err"></div>
   </div>
+  <div class="field" id="potencia_outra_wrap" style="display:none">
+    <label for="potencia_outra">Complemento da potÃªncia *</label>
+    <input id="potencia_outra" type="text" placeholder="Ex.: GOB-RS, GLMERGS, GORGS">
+    <div id="potencia_outra_err" class="err"></div>
+  </div>
   <div class="field">
-    <label for="endereco">Endereço da loja ou link do Google Maps *</label>
+    <label for="endereco">EndereÃ§o da loja ou link do Google Maps *</label>
     <input id="endereco" type="text" placeholder="Ex.: https://maps.app.goo.gl/... ou Rua X, 123 - Centro">
     <div id="endereco_err" class="err"></div>
-    <div class="info">Preferencialmente, cole o link do Google Maps para facilitar a localização exata.</div>
+    <div class="info">Preferencialmente, cole o link do Google Maps para facilitar a localizaÃ§Ã£o exata.</div>
   </div>
 </div>
 """
@@ -1402,12 +1432,19 @@ function validate(){
   ok=req('nome_loja','Nome da loja')&&ok;
   ok=req('oriente','Oriente')&&ok;
   ok=req('rito','Rito')&&ok;
-  ok=req('potencia','Potência')&&ok;
-  ok=req('endereco','Endereço')&&ok;
+  ok=req('potencia','PotÃªncia')&&ok;
+  ok=req('potencia_outra','Complemento da potÃªncia')&&ok;
+  ok=req('endereco','EndereÃ§o')&&ok;
   return ok;
 }
+function syncPotenciaComplemento(){
+  const wrap=document.getElementById('potencia_outra_wrap');
+  if(wrap)wrap.style.display=val('potencia')?'block':'none';
+}
+document.getElementById('potencia').addEventListener('change',syncPotenciaComplemento);
+syncPotenciaComplemento();
 if(tg && tg.MainButton){
-tg.MainButton.setText('Continuar para revisão');
+tg.MainButton.setText('Continuar para revisÃ£o');
 tg.MainButton.show();
 tg.MainButton.onClick(async()=>{
   if(!validate())return;
@@ -1422,13 +1459,14 @@ tg.MainButton.onClick(async()=>{
         oriente:val('oriente'),
         rito:val('rito'),
         potencia:val('potencia'),
+        potencia_outra:val('potencia_outra'),
         endereco:val('endereco')
       })
     });
     const j=await r.json();
     if(j.ok){closeMiniAppSafe();}
     else{showToast(j.error||'Erro. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
-  }catch{showToast('Falha de conexão. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
+  }catch{showToast('Falha de conexÃ£o. Tente novamente.');tg.MainButton.hideProgress();tg.MainButton.enable();}
 });
 }
 
@@ -1454,14 +1492,14 @@ tg.MainButton.onClick(async()=>{
     return _html_wrap("Cadastro de Loja", body, script)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# HTML — CADASTRO DE EVENTO
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# HTML â€” CADASTRO DE EVENTO
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def html_cadastro_evento() -> str:
     body = """
 <div class="card">
-  <div class="info">Preencha os dados e continue. A publicação final será confirmada no chat do bot.</div>
+  <div class="info">Preencha os dados e continue. A publicaÃ§Ã£o final serÃ¡ confirmada no chat do bot.</div>
 </div>
 <div id="lojas_card" class="card" style="display:none">
   <div class="card-title">Atalho - Lojas cadastradas</div>
@@ -1474,19 +1512,19 @@ def html_cadastro_evento() -> str:
 </div>
 
 <div class="card">
-  <div class="card-title">A sessão</div>
+  <div class="card-title">A sessÃ£o</div>
   <div class="field">
     <label for="data_ev">Data * <span class="info">(DD/MM/AAAA)</span></label>
     <input id="data_ev" type="text" placeholder="25/03/2026" maxlength="10" inputmode="numeric">
     <div id="data_ev_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="horario">Horário *</label>
+    <label for="horario">HorÃ¡rio *</label>
     <input id="horario" type="time" value="19:30">
     <div id="horario_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="grau">Grau da sessão *</label>
+    <label for="grau">Grau da sessÃ£o *</label>
     <select id="grau">
       <option value="">Selecione...</option>
       <option>Aprendiz</option>
@@ -1497,20 +1535,20 @@ def html_cadastro_evento() -> str:
     <div id="grau_err" class="err"></div>
   </div>
   <div class="field" id="grau_outro_wrap" style="display:none">
-    <label for="grau_outro">Informe o grau da sessão *</label>
-    <input id="grau_outro" type="text" placeholder="Ex.: Câmara do Meio">
+    <label for="grau_outro">Informe o grau da sessÃ£o *</label>
+    <input id="grau_outro" type="text" placeholder="Ex.: CÃ¢mara do Meio">
     <div id="grau_outro_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="tipo_sessao">Tipo de sessão *</label>
-    <input id="tipo_sessao" type="text" placeholder="Ex.: Ordinária, Magna, Iniciação">
+    <label for="tipo_sessao">Tipo de sessÃ£o *</label>
+    <input id="tipo_sessao" type="text" placeholder="Ex.: OrdinÃ¡ria, Magna, IniciaÃ§Ã£o">
     <div id="tipo_sessao_err" class="err"></div>
   </div>
   <div class="field">
     <label for="traje">Traje *</label>
     <select id="traje">
       <option value="">Selecione...</option>
-      <option value="Traje maçônico">Traje maçônico</option>
+      <option value="Traje maÃ§Ã´nico">Traje maÃ§Ã´nico</option>
       <option value="Livre">Livre</option>
       <option value="Outro">Outro</option>
     </select>
@@ -1522,18 +1560,18 @@ def html_cadastro_evento() -> str:
     <div id="traje_outro_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="agape">Ágape *</label>
+    <label for="agape">Ãgape *</label>
     <select id="agape">
       <option value="">Selecione...</option>
-      <option value="Nao">Não haverá ágape</option>
+      <option value="Nao">NÃ£o haverÃ¡ Ã¡gape</option>
       <option value="Sim (Gratuito)">Sim - Gratuito</option>
       <option value="Sim (Pago)">Sim - Pago (dividido)</option>
     </select>
     <div id="agape_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="observacoes">Ordem do dia / observações <span class="info">(opcional)</span></label>
-    <textarea id="observacoes" placeholder="Informações adicionais da sessão..."></textarea>
+    <label for="observacoes">Ordem do dia / observaÃ§Ãµes <span class="info">(opcional)</span></label>
+    <textarea id="observacoes" placeholder="InformaÃ§Ãµes adicionais da sessÃ£o..."></textarea>
   </div>
 </div>
 
@@ -1545,12 +1583,12 @@ def html_cadastro_evento() -> str:
     <div id="nome_loja_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="numero_loja">Número <span class="info">(0 se não houver)</span></label>
+    <label for="numero_loja">NÃºmero <span class="info">(0 se nÃ£o houver)</span></label>
     <input id="numero_loja" type="text" value="0" inputmode="numeric" maxlength="8">
   </div>
   <div class="field">
     <label for="oriente">Oriente *</label>
-    <input id="oriente" type="text" placeholder="Ex.: São Paulo / SP">
+    <input id="oriente" type="text" placeholder="Ex.: SÃ£o Paulo / SP">
     <div id="oriente_err" class="err"></div>
   </div>
   <div class="field">
@@ -1563,7 +1601,7 @@ def html_cadastro_evento() -> str:
       <option value="Brasileiro">Brasileiro</option>
       <option value="York">York</option>
       <option value="Moderno">Moderno</option>
-      <option value="Escocês Retificado">Escocês Retificado</option>
+      <option value="EscocÃªs Retificado">EscocÃªs Retificado</option>
       <option value="Memphis-Misraim">Memphis-Misraim</option>
       <option value="Outro">Outro</option>
     </select>
@@ -1575,23 +1613,22 @@ def html_cadastro_evento() -> str:
     <div id="rito_outro_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="potencia">Potência *</label>
+    <label for="potencia">PotÃªncia *</label>
     <select id="potencia">
       <option value="">Selecione...</option>
-      <option value="Grande Loja - RS">Grande Loja - RS</option>
-      <option value="GORGS">GORGS</option>
-      <option value="GOB-RS">GOB-RS</option>
-      <option value="Outra">Outra</option>
+      <option value="GOB">GOB</option>
+      <option value="CMSB">CMSB</option>
+      <option value="COMAB">COMAB</option>
     </select>
     <div id="potencia_err" class="err"></div>
   </div>
   <div class="field" id="potencia_outra_wrap" style="display:none">
-    <label for="potencia_outra">Informe a potência *</label>
-    <input id="potencia_outra" type="text" placeholder="Ex.: GLMMG">
+    <label for="potencia_outra">Complemento da potÃªncia *</label>
+    <input id="potencia_outra" type="text" placeholder="Ex.: GOB-RS, GLMERGS, GORGS">
     <div id="potencia_outra_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="endereco">Endereço da sessão ou link do Google Maps *</label>
+    <label for="endereco">EndereÃ§o da sessÃ£o ou link do Google Maps *</label>
     <input id="endereco" type="text" placeholder="Ex.: https://maps.app.goo.gl/... ou Rua X, 123 - Centro">
     <div id="endereco_err" class="err"></div>
     <div class="info">Preferencialmente, cole o link do Google Maps para que o bot gere o atalho de mapa.</div>
@@ -1600,7 +1637,7 @@ def html_cadastro_evento() -> str:
 
 <div id="acoes_publicacao" class="actions">
   <div class="actions-stack">
-    <button id="btn_publicar_evento" type="button" class="btn-primary" onclick="publicarEvento()">Continuar para revisão</button>
+    <button id="btn_publicar_evento" type="button" class="btn-primary" onclick="publicarEvento()">Continuar para revisÃ£o</button>
     <button id="btn_cancelar_evento" type="button" class="btn-secondary" onclick="closeMiniAppSafe()">Fechar</button>
   </div>
 </div>
@@ -1614,7 +1651,7 @@ let enviandoEvento=false;
 function syncOutro(selectId, wrapId, inputId, valorOutro){
   const wrap=document.getElementById(wrapId);
   if(!wrap)return;
-  const ativo=val(selectId)===valorOutro;
+  const ativo=valorOutro==='' ? !!val(selectId) : val(selectId)===valorOutro;
   wrap.style.display=ativo?'block':'none';
   if(!ativo)clearErr(inputId);
 }
@@ -1684,7 +1721,8 @@ function norm(v){
       if(jDraft.draft.numero_loja)document.getElementById('numero_loja').value=jDraft.draft.numero_loja;
       if(jDraft.draft.oriente)document.getElementById('oriente').value=jDraft.draft.oriente;
       if(jDraft.draft.rito)aplicarValorComOutro('rito','rito_outro','rito_outro_wrap',jDraft.draft.rito_outro||jDraft.draft.rito,'Outro');
-      if(jDraft.draft.potencia)aplicarValorComOutro('potencia','potencia_outra','potencia_outra_wrap',jDraft.draft.potencia_outra||jDraft.draft.potencia,'Outra');
+      if(jDraft.draft.potencia)document.getElementById('potencia').value=jDraft.draft.potencia;
+      if(jDraft.draft.potencia_complemento||jDraft.draft.potencia_outra)document.getElementById('potencia_outra').value=jDraft.draft.potencia_complemento||jDraft.draft.potencia_outra;
       if(jDraft.draft.endereco)document.getElementById('endereco').value=jDraft.draft.endereco;
     }
   }catch(e){}
@@ -1702,48 +1740,49 @@ document.getElementById('loja_sel').addEventListener('change',function(){
   if(l.numero)document.getElementById('numero_loja').value=l.numero;
   if(l.oriente)document.getElementById('oriente').value=l.oriente;
   if(l.rito)aplicarValorComOutro('rito','rito_outro','rito_outro_wrap',l.rito,'Outro');
-  if(l.potencia)aplicarValorComOutro('potencia','potencia_outra','potencia_outra_wrap',l.potencia,'Outra');
+  if(l.potencia)document.getElementById('potencia').value=l.potencia;
+  document.getElementById('potencia_outra').value=l.potencia_complemento||'';
   if(l.endereco)document.getElementById('endereco').value=l.endereco;
 });
 
 document.getElementById('grau').addEventListener('change',()=>syncOutro('grau','grau_outro_wrap','grau_outro','Outro'));
 document.getElementById('traje').addEventListener('change',()=>syncOutro('traje','traje_outro_wrap','traje_outro','Outro'));
 document.getElementById('rito').addEventListener('change',()=>syncOutro('rito','rito_outro_wrap','rito_outro','Outro'));
-document.getElementById('potencia').addEventListener('change',()=>syncOutro('potencia','potencia_outra_wrap','potencia_outra','Outra'));
+document.getElementById('potencia').addEventListener('change',()=>syncOutro('potencia','potencia_outra_wrap','potencia_outra',''));
 syncOutro('grau','grau_outro_wrap','grau_outro','Outro');
 syncOutro('traje','traje_outro_wrap','traje_outro','Outro');
 syncOutro('rito','rito_outro_wrap','rito_outro','Outro');
-syncOutro('potencia','potencia_outra_wrap','potencia_outra','Outra');
+syncOutro('potencia','potencia_outra_wrap','potencia_outra','');
 
 function validate(){
   let ok=true;
   const dv=val('data_ev');
   const dataEvento=parseDateBR(dv);
   if(!dataEvento){
-    setErr('data_ev','Use uma data válida no formato DD/MM/AAAA.');ok=false;
+    setErr('data_ev','Use uma data vÃ¡lida no formato DD/MM/AAAA.');ok=false;
   }else{
     const hoje=new Date();
     hoje.setHours(0,0,0,0);
     if(dataEvento<hoje){
-      setErr('data_ev','A data da sessão não pode estar no passado.');ok=false;
+      setErr('data_ev','A data da sessÃ£o nÃ£o pode estar no passado.');ok=false;
     }else{
       clearErr('data_ev');
     }
   }
-  ok=req('horario','Horário')&&ok;
-  ok=req('grau','Grau da sessão')&&ok;
-  if(val('grau')==='Outro') ok=req('grau_outro','Grau da sessão')&&ok;
-  ok=req('tipo_sessao','Tipo de sessão')&&ok;
+  ok=req('horario','HorÃ¡rio')&&ok;
+  ok=req('grau','Grau da sessÃ£o')&&ok;
+  if(val('grau')==='Outro') ok=req('grau_outro','Grau da sessÃ£o')&&ok;
+  ok=req('tipo_sessao','Tipo de sessÃ£o')&&ok;
   ok=req('traje','Traje')&&ok;
   if(val('traje')==='Outro') ok=req('traje_outro','Traje')&&ok;
-  ok=req('agape','Ágape')&&ok;
+  ok=req('agape','Ãgape')&&ok;
   ok=req('nome_loja','Nome da loja')&&ok;
   ok=req('oriente','Oriente')&&ok;
   ok=req('rito','Rito')&&ok;
   if(val('rito')==='Outro') ok=req('rito_outro','Rito')&&ok;
-  ok=req('potencia','Potência')&&ok;
-  if(val('potencia')==='Outra') ok=req('potencia_outra','Potência')&&ok;
-  ok=req('endereco','Endereço')&&ok;
+  ok=req('potencia','PotÃªncia')&&ok;
+  ok=req('potencia_outra','Complemento da potÃªncia')&&ok;
+  ok=req('endereco','EndereÃ§o')&&ok;
   return ok;
 }
 
@@ -1788,7 +1827,7 @@ async function publicarEvento(){
       enviandoEvento=false;
     }
   }catch{
-    showToast('Falha de conexão. Tente novamente.');
+    showToast('Falha de conexÃ£o. Tente novamente.');
     setPrimaryLoading(false);
     enviandoEvento=false;
   }
@@ -1808,9 +1847,9 @@ if(btnCancelar){
 
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # HANDLERS GET (servem os HTMLs)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async def get_cadastro_membro(request: Request) -> HTMLResponse:
     return HTMLResponse(html_cadastro_membro())
@@ -1824,9 +1863,9 @@ async def get_cadastro_loja(request: Request) -> HTMLResponse:
     return HTMLResponse(html_cadastro_loja())
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# API — LISTAR LOJAS (para o form de evento)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# API â€” LISTAR LOJAS (para o form de evento)
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async def api_listar_lojas(request: Request) -> JSONResponse:
     bot_token: str = request.app.state.bot_token
@@ -1850,39 +1889,40 @@ async def api_listar_lojas(request: Request) -> JSONResponse:
         result.append({
             "id":       str(lj.get("ID") or lj.get("id") or ""),
             "nome":     lj.get("Nome da Loja", ""),
-            "numero":   str(lj.get("Número") or "0"),
+            "numero":   str(lj.get("NÃºmero") or "0"),
             "oriente":  lj.get("Oriente da Loja") or lj.get("Oriente", ""),
             "rito":     lj.get("Rito", ""),
-            "potencia": lj.get("Potência", ""),
-            "endereco": lj.get("Endereço", ""),
+            "potencia": lj.get("PotÃªncia", ""),
+            "potencia_complemento": lj.get("PotÃªncia complemento", ""),
+            "endereco": lj.get("EndereÃ§o", ""),
         })
     return JSONResponse({"ok": True, "lojas": result})
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# API — CADASTRO DE MEMBRO
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# API â€” CADASTRO DE MEMBRO
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async def api_cadastro_membro(request: Request) -> JSONResponse:
     bot_token: str = request.app.state.bot_token
     try:
         body: dict = await request.json()
     except Exception:
-        return JSONResponse({"ok": False, "error": "JSON inválido."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "JSON invÃ¡lido."}, status_code=400)
 
     init_data = (body.get("init_data") or "").strip()
     user = verify_telegram_webapp_data(init_data, bot_token)
     if not user:
-        return JSONResponse({"ok": False, "error": "Não autorizado."}, status_code=403)
+        return JSONResponse({"ok": False, "error": "NÃ£o autorizado."}, status_code=403)
 
     telegram_id = user.get("id")
     if not telegram_id:
-        return JSONResponse({"ok": False, "error": "Usuário não identificado."}, status_code=403)
+        return JSONResponse({"ok": False, "error": "UsuÃ¡rio nÃ£o identificado."}, status_code=403)
     if not await _usuario_esta_no_grupo(request.app.state.telegram_app.bot, int(telegram_id)):
         return JSONResponse(
             {
                 "ok": False,
-                "error": "Seu cadastro só pode ser concluído por quem está participando do grupo do Bode Andarilho no momento.",
+                "error": "Seu cadastro sÃ³ pode ser concluÃ­do por quem estÃ¡ participando do grupo do Bode Andarilho no momento.",
             },
             status_code=403,
         )
@@ -1895,19 +1935,24 @@ async def api_cadastro_membro(request: Request) -> JSONResponse:
     loja       = (body.get("loja")       or "").strip()[:200]
     numero_loja= (body.get("numero_loja")or "0").strip()[:10]
     oriente    = (body.get("oriente")    or "").strip()[:200]
-    potencia   = (body.get("potencia")   or "").strip()[:200]
+    potencia, potencia_complemento = normalizar_potencia(
+        (body.get("potencia") or "").strip()[:200],
+        (body.get("potencia_outra") or body.get("potencia_complemento") or "").strip()[:200],
+    )
 
     if not all([nome, data_nasc, grau, vm, loja, oriente, potencia]):
-        return JSONResponse({"ok": False, "error": "Preencha todos os campos obrigatórios."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "Preencha todos os campos obrigatÃ³rios."}, status_code=400)
+    if not validar_potencia(potencia, potencia_complemento):
+        return JSONResponse({"ok": False, "error": "Informe a potência principal e o complemento."}, status_code=400)
 
     try:
         datetime.strptime(data_nasc, "%d/%m/%Y")
     except ValueError:
-        return JSONResponse({"ok": False, "error": "Data de nascimento inválida (DD/MM/AAAA)."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "Data de nascimento invÃ¡lida (DD/MM/AAAA)."}, status_code=400)
 
     graus_validos = {"Aprendiz", "Companheiro", "Mestre", "Mestre Instalado"}
     if grau not in graus_validos:
-        return JSONResponse({"ok": False, "error": "Grau inválido."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "Grau invÃ¡lido."}, status_code=400)
 
     ja_existe = buscar_membro(int(telegram_id))
 
@@ -1916,11 +1961,12 @@ async def api_cadastro_membro(request: Request) -> JSONResponse:
         "Nome":               nome,
         "Data de nascimento": data_nasc,
         "Grau":               grau,
-        "Venerável Mestre":   vm,
+        "VenerÃ¡vel Mestre":   vm,
         "Loja":               loja,
-        "Número da loja":     numero_loja,
+        "NÃºmero da loja":     numero_loja,
         "Oriente":            oriente,
-        "Potência":           potencia,
+        "PotÃªncia":           potencia,
+        "PotÃªncia complemento": potencia_complemento,
         "Status":             "Ativo",
         "Nivel":              "1",
     }
@@ -1933,49 +1979,54 @@ async def api_cadastro_membro(request: Request) -> JSONResponse:
         bot = request.app.state.telegram_app.bot
         nome_esc = _escape_md(nome)
         if ja_existe:
-            msg = f"✅ *Cadastro atualizado\\!*\n\nSaudações, Ir\\.·\\. {nome_esc}\\. Seus dados foram atualizados\\."
+            msg = f"âœ… *Cadastro atualizado\\!*\n\nSaudaÃ§Ãµes, Ir\\.Â·\\. {nome_esc}\\. Seus dados foram atualizados\\."
         else:
             msg = (
-                f"✅ *Cadastro realizado a contento\\!*\n\n"
-                f"Bem\\-vindo ao Bode Andarilho, Ir\\.·\\. {nome_esc}\\!\n"
+                f"âœ… *Cadastro realizado a contento\\!*\n\n"
+                f"Bem\\-vindo ao Bode Andarilho, Ir\\.Â·\\. {nome_esc}\\!\n"
                 f"Use /start para acessar o Painel do Obreiro\\."
             )
         await bot.send_message(chat_id=telegram_id, text=msg, parse_mode="MarkdownV2")
     except Exception as e:
-        logger.warning("Falha ao enviar confirmação de cadastro para %s: %s", telegram_id, e)
+        logger.warning("Falha ao enviar confirmaÃ§Ã£o de cadastro para %s: %s", telegram_id, e)
 
     return JSONResponse({"ok": True})
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# API — CADASTRO DE LOJA
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# API â€” CADASTRO DE LOJA
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async def api_cadastro_loja(request: Request) -> JSONResponse:
     bot_token: str = request.app.state.bot_token
     try:
         body: dict = await request.json()
     except Exception:
-        return JSONResponse({"ok": False, "error": "JSON inválido."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "JSON invÃ¡lido."}, status_code=400)
 
     init_data = (body.get("init_data") or "").strip()
     user = verify_telegram_webapp_data(init_data, bot_token)
     if not user:
-        return JSONResponse({"ok": False, "error": "Não autorizado."}, status_code=403)
+        return JSONResponse({"ok": False, "error": "NÃ£o autorizado."}, status_code=403)
 
     telegram_id = user.get("id")
     if not telegram_id:
-        return JSONResponse({"ok": False, "error": "Usuário não identificado."}, status_code=403)
+        return JSONResponse({"ok": False, "error": "UsuÃ¡rio nÃ£o identificado."}, status_code=403)
 
     nome     = (body.get("nome")     or "").strip()[:200]
     numero   = (body.get("numero")   or "0").strip()[:10]
     oriente  = (body.get("oriente")  or "").strip()[:200]
     rito     = (body.get("rito")     or "").strip()[:200]
-    potencia = (body.get("potencia") or "").strip()[:200]
+    potencia, potencia_complemento = normalizar_potencia(
+        (body.get("potencia") or "").strip()[:200],
+        (body.get("potencia_outra") or body.get("potencia_complemento") or "").strip()[:200],
+    )
     endereco = (body.get("endereco") or "").strip()[:400]
 
     if not all([nome, oriente, rito, potencia, endereco]):
-        return JSONResponse({"ok": False, "error": "Preencha todos os campos obrigatórios."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "Preencha todos os campos obrigatÃ³rios."}, status_code=400)
+    if not validar_potencia(potencia, potencia_complemento):
+        return JSONResponse({"ok": False, "error": "Informe a potência principal e o complemento."}, status_code=400)
 
     dados_loja: Dict[str, Any] = {
         "nome":     nome,
@@ -1983,6 +2034,7 @@ async def api_cadastro_loja(request: Request) -> JSONResponse:
         "oriente":  oriente,
         "rito":     rito,
         "potencia": potencia,
+        "potencia_complemento": potencia_complemento,
         "endereco": endereco,
     }
 
@@ -1995,7 +2047,7 @@ async def api_cadastro_loja(request: Request) -> JSONResponse:
         nome_esc = _escape_md(nome)
         await bot.send_message(
             chat_id=telegram_id,
-            text=f"✅ *Loja cadastrada\\!*\n\n🏛 *{nome_esc}* registrada com sucesso\\.\nEla estará disponível como atalho no cadastro de eventos\\.",
+            text=f"âœ… *Loja cadastrada\\!*\n\nðŸ› *{nome_esc}* registrada com sucesso\\.\nEla estarÃ¡ disponÃ­vel como atalho no cadastro de eventos\\.",
             parse_mode="MarkdownV2",
         )
     except Exception as e:
@@ -2004,25 +2056,25 @@ async def api_cadastro_loja(request: Request) -> JSONResponse:
     return JSONResponse({"ok": True})
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# API — CADASTRO DE EVENTO
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# API â€” CADASTRO DE EVENTO
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async def api_cadastro_evento(request: Request) -> JSONResponse:
     bot_token: str = request.app.state.bot_token
     try:
         body: dict = await request.json()
     except Exception:
-        return JSONResponse({"ok": False, "error": "JSON inválido."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "JSON invÃ¡lido."}, status_code=400)
 
     init_data = (body.get("init_data") or "").strip()
     user = verify_telegram_webapp_data(init_data, bot_token)
     if not user:
-        return JSONResponse({"ok": False, "error": "Não autorizado."}, status_code=403)
+        return JSONResponse({"ok": False, "error": "NÃ£o autorizado."}, status_code=403)
 
     telegram_id = user.get("id")
     if not telegram_id:
-        return JSONResponse({"ok": False, "error": "Usuário não identificado."}, status_code=403)
+        return JSONResponse({"ok": False, "error": "UsuÃ¡rio nÃ£o identificado."}, status_code=403)
 
     # Sanitizar campos
     data_str    = (body.get("data")       or "").strip()[:10]
@@ -2036,19 +2088,24 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
     numero_loja = (body.get("numero_loja")or "0").strip()[:10]
     oriente     = (body.get("oriente")    or "").strip()[:200]
     rito        = (body.get("rito")       or "").strip()[:200]
-    potencia    = (body.get("potencia")   or "").strip()[:200]
+    potencia, potencia_complemento = normalizar_potencia(
+        (body.get("potencia") or "").strip()[:200],
+        (body.get("potencia_outra") or body.get("potencia_complemento") or "").strip()[:200],
+    )
     endereco    = (body.get("endereco")   or "").strip()[:400]
 
     if not all([data_str, horario, grau, tipo_sessao, traje, agape, nome_loja, oriente, rito, potencia, endereco]):
-        return JSONResponse({"ok": False, "error": "Preencha todos os campos obrigatórios."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "Preencha todos os campos obrigatÃ³rios."}, status_code=400)
+    if not validar_potencia(potencia, potencia_complemento):
+        return JSONResponse({"ok": False, "error": "Informe a potência principal e o complemento."}, status_code=400)
 
     dt = _parse_data_ddmmyyyy(data_str)
     if not dt:
-        return JSONResponse({"ok": False, "error": "Data inválida. Use DD/MM/AAAA."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "Data invÃ¡lida. Use DD/MM/AAAA."}, status_code=400)
 
     hoje = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     if dt < hoje:
-        return JSONResponse({"ok": False, "error": "A data não pode ser no passado."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "A data nÃ£o pode ser no passado."}, status_code=400)
 
     dia_semana = dt.strftime("%A")
 
@@ -2057,57 +2114,58 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
         "Dia da semana":               dia_semana,
         "Hora":                        horario,
         "Nome da loja":                nome_loja,
-        "Número da loja":              numero_loja,
+        "NÃºmero da loja":              numero_loja,
         "Oriente":                     oriente,
         "Grau":                        grau,
-        "Tipo de sessão":              tipo_sessao,
+        "Tipo de sessÃ£o":              tipo_sessao,
         "Rito":                        rito,
-        "Potência":                    potencia,
-        "Traje obrigatório":           traje,
-        "Ágape":                       agape,
-        "Observações":                 observacoes,
+        "PotÃªncia":                    potencia,
+        "PotÃªncia complemento":        potencia_complemento,
+        "Traje obrigatÃ³rio":           traje,
+        "Ãgape":                       agape,
+        "ObservaÃ§Ãµes":                 observacoes,
         "Telegram ID do grupo":        _GRUPO_PRINCIPAL_ID,
-        "Telegram ID do secretário":   str(telegram_id),
+        "Telegram ID do secretÃ¡rio":   str(telegram_id),
         "Status":                      "Ativo",
-        "Endereço da sessão":          endereco,
+        "EndereÃ§o da sessÃ£o":          endereco,
     }
 
     id_evento = cadastrar_evento(evento)
     if not id_evento:
         return JSONResponse({"ok": False, "error": "Falha ao salvar o evento. Tente novamente."}, status_code=500)
 
-    # Publicar no grupo e notificar secretário
+    # Publicar no grupo e notificar secretÃ¡rio
     try:
         bot = request.app.state.telegram_app.bot
 
         dia_semana_pt = {
             "Monday": "segunda",
-          "Tuesday": "terça",
+          "Tuesday": "terÃ§a",
             "Wednesday": "quarta",
             "Thursday": "quinta",
             "Friday": "sexta",
-          "Saturday": "sábado",
+          "Saturday": "sÃ¡bado",
             "Sunday": "domingo",
         }.get(dia_semana, "")
 
-        data_hora = f"{_escape_md(data_str)} ({_escape_md(dia_semana_pt)}) • {_escape_md(horario)}" if dia_semana_pt else f"{_escape_md(data_str)} • {_escape_md(horario)}"
+        data_hora = f"{_escape_md(data_str)} ({_escape_md(dia_semana_pt)}) â€¢ {_escape_md(horario)}" if dia_semana_pt else f"{_escape_md(data_str)} â€¢ {_escape_md(horario)}"
         nome_esc   = _escape_md(nome_loja)
         num_fmt    = f" {_escape_md(numero_loja)}" if numero_loja and numero_loja != "0" else ""
         endereco_raw = (endereco or "").strip()
         endereco_url = endereco_raw if endereco_raw.startswith(("http://", "https://")) else ""
         texto_grupo = (
-            "NOVA SESSÃO\n\n"
+            "NOVA SESSÃƒO\n\n"
             f"{data_hora}\n"
             f"Grau: {_escape_md(grau)}\n\n"
             "LOJA\n"
             f"{nome_esc}{num_fmt}\n"
             f"{_escape_md(oriente)} - {_escape_md(potencia)}\n\n"
-            "SESSÃO\n"
+            "SESSÃƒO\n"
             f"Tipo: {_escape_md(tipo_sessao)}\n"
             f"Rito: {_escape_md(rito)}\n"
             f"Traje: {_escape_md(traje)}\n"
-            f"Ágape: {_escape_md(agape)}\n\n"
-            "ORDEM DO DIA / OBSERVAÇÕES\n"
+            f"Ãgape: {_escape_md(agape)}\n\n"
+            "ORDEM DO DIA / OBSERVAÃ‡Ã•ES\n"
             f"{_escape_md(observacoes) or '-'}\n\n"
         )
 
@@ -2129,10 +2187,11 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
 
         await bot.send_message(
             chat_id=telegram_id,
-            text="✅ *Evento cadastrado e publicado no grupo\\!*",
+            text="âœ… *Evento cadastrado e publicado no grupo\\!*",
             parse_mode="MarkdownV2",
         )
     except Exception as e:
         logger.warning("Falha ao confirmar evento para %s: %s", telegram_id, e)
 
     return JSONResponse({"ok": True})
+

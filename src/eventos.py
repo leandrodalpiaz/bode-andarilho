@@ -73,6 +73,7 @@ from src.bot import (
     _enviar_ou_editar_mensagem,
     TIPO_RESULTADO
 )
+from src.potencias import formatar_potencia, potencia_de_dados
 from src.evento_midia import editar_ou_republicar_evento_visual, publicar_evento_no_grupo
 
 logger = logging.getLogger(__name__)
@@ -299,7 +300,7 @@ def montar_texto_publicacao_evento(evento: dict) -> str:
         dia_traduzido = traduzir_dia_abreviado(dia_semana_raw)
         dia_semana_fmt = _escape_md(dia_traduzido.split("-")[0].strip().lower())
     oriente = _escape_md(evento.get("Oriente", ""))
-    potencia = _escape_md(evento.get("Potência", ""))
+    potencia = _escape_md(formatar_potencia(*potencia_de_dados(evento)))
     grau = _escape_md(evento.get("Grau", ""))
     tipo = _escape_md(evento.get("Tipo de sessão", ""))
     rito = _escape_md(evento.get("Rito", ""))
@@ -1207,7 +1208,7 @@ async def mostrar_detalhes_evento(update: Update, context: ContextTypes.DEFAULT_
     numero = str(evento.get("Número da loja", "") or "").strip()
     numero_fmt = f" {numero}" if numero else ""
     oriente = str(evento.get("Oriente", "") or "").strip()
-    potencia = str(evento.get("Potência", "") or "").strip()
+    potencia = formatar_potencia(*potencia_de_dados(evento))
     data = evento.get("Data do evento", "")
     hora = str(evento.get("Hora", "") or "").strip()
     tipo_sessao = str(evento.get("Tipo de sessão", "") or "").strip()
@@ -2103,7 +2104,7 @@ async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE
     data_txt = str(evento.get("Data do evento", "") or "").strip()
     hora = str(evento.get("Hora", "") or "").strip()
     oriente = str(evento.get("Oriente", "") or "").strip()
-    potencia = str(evento.get("Potência", "") or "").strip()
+    potencia = formatar_potencia(*potencia_de_dados(evento))
 
     user_id = update.effective_user.id
     ids_aliases = _ids_evento_aliases(id_evento, evento)

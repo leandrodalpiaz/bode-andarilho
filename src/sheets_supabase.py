@@ -134,6 +134,7 @@ _MEMBROS_SHEETS_TO_DB: Dict[str, str] = {
     "Grau":               "grau",
     "Oriente":            "oriente",
     "Potência":           "potencia",
+    "Potência complemento": "potencia_complemento",
     "Data de cadastro":   "data_cadastro",
     "Cargo":              "cargo",
     "Nivel":              "nivel",
@@ -159,6 +160,7 @@ _EVENTOS_SHEETS_TO_DB: Dict[str, str] = {
     "Tipo de sessão":               "tipo_sessao",
     "Rito":                         "rito",
     "Potência":                     "potencia",
+    "Potência complemento":         "potencia_complemento",
     "Traje obrigatório":            "traje",
     "Ágape":                        "agape",
     "Observações":                  "observacoes",
@@ -193,6 +195,7 @@ _CONFIRMACOES_SHEETS_TO_DB: Dict[str, str] = {
     "Loja":             "loja",
     "Oriente":          "oriente",
     "Potência":         "potencia",
+    "Potência complemento": "potencia_complemento",
     "Ágape":            "agape",
     "Data e hora":      "data_hora",
     "Número da loja":   "numero_loja",
@@ -208,6 +211,7 @@ _LOJAS_SHEETS_TO_DB: Dict[str, str] = {
     "Número":        "numero",
     "Rito":          "rito",
     "Potência":      "potencia",
+    "Potência complemento": "potencia_complemento",
     "Endereço":      "endereco",
     "Data Cadastro": "data_cadastro",
     "Oriente da Loja": "oriente_loja",
@@ -224,6 +228,7 @@ _LOJAS_DB_TO_SHEETS: Dict[str, str] = {
     "numero":       "Número",
     "rito":         "Rito",
     "potencia":     "Potência",
+    "potencia_complemento": "Potência complemento",
     "endereco":     "Endereço",
     "data_cadastro": "Data Cadastro",
     "oriente_loja": "Oriente da Loja",
@@ -586,6 +591,9 @@ def cadastrar_membro(dados: dict) -> bool:
             "numero_loja":    _norm_text(dados.get("Número da loja") or dados.get("numero_loja")),
             "oriente":        _norm_text(dados.get("Oriente") or dados.get("oriente")),
             "potencia":       _norm_text(dados.get("Potência") or dados.get("potencia")),
+            "potencia_complemento": _norm_text(
+                dados.get("Potência complemento") or dados.get("potencia_complemento")
+            ),
             "data_nascimento": _norm_text(
                 dados.get("Data de nascimento") or dados.get("data_nasc") or dados.get("nascimento")
             ),
@@ -876,6 +884,9 @@ def registrar_confirmacao(dados: dict) -> bool:
             "numero_loja":      _norm_text(dados.get("numero_loja") or dados.get("Número da loja")),
             "oriente":          _norm_text(dados.get("oriente") or dados.get("Oriente")),
             "potencia":         _norm_text(dados.get("potencia") or dados.get("Potência")),
+            "potencia_complemento": _norm_text(
+                dados.get("potencia_complemento") or dados.get("Potência complemento")
+            ),
             "agape":            _norm_text(dados.get("agape") or dados.get("Ágape")),
             "data_hora":        _now_str(segundos=True),
             "veneravel_mestre": _norm_text(
@@ -1343,6 +1354,7 @@ def cadastrar_loja(telegram_id: int, dados: Dict[str, Any]) -> bool:
             "oriente_loja": _norm_text(dados.get("oriente", "")),
             "rito": _norm_text(dados.get("rito", "")),
             "potencia": _norm_text(dados.get("potencia", "")),
+            "potencia_complemento": _norm_text(dados.get("potencia_complemento", "")),
             "endereco": _norm_text(dados.get("endereco", "")),
             "data_cadastro": data_cadastro,
         }

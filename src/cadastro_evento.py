@@ -54,6 +54,7 @@ from src.evento_midia import BUCKET_EVENT_CARDS, enviar_previa_evento, publicar_
 from src.sheets_supabase import upload_storage_publico
 from src.ajuda.dicas import enviar_dica_contextual
 from src.permissoes import get_nivel
+from src.potencias import formatar_potencia, potencia_de_dados
 from src.bot import (
     navegar_para,
     _enviar_ou_editar_mensagem,
@@ -443,7 +444,7 @@ def _montar_resumo_evento_md(evento: Dict[str, Any], duplicado: Optional[Dict[st
     grau = _escape_md(evento.get("Grau", ""))
     tipo = _escape_md(evento.get("Tipo de sessão", ""))
     rito = _escape_md(evento.get("Rito", ""))
-    potencia = _escape_md(evento.get("Potência", ""))
+    potencia = _escape_md(formatar_potencia(*potencia_de_dados(evento)))
     traje = _escape_md(evento.get("Traje obrigatório", ""))
     agape = _escape_md(evento.get("Ágape", ""))
     obs = _escape_md(evento.get("Observações", ""))
