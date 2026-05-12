@@ -43,12 +43,19 @@ from src.sheets_supabase import (
     buscar_membro,
     cadastrar_membro,
     cadastrar_evento,
+    atualizar_evento,
     cadastrar_loja,
     listar_lojas,
     buscar_loja_por_nome_numero,
     listar_secretarios_ativos,
 )
 from src.permissoes import get_nivel
+from src.evento_midia import publicar_evento_no_grupo as publicar_midia_evento_no_grupo
+from src.eventos import (
+    montar_texto_publicacao_evento,
+    montar_teclado_publicacao_evento,
+    registrar_post_evento_grupo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -456,6 +463,7 @@ async def draft_loja_cancelar(update: Update, context) -> None:
 
 def _extrair_dados_evento(body: Dict[str, Any]) -> Dict[str, Any]:
     return {
+        "loja_id": _norm_text(body.get("loja_id"))[:80],
         "data": _norm_text(body.get("data"))[:10],
         "horario": _norm_text(body.get("horario"))[:5],
         "grau": _norm_text(body.get("grau"))[:50],
@@ -516,6 +524,7 @@ def _payload_evento(dados: Dict[str, Any], secretario_id: str) -> Dict[str, Any]
     rito = dados["rito_outro"] if dados.get("rito") == "Outro" else dados["rito"]
     potencia = dados["potencia_outra"] if dados.get("potencia") == "Outra" else dados["potencia"]
     return {
+        "ID da loja": dados.get("loja_id", ""),
         "Data do evento": dados["data"],
         "Dia da semana": dt.strftime("%A") if dt else "",
         "Hora": dados["horario"],
@@ -533,6 +542,11 @@ def _payload_evento(dados: Dict[str, Any], secretario_id: str) -> Dict[str, Any]
         "Telegram ID do secretário": secretario_id,
         "Status": "Ativo",
         "Endereço da sessão": dados["endereco"],
+        "Modo visual": "template_loja",
+        "Card especial URL": "",
+        "Card renderizado URL": "",
+        "Card file_id Telegram": "",
+        "Telegram tipo mensagem grupo": "",
     }
 
 
@@ -572,13 +586,21 @@ def _texto_publicacao_evento(dados: Dict[str, Any]) -> str:
     ])
 
 
-async def _publicar_evento_no_grupo(bot, id_evento: str, dados: Dict[str, Any]) -> None:
-    await bot.send_message(
-        chat_id=int(_GRUPO_PRINCIPAL_ID),
-        text=_texto_publicacao_evento(dados),
-        reply_markup=_teclado_pos_publicacao(id_evento, _norm_text(dados.get("agape"))),
+async def _publicar_evento_no_grupo(context, id_evento: str, evento: Dict[str, Any]) -> None:
+    evento["ID Evento"] = id_evento
+    msg, tipo_msg = await publicar_midia_evento_no_grupo(
+        context,
+        int(_GRUPO_PRINCIPAL_ID),
+        evento,
+        montar_texto_publicacao_evento(evento),
+        montar_teclado_publicacao_evento(evento),
     )
-
+    registrar_post_evento_grupo(id_evento, int(_GRUPO_PRINCIPAL_ID), msg.message_id)
+    atualizar_evento(0, {
+        "ID Evento": id_evento,
+        "Telegram Message ID do grupo": str(msg.message_id),
+        "Telegram tipo mensagem grupo": tipo_msg,
+    })
 
 async def api_rascunho_evento(request: Request) -> JSONResponse:
     body, telegram_id, erro = await _validar_requisicao_webapp(request)
@@ -686,12 +708,13 @@ async def _confirmar_evento(update: Update, context, salvar_loja: bool) -> None:
         if not ok_loja:
             await query.answer("Não consegui salvar a loja vinculada a esta sessão.", show_alert=True)
             return
-    id_evento = cadastrar_evento(_payload_evento(dados, secretario_id))
+    evento = _payload_evento(dados, secretario_id)
+    id_evento = cadastrar_evento(evento)
     if not id_evento:
         await query.answer("Não consegui registrar a sessão agora.", show_alert=True)
         return
     try:
-        await _publicar_evento_no_grupo(context.bot, id_evento, dados)
+        await _publicar_evento_no_grupo(context, id_evento, evento)
     except Exception as e:
         logger.warning("Falha ao publicar evento %s no grupo: %s", id_evento, e)
         await query.answer("A sessão foi salva, mas não consegui publicar no grupo.", show_alert=True)
@@ -1751,7 +1774,8 @@ async function publicarEvento(){
         rito_outro:val('rito_outro'),
         potencia:val('potencia'),
         potencia_outra:val('potencia_outra'),
-        endereco:val('endereco')
+        endereco:val('endereco'),
+        loja_id:(lojasCarregadas[Number(document.getElementById('loja_sel').value)]||{}).id||''
       })
     });
     const j=await r.json();

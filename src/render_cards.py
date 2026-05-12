@@ -49,6 +49,12 @@ def _hex_to_rgba(value: str, alpha: int = 255) -> Tuple[int, int, int, int]:
 def _load_font(size: int, preferred: str = "") -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     candidates = [
         preferred,
+        "georgia.ttf",
+        "Georgia.ttf",
+        "times.ttf",
+        "Times New Roman.ttf",
+        "DejaVuSerif.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
         "arial.ttf",
         "Arial.ttf",
         "DejaVuSans.ttf",
@@ -127,17 +133,36 @@ def _layout_config(loja: Dict[str, Any], width: int, height: int) -> Dict[str, A
 def _event_text(evento: Dict[str, Any]) -> str:
     numero = _norm(evento.get("Número da loja"))
     numero_fmt = f" {numero}" if numero and numero != "0" else ""
+    data_hora = f"{_norm(evento.get('Data do evento'))} - {_norm(evento.get('Hora'))}".strip(" -")
+    loja = f"{_norm(evento.get('Nome da loja'))}{numero_fmt}".strip()
+    oriente_potencia = " - ".join([v for v in (_norm(evento.get("Oriente")), _norm(evento.get("Potência"))) if v])
     linhas = [
-        _norm(evento.get("Tipo de sessão")) or "Sessão",
-        f"{_norm(evento.get('Nome da loja'))}{numero_fmt}".strip(),
-        f"{_norm(evento.get('Data do evento'))} - {_norm(evento.get('Hora'))}".strip(" -"),
-        _norm(evento.get("Oriente")),
+        "NOVA SESSÃO",
+        data_hora,
+        f"Grau: {_norm(evento.get('Grau'))}" if _norm(evento.get("Grau")) else "",
+        "",
+        "LOJA",
+        loja,
+        oriente_potencia,
+        "",
+        "SESSÃO",
+        f"Tipo: {_norm(evento.get('Tipo de sessão'))}" if _norm(evento.get("Tipo de sessão")) else "",
+        f"Rito: {_norm(evento.get('Rito'))}" if _norm(evento.get("Rito")) else "",
         f"Traje: {_norm(evento.get('Traje obrigatório'))}" if _norm(evento.get("Traje obrigatório")) else "",
         f"Ágape: {_norm(evento.get('Ágape'))}" if _norm(evento.get("Ágape")) else "",
+        "",
+        "ORDEM DO DIA",
         _norm(evento.get("Observações")),
-        _norm(evento.get("Endereço da sessão")),
     ]
-    return "\n".join([line for line in linhas if line])
+    out: List[str] = []
+    for line in linhas:
+        if line == "":
+            if out and out[-1] != "":
+                out.append("")
+            continue
+        if line:
+            out.append(line)
+    return "\n".join(out)
 
 
 def _badge_items(evento: Dict[str, Any]) -> Iterable[Tuple[str, str]]:
