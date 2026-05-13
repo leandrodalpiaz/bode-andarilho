@@ -220,6 +220,9 @@ _LOJAS_SHEETS_TO_DB: Dict[str, str] = {
     "Nome do secretário responsável": "secretario_responsavel_nome",
     "Vínculo atualizado em": "vinculo_atualizado_em",
     "Vínculo atualizado por (Telegram ID)": "vinculo_atualizado_por_id",
+    "CEP":           "cep",
+    "Estado UF":     "estado_uf",
+    "Cidade":        "cidade",
 }
 _LOJAS_DB_TO_SHEETS: Dict[str, str] = {
     "id":          "ID",
@@ -236,6 +239,9 @@ _LOJAS_DB_TO_SHEETS: Dict[str, str] = {
     "secretario_responsavel_nome": "Nome do secretário responsável",
     "vinculo_atualizado_em": "Vínculo atualizado em",
     "vinculo_atualizado_por_id": "Vínculo atualizado por (Telegram ID)",
+    "cep":          "CEP",
+    "estado_uf":    "Estado UF",
+    "cidade":       "Cidade",
 }
 
 _LOJAS_SHEETS_TO_DB.update({
@@ -672,6 +678,9 @@ def atualizar_membro(telegram_id: int, dados_atualizados: dict, preservar_nivel:
             "vm":             "Venerável Mestre",
             "veneravel_mestre": "Venerável Mestre",
             "mi":             "Mestre Instalado",
+            "vm":             "Venerável Mestre",
+            "veneravel_mestre": "Venerável Mestre",
+            "mi":             "Mestre Instalado",
             "mestre_instalado": "Mestre Instalado",
             "notificacoes":   "Notificações",
             "status":         "Status",
@@ -683,6 +692,28 @@ def atualizar_membro(telegram_id: int, dados_atualizados: dict, preservar_nivel:
             db_col = _MEMBROS_SHEETS_TO_DB.get(sheets_key)
             if db_col:
                 update[db_col] = _norm_text(v)
+
+        # GOVERNANÇA DE PERFIL: Trava de Loja
+        # Se houve mudança em ID da loja, Nome da Loja ou Número da loja, rebaixa para 'Pendente'
+        try:
+            existente = buscar_membro(int(float(tid)))
+            if existente:
+                def _val_diff(novo, exist):
+                    return str(novo or "").strip().lower() != str(exist or "").strip().lower()
+                
+                mudanca = False
+                if "loja_id" in update and _val_diff(update["loja_id"], existente.get("ID da loja") or existente.get("loja_id")):
+                    mudanca = True
+                if "loja" in update and _val_diff(update["loja"], existente.get("Loja") or existente.get("loja")):
+                    mudanca = True
+                if "numero_loja" in update and _val_diff(update["numero_loja"], existente.get("Número da loja") or existente.get("numero_loja")):
+                    mudanca = True
+                
+                if mudanca:
+                    logger.info("Governanca: Membro %s alterou sua Loja. Rebaixando status para Pendente.", tid)
+                    update["status"] = "Pendente"
+        except Exception as e_gov:
+            logger.error("Erro na governanca de trava de loja: %s", e_gov)
 
         if not update:
             return True  # nada a atualizar

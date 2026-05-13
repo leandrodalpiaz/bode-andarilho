@@ -84,6 +84,7 @@ from src.bot import (
     texto_privado_router,
     _enviar_ou_editar_mensagem,
     TIPO_RESULTADO,
+    executar_comando_seguro,
 )
 
 # Eventos (visualização, confirmação, etc.)
@@ -104,6 +105,9 @@ from src.eventos import (
     confirmacao_presenca_handler,
     mostrar_calendario,
     calendario_atual,
+    mostrar_eventos_por_uf,
+    mostrar_eventos_por_cidade,
+    mostrar_eventos_por_potencia_filtro,
 )
 
 # Cadastro de eventos (com integração com lojas)
@@ -542,6 +546,16 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler(["ia_stats", "assistente_stats"], assistente_ia_stats))
     app.add_handler(CommandHandler(["ia_relatorio", "assistente_relatorio"], assistente_ia_relatorio))
     
+    # Novos atalhos centralizados com redirecionamento inteligente
+    async def cmd_perfil(update: Update, context):
+        await executar_comando_seguro(update, context, "meu_cadastro")
+    
+    async def cmd_agenda(update: Update, context):
+        await executar_comando_seguro(update, context, "ver_eventos")
+        
+    app.add_handler(CommandHandler("perfil", cmd_perfil))
+    app.add_handler(CommandHandler(["buscar", "agenda", "sessoes", "eventos"], cmd_agenda))
+    
     async def ping(update: Update, context):
         if update.message:
             await update.message.reply_text("OK")
@@ -576,6 +590,15 @@ def register_handlers(app: Application) -> None:
     ))
     app.add_handler(CallbackQueryHandler(
         mostrar_eventos_por_rito, pattern=r"^rito\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        mostrar_eventos_por_uf, pattern=r"^geo_uf\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        mostrar_eventos_por_cidade, pattern=r"^geo_cid\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        mostrar_eventos_por_potencia_filtro, pattern=r"^potencia_filtro\|"
     ))
     app.add_handler(CallbackQueryHandler(
         mostrar_detalhes_evento, pattern=r"^evento\|"

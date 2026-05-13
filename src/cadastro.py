@@ -805,58 +805,8 @@ async def _finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return CONFIRMAR
 
-    # --- NOTIFICAR SECRETÁRIO SOBRE NOVO CADASTRO (CÂMARA DE REFLEXÃO) ---
-    try:
-        from src.sheets_supabase import listar_lojas, _secretario_responsavel_loja_id
-        
-        # Função auxiliar local para normalização extremamente resiliente
-        import unicodedata
-        def _norm_resiliente(t: Any) -> str:
-            b = unicodedata.normalize("NFKD", str(t or "").strip())
-            b = "".join(ch for ch in b if not unicodedata.combining(ch))
-            return re.sub(r"\s+", "", b).lower()
-
-        loja_digitada = _norm_resiliente(dados_membro.get("loja"))
-        num_digitado = _norm_resiliente(dados_membro.get("numero_loja") or "0")
-        
-        loja_encontrada = None
-        if loja_digitada:
-            todas_lojas = listar_lojas(0, include_todas=True) or []
-            for l in todas_lojas:
-                l_nome = _norm_resiliente(l.get("Nome da Loja") or l.get("nome_loja"))
-                l_num = _norm_resiliente(l.get("Número") or l.get("numero") or "0")
-                
-                if l_nome == loja_digitada and l_num == num_digitado:
-                    loja_encontrada = l
-                    break
-            
-            # Fallback suave apenas pelo nome
-            if not loja_encontrada:
-                for l in todas_lojas:
-                    l_nome = _norm_resiliente(l.get("Nome da Loja") or l.get("nome_loja"))
-                    if l_nome == loja_digitada:
-                        loja_encontrada = l
-                        break
-
-        if loja_encontrada:
-            sec_id = _secretario_responsavel_loja_id(loja_encontrada)
-            if sec_id:
-                nome_obreiro = dados_membro.get("nome", "Novo Obreiro")
-                loja_nome_fmt = loja_encontrada.get("Nome da Loja") or loja_encontrada.get("nome_loja") or "Loja"
-                try:
-                    await context.bot.send_message(
-                        chat_id=int(float(sec_id)),
-                        text=(
-                            f"🔔 *Novo Registro Pendente*\n\n"
-                            f"O Ir.·. *{nome_obreiro}* realizou o cadastro no bot e aguarda sua validação para a loja *{loja_nome_fmt}*.\n\n"
-                            f"Acesse a *Área do Secretário > Validar Novos Irmãos* para gerenciar esta solicitação."
-                        ),
-                        parse_mode="Markdown"
-                    )
-                except Exception as e_notif:
-                    logger.warning("Falha ao notificar secretário %s: %s", sec_id, e_notif)
-    except Exception as e_sec:
-        logger.warning("Erro durante busca de secretário no final do cadastro: %s", e_sec)
+    # --- NOTIFICAR RESPONSÁVEL PELA VALIDAÇÃO (CÂMARA DE REFLEXÃO) ---
+    await notificar_validacao_pendente(context, dados_membro, mudanca_loja=False)
 
     # Preserva pos_cadastro
     pos = context.user_data.get("pos_cadastro")
@@ -1029,3 +979,118 @@ cadastro_handler = ConversationHandler(
     name="cadastro_handler",
     persistent=False,
 )
+
+
+# ============================================
+# CENTRAL DE NOTIFICAÇÃO DE VALIDAÇÃO PENDENTE
+# ============================================
+
+async def notificar_validacao_pendente(
+    context: ContextTypes.DEFAULT_TYPE,
+    dados_membro: dict,
+    mudanca_loja: bool = False
+):
+    """
+    Localiza o Secretário responsável pela Loja do obreiro e o notifica.
+    Caso não haja secretário configurado, envia para os Administradores Globais (Nível 3).
+    """
+    import re
+    import unicodedata
+    from src.sheets_supabase import listar_lojas, _secretario_responsavel_loja_id, listar_membros
+    
+    try:
+        # 1. Tenta localizar a Loja informada no cadastro do obreiro
+        def _norm_resiliente(t: Any) -> str:
+            b = unicodedata.normalize("NFKD", str(t or "").strip())
+            b = "".join(ch for ch in b if not unicodedata.combining(ch))
+            return re.sub(r"\s+", "", b).lower()
+
+        loja_digitada = _norm_resiliente(dados_membro.get("loja") or dados_membro.get("Loja"))
+        num_digitado = _norm_resiliente(dados_membro.get("numero_loja") or dados_membro.get("Número da loja") or "0")
+        
+        loja_encontrada = None
+        if loja_digitada:
+            todas_lojas = listar_lojas(0, include_todas=True) or []
+            for l in todas_lojas:
+                l_nome = _norm_resiliente(l.get("Nome da Loja") or l.get("nome_loja"))
+                l_num = _norm_resiliente(l.get("Número") or l.get("numero") or "0")
+                if l_nome == loja_digitada and l_num == num_digitado:
+                    loja_encontrada = l
+                    break
+            
+            if not loja_encontrada:
+                for l in todas_lojas:
+                    l_nome = _norm_resiliente(l.get("Nome da Loja") or l.get("nome_loja"))
+                    if l_nome == loja_digitada:
+                        loja_encontrada = l
+                        break
+
+        sec_id = None
+        loja_nome_fmt = "Loja informada"
+        if loja_encontrada:
+            sec_id = _secretario_responsavel_loja_id(loja_encontrada)
+            loja_nome_fmt = loja_encontrada.get("Nome da Loja") or loja_encontrada.get("nome_loja") or "Loja"
+        else:
+            loja_nome_fmt = str(dados_membro.get("loja") or dados_membro.get("Loja") or "sua Loja")
+            num_txt = str(dados_membro.get("numero_loja") or dados_membro.get("Número da loja") or "")
+            if num_txt and num_txt not in ("0", "None", ""):
+                loja_nome_fmt += f" Nº {num_txt}"
+
+        # 2. Formata mensagens baseadas na natureza da ação
+        nome_obreiro = dados_membro.get("nome") or dados_membro.get("Nome") or "Novo Obreiro"
+        
+        if mudanca_loja:
+            titulo = "⚠️ *Ajuste de Perfil: Troca de Loja*"
+            corpo = f"O Ir.·. *{nome_obreiro}* alterou sua filiação de Loja para *{loja_nome_fmt}* e seu cadastro retornou para análise pendente."
+        else:
+            titulo = "🔔 *Novo Registro Pendente*"
+            corpo = f"O Ir.·. *{nome_obreiro}* realizou o cadastro no bot e aguarda validação para a loja *{loja_nome_fmt}*."
+
+        texto_final = (
+            f"{titulo}\n\n"
+            f"{corpo}\n\n"
+            "Por favor, acesse a *Área do Secretário > Validar Novos Irmãos* para gerenciar este pedido."
+        )
+
+        # 3. Envio para o Secretário responsável
+        notificados = 0
+        if sec_id:
+            try:
+                await context.bot.send_message(
+                    chat_id=int(float(sec_id)),
+                    text=texto_final,
+                    parse_mode="Markdown"
+                )
+                notificados += 1
+                logger.info(f"Governanca: Notificacao enviada ao Secretario {sec_id}")
+            except Exception as e_notif:
+                logger.warning("Falha ao notificar secretario %s: %s", sec_id, e_notif)
+
+        # 4. Fallback para Nível 3 (Admin Globais) se nenhum secretário pôde ser notificado
+        if notificados == 0:
+            logger.info("Governanca: Sem Secretario ativo na Loja. Encaminhando para Admins Globais (Nivel 3)...")
+            membros = listar_membros() or []
+            admins = [m for m in membros if str(m.get("Nivel") or m.get("nivel") or "1") == "3"]
+            
+            texto_admin = (
+                f"🔔 *Encaminhamento: Validação Pendente (Sem Secretário)*\n\n"
+                f"O Ir.·. *{nome_obreiro}* está pendente na Loja *{loja_nome_fmt}*.\n"
+                f"Como esta Oficina não possui um Secretário ativo configurado no bot, o processo foi encaminhado à Administração.\n\n"
+                f"{texto_final}"
+            )
+            
+            for adm in admins:
+                adm_id = adm.get("Telegram ID") or adm.get("telegram_id")
+                if adm_id:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=int(float(adm_id)),
+                            text=texto_admin,
+                            parse_mode="Markdown"
+                        )
+                        notificados += 1
+                    except Exception as e_adm:
+                        logger.warning("Falha ao notificar Admin %s: %s", adm_id, e_adm)
+                        
+    except Exception as e_sec:
+        logger.warning("Erro crítico durante ciclo de notificacao de governanca: %s", e_sec)

@@ -542,6 +542,90 @@ async def rotear_atalho_privado(update: Update, context: ContextTypes.DEFAULT_TY
     return True
 
 
+async def executar_comando_seguro(update: Update, context: ContextTypes.DEFAULT_TYPE, destino: str) -> None:
+    """
+    Executa ações e consultas (como perfil, eventos/agenda) garantindo privacidade.
+    - Se for disparado em grupo: envia o conteúdo ao privado e avisa no grupo com auto-delete de 10s.
+    - Se for privado: executa imediatamente.
+    """
+    import asyncio
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    chat = update.effective_chat
+    user = update.effective_user
+    if not chat or not user:
+        return
+
+    no_grupo = chat.type in ("group", "supergroup")
+    user_id = user.id
+
+    # Bloco de execução direta para o destino mapeado
+    async def _despachar():
+        if destino == "meu_cadastro":
+            from src.perfil import mostrar_perfil
+            await mostrar_perfil(update, context)
+        elif destino == "ver_eventos":
+            from src.eventos import mostrar_eventos
+            await mostrar_eventos(update, context)
+        elif destino == "menu_principal":
+            await voltar_ao_menu_principal(update, context)
+        elif destino == "menu_ajuda":
+            from src.ajuda.menus import menu_ajuda_principal
+            await menu_ajuda_principal(update, context)
+        elif destino == "abrir_assistente_ia":
+            from src.ia_assistente import abrir_assistente_ia
+            await abrir_assistente_ia(update, context)
+
+    if not no_grupo:
+        await _despachar()
+        return
+
+    # FLUXO DE GRUPO COM REDIRECIONAMENTO E AUTO-DELETE DE 10S
+    membro = buscar_membro(user_id)
+    nome_ir = user.first_name or "Irmão"
+    if membro and (membro.get("Nome") or membro.get("nome")):
+        nome_ir = str(membro.get("Nome") or membro.get("nome")).split()[0]
+
+    # Enviar no privado primeiro
+    try:
+        await _despachar()
+        sucesso_privado = True
+    except Exception as e:
+        logger.warning("Falha ao despachar redirecionamento privado: %s", e)
+        sucesso_privado = False
+
+    # Enviar o aviso temporário no grupo
+    bot_username = getattr(context.bot, "username", None) or "BodeAndarilhoBot"
+    link_privado = f"https://t.me/{bot_username}"
+    teclado_aviso = InlineKeyboardMarkup([[
+        InlineKeyboardButton("📩 Abrir Chat Privado", url=link_privado)
+    ]])
+    
+    if sucesso_privado:
+        texto_aviso = f"Irmão {nome_ir}, para sua segurança e privacidade, enviei as informações solicitadas no seu privado. 🐐"
+    else:
+        # Se o bot foi bloqueado pelo usuário, instrui a iniciar
+        texto_aviso = f"⚠️ Irmão {nome_ir}, não consegui falar com você no privado. Por favor, clique abaixo e aperte *Iniciar/Start*."
+
+    try:
+        msg_aviso = await context.bot.send_message(
+            chat_id=chat.id,
+            text=texto_aviso,
+            reply_markup=teclado_aviso,
+            parse_mode="Markdown"
+        )
+        
+        async def _auto_delete_task(mid: int):
+            await asyncio.sleep(10)
+            try:
+                await context.bot.delete_message(chat_id=chat.id, message_id=mid)
+            except:
+                pass
+        asyncio.create_task(_auto_delete_task(msg_aviso.message_id))
+    except Exception as e:
+        logger.debug("Nao foi possivel enviar ou programar exclusao de aviso no grupo: %s", e)
+
+
 async def texto_privado_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
         return
@@ -569,6 +653,31 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     data = query.data or ""
+
+    # Segurança e Privacidade: Trava de cliques genéricos em grupo
+    chat = update.effective_chat
+    if chat and chat.type in ("group", "supergroup"):
+        prefixos_permitidos = ("confirmar|", "ver_confirmados|", "evento|")
+        tags_permitidas = {"fechar_mensagem", "remover_mensagem", "iniciar_cadastro"}
+        
+        permitido = False
+        if data in tags_permitidas:
+            permitido = True
+        else:
+            for pref in prefixos_permitidos:
+                if data.startswith(pref):
+                    permitido = True
+                    break
+        
+        if not permitido:
+            # Cancela o clique no grupo, respondendo com alerta seguro
+            await _responder_callback_seguro(
+                query,
+                "Irmão, por segurança, menus interativos funcionam apenas no seu chat privado. 🐐",
+                show_alert=True
+            )
+            return
+
     await _responder_callback_seguro(query)
 
     # Callbacks geridos por fluxos específicos (ConversationHandlers)

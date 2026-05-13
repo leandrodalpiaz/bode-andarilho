@@ -420,12 +420,27 @@ async def receber_novo_valor_perfil(update: Update, context: ContextTypes.DEFAUL
             )
     else:
         sucesso = atualizar_membro(update.effective_user.id, {campo_info["chave"]: novo_valor}, preservar_nivel=True)
+
     if sucesso:
+        # GOVERNANÇA: Se alterou Loja ou Número da Loja, dispara a notificação de análise pendente
+        if campo_id in {"loja", "numero_loja"}:
+            try:
+                from src.cadastro import notificar_validacao_pendente
+                membro_novo = buscar_membro(update.effective_user.id)
+                if membro_novo:
+                    await notificar_validacao_pendente(context, membro_novo, mudanca_loja=True)
+            except Exception as e_notif:
+                logger.warning("Erro ao despachar notificacao de governanca no editar_perfil: %s", e_notif)
+
+        texto_sucesso = f"✅ O campo *{campo_info['nome']}* foi atualizado com sucesso."
+        if campo_id in {"loja", "numero_loja"}:
+            texto_sucesso += "\n\n⚠️ *Importante:* Seus dados de Loja foram modificados e seu cadastro retornou temporariamente para a *análise pendente* por segurança."
+
         await _enviar_ou_editar_mensagem(
             context,
             update.effective_user.id,
             TIPO_RESULTADO,
-            f"✅ O campo *{campo_info['nome']}* foi atualizado com sucesso.\n\nUse o menu abaixo para seguir.",
+            f"{texto_sucesso}\n\nUse o menu abaixo para seguir.",
             _teclado_pos_edicao(),
             limpar_conteudo=True,
         )

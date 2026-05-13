@@ -320,14 +320,43 @@ async def draft_membro_confirmar(update: Update, context) -> None:
         await query.answer("Não encontrei um rascunho para confirmar.", show_alert=True)
         return
     ja_existe = buscar_membro(telegram_id)
+    
+    # GOVERNANÇA: Detecta se houve alteração em dados sensíveis de Loja
+    mudou_loja = False
+    if ja_existe:
+        def _val_diff(v1, v2):
+            return str(v1 or "").strip().lower() != str(v2 or "").strip().lower()
+        
+        novo_loja = dados.get("loja")
+        novo_num = dados.get("numero_loja")
+        
+        exist_loja = ja_existe.get("Loja") or ja_existe.get("loja")
+        exist_num = ja_existe.get("Número da loja") or ja_existe.get("numero_loja")
+        
+        if _val_diff(novo_loja, exist_loja) or _val_diff(novo_num, exist_num):
+            mudou_loja = True
+
     ok = cadastrar_membro(_payload_membro(telegram_id, dados))
     if not ok:
         await query.answer("Não consegui concluir o cadastro agora.", show_alert=True)
         return
+
+    # Se alterou a Loja, notifica o Secretário responsável (Câmara de Reflexão)
+    if mudou_loja:
+        try:
+            from src.cadastro import notificar_validacao_pendente
+            membro_novo = buscar_membro(telegram_id)
+            if membro_novo:
+                await notificar_validacao_pendente(context, membro_novo, mudanca_loja=True)
+        except Exception as e_notif:
+            logger.warning("Erro ao notificar governanca via Mini App: %s", e_notif)
+
     _limpar_rascunho(_RASCUNHOS_MEMBRO, telegram_id)
     nome_esc = _escape_md(dados.get("nome", ""))
     if ja_existe:
         texto = f"✅ *Cadastro atualizado\\!*\n\nSaudações, Ir\\.·\\. {nome_esc}\\. Seus dados foram atualizados\\."
+        if mudou_loja:
+            texto += "\n\n⚠️ *Importante:* Seus dados de Loja foram alterados\\. Seu cadastro retornou à *análise pendente* do Secretário por segurança\\."
     else:
         texto = (
             f"✅ *Cadastro realizado a contento\\!*\n\n"

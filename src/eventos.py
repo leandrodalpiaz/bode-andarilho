@@ -24,6 +24,7 @@ from datetime import datetime, date, timedelta
 from typing import Optional, Tuple, List, Dict, Any
 
 from src.ritos import normalizar_rito
+from src.location_service import buscar_estados_uf, buscar_cidades_por_uf
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest, Forbidden
@@ -196,6 +197,8 @@ TOKEN_MES_ATUAL = "mes_atual"
 TOKEN_PROXIMOS_MESES = "proximos_meses"
 TOKEN_POR_GRAU_MENU = "por_grau"
 TOKEN_POR_RITO_MENU = "por_rito"
+TOKEN_POR_LOCALIDADE_MENU = "por_localidade"
+TOKEN_POR_POTENCIA_MENU = "por_potencia"
 
 # Graus
 GRAU_APRENDIZ = "Aprendiz"
@@ -790,6 +793,92 @@ def _linha_botao_evento(ev: dict) -> str:
 
 
 # ============================================
+# FILTROS GEOGRÁFICOS E DE POTÊNCIA (RESOLVEDORES)
+# ============================================
+
+def _lojas_map_cache() -> Dict[str, dict]:
+    """Retorna dicionário global ID -> LOJA das lojas no cache."""
+    from src.sheets_supabase import listar_lojas
+    try:
+        lojas = listar_lojas(0, include_todas=True) or []
+        return {str(l.get("ID") or l.get("id") or ""): l for l in lojas if (l.get("ID") or l.get("id"))}
+    except Exception as e:
+        logger.warning(f"Erro ao carregar mapa de lojas: {e}")
+        return {}
+
+def _resolver_dados_geo_loja(ev: dict, lojas_map: dict) -> Tuple[str, str]:
+    """Retorna (estado_uf, cidade) canonizado do evento via Loja associada."""
+    loja_id = str(ev.get("ID da loja") or ev.get("loja_id") or "")
+    loja = lojas_map.get(loja_id)
+    
+    if not loja:
+        # Fallback: procura por Nome e Número
+        nome_ev = str(ev.get("Nome da loja") or ev.get("nome_loja") or "").strip().lower()
+        num_ev = str(ev.get("Número da loja") or ev.get("numero_loja") or "").strip()
+        for l in lojas_map.values():
+            nome_l = str(l.get("Nome da Loja") or l.get("nome_loja") or "").strip().lower()
+            num_l = str(l.get("Número") or l.get("numero") or "").strip()
+            if nome_ev == nome_l and (not num_ev or num_ev == num_l):
+                loja = l
+                break
+                
+    if loja:
+        uf = str(loja.get("Estado UF") or loja.get("estado_uf") or "").strip().upper()
+        cid = str(loja.get("Cidade") or loja.get("cidade") or "").strip()
+        return uf, cid
+        
+    # Segundo fallback: Caso não encontre, assume o próprio "Oriente" do evento como cidade (antigo)
+    cid = str(ev.get("Oriente") or ev.get("oriente") or "").strip()
+    return "", cid
+
+def _ufs_ativas_eventos(eventos: List[dict], lojas_map: dict) -> List[str]:
+    """Retorna lista de UFs com sessões agendadas."""
+    ufs = set()
+    for ev in eventos:
+        uf, _ = _resolver_dados_geo_loja(ev, lojas_map)
+        if uf:
+            ufs.add(uf)
+    return sorted(list(ufs))
+
+def _cidades_ativas_eventos(eventos: List[dict], lojas_map: dict, uf_alvo: str) -> List[str]:
+    """Retorna cidades ativas em uma determinada UF."""
+    cidades = set()
+    uf_alvo = uf_alvo.upper().strip()
+    for ev in eventos:
+        uf, cid = _resolver_dados_geo_loja(ev, lojas_map)
+        if uf == uf_alvo and cid:
+            cidades.add(cid)
+    return sorted(list(cidades), key=lambda x: x.lower())
+
+def _potencias_ativas_eventos(eventos: List[dict]) -> List[str]:
+    """Retorna a lista de potências com eventos ativos."""
+    pots = set()
+    for ev in eventos:
+        p = str(ev.get("Potência") or ev.get("potencia") or "").strip()
+        if p:
+            pots.add(p)
+    return sorted(list(pots), key=lambda x: x.lower())
+
+def _filtrar_por_cidade(eventos: List[dict], lojas_map: dict, uf: str, cidade: str) -> Tuple[str, List[dict]]:
+    titulo = f"Sessões — {cidade} — {uf}"
+    filtrados = []
+    for ev in eventos:
+        ev_uf, ev_cid = _resolver_dados_geo_loja(ev, lojas_map)
+        if ev_uf.upper() == uf.upper() and ev_cid.lower() == cidade.lower():
+            filtrados.append(ev)
+    return titulo, _eventos_ordenados(filtrados)
+
+def _filtrar_por_potencia(eventos: List[dict], potencia_nome: str) -> Tuple[str, List[dict]]:
+    titulo = f"Sessões — Potência — {potencia_nome}"
+    filtrados = []
+    for ev in eventos:
+        p = str(ev.get("Potência") or ev.get("potencia") or "").strip()
+        if p.lower() == potencia_nome.lower():
+            filtrados.append(ev)
+    return titulo, _eventos_ordenados(filtrados)
+
+
+# ============================================
 # FUNÇÃO PARA NOTIFICAR SECRETÁRIO
 # ============================================
 
@@ -930,6 +1019,8 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📅 Próximos meses", callback_data=f"data|{TOKEN_PROXIMOS_MESES}")],
         [InlineKeyboardButton("🔺 Por grau", callback_data=f"data|{TOKEN_POR_GRAU_MENU}")],
         [InlineKeyboardButton("📜 Por rito", callback_data=f"data|{TOKEN_POR_RITO_MENU}")],
+        [InlineKeyboardButton("📍 Por localidade", callback_data=f"data|{TOKEN_POR_LOCALIDADE_MENU}")],
+        [InlineKeyboardButton("🏛️ Por potência", callback_data=f"data|{TOKEN_POR_POTENCIA_MENU}")],
         [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
     ])
 
@@ -1038,6 +1129,61 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
             update, context,
             "Ver Sessões > Por Rito",
             "📜 *Selecione o rito:*",
+            InlineKeyboardMarkup(botoes)
+        )
+        return
+
+    if token_or_data == TOKEN_POR_LOCALIDADE_MENU:
+        eventos = listar_eventos() or []
+        lojas_map = _lojas_map_cache()
+        ufs = _ufs_ativas_eventos(eventos, lojas_map)
+        
+        if not ufs:
+            ufs_todas = buscar_estados_uf()
+            ufs = [u["sigla"] for u in ufs_todas]
+
+        linhas_uf = []
+        linha_atual = []
+        for uf in ufs:
+            linha_atual.append(InlineKeyboardButton(uf, callback_data=f"geo_uf|{uf}"))
+            if len(linha_atual) >= 6:
+                linhas_uf.append(linha_atual)
+                linha_atual = []
+        if linha_atual:
+            linhas_uf.append(linha_atual)
+            
+        linhas_uf.append([InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")])
+        
+        await navegar_para(
+            update, context,
+            "Ver Sessões > Por Localidade",
+            "📍 *Busca por Localidade*\n\nSelecione o estado (UF) desejado:",
+            InlineKeyboardMarkup(linhas_uf)
+        )
+        return
+
+    if token_or_data == TOKEN_POR_POTENCIA_MENU:
+        eventos = listar_eventos() or []
+        potencias = _potencias_ativas_eventos(eventos)
+        
+        if not potencias:
+             await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "🏛️ *Sessões por Potência*\n\nAinda não há potências vinculadas às sessões disponíveis.",
+                InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
+            )
+             return
+             
+        botoes = []
+        for pot in potencias[:MAX_EVENTOS_LISTA]:
+            botoes.append([InlineKeyboardButton(f"🏛️ {pot}", callback_data=f"potencia_filtro|{pot}")])
+            
+        botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")])
+        
+        await navegar_para(
+            update, context,
+            "Ver Sessões > Por Potência",
+            "🏛️ *Selecione a Potência:*",
             InlineKeyboardMarkup(botoes)
         )
         return
@@ -1415,6 +1561,33 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             await _responder_callback_seguro(query, "Verifique seu privado.", show_alert=True)
         return ConversationHandler.END
 
+    # INTERCEPTAÇÃO LOGÍSTICA: Aviso de Ágape (Hospitalaria Digital)
+    is_final = len(partes) >= 4 and partes[3] == "final"
+    
+    if tipo_agape != "sem" and not is_final:
+        botoes = [
+            [InlineKeyboardButton("✅ Confirmar Fisicamente", callback_data=f"confirmar|{id_evento_cod}|{tipo_agape}|final")],
+            [InlineKeyboardButton("❌ Cancelar", callback_data="fechar_mensagem")]
+        ]
+        
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⚠️ *Responsabilidade Logística: Confirmação de Ágape*\n\n"
+            "Irmão, note que sua presença no ágape acarreta custos, preparo alimentar "
+            "e dimensionamento logístico pela *Hospitalaria* anfitriã.\n\n"
+            "Você confirma que estará fisicamente presente e assume este compromisso fraterno? 🐐",
+            InlineKeyboardMarkup(botoes),
+            limpar_conteudo=True
+        )
+        
+        if update.effective_chat.type in ["group", "supergroup"]:
+            await _responder_callback_seguro(
+                query, 
+                "Ir.·., verifique seu chat privado para confirmar seu compromisso com o Ágape.",
+                show_alert=True
+            )
+        return ConversationHandler.END
+
     participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não"
     confirmou_com_agape = tipo_agape != "sem"
     desc_agape = {
@@ -1618,6 +1791,24 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
                 [InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")],
             ]),
             limpar_conteudo=True,
+        )
+        return
+
+    # INTERCEPTAÇÃO LOGÍSTICA: Aviso de Ágape (Hospitalaria Digital)
+    if tipo_agape != "sem":
+        botoes = [
+            [InlineKeyboardButton("✅ Confirmar Fisicamente", callback_data=f"confirmar|{_encode_cb(id_evento)}|{tipo_agape}|final")],
+            [InlineKeyboardButton("❌ Cancelar", callback_data="fechar_mensagem")]
+        ]
+        
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⚠️ *Responsabilidade Logística: Confirmação de Ágape*\n\n"
+            "Irmão, observe que sua presença no ágape acarreta custos, preparo alimentar "
+            "e dimensionamento logístico pela *Hospitalaria* anfitriã.\n\n"
+            "Você confirma que estará fisicamente presente e assume este compromisso fraterno? 🐐",
+            InlineKeyboardMarkup(botoes),
+            limpar_conteudo=True
         )
         return
 
@@ -2272,3 +2463,118 @@ confirmacao_presenca_handler = ConversationHandler(
     states={},
     fallbacks=[CommandHandler("cancelar", cancelar_presenca)],
 )
+
+
+# ============================================
+# AÇÕES DE SELEÇÃO GEOGRÁFICA E POTÊNCIA
+# ============================================
+
+async def mostrar_eventos_por_uf(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    partes = query.data.split("|", 1)
+    if len(partes) < 2:
+        return
+        
+    uf = partes[1].upper()
+    eventos = listar_eventos() or []
+    lojas_map = _lojas_map_cache()
+    
+    cidades = _cidades_ativas_eventos(eventos, lojas_map, uf)
+    
+    if not cidades:
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            f"📍 *Sessões em {uf}*\n\nNão há sessões programadas para cidades deste estado no momento.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data=f"data|{TOKEN_POR_LOCALIDADE_MENU}")]])
+        )
+        return
+        
+    botoes = []
+    for cid in cidades[:MAX_EVENTOS_LISTA]:
+        botoes.append([InlineKeyboardButton(f"🌆 {cid}", callback_data=f"geo_cid|{uf}|{cid}")])
+        
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data=f"data|{TOKEN_POR_LOCALIDADE_MENU}")])
+    
+    await navegar_para(
+        update, context,
+        f"Ver Sessões > Localidade > {uf}",
+        f"📍 *Cidades em {uf} com sessões agendadas:*\nSelecione uma para ver os detalhes:",
+        InlineKeyboardMarkup(botoes)
+    )
+
+async def mostrar_eventos_por_cidade(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    partes = query.data.split("|", 2)
+    if len(partes) < 3:
+        return
+        
+    uf = partes[1].upper()
+    cidade = partes[2]
+    
+    eventos = listar_eventos() or []
+    lojas_map = _lojas_map_cache()
+    
+    titulo, filtrados = _filtrar_por_cidade(eventos, lojas_map, uf, cidade)
+    
+    if not filtrados:
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            f"*{titulo}*\n\nNão há sessões para esta cidade no momento.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data=f"geo_uf|{uf}")]])
+        )
+        return
+        
+    filtrados = filtrados[:MAX_EVENTOS_LISTA]
+    botoes = []
+    for ev in filtrados:
+        id_evento = normalizar_id_evento(ev)
+        botoes.append([InlineKeyboardButton(
+            _linha_botao_evento(ev),
+            callback_data=f"evento|{_encode_cb(id_evento)}"
+        )])
+        
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data=f"geo_uf|{uf}")])
+    
+    await navegar_para(
+        update, context,
+        f"Ver Sessões > Localidade > {uf} > {cidade}",
+        f"*{titulo}*\n\nSelecione uma sessão:",
+        InlineKeyboardMarkup(botoes)
+    )
+
+async def mostrar_eventos_por_potencia_filtro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    partes = query.data.split("|", 1)
+    if len(partes) < 2:
+        return
+        
+    potencia = partes[1]
+    eventos = listar_eventos() or []
+    
+    titulo, filtrados = _filtrar_por_potencia(eventos, potencia)
+    
+    if not filtrados:
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO,
+            f"*{titulo}*\n\nNão há sessões para esta potência no momento.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data=f"data|{TOKEN_POR_POTENCIA_MENU}")]])
+        )
+        return
+        
+    filtrados = filtrados[:MAX_EVENTOS_LISTA]
+    botoes = []
+    for ev in filtrados:
+        id_evento = normalizar_id_evento(ev)
+        botoes.append([InlineKeyboardButton(
+            _linha_botao_evento(ev),
+            callback_data=f"evento|{_encode_cb(id_evento)}"
+        )])
+        
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data=f"data|{TOKEN_POR_POTENCIA_MENU}")])
+    
+    await navegar_para(
+        update, context,
+        f"Ver Sessões > Potência > {potencia}",
+        f"*{titulo}*\n\nSelecione uma sessão:",
+        InlineKeyboardMarkup(botoes)
+    )
