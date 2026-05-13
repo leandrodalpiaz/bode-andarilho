@@ -33,6 +33,10 @@ python main.py
 - Selos de grau (carimbos): `assets/stamps/`
 - Selos de potência (GOB/CMSB/COMAB): `assets/potencias/`
 - Fontes versionadas usadas no card padrão: `assets/fonts/`
+- Marca d'água opcional: `assets/branding/bode_andarilho_watermark.png`
+
+Quando a Loja não possui template próprio, o bot usa o template padrão do sistema
+e mantém links, captions e botões inline do Telegram fora da imagem.
 
 ## Migrações Supabase
 
@@ -40,4 +44,3 @@ Os scripts SQL ficam em `docs/` e devem ser aplicados no ambiente quando necess�
 
 - `docs/supabase_event_cards.sql` (colunas de camada visual do evento/loja)
 - `docs/supabase_potencias_normalizadas.sql` (normalização de potência + complemento)
-

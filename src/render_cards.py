@@ -21,6 +21,7 @@ DEFAULT_TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "assets" / "tem
 DEFAULT_FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
 DEFAULT_STAMP_DIR = Path(__file__).resolve().parent.parent / "assets" / "stamps"
 DEFAULT_POTENCIA_DIR = Path(__file__).resolve().parent.parent / "assets" / "potencias"
+DEFAULT_BRANDING_DIR = Path(__file__).resolve().parent.parent / "assets" / "branding"
 DEFAULT_BADGE_COLORS = {
     "grau": "#7b3f00",
     "rito": "#254f7a",
@@ -41,6 +42,16 @@ BODY_FONT_CANDIDATES = (
     "georgia.ttf",
     "Times New Roman.ttf",
     "times.ttf",
+)
+ITALIC_FONT_CANDIDATES = (
+    "CormorantGaramond-Italic.ttf",
+    "CormorantGaramond-SemiBold.ttf",
+    "Georgia Italic.ttf",
+    "georgiai.ttf",
+    "Times New Roman Italic.ttf",
+    "timesi.ttf",
+    "DejaVuSerif-Italic.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf",
 )
 
 
@@ -483,28 +494,28 @@ def _draw_potencia_stamp(
         stamp = ImageOps.exif_transpose(Image.open(path))
         stamp = _remove_edge_background(stamp)
         width, height = image.size
-        target_w = int(width * 0.145)
+        target_w = int(width * 0.14)
         ratio = target_w / max(1, stamp.size[0])
         target_h = int(stamp.size[1] * ratio)
         stamp = stamp.resize((target_w, target_h), Image.Resampling.LANCZOS)
-        alpha = stamp.getchannel("A").point(lambda p: int(p * 0.78))
+        alpha = stamp.getchannel("A").point(lambda p: int(p * 0.58))
         stamp.putalpha(alpha)
 
-        x = int(width * 0.145)
-        y = int(height * 0.095)
+        x = int(width * 0.155)
+        y = int(height * 0.105)
         image.alpha_composite(stamp, (x, y))
         if complemento:
             label = complemento.upper()
             tw, th = _measure(draw, label, font)
-            pad_x, pad_y = 10, 5
+            pad_x, pad_y = 10, 4
             lx = x + max(0, (stamp.size[0] - tw - pad_x * 2) // 2)
             ly = y + stamp.size[1] + 3
             draw.rounded_rectangle(
                 (lx, ly, lx + tw + pad_x * 2, ly + th + pad_y * 2),
-                radius=8,
-                fill=(43, 26, 12, 190),
+                radius=7,
+                fill=(77, 45, 18, 135),
             )
-            draw.text((lx + pad_x, ly + pad_y), label, font=font, fill=(255, 248, 230, 255))
+            draw.text((lx + pad_x, ly + pad_y), label, font=font, fill=(255, 248, 230, 230))
         return True
     except Exception as exc:
         logger.warning("Falha ao aplicar selo de potencia '%s': %s", potencia, exc)
@@ -605,6 +616,269 @@ def _render_default_template_card(
             note_lines[-1] = note_lines[-1].rstrip(" .") + "..."
             warnings.append("Ordem do dia longa; card renderizado com corte.")
         _draw_centered_lines(draw, note_lines, center_x, y, note_font, ink, 6)
+
+    out_dir = output_dir or tempfile.gettempdir()
+    os.makedirs(out_dir, exist_ok=True)
+    event_id = _norm(_get_any(evento, "ID Evento", "id_evento", "id") or "preview") or "preview"
+    out_path = os.path.join(out_dir, f"bode_event_card_{event_id}.png")
+    image.convert("RGB").save(out_path, "PNG", optimize=True)
+    return RenderResult(path=out_path, warnings=warnings)
+
+
+def _event_visual_parts(evento: Dict[str, Any]) -> Dict[str, str]:
+    numero = _norm(_get_any(evento, "Numero da loja", "Número da loja", "NÃºmero da loja", "NÃƒÂºmero da loja", "numero_loja", "numero"))
+    numero_fmt = f" {numero}" if numero and numero != "0" else ""
+    loja = f"{_norm(_get_any(evento, 'Nome da loja', 'nome_loja'))}{numero_fmt}".strip()
+    cidade = _norm(_get_any(evento, "Cidade", "cidade", "Oriente", "oriente"))
+    uf = _norm(_get_any(evento, "UF", "uf", "Estado", "estado"))
+    potencia = _norm(_get_any(evento, "Potencia", "Potência", "PotÃªncia", "PotÃƒÂªncia", "potencia"))
+    potencia_complemento = _norm(_get_any(evento, "Potencia complemento", "Potência complemento", "PotÃªncia complemento", "PotÃƒÂªncia complemento", "potencia_complemento"))
+    potencia_display = potencia_complemento or potencia
+    local_potencia = " - ".join([v for v in (cidade, uf, potencia_display) if v])
+    data = _norm(_get_any(evento, "Data do evento", "Data", "data_evento", "data"))
+    dia = _norm(_get_any(evento, "Dia da semana", "dia_semana", "dia"))
+    hora = _norm(_get_any(evento, "Hora", "hora_evento", "hora"))
+    data_hora = data
+    if dia:
+        data_hora = f"{data} ({dia})" if data else f"({dia})"
+    if hora:
+        data_hora = f"{data_hora} • {hora}" if data_hora else hora
+    return {
+        "data": data,
+        "dia": dia,
+        "hora": hora,
+        "data_hora": data_hora.strip(" •"),
+        "grau": _norm(_get_any(evento, "Grau", "grau")),
+        "loja": loja or "Loja",
+        "numero": numero,
+        "local_potencia": local_potencia,
+        "potencia": potencia,
+        "potencia_complemento": potencia_complemento,
+        "tipo": _norm(_get_any(evento, "Sessao", "Sessão", "Tipo de sessao", "Tipo de sessão", "Tipo de sessÃ£o", "Tipo de sessÃƒÂ£o", "tipo_sessao", "tipo_evento")),
+        "rito": _norm(_get_any(evento, "Rito", "rito")),
+        "traje": _norm(_get_any(evento, "Traje obrigatorio", "Traje obrigatório", "Traje obrigatÃ³rio", "Traje obrigatÃƒÂ³rio", "traje_obrigatorio", "Traje")),
+        "agape": _norm(_get_any(evento, "Agape", "Ágape", "Ãgape", "ÃƒÂgape", "agape")),
+        "observacoes": _norm(_get_any(evento, "Ordem do dia", "Ordem do dia / observacoes", "Ordem do dia / observações", "Observacoes", "Observações", "ObservaÃ§Ãµes", "ObservaÃƒÂ§ÃƒÂµes", "observacoes", "ordem_do_dia")),
+    }
+
+
+def _draw_centered_wrapped(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    center_x: int,
+    y: int,
+    font: ImageFont.ImageFont,
+    fill: Tuple[int, int, int, int],
+    max_width: int,
+    line_gap: int = 6,
+    max_lines: Optional[int] = None,
+) -> int:
+    lines = _wrap_text(draw, text, font, max_width)
+    if max_lines is not None and len(lines) > max_lines:
+        lines = lines[:max_lines]
+        lines[-1] = lines[-1].rstrip(" .") + "..."
+    return _draw_centered_lines(draw, lines, center_x, y, font, fill, line_gap)
+
+
+def _draw_ornament_divider(
+    draw: ImageDraw.ImageDraw,
+    center_x: int,
+    y: int,
+    width: int,
+    fill: Tuple[int, int, int, int],
+    mark: str = "",
+) -> None:
+    line_w = max(50, width // 2 - 34)
+    left_end = center_x - 24
+    right_start = center_x + 24
+    draw.line((center_x - line_w, y, left_end, y), fill=fill, width=1)
+    draw.line((right_start, y, center_x + line_w, y), fill=fill, width=1)
+    r = 4
+    draw.ellipse((center_x - r, y - r, center_x + r, y + r), outline=fill, width=1)
+    if mark:
+        small_font = _load_font(max(16, width // 42), "", TITLE_FONT_CANDIDATES)
+        _draw_text_shadow(draw, (center_x, y - 12), mark, small_font, fill, anchor="ma")
+
+
+def _draw_section_title(
+    draw: ImageDraw.ImageDraw,
+    title: str,
+    center_x: int,
+    y: int,
+    font: ImageFont.ImageFont,
+    fill: Tuple[int, int, int, int],
+    width: int,
+) -> int:
+    _draw_ornament_divider(draw, center_x, y + 13, int(width * 0.55), fill)
+    _draw_text_shadow(draw, (center_x, y), title, font, fill, anchor="ma")
+    return y + max(getattr(font, "size", 28), _measure(draw, title, font)[1]) + 24
+
+
+def _draw_centered_highlight_tail(
+    draw: ImageDraw.ImageDraw,
+    center_x: int,
+    y: int,
+    prefix: str,
+    tail: str,
+    font: ImageFont.ImageFont,
+    tail_font: ImageFont.ImageFont,
+    fill: Tuple[int, int, int, int],
+    tail_fill: Tuple[int, int, int, int],
+) -> int:
+    prefix_w, _ = _measure(draw, prefix, font)
+    tail_w, _ = _measure(draw, tail, tail_font)
+    x = center_x - (prefix_w + tail_w) // 2
+    _draw_text_shadow(draw, (x, y), prefix, font, fill)
+    _draw_text_shadow(draw, (x + prefix_w, y), tail, tail_font, tail_fill)
+    return y + max(getattr(font, "size", 30), getattr(tail_font, "size", 30)) + 14
+
+
+def _draw_loja_name(
+    draw: ImageDraw.ImageDraw,
+    loja: str,
+    numero: str,
+    center_x: int,
+    y: int,
+    max_width: int,
+    font: ImageFont.ImageFont,
+    fill: Tuple[int, int, int, int],
+    highlight: Tuple[int, int, int, int],
+) -> int:
+    if numero and loja.endswith(f" {numero}"):
+        prefix = loja[: -len(numero)]
+        return _draw_centered_highlight_tail(draw, center_x, y, prefix, numero, font, font, fill, highlight)
+    return _draw_centered_wrapped(draw, loja, center_x, y, font, fill, max_width, line_gap=4, max_lines=2)
+
+
+def _apply_watermark(image: Image.Image) -> None:
+    path = DEFAULT_BRANDING_DIR / "bode_andarilho_watermark.png"
+    if not path.exists():
+        return
+    try:
+        watermark = ImageOps.exif_transpose(Image.open(path)).convert("RGBA")
+        watermark = _transparent_light_background(_remove_edge_background(watermark))
+        width, height = image.size
+        target_w = int(width * 0.48)
+        ratio = target_w / max(1, watermark.size[0])
+        target_h = int(watermark.size[1] * ratio)
+        watermark = watermark.resize((target_w, target_h), Image.Resampling.LANCZOS)
+        alpha = watermark.getchannel("A").point(lambda p: int(p * 0.09))
+        watermark.putalpha(alpha)
+        sepia = Image.new("RGBA", watermark.size, (91, 57, 24, 0))
+        sepia.putalpha(watermark.getchannel("A"))
+        image.alpha_composite(sepia, (int(width * 0.47), int(height * 0.315)))
+    except Exception as exc:
+        logger.warning("Falha ao aplicar marca d'agua do Bode Andarilho: %s", exc)
+
+
+def _render_default_template_card(
+    image: Image.Image,
+    evento: Dict[str, Any],
+    loja: Dict[str, Any],
+    output_dir: Optional[str],
+) -> RenderResult:
+    draw = ImageDraw.Draw(image)
+    width, height = image.size
+    warnings: List[str] = []
+    preferred_font = _norm(_get_any(loja, "Fonte padrão", "Fonte padrÃ£o", "Fonte padrÃƒÂ£o", "fonte_padrao"))
+    ink = _hex_to_rgba(_norm(_get_any(loja, "Cor texto padrão", "Cor texto padrÃ£o", "Cor texto padrÃƒÂ£o", "cor_texto_padrao")) or DEFAULT_TEXT_COLOR, 255)
+    soft_ink = _hex_to_rgba("#3a2410", 235)
+    accent = _hex_to_rgba("#0c5265", 255)
+    rito_accent = _hex_to_rgba("#0c5265", 245)
+    divider = _hex_to_rgba("#8a5a22", 150)
+    parts = _event_visual_parts(evento)
+
+    _apply_watermark(image)
+    _draw_potencia_stamp(
+        image,
+        draw,
+        parts["potencia"],
+        parts["potencia_complemento"],
+        _load_font(max(14, width // 68), preferred_font, TITLE_FONT_CANDIDATES),
+    )
+    _draw_degree_stamp(image, parts["grau"])
+    draw = ImageDraw.Draw(image)
+
+    margin_x = int(width * 0.15)
+    content_w = width - margin_x * 2
+    center_x = width // 2
+    y = int(height * 0.235)
+
+    date_font = _fit_font(draw, parts["data_hora"], int(content_w * 0.98), max(56, width // 15), max(36, width // 26), preferred_font, BODY_FONT_CANDIDATES)
+    hour_font = _load_font(max(getattr(date_font, "size", 46) + 4, width // 14), preferred_font, TITLE_FONT_CANDIDATES)
+    degree_font = _load_font(max(24, width // 34), preferred_font, ITALIC_FONT_CANDIDATES)
+    section_font = _load_font(max(30, width // 29), preferred_font, TITLE_FONT_CANDIDATES)
+    loja_font = _fit_font(draw, parts["loja"], int(content_w * 0.96), max(62, width // 14), max(34, width // 25), preferred_font, ITALIC_FONT_CANDIDATES)
+    local_font = _load_font(max(28, width // 32), preferred_font, BODY_FONT_CANDIDATES)
+    body_font = _load_font(max(31, width // 30), preferred_font, BODY_FONT_CANDIDATES)
+    note_font = _load_font(max(27, width // 34), preferred_font, ITALIC_FONT_CANDIDATES)
+    footer_small = _load_font(max(17, width // 60), preferred_font, TITLE_FONT_CANDIDATES)
+
+    _draw_ornament_divider(draw, center_x, y, int(content_w * 0.86), divider)
+    y += int(height * 0.035)
+    if parts["hora"] and parts["data_hora"].endswith(parts["hora"]):
+        prefix = parts["data_hora"][: -len(parts["hora"])]
+        y = _draw_centered_highlight_tail(draw, center_x, y, prefix, parts["hora"], date_font, hour_font, ink, ink)
+    else:
+        y = _draw_centered_wrapped(draw, parts["data_hora"], center_x, y, date_font, ink, content_w, line_gap=4, max_lines=2)
+    _draw_ornament_divider(draw, center_x, y + 3, int(content_w * 0.72), divider)
+    y += int(height * 0.038)
+    if parts["grau"]:
+        y = _draw_centered_wrapped(draw, f"Grau {parts['grau']}", center_x, y, degree_font, soft_ink, content_w, line_gap=2, max_lines=1)
+
+    y += int(height * 0.035)
+    y = _draw_section_title(draw, "LOJA", center_x, y, section_font, ink, content_w)
+    y = _draw_loja_name(draw, parts["loja"], parts["numero"], center_x, y, int(content_w * 0.96), loja_font, ink, accent)
+    if parts["local_potencia"]:
+        y = _draw_centered_wrapped(draw, parts["local_potencia"], center_x, y + 4, local_font, soft_ink, content_w, line_gap=2, max_lines=2)
+
+    y += int(height * 0.04)
+    y = _draw_section_title(draw, "SESSÃO", center_x, y, section_font, ink, content_w)
+    details: List[Tuple[str, Tuple[int, int, int, int]]] = []
+    if parts["tipo"]:
+        tipo = parts["tipo"]
+        if not _slug_text(tipo).startswith("sessao"):
+            tipo = f"Sessão {tipo}"
+        details.append((tipo, ink))
+    if parts["rito"]:
+        details.append((f"Rito {parts['rito']}", rito_accent))
+    if parts["traje"]:
+        details.append((parts["traje"], ink))
+    if parts["agape"]:
+        agape = parts["agape"]
+        if _slug_text(agape) in {"nao", "nao_ha", "sem", "sem_agape"}:
+            agape = "Sem Ágape"
+        elif not _slug_text(agape).startswith("agape"):
+            agape = f"Ágape {agape}"
+        details.append((agape, ink))
+    for text, color in details:
+        y = _draw_centered_wrapped(draw, text, center_x, y, body_font, color, int(content_w * 0.86), line_gap=3, max_lines=2)
+
+    y += int(height * 0.035)
+    _draw_ornament_divider(draw, center_x, y, int(content_w * 0.72), divider)
+    y += int(height * 0.025)
+    y = _draw_section_title(draw, "ORDEM DO DIA / OBSERVAÇÕES", center_x, y, section_font, ink, content_w)
+    if parts["observacoes"]:
+        max_note_bottom = int(height * 0.825)
+        line_h = max(_measure(draw, "Ag", note_font)[1], getattr(note_font, "size", 26)) + 6
+        max_lines = max(1, (max_note_bottom - y) // line_h)
+        note_lines = _wrap_text(draw, parts["observacoes"], note_font, int(content_w * 0.92))
+        if len(note_lines) > max_lines:
+            note_lines = note_lines[:max_lines]
+            note_lines[-1] = note_lines[-1].rstrip(" .") + "..."
+            warnings.append("Ordem do dia longa; card renderizado com corte.")
+        _draw_centered_lines(draw, note_lines, center_x, y, note_font, ink, 6)
+
+    footer_y = int(height * 0.875)
+    _draw_ornament_divider(draw, center_x, footer_y - 4, int(content_w * 0.46), divider)
+    _draw_text_shadow(
+        draw,
+        (center_x, footer_y + int(height * 0.03)),
+        "VISITE, PARTICIPE E FORTALEÇA A JORNADA.",
+        footer_small,
+        _hex_to_rgba("#5a3616", 205),
+        anchor="ma",
+    )
 
     out_dir = output_dir or tempfile.gettempdir()
     os.makedirs(out_dir, exist_ok=True)

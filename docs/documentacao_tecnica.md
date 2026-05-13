@@ -1,19 +1,23 @@
-# Documentação Técnica - Bode Andarilho Bot
+# Documentacao Tecnica - Bode Andarilho Bot
 
-**Versão:** 2.1 (Supabase + Mini App + Cards Visuais)
-**Última atualização:** 12/05/2026
+**Versao:** 2.2 (Supabase + Mini App + Cards Visuais)
+**Ultima atualizacao:** 13/05/2026
 **Runtime:** Python 3.12
 
-## 1. Visão Geral
+## 1. Visao Geral
 
-O **Bode Andarilho** é um bot do Telegram para gerenciar eventos/sessões, presenças e membros.
-A lógica de confirmação/cancelamento e os callbacks existentes foram preservados; a evolução principal recente foi na camada de apresentação e padronização de cadastros via Mini App.
+O **Bode Andarilho** e um bot do Telegram para gerenciar eventos/sessoes,
+presencas e membros.
+
+A logica de confirmacao, cancelamento, listagem de confirmados, links de
+endereco, captions, callbacks e botoes inline permanece fora da renderizacao
+visual. A camada de cards apenas gera a imagem usada na publicacao.
 
 Pontos-chave:
 
-- Fluxos principais preferem Mini App (formulários) para reduzir erros de digitação e padronizar dados.
-- Publicação de evento no grupo pode ser uma foto (card) com botões inline abaixo (`send_photo(..., reply_markup=...)`).
-- Fallback obrigatório: se falhar renderização/envio de imagem, publica em texto (com a mesma lógica atual).
+- Fluxos principais preferem Mini App (formularios) para reduzir erro de digitacao.
+- Publicacao de evento no grupo pode ser foto/card com botoes inline abaixo.
+- Fallback obrigatorio: se renderizacao/envio de imagem falhar, publica em texto.
 
 ## 2. Arquitetura e Tecnologias
 
@@ -21,13 +25,14 @@ Pontos-chave:
 - Starlette + uvicorn (webhook e Mini App HTTP)
 - Supabase (PostgreSQL + Storage)
 - APScheduler (jobs recorrentes)
-- Pillow (renderização de cards)
+- Pillow (renderizacao de cards)
 
-## 3. Estrutura de Diretórios (alto nível)
+## 3. Estrutura de Diretorios
 
 ```text
 assets/
-  fonts/                 # fontes .ttf usadas no card padrão
+  branding/              # marca d'agua opcional do Bode Andarilho
+  fonts/                 # fontes .ttf usadas no card padrao
   potencias/             # selos GOB/CMSB/COMAB
   stamps/                # selos de grau (aprendiz/companheiro/mestre)
   templates/             # templates, incluindo o default do sistema
@@ -35,71 +40,156 @@ docs/
   supabase_event_cards.sql
   supabase_potencias_normalizadas.sql
 src/
-  miniapp.py             # endpoints do Mini App e validação initData
+  miniapp.py
   render_cards.py        # renderizador de cards com Pillow
-  evento_midia.py        # decisão: card especial / template / texto fallback
-  sheets_supabase.py     # camada de dados (Supabase REST) + mapeamentos
-  potencias.py           # normalização/validação de potência + complemento
-  ajuda/                 # FAQ, tutoriais, glossário e menus de ajuda
-main.py                  # webhook Telegram + inicialização do app
+  evento_midia.py        # decisao: card especial / template / texto fallback
+  sheets_supabase.py
+  potencias.py
+  ajuda/
+main.py
 ```
 
-## 4. Camada Visual de Eventos (MVP)
+## 4. Camada Visual de Eventos
 
 Regra operacional:
 
 1. Se o evento tiver `card_especial_url`, publica o card especial.
-2. Senão, se houver template (da loja ou default), renderiza um card e publica como foto.
-3. Senão, publica no formato textual atual.
+2. Senao, se houver template da Loja, renderiza com o template da Loja.
+3. Senao, usa o template padrao do sistema.
+4. Se qualquer etapa visual falhar, usa texto fallback.
 
-O card padrão do sistema usa:
+Essa camada nao altera:
 
-- `assets/templates/default_event_card.png`
-- fontes versionadas em `assets/fonts`
-- selo de grau no canto superior direito (carimbo) a partir de `assets/stamps`
-- selo de potência no canto superior esquerdo a partir de `assets/potencias`, com `potencia_complemento` exibido pequeno
+- callbacks `confirmar|`, `cancelar_card|`, `ver_confirmados|`;
+- botoes inline do Telegram;
+- regras de confirmacao/cancelamento;
+- link de endereco/Google Maps;
+- scheduler/lembretes;
+- permissoes;
+- banco de dados.
 
-Importante:
+## 5. Template Padrao do Sistema
 
-- Links (ex.: Google Maps) e os botões de confirmação/cancelamento/ver confirmados ficam fora da imagem (caption e teclado inline do Telegram).
-- A camada visual é aditiva. O bot não pode deixar de comunicar evento por falha de imagem.
+Arquivo:
 
-## 5. Potências (normalização)
+```text
+assets/templates/default_event_card.png
+```
 
-Padrão oficial:
+Uso:
+
+- sugerido automaticamente quando a Loja nao tiver template visual proprio;
+- funciona como fallback institucional;
+- mantem a comunicacao visual mesmo em homologacao ou lojas recem-cadastradas.
+
+Montagem visual atual em `src/render_cards.py`:
+
+1. Topo esquerdo: selo da potencia em `assets/potencias/` e complemento pequeno.
+2. Topo direito: carimbo do grau em `assets/stamps/`.
+3. Data/hora centralizadas, com hora em peso visual maior.
+4. Linha discreta de grau no corpo.
+5. Secao `LOJA`: nome, numero destacado, cidade, UF e potencia/complemento.
+6. Secao `SESSAO`: tipo de sessao, rito, traje e agape.
+7. Secao `ORDEM DO DIA / OBSERVACOES`: pauta com quebra automatica.
+8. Rodape: frase institucional discreta.
+
+Regras visuais consolidadas:
+
+- O texto "Nova Sessao" nao e renderizado.
+- O rito nao aparece no topo.
+- O rito aparece apenas dentro da secao `SESSAO`.
+- Links e botoes ficam fora da imagem, no Telegram.
+
+## 6. Marca d'agua opcional
+
+Arquivo reconhecido:
+
+```text
+assets/branding/bode_andarilho_watermark.png
+```
+
+Comportamento:
+
+- aplicada somente no template padrao;
+- opacidade baixa;
+- tratamento em sepia;
+- tentativa de remocao de fundo claro;
+- posicionamento discreto no centro-direita;
+- sem impacto funcional.
+
+Formato recomendado:
+
+- PNG;
+- fundo transparente;
+- 800x800 a 1200x1200 px;
+- estilo gravura/traco;
+- sem textos que concorram com os dados da sessao.
+
+## 7. Como editar no futuro
+
+Para trocar apenas o fundo, substitua:
+
+```text
+assets/templates/default_event_card.png
+```
+
+Para trocar selos sem alterar codigo:
+
+```text
+assets/stamps/aprendiz.png
+assets/stamps/companheiro.png
+assets/stamps/mestre.png
+assets/potencias/gob.png
+assets/potencias/cmsb.png
+assets/potencias/comab.png
+assets/branding/bode_andarilho_watermark.png
+```
+
+Para ajustar hierarquia, espacamentos, fontes, opacidade ou posicoes, editar
+somente o bloco do template padrao em `src/render_cards.py`.
+
+## 8. Potencias
+
+Padrao oficial:
 
 - `potencia`: apenas `GOB`, `CMSB` ou `COMAB`
-- `potencia_complemento`: texto livre obrigatório para **todas** (ex.: `GOB-RS`, `GLMERGS`, `GORGS`, `GOSC`, `GOP`)
+- `potencia_complemento`: texto livre obrigatorio para todas
 
-O Mini App e o backend validam a regra; eventos podem herdar potência/complemento da Loja quando aplicável.
+Exemplos de complemento:
 
-## 6. Supabase (DB + Storage)
+- `GOB-RS`
+- `GLMERGS`
+- `GORGS`
+- `GOSC`
+- `GOP`
 
-### 6.1 Migrações SQL
+## 9. Supabase
 
-Arquivos em `docs/`:
+Scripts SQL em `docs/`:
 
-- `supabase_event_cards.sql`: colunas de camada visual (lojas/eventos)
-- `supabase_potencias_normalizadas.sql`: colunas `*_potencia_complemento` + normalização de valores legados
+- `supabase_event_cards.sql`
+- `supabase_potencias_normalizadas.sql`
 
-### 6.2 Storage
+Bucket recomendado:
 
-Bucket recomendado: `event-cards` (estrutura lógica):
+```text
+event-cards
+```
+
+Estrutura logica:
 
 - `lojas/{loja_id}/template.*`
 - `eventos/{id_evento}/render.png`
 - `eventos/{id_evento}/especial.*`
 
-## 7. Execução / Verificação rápida
+## 10. Verificacao rapida
 
 ```bash
 python -m compileall main.py src
-python main.py
 ```
 
-## 8. Referências de Fluxo
+## 11. Referencias
 
 - Fluxos atualizados: `docs/fluxos_atualizados_2026_04.md`
-- Ajuda/FAQ (no bot): `src/ajuda/faq.py`
-- Manutenção da base de IA/ajuda: `docs/manutencao_ajuda_e_ia.md`
-
+- Ajuda/FAQ: `src/ajuda/faq.py`
+- Manutencao da base de IA/ajuda: `docs/manutencao_ajuda_e_ia.md`
