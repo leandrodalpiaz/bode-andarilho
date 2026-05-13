@@ -96,6 +96,36 @@ def _teclado_inline_potencia_admin() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(linhas)
 
 
+def _teclado_inline_complemento_potencia_admin(principal: str) -> InlineKeyboardMarkup:
+    principal = (principal or "").strip().upper()
+    if principal == "CMSB":
+        opcoes = [
+            ("GLMERGS", "Grande Loja Maçônica do Estado do Rio Grande do Sul"),
+            ("GLSC", "Grande Loja de Santa Catarina"),
+            ("GLP", "Grande Loja Maçônica do Estado do Paraná"),
+        ]
+    elif principal == "COMAB":
+        opcoes = [
+            ("GORGS", "Grande Oriente do Rio Grande do Sul"),
+            ("GOP", "Grande Oriente do Paraná"),
+            ("GOSC", "Grande Oriente de Santa Catarina"),
+        ]
+    else:
+        opcoes = [
+            ("GOB-RS", "Rio Grande do Sul"),
+            ("GOB-SC", "Santa Catarina"),
+            ("GOB-PR", "Paraná"),
+        ]
+    linhas = [
+        [InlineKeyboardButton(f"{sigla} - {descricao}", callback_data=f"editar_valor_membro|potencia_complemento|{sigla}")]
+        for sigla, descricao in opcoes
+    ]
+    linhas.append([InlineKeyboardButton("Outra (texto livre)", callback_data="editar_valor_membro|potencia_complemento|OUTRA")])
+    linhas.append([InlineKeyboardButton("🔙 Voltar", callback_data="editar_campo_membro|potencia")])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_edicao")])
+    return InlineKeyboardMarkup(linhas)
+
+
 async def aplicar_valor_inline_membro(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Aplica valores de campos com opções inline (ex.: Potência)."""
     query = update.callback_query
@@ -121,14 +151,59 @@ async def aplicar_valor_inline_membro(update: Update, context: ContextTypes.DEFA
                 update,
                 context,
                 "Admin > Editar > Potência (Complemento)",
-                f"Informe o complemento da potência. {sugestao_complemento(principal)}:",
-                None,
+                "Selecione o complemento abaixo ou escolha 'Outra (texto livre)'.",
+                _teclado_inline_complemento_potencia_admin(principal),
             )
-            return NOVO_VALOR
+            return SELECIONAR_CAMPO
 
         ok = atualizar_membro(
             telegram_id,
             {"Potência": principal, "Potência complemento": ""},
+            preservar_nivel=True,
+        )
+        if ok:
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO, "✅ Potência atualizada."
+            )
+        else:
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO, "❌ Falha ao atualizar a Potência."
+            )
+        context.user_data.pop("potencia_principal_pendente", None)
+        context.user_data.pop("editando_membro_id", None)
+        context.user_data.pop("editando_membro_dados", None)
+        context.user_data.pop("editando_campo", None)
+        return ConversationHandler.END
+
+    if campo_id == "potencia_complemento":
+        principal_pendente = (context.user_data.get("potencia_principal_pendente") or "").strip()
+        if not principal_pendente:
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO, "Selecione primeiro a Potência principal."
+            )
+            return ConversationHandler.END
+
+        if valor == "OUTRA":
+            context.user_data["editando_campo"] = "potencia_complemento"
+            await navegar_para(
+                update,
+                context,
+                "Admin > Editar > Potência (Complemento)",
+                f"Informe o complemento da potência. {sugestao_complemento(principal_pendente)}:",
+                None,
+            )
+            return NOVO_VALOR
+
+        principal, comp = normalizar_potencia(principal_pendente, valor)
+        if not validar_potencia(principal, comp):
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO, "Complemento inválido."
+            )
+            return SELECIONAR_CAMPO
+
+        ok = atualizar_membro(
+            telegram_id,
+            {"Potência": principal, "Potência complemento": comp},
             preservar_nivel=True,
         )
         if ok:
@@ -807,6 +882,8 @@ async def selecionar_membro_para_editar(update: Update, context: ContextTypes.DE
 
     botoes = []
     for campo_id, campo_info in CAMPOS_EDITAVEIS.items():
+        if campo_id == "potencia_complemento":
+            continue  # Editado apenas em conjunto com a Potência principal
         if int(nivel_usuario) < int(campo_info["nivel_minimo"]):
             continue
 

@@ -80,9 +80,14 @@ def _valor_campo(membro: dict, campo_id: str, campo_info: dict) -> str:
 
 def _teclado_inicio_edicao(membro: dict) -> InlineKeyboardMarkup:
     campos_principais = [
+        "nome",
+        "data_nasc",
         "grau",
         "mestre_instalado",
         "veneravel_mestre",
+        "loja",
+        "numero_loja",
+        "oriente",
         "potencia",
     ]
     linhas = []
@@ -117,6 +122,36 @@ def _teclado_opcoes_inline(campo_id: str) -> InlineKeyboardMarkup:
         opcoes = []
     linhas = [[InlineKeyboardButton(valor, callback_data=f"editar_valor_perfil|{campo_id}|{valor}")] for valor in opcoes]
     linhas.append([InlineKeyboardButton("🔙 Voltar", callback_data="editar_perfil")])
+    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")])
+    return InlineKeyboardMarkup(linhas)
+
+
+def _teclado_complemento_potencia(principal: str) -> InlineKeyboardMarkup:
+    principal = (principal or "").strip().upper()
+    if principal == "CMSB":
+        opcoes = [
+            ("GLMERGS", "Grande Loja Maçônica do Estado do Rio Grande do Sul"),
+            ("GLSC", "Grande Loja de Santa Catarina"),
+            ("GLP", "Grande Loja Maçônica do Estado do Paraná"),
+        ]
+    elif principal == "COMAB":
+        opcoes = [
+            ("GORGS", "Grande Oriente do Rio Grande do Sul"),
+            ("GOP", "Grande Oriente do Paraná"),
+            ("GOSC", "Grande Oriente de Santa Catarina"),
+        ]
+    else:
+        opcoes = [
+            ("GOB-RS", "Rio Grande do Sul"),
+            ("GOB-SC", "Santa Catarina"),
+            ("GOB-PR", "Paraná"),
+        ]
+    linhas = [
+        [InlineKeyboardButton(f"{sigla} - {descricao}", callback_data=f"editar_valor_perfil|potencia_complemento|{sigla}")]
+        for sigla, descricao in opcoes
+    ]
+    linhas.append([InlineKeyboardButton("Outra (texto livre)", callback_data="editar_valor_perfil|potencia_complemento|OUTRA")])
+    linhas.append([InlineKeyboardButton("🔙 Voltar", callback_data="editar_campo_perfil|potencia")])
     linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")])
     return InlineKeyboardMarkup(linhas)
 
@@ -236,12 +271,58 @@ async def aplicar_valor_inline_perfil(update: Update, context: ContextTypes.DEFA
         if potencia_requer_complemento(principal):
             context.user_data["potencia_principal_pendente"] = principal
             context.user_data["editando_campo_perfil"] = "potencia_complemento"
+            await navegar_para(
+                update,
+                context,
+                "Retificar Potência",
+                (
+                    f"Potência principal selecionada: *{principal}*\n\n"
+                    "Selecione o complemento abaixo ou escolha *Outra* para digitar manualmente."
+                ),
+                _teclado_complemento_potencia(principal),
+                limpar_conteudo=True,
+            )
+            return SELECIONAR_CAMPO
+
+    if campo_id == "potencia_complemento":
+        principal_pendente = (context.user_data.get("potencia_principal_pendente") or "").strip()
+        if not principal_pendente:
+            await query.answer("Selecione primeiro a Potência principal.", show_alert=True)
+            return ConversationHandler.END
+        if novo_valor == "OUTRA":
             return await _mostrar_prompt_campo_texto(
                 update,
                 context,
                 "potencia_complemento",
-                f"Informe o complemento da potência. {sugestao_complemento(principal)}",
+                f"Informe o complemento da potência. {sugestao_complemento(principal_pendente)}",
             )
+        principal, comp = normalizar_potencia(principal_pendente, novo_valor)
+        if not validar_potencia(principal, comp):
+            await query.answer("Complemento inválido.", show_alert=True)
+            return SELECIONAR_CAMPO
+        sucesso = atualizar_membro(
+            user_id,
+            {
+                CAMPOS_EDITAVEIS_PERFIL["potencia"]["chave"]: principal,
+                CAMPOS_EDITAVEIS_PERFIL["potencia_complemento"]["chave"]: comp,
+            },
+            preservar_nivel=True,
+        )
+        if not sucesso:
+            await query.answer("Não consegui atualizar este dado agora.", show_alert=True)
+            return ConversationHandler.END
+        await _enviar_ou_editar_mensagem(
+            context,
+            user_id,
+            TIPO_RESULTADO,
+            "✅ Potência atualizada com sucesso.\n\nUse o menu abaixo para seguir.",
+            _teclado_pos_edicao(),
+            limpar_conteudo=True,
+        )
+        context.user_data.pop("potencia_principal_pendente", None)
+        context.user_data.pop("editando_campo_perfil", None)
+        context.user_data.pop("perfil_dados", None)
+        return ConversationHandler.END
 
     campo_info = CAMPOS_EDITAVEIS_PERFIL.get(campo_id)
     if not campo_info:

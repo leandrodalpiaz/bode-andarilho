@@ -658,6 +658,7 @@ def atualizar_membro(telegram_id: int, dados_atualizados: dict, preservar_nivel:
             "numero_loja":    "Número da loja",
             "oriente":        "Oriente",
             "potencia":       "Potência",
+            "potencia_complemento": "Potência complemento",
             "data_nasc":      "Data de nascimento",
             "vm":             "Venerável Mestre",
             "veneravel_mestre": "Venerável Mestre",
