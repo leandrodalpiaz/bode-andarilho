@@ -225,13 +225,17 @@ def _teclado_nav(estado_voltar: int) -> InlineKeyboardMarkup:
     )
 
 
-def _teclado_confirmar() -> InlineKeyboardMarkup:
+def _teclado_confirmar(context: Optional[ContextTypes.DEFAULT_TYPE] = None) -> InlineKeyboardMarkup:
     """Cria teclado para tela de confirmação."""
+    estado_voltar = POTENCIA
+    if context and context.user_data.get("cadastro_voucher"):
+        estado_voltar = VM
+        
     return InlineKeyboardMarkup(
         [
             [InlineKeyboardButton("✅ Confirmar registro", callback_data="confirmar_cadastro")],
             [
-                InlineKeyboardButton("⬅️ Voltar", callback_data=f"voltar|{POTENCIA}"),
+                InlineKeyboardButton("⬅️ Voltar", callback_data=f"voltar|{estado_voltar}"),
                 InlineKeyboardButton("❌ Cancelar", callback_data="cancelar"),
             ],
         ]
@@ -319,13 +323,13 @@ def _caminho_etapa(estado: int) -> str:
     return "Confirmar Registro" if estado == CONFIRMAR else "Registro"
 
 
-def _teclado_etapa(estado: int) -> InlineKeyboardMarkup:
+def _teclado_etapa(estado: int, context: Optional[ContextTypes.DEFAULT_TYPE] = None) -> InlineKeyboardMarkup:
     if estado == GRAU:
         return _teclado_grau()
     if estado == VM:
         return _teclado_vm()
     if estado == CONFIRMAR:
-        return _teclado_confirmar()
+        return _teclado_confirmar(context)
     return _teclado_nav(max(NOME, estado - 1))
 
 
@@ -356,7 +360,7 @@ async def _reexibir_etapa(
         context,
         _caminho_etapa(estado),
         conteudo,
-        _teclado_etapa(estado),
+        _teclado_etapa(estado, context),
         limpar_conteudo=True,
     )
     return estado
@@ -689,7 +693,8 @@ async def receber_vm_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return VM
 
     context.user_data["cadastro_vm"] = vm
-    return await _navegar_etapa(update, context, LOJA)
+    proximo_passo = _estado_pendente_cadastro(context)
+    return await _navegar_etapa(update, context, proximo_passo)
 
 async def set_grau_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Define o grau selecionado via botão."""
@@ -722,7 +727,8 @@ async def set_vm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await _reexibir_etapa(update, context, VM, CADASTRO_ERRO_VM_INVALIDO)
 
     context.user_data["cadastro_vm"] = vm
-    return await _navegar_etapa(update, context, LOJA)
+    proximo_passo = _estado_pendente_cadastro(context)
+    return await _navegar_etapa(update, context, proximo_passo)
 
 
 # ============================================
@@ -732,12 +738,12 @@ async def set_vm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def _mostrar_confirmacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Exibe tela de confirmação com resumo dos dados."""
     texto = CADASTRO_REVISAO_FINAL_TMPL.format(resumo=_resumo_cadastro(context))
-    await navegar_para(update, context, "Confirmar Cadastro", texto, _teclado_confirmar())
+    await navegar_para(update, context, "Confirmar Cadastro", texto, _teclado_confirmar(context))
 
 
 def _dados_para_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Any]:
     """Monta os dados finais do cadastro para persistência."""
-    return {
+    payload = {
         "nome": context.user_data.get("cadastro_nome", ""),
         "data_nasc": context.user_data.get("cadastro_data_nasc", ""),
         "grau": context.user_data.get("cadastro_grau", ""),
@@ -749,6 +755,9 @@ def _dados_para_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Di
         "telegram_id": update.effective_user.id,
         "veneravel_mestre": context.user_data.get("cadastro_vm", ""),
     }
+    if context.user_data.get("cadastro_voucher"):
+        payload["status"] = "Ativo"
+    return payload
 
 
 async def _finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -765,6 +774,16 @@ async def _finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     dados_membro = _dados_para_salvar(update, context)
     salvo = cadastrar_membro(dados_membro)
+    if salvo:
+        v_token = context.user_data.get("cadastro_voucher")
+        if v_token:
+            try:
+                from src.sheets_supabase import consumir_voucher
+                consumir_voucher(v_token)
+                logger.info("Voucher %s consumido pelo usuário %s", v_token, update.effective_user.id)
+            except Exception as e_v:
+                logger.warning("Falha ao consumir voucher %s: %s", v_token, e_v)
+
     if not salvo:
         logger.error("Falha ao persistir cadastro do usuário %s", update.effective_user.id)
         await _enviar_ou_editar_mensagem(

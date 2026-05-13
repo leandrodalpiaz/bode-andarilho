@@ -442,9 +442,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     telegram_id = update.effective_user.id
+    raw_arg = ""
     payload_start = ""
-    if getattr(context, "args", None):
-        payload_start = str(context.args[0] or "").strip().lower()
+    if getattr(context, "args", None) and context.args:
+        raw_arg = str(context.args[0] or "").strip()
+        payload_start = raw_arg.lower()
+
+    if raw_arg.upper().startswith("VOUCHER_"):
+        from src.sheets_supabase import verificar_voucher
+        try:
+            v_data = verificar_voucher(raw_arg)
+            if v_data:
+                loja = v_data.get("loja_enriquecida") or {}
+                context.user_data["cadastro_loja"] = (loja.get("Nome da Loja") or loja.get("nome") or "").strip()
+                context.user_data["cadastro_numero_loja"] = str(loja.get("Número") or loja.get("numero") or "0").strip()
+                context.user_data["cadastro_oriente"] = (loja.get("Oriente da Loja") or loja.get("oriente") or "").strip()
+                context.user_data["cadastro_potencia"] = (loja.get("Potência") or loja.get("potencia") or "").strip()
+                context.user_data["cadastro_potencia_complemento"] = ""
+                context.user_data["cadastro_voucher"] = raw_arg.strip()
+                logger.info("Voucher %s ativado.", raw_arg)
+        except Exception as v_err:
+            logger.error("Erro voucher: %s", v_err)
 
     veio_do_grupo = payload_start in {"cadastro", "grupo", "start"}
     membro = buscar_membro(telegram_id)

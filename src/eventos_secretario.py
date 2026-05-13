@@ -273,6 +273,9 @@ async def exibir_menu_secretario(update: Update, context: ContextTypes.DEFAULT_T
     Exibe o menu principal da área do secretário.
     Esta função é chamada pelo bot.py quando o usuário acessa a área.
     """
+    return await _exibir_menu_secretario_seguro(update, context)
+
+async def _legacy_exibir_menu_secretario(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
     
@@ -1653,3 +1656,439 @@ async def recusar_membro(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context, user_id, TIPO_RESULTADO,
             "❌ Ocorreu uma falha ao tentar apagar o registro do banco. Contate o suporte."
         )
+
+
+# ==========================================================
+# 10. MENU DO SECRETÁRIO SEGURO E TRAVA DE GESTÃO
+# ==========================================================
+
+async def _exibir_menu_secretario_seguro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Nova implementação segura do menu principal com trava de configuração,
+    vouchers dinâmicos e ferramentas de bastão.
+    """
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    
+    if nivel not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⛔ Você não tem permissão para acessar esta área."
+        )
+        return
+
+    # TRAVA DE SECRETÁRIO SEM OFICINA (Apenas para Nível 2)
+    loja_vinculada = None
+    if nivel == "2":
+        from src.sheets_supabase import get_loja_por_secretario
+        loja_vinculada = get_loja_por_secretario(user_id)
+        
+        if not loja_vinculada:
+            texto_trava = (
+                "⚠️ *OFICINA NÃO CONFIGURADA*\n\n"
+                "Prezado Ir.·., identificamos que seu cadastro possui perfil de Secretário (Nível 2), "
+                "mas ainda não há nenhuma Loja vinculada à sua gestão administrativa.\n\n"
+                "Para liberar o acesso às ferramentas de gestão (Eventos, Vouchers e Validações), "
+                "por favor realize o registro da sua Oficina tocando no botão abaixo:"
+            )
+            teclado_trava = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🏛️ Cadastrar Minha Loja", callback_data="cadastrar_loja_inicio")],
+                [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
+            ])
+            await navegar_para(update, context, "Área do Secretário", texto_trava, teclado_trava)
+            return
+
+    # Se for Admin ou passar da trava, exibe o menu completo!
+    voucher_str = "🎫 Gerar Voucher Coletivo"
+    if not loja_vinculada and nivel == "3":
+        from src.sheets_supabase import get_loja_por_secretario
+        loja_vinculada = get_loja_por_secretario(user_id)
+
+    if loja_vinculada:
+        from src.sheets_supabase import get_voucher_ativo_por_loja
+        lid = loja_vinculada.get("ID da loja") or loja_vinculada.get("id")
+        try:
+            v_ativo = get_voucher_ativo_por_loja(lid)
+            if v_ativo:
+                usos = v_ativo.get("usos_atuais") or 0
+                limite = v_ativo.get("limite_usos") or 100
+                voucher_str = f"🎫 Voucher: {usos}/{limite} Usos"
+        except Exception:
+            pass
+
+    # Construção do Teclado
+    opcoes = [
+        [_botao_cadastrar_evento()],
+        [InlineKeyboardButton("✅ Validar Novos Irmãos", callback_data="listar_membros_pendentes")],
+        [InlineKeyboardButton(voucher_str, callback_data="gerar_voucher_inicio")],
+    ]
+    
+    if loja_vinculada or nivel == "3":
+        opcoes.append([InlineKeyboardButton("🤝 Passagem de Bastão", callback_data="bastao_listar")])
+        
+    opcoes.extend([
+        [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
+        [InlineKeyboardButton("👥 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
+        [InlineKeyboardButton("🏛️ Minhas lojas", callback_data="menu_lojas")],
+        [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
+        [InlineKeyboardButton("🏆 Meus Marcos de Secretário", callback_data="mostrar_marcos_secretario")],
+        [InlineKeyboardButton("🔄 Ver eventos cancelados", callback_data="listar_eventos_cancelados")],
+        [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
+    ])
+    
+    teclado = InlineKeyboardMarkup(opcoes)
+
+    await navegar_para(
+        update, context,
+        "Área do Secretário",
+        "📋 *Bem-vindo à Área do Secretário*\n\nO que deseja fazer?",
+        teclado
+    )
+    await enviar_dica_contextual(update, context, "area_secretario_lojas")
+
+
+# ==========================================================
+# 11. MÓDULO DE VOUCHERS COLETIVOS (DEEP LINKING)
+# ==========================================================
+
+VOUCHER_LIMITE = 1
+
+async def gerar_voucher_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Exibe opções de limite para o novo voucher coletivo."""
+    query = update.callback_query
+    if query:
+        await query.answer()
+        
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    if nivel not in ["2", "3"]:
+        return ConversationHandler.END
+        
+    from src.sheets_supabase import get_loja_por_secretario, get_voucher_ativo_por_loja
+    loja = get_loja_por_secretario(user_id)
+    
+    if not loja:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⚠️ Esta funcionalidade exige uma Loja vinculada ao seu usuário."
+        )
+        return ConversationHandler.END
+
+    lid = loja.get("ID da loja") or loja.get("id")
+    v_ativo = get_voucher_ativo_por_loja(lid)
+    
+    texto_ativo = ""
+    if v_ativo:
+        token_at = v_ativo.get("token")
+        usos = v_ativo.get("usos_atuais") or 0
+        lim = v_ativo.get("limite_usos") or 100
+        link = f"https://t.me/{context.bot.username}?start={token_at}"
+        texto_ativo = (
+            f"🎫 *Voucher Ativo Atual:*\n"
+            f"📊 Usos: `{usos}/{lim}`\n"
+            f"🔗 Link: `{link}`\n\n"
+            f"⚠️ _Atenção: Gerar um novo voucher irá invalidar o link ativo acima._\n\n"
+        )
+
+    texto = (
+        f"🎫 *GERAR VOUCHER COLETIVO*\n\n"
+        f"{texto_ativo}"
+        f"Escolha o limite máximo de utilizações para o novo link de convite:"
+    )
+    
+    teclado = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("👥 50 Usos", callback_data="c_voucher|50"),
+            InlineKeyboardButton("👥 100 Usos", callback_data="c_voucher|100"),
+        ],
+        [
+            InlineKeyboardButton("👥 250 Usos", callback_data="c_voucher|250"),
+            InlineKeyboardButton("⌨ Digitar limite...", callback_data="c_voucher_digitar"),
+        ],
+        [InlineKeyboardButton("🔙 Voltar ao painel", callback_data="menu_secretario")]
+    ])
+    
+    await navegar_para(update, context, "Gerar Voucher", texto, teclado)
+    return VOUCHER_LIMITE
+
+
+async def gerar_voucher_processar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Cria o voucher com base no clique do botão pré-definido."""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data or ""
+    
+    if data == "c_voucher_digitar":
+        await navegar_para(
+            update, context,
+            "Gerar Voucher",
+            "⌨ *DIGITE O LIMITE*\n\nPor favor, envie uma mensagem apenas com o número desejado (ex: `15`):",
+            InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancelar", callback_data="gerar_voucher_inicio")]])
+        )
+        return VOUCHER_LIMITE
+
+    try:
+        _, lim_str = data.split("|", 1)
+        limite = int(lim_str)
+    except Exception:
+        limite = 100
+        
+    return await _finalizar_criacao_voucher(update, context, limite)
+
+
+async def gerar_voucher_digitado(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Recebe e processa o limite numérico enviado via texto."""
+    texto = (update.message.text or "").strip()
+    user_id = update.effective_user.id
+    
+    try:
+        limite = int(texto)
+        if limite <= 0 or limite > 1000:
+            raise ValueError()
+    except Exception:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⚠️ Por favor, insira um número inteiro válido entre 1 e 1000.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancelar", callback_data="gerar_voucher_inicio")]])
+        )
+        return VOUCHER_LIMITE
+        
+    return await _finalizar_criacao_voucher(update, context, limite)
+
+
+async def _finalizar_criacao_voucher(update: Update, context: ContextTypes.DEFAULT_TYPE, limite: int) -> int:
+    """Invoca a persistência de criação e exibe o link pronto ao Secretário."""
+    user_id = update.effective_user.id
+    
+    from src.sheets_supabase import get_loja_por_secretario, criar_voucher
+    loja = get_loja_por_secretario(user_id)
+    if not loja:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "❌ Oficina não vinculada.")
+        return ConversationHandler.END
+        
+    lid = loja.get("ID da loja") or loja.get("id")
+    token = criar_voucher(lid, user_id, limite)
+    
+    if not token:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "❌ Falha ao gerar registro no banco de dados.")
+        return ConversationHandler.END
+        
+    link_completo = f"https://t.me/{context.bot.username}?start={token}"
+    nome_loja = loja.get("Nome da Loja") or loja.get("nome") or "Sua Loja"
+    
+    texto_sucesso = (
+        f"✅ *VOUCHER COLETIVO CRIADO!*\n\n"
+        f"O link abaixo está ativo e pré-configurado para a oficina *{nome_loja}*.\n\n"
+        f"📊 *Limite de usos:* `{limite} cadastros`.\n\n"
+        f"🔗 *Link de Convite:* (Toque para copiar)\n"
+        f"`{link_completo}`\n\n"
+        f"💡 *Como funciona:* Ao clicar no link, o novo Irmão iniciará o cadastro com todos os dados de Loja/Oriente pré-preenchidos, "
+        f"sendo ativado *imediatamente* sem precisar aguardar aprovação na Câmara de Reflexão."
+    )
+    
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Voltar à Área do Secretário", callback_data="menu_secretario")]
+    ])
+    
+    await navegar_para(update, context, "Voucher Ativo", texto_sucesso, teclado)
+    return ConversationHandler.END
+
+
+# ==========================================================
+# 12. MÓDULO PASSAGEM DE BASTÃO (TRANSMISSÃO DE OFÍCIO)
+# ==========================================================
+
+async def bastao_listar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lista os obreiros ativos da mesma Loja para transferência."""
+    query = update.callback_query
+    if query:
+        await query.answer()
+        
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    if nivel not in ["2", "3"]:
+        return
+
+    from src.sheets_supabase import get_loja_por_secretario, listar_membros_por_loja
+    loja = get_loja_por_secretario(user_id)
+    if not loja:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "⚠️ Esta funcionalidade exige uma Loja vinculada.")
+        return
+
+    lid = loja.get("ID da loja") or loja.get("id")
+    nome_loja = loja.get("Nome da Loja") or loja.get("nome")
+    numero_loja = loja.get("Número") or loja.get("numero") or "0"
+    
+    membros = listar_membros_por_loja(loja_id=lid, nome_loja=nome_loja, numero_loja=numero_loja) or []
+    membros_elegiveis = [m for m in membros if str(m.get("Telegram ID") or m.get("telegram_id")) != str(user_id)]
+
+    texto = (
+        "🤝 *PASSAGEM DE BASTÃO*\n\n"
+        "Esta ferramenta transfere sua autoridade de Secretário da Loja para outro Ir.·. cadastrado.\n"
+        "🚨 *Atenção:* Após concluir a transmissão, seu acesso será rebaixado para Nível 1 e o sucessor será promovido a Nível 2.\n\n"
+        "Selecione o sucessor abaixo:"
+    )
+    
+    if not membros_elegiveis:
+        texto = (
+            "🤝 *PASSAGEM DE BASTÃO*\n\n"
+            "❌ Não foram encontrados outros obreiros *Ativos* vinculados a esta Loja.\n\n"
+            "Peça para o futuro secretário cadastrar-se e ser validado antes de transmitir o bastão."
+        )
+        await navegar_para(
+            update, context, "Transmitir Ofício", texto,
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="menu_secretario")]])
+        )
+        return
+
+    botoes = []
+    for m in membros_elegiveis:
+        m_id = m.get("Telegram ID") or m.get("telegram_id")
+        m_nome = m.get("Nome") or m.get("nome") or "Obreiro"
+        grau = m.get("Grau") or m.get("grau") or "M.·."
+        botoes.append([InlineKeyboardButton(f"🔺 {m_nome} ({grau})", callback_data=f"bastao_conf|{m_id}")])
+        
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="menu_secretario")])
+    
+    await navegar_para(update, context, "Transmitir Ofício", texto, InlineKeyboardMarkup(botoes))
+
+
+async def bastao_confirmar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Pede a confirmação dupla para a passagem de bastão."""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data or ""
+    
+    try:
+        _, sucessor_id = data.split("|", 1)
+    except Exception:
+        await bastao_listar(update, context)
+        return
+        
+    from src.sheets_supabase import buscar_membro
+    sucessor = buscar_membro(sucessor_id)
+    if not sucessor:
+        await query.answer("Obreiro não localizado.", show_alert=True)
+        return
+        
+    nome_suc = sucessor.get("Nome") or sucessor.get("nome") or "Novo Secretário"
+    
+    texto = (
+        "🚨 *CONFIRMAÇÃO DUPLA*\n\n"
+        f"Tem certeza absoluta que deseja transferir todos os seus poderes administrativos de Secretário para o Ir.·. *{nome_suc}*?\n\n"
+        "1. Ele receberá plenos acessos de Nível 2 e será o dono desta Loja no sistema.\n"
+        "2. Seu cadastro perderá acesso a esta Área do Secretário imediatamente após o clique."
+    )
+    
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔥 SIM, TRANSMITIR BASTÃO", callback_data=f"bastao_executar|{sucessor_id}")],
+        [InlineKeyboardButton("❌ Cancelar", callback_data="bastao_listar")]
+    ])
+    
+    await navegar_para(update, context, "Confirmar Transmissão", texto, teclado)
+
+
+async def bastao_executar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Executa a transação de banco de dados e avisa as duas partes."""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    data = query.data or ""
+    
+    try:
+        _, sucessor_id = data.split("|", 1)
+    except Exception:
+        return
+
+    from src.sheets_supabase import get_loja_por_secretario, buscar_membro, transferir_secretaria
+    loja = get_loja_por_secretario(user_id)
+    sucessor = buscar_membro(sucessor_id)
+    
+    if not loja or not sucessor:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "❌ Erro de vinculação. Operação cancelada.")
+        return
+        
+    lid = loja.get("ID da loja") or loja.get("id")
+    nome_loja = loja.get("Nome da Loja") or loja.get("nome") or "Loja"
+    nome_suc = sucessor.get("Nome") or sucessor.get("nome") or "Obreiro"
+    
+    sucesso = transferir_secretaria(id_antigo=user_id, id_novo=sucessor_id, loja_id=lid)
+    
+    if not sucesso:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "❌ Falha crítica na transação. Tente novamente.")
+        return
+        
+    texto_ant = (
+        "🤝 *BASTÃO TRANSMITIDO COM SUCESSO*\n\n"
+        f"Agradecemos imensamente por seus valiosos serviços na administração da Oficina *{nome_loja}*.\n\n"
+        f"O Ir.·. *{nome_suc}* assumiu a zeladoria no ambiente digital e seu acesso foi rebaixado ao perfil de Obreiro.\n\n"
+        "Que o G.·.A.·.D.·.U.·. guie seus passos!"
+    )
+    await navegar_para(
+        update, context, "Posse Transmitida", texto_ant,
+        InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")]])
+    )
+    
+    try:
+        texto_suc = (
+            "🎉 *POSSE ADMINISTRATIVA CONCEDIDA*\n\n"
+            f"Ir.·., você foi nomeado o novo Secretário responsável pela oficina *{nome_loja}* no bot!\n\n"
+            "Seus privilégios de Nível 2 foram ativados e a Área do Secretário está liberada em seu painel principal.\n\n"
+            "Desejamos um profícuo trabalho em sua nova jornada administrativa!"
+        )
+        teclado_suc = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📋 Ir para Área do Secretário", callback_data="menu_secretario")],
+            [InlineKeyboardButton("💡 Ajuda: Gerar Primeiro Voucher", callback_data="ajuda_voucher_boasvindas")],
+        ])
+        await context.bot.send_message(
+            chat_id=int(float(sucessor_id)),
+            text=texto_suc,
+            reply_markup=teclado_suc,
+            parse_mode="Markdown"
+        )
+    except Exception as ex:
+        logger.warning("Falha ao notificar o sucessor %s privado: %s", sucessor_id, ex)
+
+
+async def ajuda_voucher_boasvindas(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Popup explicando o que é um voucher para o novo secretário."""
+    query = update.callback_query
+    await query.answer()
+    
+    texto = (
+        "💡 *AJUDA RÁPIDA: VOUCHER COLETIVO*\n\n"
+        "O *Voucher Coletivo* é a forma mais segura e rápida de trazer Irmãos da sua Loja para o bot.\n\n"
+        "1️⃣ Acesse a *Área do Secretário > Gerar Voucher*.\n"
+        "2️⃣ Escolha a quantidade máxima de utilizações.\n"
+        "3️⃣ O bot gerará um link único exclusivo da sua oficina.\n"
+        "4️⃣ Copie o link e envie no grupo de WhatsApp/Telegram da sua Loja.\n\n"
+        "Ao clicar no link, o Irmão preenche apenas os dados pessoais e é *ATIVADO IMEDIATAMENTE*, "
+        "sem precisar que você aprove cada cadastro individualmente!"
+    )
+    
+    await navegar_para(
+        update, context, "Ajuda Voucher", texto,
+        InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar à Área do Secretário", callback_data="menu_secretario")]])
+    )
+
+
+# ==========================================================
+# 13. REGISTRO DE CONVERSATION HANDLER
+# ==========================================================
+
+voucher_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(gerar_voucher_inicio, pattern="^gerar_voucher_inicio$")],
+    states={
+        VOUCHER_LIMITE: [
+            CallbackQueryHandler(gerar_voucher_processar, pattern=r"^c_voucher\||^c_voucher_digitar$"),
+            MessageHandler(filters.TEXT & ~filters.COMMAND, gerar_voucher_digitado),
+        ],
+    },
+    fallbacks=[
+        CallbackQueryHandler(gerar_voucher_inicio, pattern="^gerar_voucher_inicio$"),
+        CallbackQueryHandler(exibir_menu_secretario, pattern="^menu_secretario$"),
+    ],
+)

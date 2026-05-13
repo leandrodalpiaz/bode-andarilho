@@ -606,7 +606,7 @@ def cadastrar_membro(dados: dict) -> bool:
                 dados.get("Mestre Instalado") or dados.get("mestre_instalado") or dados.get("mi")
             ),
             "nivel": _norm_intlike(dados.get("Nivel")) or "1",
-            "status": "Pendente",
+            "status": _norm_text(dados.get("Status") or dados.get("status")) or "Pendente",
         }
 
         try:
@@ -1794,3 +1794,187 @@ async def buscar_eventos_no_periodo(data_inicio_str: str, data_fim_str: str) -> 
         logger.error("Erro ao buscar eventos no período %s - %s: %s", data_inicio_str, data_fim_str, e)
         return []
 
+
+# ============================================
+# GESTÃO DE VOUCHERS E OFÍCIOS
+# ============================================
+
+def get_loja_por_secretario(user_id: Any) -> Optional[Dict[str, Any]]:
+    """Busca a loja cujo secretário_responsavel_id corresponde ao ID do usuário."""
+    target = _norm_intlike(user_id)
+    if not target:
+        return None
+    try:
+        # Procura pelo secretário responsável no banco
+        resp = supabase.table("lojas").select("*").eq("secretario_responsavel_id", str(target)).execute()
+        if resp.data:
+            return _row_to_sheets("lojas", resp.data[0])
+            
+        # Fallback legado para compatibilidade: procura na coluna telegram_id
+        resp = supabase.table("lojas").select("*").eq("telegram_id", target).execute()
+        if resp.data:
+            return _row_to_sheets("lojas", resp.data[0])
+            
+        return None
+    except Exception as e:
+        logger.error("Erro em get_loja_por_secretario para %s: %s", user_id, e)
+        return None
+
+
+def get_voucher_ativo_por_loja(loja_id: Any) -> Optional[Dict[str, Any]]:
+    """Busca o voucher ativo mais recente para uma oficina."""
+    lid = _norm_intlike(loja_id)
+    if not lid:
+        return None
+    try:
+        resp = (
+            supabase.table("vouchers")
+            .select("*")
+            .eq("loja_id", int(float(lid)))
+            .eq("ativo", True)
+            .execute()
+        )
+        if not resp.data:
+            return None
+            
+        # Trata limitação física / temporal
+        for v in resp.data:
+            limite = v.get("limite_usos") or 100
+            usos = v.get("usos_atuais") or 0
+            if usos < limite:
+                exp = v.get("data_expiracao")
+                if exp:
+                    from datetime import datetime, timezone
+                    try:
+                        dt_exp = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+                        if datetime.now(timezone.utc) > dt_exp:
+                            continue
+                    except:
+                        pass
+                return v
+        return None
+    except Exception as e:
+        logger.error("Erro ao obter voucher ativo para loja %s: %s", loja_id, e)
+        return None
+
+
+def criar_voucher(loja_id: Any, criado_por: Any, limite: int = 100) -> Optional[str]:
+    """Gera um token único de voucher e insere no banco de dados."""
+    import uuid
+    lid = _norm_intlike(loja_id)
+    criador = _norm_intlike(criado_por)
+    if not lid or not criador:
+        return None
+        
+    token = f"VOUCHER_{uuid.uuid4().hex[:8].upper()}"
+    
+    try:
+        # Desativa eventuais vouchers ativos anteriores desta loja
+        try:
+            supabase.table("vouchers").update({"ativo": False}).eq("loja_id", int(float(lid))).eq("ativo", True).execute()
+        except Exception:
+            pass
+
+        row = {
+            "token": token,
+            "loja_id": int(float(lid)),
+            "criado_por": str(criador),
+            "limite_usos": int(limite),
+            "usos_atuais": 0,
+            "ativo": True
+        }
+        supabase.table("vouchers").insert(row).execute()
+        return token
+    except Exception as e:
+        logger.error("Erro ao criar voucher para loja %s: %s", lid, e)
+        return None
+
+
+def verificar_voucher(token: str) -> Optional[Dict[str, Any]]:
+    """Verifica se um token existe, está ativo, não expirado e tem usos disponíveis."""
+    if not token:
+        return None
+    try:
+        # Query trazendo a Loja como join nativo
+        resp = supabase.table("vouchers").select("*, lojas(*)").eq("token", token.strip().upper()).execute()
+        if not resp.data:
+            return None
+            
+        v = resp.data[0]
+        if not v.get("ativo"):
+            return None
+            
+        limite = v.get("limite_usos") or 100
+        usos = v.get("usos_atuais") or 0
+        if usos >= limite:
+            return None
+            
+        # Verificar validade temporal
+        exp = v.get("data_expiracao")
+        if exp:
+            from datetime import datetime, timezone
+            try:
+                dt_exp = datetime.fromisoformat(exp.replace("Z", "+00:00"))
+                if datetime.now(timezone.utc) > dt_exp:
+                    return None
+            except Exception:
+                pass
+                
+        raw_loja = v.get("lojas")
+        if not raw_loja:
+            return None
+            
+        v["loja_enriquecida"] = _row_to_sheets("lojas", raw_loja)
+        return v
+    except Exception as e:
+        logger.error("Erro ao verificar voucher %s: %s", token, e)
+        return None
+
+
+def consumir_voucher(token: str) -> bool:
+    """Registra o uso do voucher incrementando usos_atuais."""
+    if not token:
+        return False
+    try:
+        # Controle de concorrência via Read-Modify-Write
+        resp = supabase.table("vouchers").select("id, usos_atuais").eq("token", token.strip().upper()).execute()
+        if not resp.data:
+            return False
+            
+        v = resp.data[0]
+        novos_usos = (v.get("usos_atuais") or 0) + 1
+        supabase.table("vouchers").update({"usos_atuais": novos_usos}).eq("id", v["id"]).execute()
+        return True
+    except Exception as e:
+        logger.error("Erro ao consumir voucher %s: %s", token, e)
+        return False
+
+
+def transferir_secretaria(id_antigo: Any, id_novo: Any, loja_id: Any) -> bool:
+    """Realiza a transmissão do bastão da secretaria de forma atômica."""
+    old_tid = _norm_intlike(id_antigo)
+    new_tid = _norm_intlike(id_novo)
+    lid = _norm_intlike(loja_id)
+    
+    if not old_tid or not new_tid or not lid:
+        return False
+        
+    try:
+        # 1. Atualiza o proprietário da Loja
+        supabase.table("lojas").update({"secretario_responsavel_id": str(new_tid)}).eq("id", int(float(lid))).execute()
+        
+        # 2. Promove o sucessor para Nível 2
+        atualizar_nivel_membro(int(float(new_tid)), "2")
+        
+        # 3. Rebaixa o antigo para Nível 1
+        atualizar_nivel_membro(int(float(old_tid)), "1")
+        
+        # Limpeza total de caches afetados
+        _cache_lojas.clear()
+        _cache_membros.pop(int(float(old_tid)), None)
+        _cache_membros.pop(int(float(new_tid)), None)
+        
+        return True
+    except Exception as e:
+        logger.error("Falha transacional ao transferir secretaria de %s para %s: %s", old_tid, new_tid, e)
+        return False

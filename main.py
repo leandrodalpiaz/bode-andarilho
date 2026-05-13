@@ -514,6 +514,19 @@ def register_handlers(app: Application) -> None:
     """Registra todos os handlers na ordem correta."""
 
     # ===== 1. CONVERSATION HANDLERS =====
+    from src.eventos_secretario import (
+        voucher_handler,
+        bastao_listar,
+        bastao_confirmar,
+        bastao_executar,
+        ajuda_voucher_boasvindas
+    )
+    app.add_handler(voucher_handler)
+    app.add_handler(CallbackQueryHandler(bastao_listar, pattern="^bastao_listar$"))
+    app.add_handler(CallbackQueryHandler(bastao_confirmar, pattern=r"^bastao_conf\|"))
+    app.add_handler(CallbackQueryHandler(bastao_executar, pattern=r"^bastao_executar\|"))
+    app.add_handler(CallbackQueryHandler(ajuda_voucher_boasvindas, pattern="^ajuda_voucher_boasvindas$"))
+
     app.add_handler(confirmacao_presenca_handler)
     app.add_handler(cadastro_evento_handler)
     app.add_handler(promover_handler)
