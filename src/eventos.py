@@ -1915,16 +1915,46 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.debug("Confirmacoes por alias de evento %s -> %s itens", ids_aliases, len(confirmacoes))
 
     linhas: List[str] = []
+
+    def _clean(val):
+        return str(val or "").strip().lower()
+
     for c in confirmacoes:
         tid = _tid_to_int(c.get("Telegram ID") or c.get("telegram_id"))
         membro = buscar_membro(tid) if tid is not None else None
 
+        # Selo do Cabrito: comparar se o membro é visitante da loja do evento
+        es_visitante = False
+        if evento:
+            ev_loja_id = _clean(evento.get("ID da loja") or evento.get("loja_id"))
+
+            if membro:
+                m_loja_id = _clean(membro.get("ID da loja") or membro.get("loja_id"))
+                if ev_loja_id and m_loja_id:
+                    es_visitante = ev_loja_id != m_loja_id
+                else:
+                    ev_loja_nome = _clean(evento.get("Nome da loja") or evento.get("nome_loja"))
+                    ev_loja_num = _clean(evento.get("Número da loja") or evento.get("numero_loja"))
+                    m_loja_nome = _clean(membro.get("Loja") or membro.get("loja"))
+                    m_loja_num = _clean(membro.get("Número da loja") or membro.get("numero_loja"))
+                    es_visitante = (ev_loja_nome != m_loja_nome) or (ev_loja_num != m_loja_num)
+            else:
+                ev_loja_nome = _clean(evento.get("Nome da loja") or evento.get("nome_loja"))
+                ev_loja_num = _clean(evento.get("Número da loja") or evento.get("numero_loja"))
+                c_loja_nome = _clean(c.get("Loja") or c.get("loja"))
+                c_loja_num = _clean(c.get("Número da loja") or c.get("numero_loja") or c.get("NÃºmero da loja"))
+                es_visitante = (ev_loja_nome != c_loja_nome) or (ev_loja_num != c_loja_num)
+
+        suffix = " 🐐" if es_visitante else ""
+
         if membro:
-            linhas.append(montar_linha_confirmado(membro))
+            dados = dict(membro)
+            dados["Nome"] = (dados.get("Nome") or dados.get("nome") or "").strip() + suffix
+            linhas.append(montar_linha_confirmado(dados))
         else:
             snapshot = {
                 "Grau": c.get("Grau", c.get("grau", "")),
-                "Nome": c.get("Nome", c.get("nome", "")),
+                "Nome": (c.get("Nome") or c.get("nome") or "").strip() + suffix,
                 "Loja": c.get("Loja", c.get("loja", "")),
                 "Número da loja": c.get("Número da loja", c.get("numero_loja", c.get("NÃºmero da loja", ""))),
                 "Oriente": c.get("Oriente", c.get("oriente", "")),

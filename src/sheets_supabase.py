@@ -1978,3 +1978,13 @@ def transferir_secretaria(id_antigo: Any, id_novo: Any, loja_id: Any) -> bool:
     except Exception as e:
         logger.error("Falha transacional ao transferir secretaria de %s para %s: %s", old_tid, new_tid, e)
         return False
+
+
+def listar_membros_ativos() -> list[dict[str, Any]]:
+    """Retorna membros com status 'Ativo'."""
+    return listar_membros(include_inativos=False)
+
+
+def marcar_como_inativo(telegram_id: int) -> bool:
+    """Marca o status do cadastro do membro como 'Inativo'."""
+    return atualizar_status_membro(telegram_id, 'Inativo')

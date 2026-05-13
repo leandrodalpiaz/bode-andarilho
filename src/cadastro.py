@@ -437,12 +437,22 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Aqui já é privado
         telegram_id = update.effective_user.id
         membro = buscar_membro(telegram_id)
-        cadastrado = bool(membro)
+
+        status_atual = ""
+        if membro:
+            status_atual = str(membro.get("Status") or membro.get("status") or "").strip().lower()
+
+        # Se o cadastro estiver inativo, tratamos como revalidação obrigatória
+        cadastro_inativo = (status_atual == "inativo")
+
+        cadastrado = bool(membro) and not cadastro_inativo
         origem_grupo = bool(context.user_data.pop("origem_grupo_cadastro", False))
-        forcar_revalidacao = bool(context.user_data.pop("forcar_revalidacao_cadastro", False))
+
+        # Ativa revalidação se o cadastro no banco estiver Inativo ou se forçado
+        forcar_revalidacao = bool(context.user_data.pop("forcar_revalidacao_cadastro", False)) or cadastro_inativo
         cadastro_parcial = (not cadastrado) and _cadastro_parcial_em_andamento(context)
 
-        if forcar_revalidacao and cadastrado:
+        if forcar_revalidacao and (cadastrado or cadastro_inativo):
             texto = CADASTRO_REVALIDACAO_NECESSARIA
         elif cadastro_parcial:
             texto = CADASTRO_PARCIAL_EM_ANDAMENTO

@@ -1,4 +1,5 @@
 import logging
+import asyncio
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from telegram.ext import Application
@@ -31,6 +32,93 @@ async def job_celebracao_mensal(app: Application):
 async def job_flush_notificacoes_secretario(app: Application):
     """Consolida e envia notificações acumuladas do período silencioso."""
     await flush_notificacoes_secretario_adiadas(app.bot)
+
+
+async def job_faxina_membros(app: Application):
+    """
+    Job semanal de faxina de membros.
+    Verifica se os membros cadastrados com status 'Ativo' continuam no grupo principal.
+    Caso contrário, altera seu status para 'Inativo'.
+    """
+    import os
+    from src.sheets_supabase import listar_membros_ativos, marcar_como_inativo
+
+    grupo_id_str = os.getenv("GRUPO_PRINCIPAL_ID", "")
+    if not grupo_id_str or not grupo_id_str.lstrip("-").isdigit():
+        logger.warning("Job de faxina abortado: GRUPO_PRINCIPAL_ID não configurado corretamente.")
+        return
+
+    grupo_id = int(grupo_id_str)
+
+    try:
+        membros = await asyncio.to_thread(listar_membros_ativos)
+    except Exception as e:
+        logger.error("Erro ao buscar membros ativos para a faxina: %s", e)
+        return
+
+    if not membros:
+        logger.info("Nenhum membro ativo para validar no job de faxina.")
+        return
+
+    logger.info("Iniciando faxina de %d membros ativos...", len(membros))
+    processados = 0
+    inativados = 0
+
+    for m in membros:
+        user_id_str = m.get("Telegram ID") or m.get("telegram_id")
+        if not user_id_str:
+            continue
+
+        try:
+            user_id = int(float(user_id_str))
+        except Exception:
+            continue
+
+        try:
+            # Rate limiting suave para evitar flood do Telegram API
+            await asyncio.sleep(0.2)
+
+            member = await app.bot.get_chat_member(chat_id=grupo_id, user_id=user_id)
+            esta_no_grupo = member.status in ("member", "administrator", "creator")
+
+            if not esta_no_grupo:
+                logger.info(
+                    "Membro %s (%s) saiu do grupo (status: %s). Inativando...",
+                    m.get("Nome"),
+                    user_id,
+                    member.status,
+                )
+                await asyncio.to_thread(marcar_como_inativo, user_id)
+                inativados += 1
+
+        except Exception as e:
+            msg = str(e).lower()
+            # Se o erro for do chat inexistente ou bot expulso, aborte!
+            if "chat not found" in msg or "bot was kicked" in msg or "not member of the chat" in msg:
+                logger.critical("Job de faxina abortado por erro crítico no chat %s: %s", grupo_id, e)
+                return
+
+            # Erros de usuário (user not found / user_id_invalid)
+            if "user not found" in msg or "invalid user" in msg:
+                logger.info(
+                    "Membro %s (%s) não localizado no chat (erro: %s). Inativando...",
+                    m.get("Nome"),
+                    user_id,
+                    e,
+                )
+                await asyncio.to_thread(marcar_como_inativo, user_id)
+                inativados += 1
+            else:
+                logger.warning("Erro ao verificar membro %s (%s) no chat: %s", m.get("Nome"), user_id, e)
+
+        processados += 1
+
+    logger.info(
+        "Faxina concluída! Processados: %d/%d membros. Inativados: %d.",
+        processados,
+        len(membros),
+        inativados,
+    )
 
 
 async def iniciar_scheduler(app: Application):
@@ -79,7 +167,19 @@ async def iniciar_scheduler(app: Application):
         id="job_flush_notificacoes_secretario",
         replace_existing=True,
     )
+    scheduler.add_job(
+        job_faxina_membros,
+        "cron",
+        day_of_week="sun",
+        hour=3,
+        minute=0,
+        args=[app],
+        id="job_faxina_membros",
+        replace_existing=True,
+    )
 
     scheduler.start()
     _scheduler = scheduler
-    logger.info("Scheduler iniciado com jobs de lembretes, celebração mensal e flush de notificações do secretário.")
+    logger.info(
+        "Scheduler iniciado com jobs de lembretes, celebração mensal, flush e faxina semanal."
+    )
