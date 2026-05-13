@@ -141,6 +141,11 @@ from src.eventos_secretario import (
     confirmar_refazer_evento,
     executar_refazer_evento,
     exibir_menu_secretario,
+    listar_membros_pendentes,
+    detalhe_pendente,
+    aprovar_membro,
+    confirmar_recusar_membro,
+    recusar_membro,
 )
 
 # Gerenciamento de lojas (com exclusão)
@@ -637,6 +642,21 @@ def register_handlers(app: Application) -> None:
     ))
     app.add_handler(CallbackQueryHandler(
         executar_refazer_evento, pattern=r"^executar_refazer\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        listar_membros_pendentes, pattern=r"^listar_membros_pendentes$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        detalhe_pendente, pattern=r"^detalhe_pendente\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        aprovar_membro, pattern=r"^aprovar_membro\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        confirmar_recusar_membro, pattern=r"^confirmar_recusar_membro\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        recusar_membro, pattern=r"^recusar_membro\|"
     ))
 
     # ===== 9. CALLBACKS ADMINISTRATIVOS =====

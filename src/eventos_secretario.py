@@ -285,6 +285,7 @@ async def exibir_menu_secretario(update: Update, context: ContextTypes.DEFAULT_T
 
     teclado = InlineKeyboardMarkup([
         [_botao_cadastrar_evento()],
+        [InlineKeyboardButton("✅ Validar Novos Irmãos", callback_data="listar_membros_pendentes")],
         [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
         [InlineKeyboardButton("👥 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
         [InlineKeyboardButton("🏛️ Minhas lojas", callback_data="menu_lojas")],
@@ -1328,3 +1329,327 @@ editar_evento_secretario_handler = ConversationHandler(
         CallbackQueryHandler(cancelar_edicao_evento, pattern="^cancelar$"),
     ],
 )
+
+
+# ============================================
+# CÂMARA DE REFLEXÃO - VALIDAÇÃO DE NOVOS IRMÃOS
+# ============================================
+
+async def listar_membros_pendentes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Lista os cadastros com status Pendente filtrando por responsabilidade de oficina."""
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    
+    if nivel not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⛔ Você não tem permissão para acessar esta área."
+        )
+        return
+
+    from src.sheets_supabase import listar_membros, listar_lojas
+    
+    membros_brutos = listar_membros(include_inativos=True) or []
+    # Normalização do status Pendente
+    pendentes_geral = []
+    for m in membros_brutos:
+        st = str(m.get("Status") or m.get("status") or "").strip().lower()
+        if st == "pendente":
+            pendentes_geral.append(m)
+
+    if not pendentes_geral:
+        await navegar_para(
+            update, context,
+            "Validar Novos Irmãos",
+            "🎉 Nenhum cadastro aguarda validação na Câmara de Reflexão neste momento.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data=_callback_voltar_area(nivel))]])
+        )
+        return
+
+    # Filtro de escopo
+    filtrados = []
+    if nivel == "3":
+        filtrados = pendentes_geral
+    else:
+        # Secretário: Buscar apenas os que pertencem à loja que ele administra
+        lojas_admin = listar_lojas(user_id, include_todas=False) or []
+        
+        # Cria chaves de correspondência resilientes
+        import unicodedata
+        import re
+        def _key(txt: Any) -> str:
+            b = unicodedata.normalize("NFKD", str(txt or "").strip())
+            b = "".join(ch for ch in b if not unicodedata.combining(ch))
+            return re.sub(r"\s+", "", b).lower()
+
+        chaves_lojas_sec = set()
+        for l in lojas_admin:
+            lid = _key(l.get("ID") or l.get("id"))
+            if lid:
+                chaves_lojas_sec.add(f"id:{lid}")
+            nome = _key(l.get("Nome da Loja") or l.get("nome_loja"))
+            num = _key(l.get("Número") or l.get("numero") or "0")
+            if nome:
+                chaves_lojas_sec.add(f"nn:{nome}:{num}")
+                
+        for m in pendentes_geral:
+            mid = _key(m.get("ID da loja") or m.get("loja_id"))
+            mnome = _key(m.get("Loja") or m.get("loja"))
+            mnum = _key(m.get("Número da loja") or m.get("numero_loja") or "0")
+            
+            match = False
+            if mid and f"id:{mid}" in chaves_lojas_sec:
+                match = True
+            elif mnome and f"nn:{mnome}:{mnum}" in chaves_lojas_sec:
+                match = True
+            
+            if match:
+                filtrados.append(m)
+
+    if not filtrados:
+        await navegar_para(
+            update, context,
+            "Validar Novos Irmãos",
+            "📋 Não há cadastros pendentes de validação vinculados à(s) sua(s) oficina(s) no momento.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data=_callback_voltar_area(nivel))]])
+        )
+        return
+
+    botoes = []
+    for m in filtrados[:50]:  # Limite de segurança
+        nome = m.get("Nome", "Novo Obreiro")
+        loja_label = m.get("Loja", "Sem Loja")
+        tid = m.get("Telegram ID")
+        
+        label = f"👤 {nome} ({loja_label})"
+        if len(label) > 36:
+            label = label[:33] + "..."
+            
+        botoes.append([InlineKeyboardButton(label, callback_data=f"detalhe_pendente|{tid}")])
+
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data=_callback_voltar_area(nivel))])
+
+    titulo_painel = "Administração > Pendentes" if nivel == "3" else "Validar Novos Irmãos"
+    await navegar_para(
+        update, context,
+        titulo_painel,
+        f"📋 *Cadastros Pendentes ({len(filtrados)})*\n\nSelecione um Irmão para analisar dados e ativar:",
+        InlineKeyboardMarkup(botoes)
+    )
+
+
+async def detalhe_pendente(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Exibe visão detalhada de dados do obreiro pendente para decisão."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    
+    if nivel not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "⛔ Sem permissão.")
+        return
+
+    _, tid = query.data.split("|", 1)
+    
+    from src.sheets_supabase import buscar_membro
+    membro = buscar_membro(int(float(tid)))
+    
+    if not membro:
+        await query.answer("❌ Registro pendente não encontrado.")
+        await listar_membros_pendentes(update, context)
+        return
+
+    nome = membro.get("Nome", "-")
+    grau = membro.get("Grau", "-")
+    cargo = membro.get("Cargo", "Nenhum")
+    loja = membro.get("Loja", "-")
+    numero = membro.get("Número da loja", "")
+    potencia = membro.get("Potência", "-")
+    oriente = membro.get("Oriente", "-")
+    veneravel = membro.get("Venerável Mestre", "-")
+    
+    num_fmt = f" nº {numero}" if numero else ""
+
+    texto = (
+        f"👤 *Análise de Credenciais*\n\n"
+        f"▪️ Nome: *{nome}*\n"
+        f"▪️ Grau: *{grau}*\n"
+        f"▪️ Cargo declarado: *{cargo or 'Nenhum'}*\n"
+        f"▪️ Loja: *{loja}{num_fmt}*\n"
+        f"▪️ Potência: *{potencia}*\n"
+        f"▪️ Oriente: *{oriente}*\n"
+        f"▪️ Venerável Mestre: *{veneravel}*\n\n"
+        f"Deseja validar o acesso deste obreiro ao painel do Bode Andarilho?"
+    )
+
+    teclado = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Aprovar Registro", callback_data=f"aprovar_membro|{tid}"),
+        ],
+        [
+            InlineKeyboardButton("❌ Recusar Registro", callback_data=f"confirmar_recusar_membro|{tid}"),
+        ],
+        [InlineKeyboardButton("🔙 Voltar à lista", callback_data="listar_membros_pendentes")]
+    ])
+
+    await navegar_para(
+        update, context,
+        "Validar > Detalhe",
+        texto,
+        teclado
+    )
+
+
+async def aprovar_membro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Altera o status para Ativo e envia notificação de boas vindas ao obreiro."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    
+    # REFINAMENTO DE SEGURANÇA: Verificação explícita do callback
+    if nivel not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "⛔ Acesso negado.")
+        return
+
+    if query:
+        await query.answer("Efetuando aprovação...")
+
+    _, tid_str = query.data.split("|", 1)
+    tid = int(float(tid_str))
+
+    from src.sheets_supabase import atualizar_membro, buscar_membro, _cache_membros
+    
+    # Carrega dados antes de atualizar para notificação amigável
+    membro = buscar_membro(tid)
+    if not membro:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "❌ Obreiro não localizado no banco.")
+        return
+
+    # Atualiza
+    sucesso = atualizar_membro(tid, {"Status": "Ativo"}, preservar_nivel=True)
+    
+    if sucesso:
+        _cache_membros.pop(tid, None) # Invalida cache explicitamente
+
+        # Envio de mensagem privada de liberação ao obreiro
+        try:
+            await context.bot.send_message(
+                chat_id=tid,
+                text=(
+                    "✨ *Acesso Concedido!*\n\n"
+                    "Saudações, Ir.·.!\n"
+                    "Seu cadastro no Bode Andarilho foi validado e aprovado pela secretaria de sua oficina.\n\n"
+                    "Agora seu acesso completo ao Painel do Obreiro está liberado!\n\n"
+                    "Use o comando /start para acessar os recursos e confirmar presenças."
+                ),
+                parse_mode="Markdown"
+            )
+        except Exception as e_notif:
+            logger.warning("Membro %s aprovado, mas notificação privada falhou: %s", tid, e_notif)
+
+        await navegar_para(
+            update, context,
+            "Validar > Sucesso",
+            f"✅ O cadastro de *{membro.get('Nome', 'Novo Obreiro')}* foi ativado com sucesso!\n\n"
+            f"O Irmão recebeu uma notificação no privado.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="listar_membros_pendentes")]])
+        )
+    else:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "❌ Falha técnica ao atualizar banco de dados. Tente novamente."
+        )
+
+
+async def confirmar_recusar_membro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Tela de confirmação destrutiva para recusar o cadastro."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    
+    if nivel not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "⛔ Acesso negado.")
+        return
+
+    _, tid = query.data.split("|", 1)
+    
+    from src.sheets_supabase import buscar_membro
+    membro = buscar_membro(int(float(tid)))
+    nome = membro.get("Nome", "este obreiro") if membro else "este obreiro"
+
+    texto = (
+        f"⚠️ *Confirmar Recusa de Cadastro*\n\n"
+        f"Tem certeza de que deseja recusar o registro de *{nome}*?\n\n"
+        f"Esta ação enviará uma notificação avisando-o sobre a divergência e EXCLUIRÁ os dados provisórios dele para que ele possa refazer o processo."
+    )
+
+    teclado = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("❌ Sim, recusar e excluir", callback_data=f"recusar_membro|{tid}"),
+        ],
+        [
+            InlineKeyboardButton("🔙 Voltar", callback_data=f"detalhe_pendente|{tid}")
+        ]
+    ])
+
+    await navegar_para(
+        update, context,
+        "Validar > Confirmação",
+        texto,
+        teclado
+    )
+
+
+async def recusar_membro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Notifica a recusa ao obreiro e executa o hard delete do registro pendente."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    
+    # REFINAMENTO DE SEGURANÇA: Verificação explícita do callback
+    if nivel not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "⛔ Acesso negado.")
+        return
+
+    if query:
+        await query.answer("Processando recusa...")
+
+    _, tid_str = query.data.split("|", 1)
+    tid = int(float(tid_str))
+
+    from src.sheets_supabase import excluir_membro, buscar_membro
+    
+    membro = buscar_membro(tid)
+    nome_membro = membro.get("Nome", "Novo Obreiro") if membro else "Obreiro"
+
+    # REFINAMENTO DE SEGURANÇA: Enviar notificação ANTES de apagar dados
+    try:
+        await context.bot.send_message(
+            chat_id=tid,
+            text=(
+                "⛔ *Registro não Validado*\n\n"
+                "Ir.·., saudações!\n"
+                "O Secretário da Loja revisou sua solicitação de cadastro e não pôde validá-la.\n"
+                "Isto ocorre geralmente por erros de grafia no Nome, Loja, Número ou Potência.\n\n"
+                "Seus dados temporários foram limpos. Sinta-se à vontade para usar o comando /start e preencher um novo formulário de acesso."
+            ),
+            parse_mode="Markdown"
+        )
+    except Exception as e_notif:
+        logger.warning("Membro %s recusado, falha ao enviar aviso prévio: %s", tid, e_notif)
+
+    # Realiza a exclusão física
+    ok = excluir_membro(tid)
+    
+    if ok:
+        await navegar_para(
+            update, context,
+            "Validar > Recusado",
+            f"🚫 Registro de *{nome_membro}* recusado e excluído com sucesso.\n\n"
+            f"O usuário foi devidamente notificado e o registro limpo.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="listar_membros_pendentes")]])
+        )
+    else:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "❌ Ocorreu uma falha ao tentar apagar o registro do banco. Contate o suporte."
+        )

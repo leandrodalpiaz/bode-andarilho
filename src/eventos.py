@@ -32,6 +32,7 @@ from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler
 from src.sheets_supabase import (
     listar_eventos,
     buscar_membro,
+    membro_esta_ativo,
     registrar_confirmacao,
     cancelar_confirmacao,
     buscar_confirmacao,
@@ -1361,6 +1362,22 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             )
         return ConversationHandler.END
 
+    if not membro_esta_ativo(membro):
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⚠️ *Cadastro em Análise*\n\n"
+            "Seu registro está na *Câmara de Reflexão* aguardando a validação do Secretário da Loja.\n"
+            "Assim que for aprovado, você receberá uma notificação e poderá confirmar sua presença em sessões.",
+            limpar_conteudo=True
+        )
+        if update.effective_chat.type in ["group", "supergroup"]:
+            await _responder_callback_seguro(
+                query,
+                "Seu cadastro ainda aguarda aprovação do Secretário da Loja.",
+                show_alert=True
+            )
+        return ConversationHandler.END
+
     # Verificar confirmação existente (evita duplicidade e dá feedback amigável).
     if buscar_confirmacao_em_eventos(ids_aliases, user_id):
         if update.effective_chat.type in ["group", "supergroup"]:
@@ -1573,6 +1590,16 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
 
     membro = buscar_membro(user_id)
     if not membro:
+        return
+
+    if not membro_esta_ativo(membro):
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⚠️ *Cadastro em Análise*\n\n"
+            "Seu registro está na *Câmara de Reflexão* aguardando a validação do Secretário da Loja.\n"
+            "Assim que for aprovado, você poderá confirmar presenças e acessar o painel completo.",
+            limpar_conteudo=True
+        )
         return
 
     ids_aliases = _ids_evento_aliases(id_evento, evento)
@@ -1948,7 +1975,7 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     context,
                     update.effective_chat.id,
                     msg.message_id,
-                    delay=15,
+                    delay=10,
                 )
             )
 

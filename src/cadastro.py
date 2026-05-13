@@ -776,6 +776,59 @@ async def _finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return CONFIRMAR
 
+    # --- NOTIFICAR SECRETÁRIO SOBRE NOVO CADASTRO (CÂMARA DE REFLEXÃO) ---
+    try:
+        from src.sheets_supabase import listar_lojas, _secretario_responsavel_loja_id
+        
+        # Função auxiliar local para normalização extremamente resiliente
+        import unicodedata
+        def _norm_resiliente(t: Any) -> str:
+            b = unicodedata.normalize("NFKD", str(t or "").strip())
+            b = "".join(ch for ch in b if not unicodedata.combining(ch))
+            return re.sub(r"\s+", "", b).lower()
+
+        loja_digitada = _norm_resiliente(dados_membro.get("loja"))
+        num_digitado = _norm_resiliente(dados_membro.get("numero_loja") or "0")
+        
+        loja_encontrada = None
+        if loja_digitada:
+            todas_lojas = listar_lojas(0, include_todas=True) or []
+            for l in todas_lojas:
+                l_nome = _norm_resiliente(l.get("Nome da Loja") or l.get("nome_loja"))
+                l_num = _norm_resiliente(l.get("Número") or l.get("numero") or "0")
+                
+                if l_nome == loja_digitada and l_num == num_digitado:
+                    loja_encontrada = l
+                    break
+            
+            # Fallback suave apenas pelo nome
+            if not loja_encontrada:
+                for l in todas_lojas:
+                    l_nome = _norm_resiliente(l.get("Nome da Loja") or l.get("nome_loja"))
+                    if l_nome == loja_digitada:
+                        loja_encontrada = l
+                        break
+
+        if loja_encontrada:
+            sec_id = _secretario_responsavel_loja_id(loja_encontrada)
+            if sec_id:
+                nome_obreiro = dados_membro.get("nome", "Novo Obreiro")
+                loja_nome_fmt = loja_encontrada.get("Nome da Loja") or loja_encontrada.get("nome_loja") or "Loja"
+                try:
+                    await context.bot.send_message(
+                        chat_id=int(float(sec_id)),
+                        text=(
+                            f"🔔 *Novo Registro Pendente*\n\n"
+                            f"O Ir.·. *{nome_obreiro}* realizou o cadastro no bot e aguarda sua validação para a loja *{loja_nome_fmt}*.\n\n"
+                            f"Acesse a *Área do Secretário > Validar Novos Irmãos* para gerenciar esta solicitação."
+                        ),
+                        parse_mode="Markdown"
+                    )
+                except Exception as e_notif:
+                    logger.warning("Falha ao notificar secretário %s: %s", sec_id, e_notif)
+    except Exception as e_sec:
+        logger.warning("Erro durante busca de secretário no final do cadastro: %s", e_sec)
+
     # Preserva pos_cadastro
     pos = context.user_data.get("pos_cadastro")
     context.user_data.clear()

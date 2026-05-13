@@ -577,7 +577,9 @@ def cadastrar_membro(dados: dict) -> bool:
         existente = buscar_membro(int(float(telegram_id)))
         if existente is not None:
             dados_revalidacao = dict(dados)
-            dados_revalidacao["Status"] = "Ativo"
+            # Garante que revalida o cadastro mantendo ativo apenas se já estivesse ativo
+            status_atual = _norm_status(existente.get("Status") or existente.get("status"))
+            dados_revalidacao["Status"] = "Ativo" if status_atual == "ativo" else "Pendente"
             return atualizar_membro(int(float(telegram_id)), dados_revalidacao, preservar_nivel=True)
 
         # Monta registro para inserção
@@ -604,7 +606,7 @@ def cadastrar_membro(dados: dict) -> bool:
                 dados.get("Mestre Instalado") or dados.get("mestre_instalado") or dados.get("mi")
             ),
             "nivel": _norm_intlike(dados.get("Nivel")) or "1",
-            "status": "Ativo",
+            "status": "Pendente",
         }
 
         try:
