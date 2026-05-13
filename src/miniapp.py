@@ -63,6 +63,7 @@ from src.potencias import (
     potencia_requer_complemento,
     validar_potencia,
 )
+from src.ritos import normalizar_rito
 
 logger = logging.getLogger(__name__)
 
@@ -2016,7 +2017,8 @@ async def api_cadastro_loja(request: Request) -> JSONResponse:
     nome     = (body.get("nome")     or "").strip()[:200]
     numero   = (body.get("numero")   or "0").strip()[:10]
     oriente  = (body.get("oriente")  or "").strip()[:200]
-    rito     = (body.get("rito")     or "").strip()[:200]
+    rito_raw = (body.get("rito")     or "").strip()[:200]
+    rito = normalizar_rito(rito_raw) or rito_raw
     potencia, potencia_complemento = normalizar_potencia(
         (body.get("potencia") or "").strip()[:200],
         (body.get("potencia_outra") or body.get("potencia_complemento") or "").strip()[:200],
@@ -2087,7 +2089,8 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
     nome_loja   = (body.get("nome_loja")  or "").strip()[:200]
     numero_loja = (body.get("numero_loja")or "0").strip()[:10]
     oriente     = (body.get("oriente")    or "").strip()[:200]
-    rito        = (body.get("rito")       or "").strip()[:200]
+    rito_raw    = (body.get("rito")       or "").strip()[:200]
+    rito        = normalizar_rito(rito_raw) or rito_raw
     potencia, potencia_complemento = normalizar_potencia(
         (body.get("potencia") or "").strip()[:200],
         (body.get("potencia_outra") or body.get("potencia_complemento") or "").strip()[:200],

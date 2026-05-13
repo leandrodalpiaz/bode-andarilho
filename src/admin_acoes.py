@@ -44,6 +44,7 @@ from src.sheets_supabase import (
 )
 from src.permissoes import get_nivel
 from src.miniapp import WEBAPP_URL_EVENTO
+from src.potencias import normalizar_potencia, potencia_requer_complemento, sugestao_complemento, validar_potencia
 
 from src.bot import (
     navegar_para,
@@ -75,12 +76,76 @@ CAMPOS_EDITAVEIS = {
     "grau": {"nome": "Grau", "chave": "Grau", "nivel_minimo": "2"},
     "oriente": {"nome": "Oriente", "chave": "Oriente", "nivel_minimo": "2"},
     "potencia": {"nome": "Potência", "chave": "Potência", "nivel_minimo": "2"},
+    # Não expor como opção separada no menu; é usado internamente após selecionar a Potência principal.
+    "potencia_complemento": {"nome": "Potência complemento", "chave": "Potência complemento", "nivel_minimo": "2"},
     "data_nasc": {"nome": "Data de nascimento", "chave": "Data de nascimento", "nivel_minimo": "2"},
     "numero_loja": {"nome": "Número da loja", "chave": "Número da loja", "nivel_minimo": "2"},
     "cargo": {"nome": "Cargo", "chave": "Cargo", "nivel_minimo": "2"},
     "veneravel_mestre": {"nome": "Venerável Mestre (Sim/Não)", "chave": "Venerável Mestre", "nivel_minimo": "2"},
     "nivel": {"nome": "Nível (1,2,3)", "chave": "Nivel", "nivel_minimo": "3"},  # Apenas admin pode editar nível
 }
+
+
+def _teclado_inline_potencia_admin() -> InlineKeyboardMarkup:
+    linhas = [
+        [InlineKeyboardButton("GOB", callback_data="editar_valor_membro|potencia|GOB")],
+        [InlineKeyboardButton("CMSB", callback_data="editar_valor_membro|potencia|CMSB")],
+        [InlineKeyboardButton("COMAB", callback_data="editar_valor_membro|potencia|COMAB")],
+        [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_edicao")],
+    ]
+    return InlineKeyboardMarkup(linhas)
+
+
+async def aplicar_valor_inline_membro(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Aplica valores de campos com opções inline (ex.: Potência)."""
+    query = update.callback_query
+    await query.answer()
+    try:
+        _, campo_id, valor = (query.data or "").split("|", 2)
+    except Exception:
+        return ConversationHandler.END
+
+    telegram_id = context.user_data.get("editando_membro_id")
+    if not telegram_id:
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO, "Erro: membro não identificado."
+        )
+        return ConversationHandler.END
+
+    if campo_id == "potencia":
+        principal, _ = normalizar_potencia(valor, "")
+        if potencia_requer_complemento(principal):
+            context.user_data["potencia_principal_pendente"] = principal
+            context.user_data["editando_campo"] = "potencia_complemento"
+            await navegar_para(
+                update,
+                context,
+                "Admin > Editar > Potência (Complemento)",
+                f"Informe o complemento da potência. {sugestao_complemento(principal)}:",
+                None,
+            )
+            return NOVO_VALOR
+
+        ok = atualizar_membro(
+            telegram_id,
+            {"Potência": principal, "Potência complemento": ""},
+            preservar_nivel=True,
+        )
+        if ok:
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO, "✅ Potência atualizada."
+            )
+        else:
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO, "❌ Falha ao atualizar a Potência."
+            )
+        context.user_data.pop("potencia_principal_pendente", None)
+        context.user_data.pop("editando_membro_id", None)
+        context.user_data.pop("editando_membro_dados", None)
+        context.user_data.pop("editando_campo", None)
+        return ConversationHandler.END
+
+    return ConversationHandler.END
 
 
 # ============================================
@@ -841,6 +906,8 @@ async def selecionar_campo_membro(update: Update, context: ContextTypes.DEFAULT_
 
         botoes = []
         for campo_id, campo_info in CAMPOS_EDITAVEIS.items():
+            if campo_id == "potencia_complemento":
+                continue  # Potência complemento é guiado junto com Potência principal
             if int(nivel_usuario) < int(campo_info["nivel_minimo"]):
                 continue
             valor_atual = membro.get(campo_info["chave"], "")
@@ -927,6 +994,19 @@ async def selecionar_campo_membro(update: Update, context: ContextTypes.DEFAULT_
     membro = context.user_data.get("editando_membro_dados", {})
     valor_atual = membro.get(campo_info["chave"], "")
 
+    if campo_id == "potencia":
+        await navegar_para(
+            update,
+            context,
+            "Admin > Editar > Potência",
+            (
+                "Selecione a Potência principal.\n"
+                "Em seguida, o bot solicitará o complemento (ex.: GLMERGS, GOB-RS, GORGS)."
+            ),
+            _teclado_inline_potencia_admin(),
+        )
+        return SELECIONAR_CAMPO
+
     titulo = f"Admin > Editar > {campo_info['nome']}"
     mensagem = (
         f"✏️ *Editando {campo_info['nome']}*\n\n"
@@ -957,6 +1037,32 @@ async def receber_novo_valor_membro(update: Update, context: ContextTypes.DEFAUL
     if campo_id == "nivel" and novo_valor not in ("1", "2", "3"):
         await update.message.reply_text("❌ Nível inválido. Use 1, 2 ou 3.")
         return NOVO_VALOR
+
+    if campo_id == "potencia_complemento":
+        principal_pendente = (context.user_data.get("potencia_principal_pendente") or "").strip()
+        if not principal_pendente:
+            await update.message.reply_text("❌ Selecione primeiro a Potência principal.")
+            return NOVO_VALOR
+        principal, comp = normalizar_potencia(principal_pendente, novo_valor)
+        if not validar_potencia(principal, comp):
+            await update.message.reply_text(f"❌ Complemento inválido. {sugestao_complemento(principal)}.")
+            return NOVO_VALOR
+
+        sucesso = atualizar_membro(
+            telegram_id,
+            {"Potência": principal, "Potência complemento": comp},
+            preservar_nivel=True,
+        )
+        if sucesso:
+            await update.message.reply_text("✅ Potência atualizada com sucesso!")
+        else:
+            await update.message.reply_text("❌ Erro ao atualizar a Potência. Tente novamente mais tarde.")
+
+        context.user_data.pop("potencia_principal_pendente", None)
+        context.user_data.pop("editando_membro_id", None)
+        context.user_data.pop("editando_membro_dados", None)
+        context.user_data.pop("editando_campo", None)
+        return ConversationHandler.END
 
     sucesso = atualizar_membro(telegram_id, {campo_info["chave"]: novo_valor}, preservar_nivel=(campo_id != "nivel"))
 
@@ -1152,6 +1258,8 @@ editar_membro_handler = ConversationHandler(
                 selecionar_campo_membro,
                 pattern="^(editar_campo_membro|cancelar_edicao|excluir_membro|confirmar_excluir_membro|cancelar_excluir_membro)",
             )
+            ,
+            CallbackQueryHandler(aplicar_valor_inline_membro, pattern=r"^editar_valor_membro\|"),
         ],
         NOVO_VALOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_novo_valor_membro)],
     },

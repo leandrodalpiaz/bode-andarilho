@@ -41,6 +41,7 @@ from src.sheets_supabase import (
     obter_secretario_responsavel_evento,
     usuario_pode_gerenciar_evento,
 )
+from src.ritos import normalizar_rito
 from src.eventos import (
     normalizar_id_evento,
     _encode_cb,
@@ -883,6 +884,9 @@ async def receber_novo_valor_evento(update: Update, context: ContextTypes.DEFAUL
     if not campo_info or not evento:
         await update.message.reply_text(EDICAO_EVENTO_CONTEXTO_PERDIDO)
         return ConversationHandler.END
+
+    if campo_id == "rito":
+        novo_valor = normalizar_rito(novo_valor) or novo_valor
 
     evento[campo_info["chave"]] = novo_valor
     _registrar_ultima_edicao(evento, update.effective_user.id, update.effective_user.full_name or "")

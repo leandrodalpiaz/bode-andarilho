@@ -55,6 +55,7 @@ from src.sheets_supabase import upload_storage_publico
 from src.ajuda.dicas import enviar_dica_contextual
 from src.permissoes import get_nivel
 from src.potencias import formatar_potencia, potencia_de_dados
+from src.ritos import normalizar_rito
 from src.bot import (
     navegar_para,
     _enviar_ou_editar_mensagem,
@@ -942,7 +943,7 @@ async def confirmar_loja_callback(update: Update, context: ContextTypes.DEFAULT_
             context.user_data["novo_evento_nome_loja"] = loja.get("Nome da Loja", "")
             context.user_data["novo_evento_numero_loja"] = str(loja.get("Número", "0"))
             context.user_data["novo_evento_oriente"] = loja.get("Oriente da Loja", loja.get("Oriente", ""))
-            context.user_data["novo_evento_rito"] = loja.get("Rito", "")
+            context.user_data["novo_evento_rito"] = normalizar_rito(loja.get("Rito", "")) or loja.get("Rito", "")
             context.user_data["novo_evento_potencia"] = loja.get("Potência", "")
             context.user_data["novo_evento_endereco"] = loja.get("Endereço", "")
             if not _norm_text(context.user_data.get("novo_evento_secretario_responsavel_id")):
@@ -1282,7 +1283,8 @@ async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except:
         pass
     val = _truncate(update.message.text)
-    context.user_data["novo_evento_rito"] = val
+    rito = normalizar_rito(val) or val
+    context.user_data["novo_evento_rito"] = rito
     
     # Se já tem potência (veio de cadastro com loja), pula
     if "novo_evento_potencia" in context.user_data:

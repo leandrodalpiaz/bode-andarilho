@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from datetime import datetime, date, timedelta
 from typing import Optional, Tuple, List, Dict, Any
 
+from src.ritos import normalizar_rito
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest, Forbidden
 from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler, CommandHandler
@@ -740,28 +742,8 @@ def _filtrar_por_grau(eventos: List[dict], grau_nome: str) -> Tuple[str, List[di
 
 
 def _normalizar_rito(valor: Any) -> str:
-    rito = str(valor or "").strip()
-    if not rito or rito.lower() == "nan":
-        return ""
-    aliases = {
-        "reaa": "REAA",
-        "r.e.a.a.": "REAA",
-        "rito escoces antigo e aceito": "REAA",
-        "rito escocês antigo e aceito": "REAA",
-        "york": "York",
-        "rito de york": "York",
-        "adonhiramita": "Adonhiramita",
-        "brasileiro": "Brasileiro",
-        "moderno": "Moderno",
-        "schroeder": "Schroeder",
-        "schröeder": "Schroeder",
-        "escoces retificado": "Escocês Retificado",
-        "escocês retificado": "Escocês Retificado",
-        "memphis-misraim": "Memphis-Misraim",
-        "memphis misraim": "Memphis-Misraim",
-    }
-    chave = rito.lower().replace(".", "").strip()
-    return aliases.get(chave, aliases.get(rito.lower(), rito))
+    # Compat: retorna o normalizado quando reconhecido; caso contrário, preserva o valor original.
+    return normalizar_rito(valor) or str(valor or "").strip()
 
 
 def _ritos_disponiveis(eventos: List[dict]) -> List[str]:

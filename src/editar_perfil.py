@@ -16,6 +16,13 @@ from src.bot import TIPO_RESULTADO, _enviar_ou_editar_mensagem, navegar_para
 from src.miniapp import WEBAPP_URL_MEMBRO
 from src.perfil import mostrar_perfil
 from src.sheets_supabase import atualizar_membro, buscar_membro
+from src.potencias import (
+    formatar_potencia,
+    normalizar_potencia,
+    potencia_requer_complemento,
+    sugestao_complemento,
+    validar_potencia,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +36,7 @@ CAMPOS_EDITAVEIS_PERFIL = {
     "numero_loja": {"nome": "Número da loja", "chave": "Número da loja", "modo": "texto"},
     "oriente": {"nome": "Oriente", "chave": "Oriente", "modo": "texto"},
     "potencia": {"nome": "Potência", "chave": "Potência", "modo": "inline"},
+    "potencia_complemento": {"nome": "Complemento da Potência", "chave": "Potência complemento", "modo": "texto"},
     "mestre_instalado": {"nome": "Mestre Instalado", "chave": "Mestre Instalado", "modo": "inline"},
     "veneravel_mestre": {"nome": "Venerável Mestre", "chave": "Venerável Mestre", "modo": "inline"},
 }
@@ -41,11 +49,28 @@ def _valor_campo(membro: dict, campo_id: str, campo_info: dict) -> str:
         "data_nasc": ["Data de nascimento", "data_nasc"],
         "numero_loja": ["Número da loja", "numero_loja"],
         "potencia": ["Potência", "potencia"],
+        "potencia_complemento": ["Potência complemento", "potencia_complemento", "potencia_outra"],
         "grau": ["Grau", "grau"],
         "loja": ["Loja", "loja"],
         "oriente": ["Oriente", "oriente"],
         "nome": ["Nome", "nome"],
     }
+    if campo_id == "potencia":
+        principal = ""
+        comp = ""
+        for chave in aliases.get("potencia", ["Potência"]):
+            v = membro.get(chave)
+            if v not in (None, ""):
+                principal = str(v)
+                break
+        for chave in aliases.get("potencia_complemento", ["Potência complemento"]):
+            v = membro.get(chave)
+            if v not in (None, ""):
+                comp = str(v)
+                break
+        if principal or comp:
+            return formatar_potencia(principal, comp)
+        return "Não informado"
     for chave in aliases.get(campo_id, [campo_info["chave"]]):
         valor = membro.get(chave)
         if valor not in (None, ""):
@@ -206,19 +231,37 @@ async def aplicar_valor_inline_perfil(update: Update, context: ContextTypes.DEFA
     _, campo_id, novo_valor = query.data.split("|", 2)
     user_id = update.effective_user.id
 
-    if campo_id == "potencia" and novo_valor == "Outra":
-        return await _mostrar_prompt_campo_texto(
-            update,
-            context,
-            campo_id,
-            "Informe a potência desejada para manter o cadastro correto.",
-        )
+    if campo_id == "potencia":
+        principal, _ = normalizar_potencia(novo_valor, "")
+        if potencia_requer_complemento(principal):
+            context.user_data["potencia_principal_pendente"] = principal
+            context.user_data["editando_campo_perfil"] = "potencia_complemento"
+            return await _mostrar_prompt_campo_texto(
+                update,
+                context,
+                "potencia_complemento",
+                f"Informe o complemento da potência. {sugestao_complemento(principal)}",
+            )
 
     campo_info = CAMPOS_EDITAVEIS_PERFIL.get(campo_id)
     if not campo_info:
         return ConversationHandler.END
 
-    sucesso = atualizar_membro(user_id, {campo_info["chave"]: novo_valor}, preservar_nivel=True)
+    if campo_id == "potencia":
+        principal, comp = normalizar_potencia(novo_valor, "")
+        if not validar_potencia(principal, comp):
+            await query.answer("Potência inválida.", show_alert=True)
+            return ConversationHandler.END
+        sucesso = atualizar_membro(
+            user_id,
+            {
+                CAMPOS_EDITAVEIS_PERFIL["potencia"]["chave"]: principal,
+                CAMPOS_EDITAVEIS_PERFIL["potencia_complemento"]["chave"]: "",
+            },
+            preservar_nivel=True,
+        )
+    else:
+        sucesso = atualizar_membro(user_id, {campo_info["chave"]: novo_valor}, preservar_nivel=True)
     if not sucesso:
         await query.answer("Não consegui atualizar este dado agora.", show_alert=True)
         return ConversationHandler.END
@@ -257,7 +300,45 @@ async def receber_novo_valor_perfil(update: Update, context: ContextTypes.DEFAUL
                 "Irmão, para este campo, responda apenas com *Sim* ou *Não*.",
             )
 
-    sucesso = atualizar_membro(update.effective_user.id, {campo_info["chave"]: novo_valor}, preservar_nivel=True)
+    if campo_id == "potencia_complemento":
+        principal_pendente = (context.user_data.get("potencia_principal_pendente") or "").strip()
+        if principal_pendente:
+            principal, comp = normalizar_potencia(principal_pendente, novo_valor)
+            if not validar_potencia(principal, comp):
+                return await _mostrar_prompt_campo_texto(
+                    update,
+                    context,
+                    campo_id,
+                    "Complemento inválido. Ex.: GLMERGS, GOB-RS, GORGS.",
+                )
+            sucesso = atualizar_membro(
+                update.effective_user.id,
+                {
+                    CAMPOS_EDITAVEIS_PERFIL["potencia"]["chave"]: principal,
+                    CAMPOS_EDITAVEIS_PERFIL["potencia_complemento"]["chave"]: comp,
+                },
+                preservar_nivel=True,
+            )
+        else:
+            membro = buscar_membro(update.effective_user.id) or {}
+            pot_atual = _valor_campo(membro, "potencia", CAMPOS_EDITAVEIS_PERFIL["potencia"])
+            principal, _ = normalizar_potencia(pot_atual, "")
+            principal = principal or "CMSB"
+            principal, comp = normalizar_potencia(principal, novo_valor)
+            if not validar_potencia(principal, comp):
+                return await _mostrar_prompt_campo_texto(
+                    update,
+                    context,
+                    campo_id,
+                    "Complemento inválido. Ex.: GLMERGS, GOB-RS, GORGS.",
+                )
+            sucesso = atualizar_membro(
+                update.effective_user.id,
+                {CAMPOS_EDITAVEIS_PERFIL["potencia_complemento"]["chave"]: comp},
+                preservar_nivel=True,
+            )
+    else:
+        sucesso = atualizar_membro(update.effective_user.id, {campo_info["chave"]: novo_valor}, preservar_nivel=True)
     if sucesso:
         await _enviar_ou_editar_mensagem(
             context,
@@ -277,6 +358,7 @@ async def receber_novo_valor_perfil(update: Update, context: ContextTypes.DEFAUL
 
     context.user_data.pop("editando_campo_perfil", None)
     context.user_data.pop("perfil_dados", None)
+    context.user_data.pop("potencia_principal_pendente", None)
     return ConversationHandler.END
 
 

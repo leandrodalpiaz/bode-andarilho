@@ -64,6 +64,13 @@ from src.messages import (
     CADASTRO_PROMPT_CONFIRMAR,
 )
 from src.sheets_supabase import buscar_membro, cadastrar_membro
+from src.potencias import (
+    formatar_potencia,
+    normalizar_potencia,
+    potencia_requer_complemento,
+    sugestao_complemento,
+    validar_potencia,
+)
 from src.bot import (
     navegar_para,
     _enviar_ou_editar_mensagem,
@@ -77,7 +84,7 @@ logger = logging.getLogger(__name__)
 # ============================================
 
 # Estados da conversação
-NOME, DATA_NASC, GRAU, VM, LOJA, NUMERO_LOJA, ORIENTE, POTENCIA, CONFIRMAR = range(9)
+NOME, DATA_NASC, GRAU, VM, LOJA, NUMERO_LOJA, ORIENTE, POTENCIA, POTENCIA_COMPLEMENTO, CONFIRMAR = range(10)
 
 # Opções fixas
 GRAUS_OPCOES = [
@@ -99,6 +106,7 @@ CADASTRO_ETAPAS = (
     "cadastro_numero_loja",
     "cadastro_oriente",
     "cadastro_potencia",
+    "cadastro_potencia_complemento",
 )
 
 
@@ -136,6 +144,8 @@ def _estado_pendente_cadastro(context: ContextTypes.DEFAULT_TYPE) -> int:
         return ORIENTE
     if not _campo_preenchido(context, "cadastro_potencia"):
         return POTENCIA
+    if not _campo_preenchido(context, "cadastro_potencia_complemento"):
+        return POTENCIA_COMPLEMENTO
     return CONFIRMAR
 
 
@@ -143,14 +153,15 @@ def _texto_etapa(estado: int, retomada: bool = False) -> str:
     """Texto guia para cada etapa, com linguagem de passo a passo."""
     prefixo = "▶️ *Retomando cadastro*\n\n" if retomada else ""
     textos = {
-        NOME: "🧭 *Passo 1/8*\nEnvie seu *nome completo*.",
-        DATA_NASC: "🧭 *Passo 2/8*\nEnvie sua *data de nascimento* no formato DD/MM/AAAA.\nEx.: 25/03/1988",
-        GRAU: "🧭 *Passo 3/8*\nSelecione seu *grau*.",
-        VM: "🧭 *Passo 4/8*\nVocê é *Venerável Mestre*?",
-        LOJA: "🧭 *Passo 5/8*\nInforme o *nome da sua loja*.",
-        NUMERO_LOJA: "🧭 *Passo 6/8*\nInforme o *número da sua loja* (somente números).\nEx.: 12 ou 0",
-        ORIENTE: "🧭 *Passo 7/8*\nInforme seu *Oriente*.",
-        POTENCIA: "🧭 *Passo 8/8*\nInforme sua *Potência*.",
+        NOME: "🧭 *Passo 1/9*\nEnvie seu *nome completo*.",
+        DATA_NASC: "🧭 *Passo 2/9*\nEnvie sua *data de nascimento* no formato DD/MM/AAAA.\nEx.: 25/03/1988",
+        GRAU: "🧭 *Passo 3/9*\nSelecione seu *grau*.",
+        VM: "🧭 *Passo 4/9*\nVocê é *Venerável Mestre*?",
+        LOJA: "🧭 *Passo 5/9*\nInforme o *nome da sua loja*.",
+        NUMERO_LOJA: "🧭 *Passo 6/9*\nInforme o *número da sua loja* (somente números).\nEx.: 12 ou 0",
+        ORIENTE: "🧭 *Passo 7/9*\nInforme seu *Oriente*.",
+        POTENCIA: "🧭 *Passo 8/9*\nInforme sua *Potência principal* (GOB, CMSB ou COMAB).",
+        POTENCIA_COMPLEMENTO: "🧭 *Passo 9/9*\nInforme o *complemento da Potência*.",
     }
     return f"{prefixo}{textos.get(estado, 'Envie a informação solicitada:')}"
 
@@ -381,6 +392,7 @@ def _resumo_cadastro(context: ContextTypes.DEFAULT_TYPE) -> str:
     numero_loja = (context.user_data.get("cadastro_numero_loja") or "").strip()
     oriente = (context.user_data.get("cadastro_oriente") or "").strip()
     potencia = (context.user_data.get("cadastro_potencia") or "").strip()
+    potencia_comp = (context.user_data.get("cadastro_potencia_complemento") or "").strip()
 
     numero_fmt = f" - Nº {numero_loja}" if numero_loja and numero_loja not in ("0", "") else ""
 
@@ -392,7 +404,7 @@ def _resumo_cadastro(context: ContextTypes.DEFAULT_TYPE) -> str:
         f"🔨 *Venerável Mestre:* {vm}\n"
         f"🏛 *Loja:* {loja}{numero_fmt}\n"
         f"📍 *Oriente:* {oriente}\n"
-        f"⚜️ *Potência:* {potencia}\n\n"
+        f"⚜️ *Potência:* {formatar_potencia(potencia, potencia_comp)}\n\n"
         "_Seus dados serão mantidos em absoluto sigilo._"
     )
 
@@ -539,6 +551,9 @@ async def editar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT
     context.user_data["cadastro_numero_loja"] = (membro.get("Número da loja") or membro.get("numero_loja") or "").strip()
     context.user_data["cadastro_oriente"] = (membro.get("Oriente") or membro.get("oriente") or "").strip()
     context.user_data["cadastro_potencia"] = (membro.get("Potência") or membro.get("potencia") or "").strip()
+    context.user_data["cadastro_potencia_complemento"] = (
+        membro.get("Potência complemento") or membro.get("potencia_complemento") or membro.get("potencia_outra") or ""
+    ).strip()
 
     await navegar_para(
         update, context,
@@ -609,7 +624,33 @@ async def receber_potencia(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(potencia) < 2:
         return await _reexibir_etapa(update, context, POTENCIA, CADASTRO_ERRO_POTENCIA)
 
-    context.user_data["cadastro_potencia"] = potencia
+    principal, _ = normalizar_potencia(potencia, "")
+    if principal not in ("GOB", "CMSB", "COMAB"):
+        return await _reexibir_etapa(update, context, POTENCIA, CADASTRO_ERRO_POTENCIA)
+
+    context.user_data["cadastro_potencia"] = principal
+
+    if potencia_requer_complemento(principal):
+        return await _navegar_etapa(update, context, POTENCIA_COMPLEMENTO)
+
+    context.user_data["cadastro_potencia_complemento"] = ""
+    return await _navegar_etapa(update, context, CONFIRMAR)
+
+
+async def receber_potencia_complemento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Recebe o complemento da potência."""
+    comp = (update.message.text or "").strip()
+    principal = (context.user_data.get("cadastro_potencia") or "").strip()
+    principal, comp_norm = normalizar_potencia(principal, comp)
+    if not validar_potencia(principal, comp_norm):
+        return await _reexibir_etapa(
+            update,
+            context,
+            POTENCIA_COMPLEMENTO,
+            f"Informe um complemento válido. {sugestao_complemento(principal)}",
+        )
+
+    context.user_data["cadastro_potencia_complemento"] = comp_norm
     return await _navegar_etapa(update, context, CONFIRMAR)
 
 
@@ -704,6 +745,7 @@ def _dados_para_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Di
         "numero_loja": context.user_data.get("cadastro_numero_loja", ""),
         "oriente": context.user_data.get("cadastro_oriente", ""),
         "potencia": context.user_data.get("cadastro_potencia", ""),
+        "potencia_complemento": context.user_data.get("cadastro_potencia_complemento", ""),
         "telegram_id": update.effective_user.id,
         "veneravel_mestre": context.user_data.get("cadastro_vm", ""),
     }
@@ -885,6 +927,10 @@ cadastro_handler = ConversationHandler(
         ],
         POTENCIA: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_potencia),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
+        ],
+        POTENCIA_COMPLEMENTO: [
+            MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_potencia_complemento),
             CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
         ],
         CONFIRMAR: [

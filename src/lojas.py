@@ -37,6 +37,7 @@ from src.sheets_supabase import (
 )
 from src.evento_midia import BUCKET_EVENT_CARDS
 from src.permissoes import get_nivel
+from src.ritos import normalizar_rito
 
 from src.bot import (
     navegar_para,
@@ -734,7 +735,8 @@ async def receber_oriente_loja(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recebe o rito."""
-    rito = update.message.text.strip()
+    rito_raw = update.message.text.strip()
+    rito = normalizar_rito(rito_raw) or rito_raw
     if len(rito) < 2:
         await update.message.reply_text("❌ Rito muito curto. Digite novamente:")
         return RITO

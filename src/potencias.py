@@ -8,6 +8,25 @@ POTENCIAS_PRINCIPAIS = ("GOB", "CMSB", "COMAB")
 POTENCIAS_COM_COMPLEMENTO = {"GOB", "CMSB", "COMAB"}
 
 
+def sugestao_complemento(principal: Any) -> str:
+    """
+    Sugere o formato do complemento conforme a potência principal.
+
+    Padrões de UX:
+    - CMSB  -> exemplos iniciando com "GL" (ex.: GLMERGS)
+    - COMAB -> exemplos iniciando com "GO" (ex.: GORGS)
+    - GOB   -> exemplos iniciando com "GOB-" (ex.: GOB-RS)
+    """
+    p, _ = normalizar_potencia(principal, "")
+    if p == "CMSB":
+        return "Ex.: GLMERGS, GLESP"
+    if p == "COMAB":
+        return "Ex.: GORGS, GOSC, GOP"
+    if p == "GOB":
+        return "Ex.: GOB-RS, GOB-SP"
+    return "Ex.: GLMERGS, GOB-RS, GORGS"
+
+
 def _norm(value: Any) -> str:
     return "" if value is None else str(value).strip()
 
