@@ -2,7 +2,7 @@
 
 Este documento complementa `docs/documentacao_tecnica.md` com os fluxos que estão ativos no código atual e que impactam diretamente navegação, onboarding e suporte com IA.
 
-## Escopo validado no codigo
+## Escopo validado no código
 
 Arquivos de maior impacto para fluxo:
 

@@ -59,8 +59,8 @@ logger = logging.getLogger(__name__)
 def _botao_cadastrar_evento() -> InlineKeyboardButton:
     """Retorna botão de cadastro priorizando o Mini App."""
     if WEBAPP_URL_EVENTO:
-        return InlineKeyboardButton("📌 Cadastrar evento", web_app=WebAppInfo(url=WEBAPP_URL_EVENTO))
-    return InlineKeyboardButton("📌 Cadastrar evento", callback_data="cadastrar_evento")
+        return InlineKeyboardButton("📌 Agendar sessão", web_app=WebAppInfo(url=WEBAPP_URL_EVENTO))
+    return InlineKeyboardButton("📌 Agendar sessão", callback_data="cadastrar_evento")
 
 # ============================================
 # CONSTANTES E CONFIGURAÇÕES
@@ -281,9 +281,9 @@ async def exibir_menu_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     teclado = InlineKeyboardMarkup([
         [_botao_cadastrar_evento()],
-        [InlineKeyboardButton("📋 Gerenciar todos os eventos", callback_data="meus_eventos")],
-        [InlineKeyboardButton("👥 Ver todos os membros", callback_data="admin_ver_membros")],
-        [InlineKeyboardButton("✏️ Editar membro", callback_data="admin_editar_membro")],
+        [InlineKeyboardButton("📋 Gerenciar todas as sessões", callback_data="meus_eventos")],
+        [InlineKeyboardButton("👥 Quadro de Obreiros", callback_data="admin_ver_membros")],
+        [InlineKeyboardButton("✏️ Atualizar Obreiro", callback_data="admin_editar_membro")],
         [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
         [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
         [InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")],
@@ -294,7 +294,7 @@ async def exibir_menu_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await navegar_para(
         update, context,
         "Área do Administrador",
-        "⚙️ *Bem-vindo à Área do Administrador*\n\nO que deseja fazer?",
+        "⚙️ *Painel da Administração*\n\nO que deseja fazer?",
         teclado
     )
 
@@ -394,7 +394,7 @@ async def promover_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if get_nivel(user_id) != "3":
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Apenas administradores podem promover membros."
+            "Apenas administradores podem promover obreiros."
         )
         return ConversationHandler.END
 
@@ -402,7 +402,7 @@ async def promover_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not membros:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Nenhum membro cadastrado."
+            "Nenhum obreiro registrado."
         )
         return ConversationHandler.END
 
@@ -421,7 +421,7 @@ async def promover_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not botoes:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Não há membros comuns para promover."
+            "Não há obreiros para promover."
         )
         return ConversationHandler.END
 
@@ -431,7 +431,7 @@ async def promover_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await navegar_para(
         update, context,
         "Admin > Promover Secretário",
-        "Selecione o membro que deseja promover a **secretário**:",
+        "Selecione o obreiro que deseja promover a **secretário**:",
         teclado
     )
     return 1  # SELECIONAR_MEMBRO
@@ -464,7 +464,7 @@ async def selecionar_membro_promover(update: Update, context: ContextTypes.DEFAU
     if not membro:
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "Membro não encontrado."
+            "Obreiro não encontrado."
         )
         return ConversationHandler.END
 
@@ -513,7 +513,7 @@ async def confirmar_promover(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await navegar_para(
             update, context,
             "Admin > Promover Secretário",
-            "✅ Membro promovido a secretário com sucesso!",
+            "✅ Obreiro promovido a secretário com sucesso!",
             InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔙 Voltar", callback_data="area_admin")
             ]])
@@ -521,7 +521,7 @@ async def confirmar_promover(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "❌ Erro ao promover membro."
+            "❌ Erro ao promover obreiro."
         )
 
     context.user_data.pop("promover_telegram_id", None)
@@ -539,7 +539,7 @@ async def rebaixar_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if get_nivel(user_id) != "3":
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Apenas administradores podem rebaixar membros."
+            "Apenas administradores podem rebaixar obreiros."
         )
         return ConversationHandler.END
 
@@ -547,7 +547,7 @@ async def rebaixar_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not membros:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Nenhum membro cadastrado."
+            "Nenhum obreiro registrado."
         )
         return ConversationHandler.END
 
@@ -609,7 +609,7 @@ async def selecionar_membro_rebaixar(update: Update, context: ContextTypes.DEFAU
     if not membro:
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
-            "Membro não encontrado."
+            "Obreiro não encontrado."
         )
         return ConversationHandler.END
 
@@ -658,7 +658,7 @@ async def confirmar_rebaixar(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await navegar_para(
             update, context,
             "Admin > Rebaixar Secretário",
-            "✅ Secretário rebaixado a comum com sucesso!",
+            "✅ Remoção de cargo efetuada com sucesso!",
             InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔙 Voltar", callback_data="area_admin")
             ]])
@@ -666,7 +666,7 @@ async def confirmar_rebaixar(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "❌ Erro ao rebaixar membro."
+            "❌ Erro ao rebaixar obreiro."
         )
 
     context.user_data.pop("rebaixar_telegram_id", None)
@@ -684,7 +684,7 @@ async def ver_todos_membros(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if get_nivel(user_id) != "3":
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "⛔ Apenas administradores podem ver todos os membros."
+            "⛔ Apenas administradores podem ver o Quadro de Obreiros."
         )
         return
 
@@ -692,7 +692,7 @@ async def ver_todos_membros(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not membros:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Nenhum membro cadastrado."
+            "Nenhum obreiro registrado."
         )
         return
 
@@ -754,7 +754,7 @@ async def ver_todos_membros(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="area_admin")])
     
-    texto = f"*Membros cadastrados (Página {page + 1}/{total_pages}):*\n\nSelecione um membro para editar."
+    texto = f"*Quadro de Obreiros (Página {page + 1}/{total_pages}):*\n\nSelecione um obreiro para atualizar."
 
     await navegar_para(
         update, context,
@@ -776,7 +776,7 @@ async def editar_membro_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
     if nivel not in ["2", "3"]:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "⛔ Você não tem permissão para editar membros."
+            "⛔ Você não tem permissão para atualizar obreiros."
         )
         return ConversationHandler.END
 
@@ -784,7 +784,7 @@ async def editar_membro_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
     if not membros:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "Nenhum membro cadastrado."
+            "Nenhum obreiro registrado."
         )
         return ConversationHandler.END
 

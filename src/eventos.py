@@ -172,7 +172,7 @@ async def _auto_delete_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int,
     try:
         await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
     except Exception as e:
-        logger.debug("Nao foi possivel autoapagar mensagem %s no chat %s: %s", message_id, chat_id, e)
+        logger.debug("Não foi possível autoapagar mensagem %s no chat %s: %s", message_id, chat_id, e)
 
 
 def registrar_post_evento_grupo(id_evento: str, chat_id: int, message_id: int) -> None:

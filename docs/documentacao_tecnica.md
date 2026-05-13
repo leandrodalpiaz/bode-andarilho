@@ -1,38 +1,38 @@
-# Documentacao Tecnica - Bode Andarilho Bot
+# Documentação Técnica - Bode Andarilho Bot
 
-**Versao:** 2.2 (Supabase + Mini App + Cards Visuais)
-**Ultima atualizacao:** 13/05/2026
+**Versão:** 2.2 (Supabase + Mini App + Cards Visuais)
+**Última atualização:** 13/05/2026
 **Runtime:** Python 3.12
 
-## 1. Visao Geral
+## 1. Visão Geral
 
-O **Bode Andarilho** e um bot do Telegram para gerenciar eventos/sessoes,
-presencas e membros.
+O **Bode Andarilho** é um bot do Telegram para gerenciar eventos/sessões,
+presenças e membros.
 
-A logica de confirmacao, cancelamento, listagem de confirmados, links de
-endereco, captions, callbacks e botoes inline permanece fora da renderizacao
-visual. A camada de cards apenas gera a imagem usada na publicacao.
+A lógica de confirmação, cancelamento, listagem de confirmados, links de
+endereço, captions, callbacks e botões inline permanece fora da renderização
+visual. A camada de cards apenas gera a imagem usada na publicação.
 
 Pontos-chave:
 
-- Fluxos principais preferem Mini App (formularios) para reduzir erro de digitacao.
-- Publicacao de evento no grupo pode ser foto/card com botoes inline abaixo.
-- Fallback obrigatorio: se renderizacao/envio de imagem falhar, publica em texto.
+- Fluxos principais preferem Mini App (formulários) para reduzir erros de digitação.
+- Publicação de evento no grupo pode ser foto/card com botões inline abaixo.
+- Fallback obrigatório: se a renderização/envio da imagem falhar, publica em texto.
 
 ## 2. Arquitetura e Tecnologias
 
-- python-telegram-bot (handlers, callbacks, envio/edicao de mensagens)
+- python-telegram-bot (handlers, callbacks, envio/edição de mensagens)
 - Starlette + uvicorn (webhook e Mini App HTTP)
 - Supabase (PostgreSQL + Storage)
 - APScheduler (jobs recorrentes)
-- Pillow (renderizacao de cards)
+- Pillow (renderização de cards)
 
-## 3. Estrutura de Diretorios
+## 3. Estrutura de Diretórios
 
 ```text
 assets/
-  branding/              # marca d'agua opcional do Bode Andarilho
-  fonts/                 # fontes .ttf usadas no card padrao
+  branding/              # marca d'água opcional do Bode Andarilho
+  fonts/                 # fontes .ttf usadas no card padrão
   potencias/             # selos GOB/CMSB/COMAB
   stamps/                # selos de grau (aprendiz/companheiro/mestre)
   templates/             # templates, incluindo o default do sistema
@@ -42,7 +42,7 @@ docs/
 src/
   miniapp.py
   render_cards.py        # renderizador de cards com Pillow
-  evento_midia.py        # decisao: card especial / template / texto fallback
+  evento_midia.py        # decisão: card especial / template / texto fallback
   sheets_supabase.py
   potencias.py
   ajuda/
@@ -54,21 +54,21 @@ main.py
 Regra operacional:
 
 1. Se o evento tiver `card_especial_url`, publica o card especial.
-2. Senao, se houver template da Loja, renderiza com o template da Loja.
-3. Senao, usa o template padrao do sistema.
+2. Senão, se houver template da Loja, renderiza com o template da Loja.
+3. Senão, usa o template padrão do sistema.
 4. Se qualquer etapa visual falhar, usa texto fallback.
 
-Essa camada nao altera:
+Essa camada não altera:
 
 - callbacks `confirmar|`, `cancelar_card|`, `ver_confirmados|`;
-- botoes inline do Telegram;
-- regras de confirmacao/cancelamento;
-- link de endereco/Google Maps;
+- botões inline do Telegram;
+- regras de confirmação/cancelamento;
+- link de endereço/Google Maps;
 - scheduler/lembretes;
-- permissoes;
+- permissões;
 - banco de dados.
 
-## 5. Template Padrao do Sistema
+## 5. Template Padrão do Sistema
 
 Arquivo:
 
@@ -78,29 +78,29 @@ assets/templates/default_event_card.png
 
 Uso:
 
-- sugerido automaticamente quando a Loja nao tiver template visual proprio;
+- sugerido automaticamente quando a Loja não tiver template visual próprio;
 - funciona como fallback institucional;
-- mantem a comunicacao visual mesmo em homologacao ou lojas recem-cadastradas.
+- mantém a comunicação visual mesmo em homologação ou lojas recém-cadastradas.
 
 Montagem visual atual em `src/render_cards.py`:
 
-1. Topo esquerdo: selo da potencia em `assets/potencias/` e complemento pequeno.
+1. Topo esquerdo: selo da potência em `assets/potencias/` e complemento pequeno.
 2. Topo direito: carimbo do grau em `assets/stamps/`.
 3. Data/hora centralizadas, com hora em peso visual maior.
 4. Linha discreta de grau no corpo.
-5. Secao `LOJA`: nome, numero destacado, cidade, UF e potencia/complemento.
-6. Secao `SESSAO`: tipo de sessao, rito, traje e agape.
-7. Secao `ORDEM DO DIA / OBSERVACOES`: pauta com quebra automatica.
-8. Rodape: frase institucional discreta.
+5. Seção `LOJA`: nome, número destacado, cidade, UF e potência/complemento.
+6. Seção `SESSÃO`: tipo de sessão, rito, traje e ágape.
+7. Seção `ORDEM DO DIA / OBSERVAÇÕES`: pauta com quebra automática.
+8. Rodapé: frase institucional discreta.
 
 Regras visuais consolidadas:
 
-- O texto "Nova Sessao" nao e renderizado.
-- O rito nao aparece no topo.
-- O rito aparece apenas dentro da secao `SESSAO`.
-- Links e botoes ficam fora da imagem, no Telegram.
+- O texto "Nova Sessão" não é renderizado.
+- O rito não aparece no topo.
+- O rito aparece apenas dentro da seção `SESSÃO`.
+- Links e botões ficam fora da imagem, no Telegram.
 
-## 6. Marca d'agua opcional
+## 6. Marca d'água opcional
 
 Arquivo reconhecido:
 
@@ -110,10 +110,10 @@ assets/branding/bode_andarilho_watermark.png
 
 Comportamento:
 
-- aplicada somente no template padrao;
+- aplicada somente no template padrão;
 - opacidade baixa;
-- tratamento em sepia;
-- tentativa de remocao de fundo claro;
+- tratamento em sépia;
+- tentativa de remoção de fundo claro;
 - posicionamento discreto no centro-direita;
 - sem impacto funcional.
 
@@ -122,8 +122,8 @@ Formato recomendado:
 - PNG;
 - fundo transparente;
 - 800x800 a 1200x1200 px;
-- estilo gravura/traco;
-- sem textos que concorram com os dados da sessao.
+- estilo gravura/traço;
+- sem textos que concorram com os dados da sessão.
 
 ## 7. Como editar no futuro
 
@@ -133,7 +133,7 @@ Para trocar apenas o fundo, substitua:
 assets/templates/default_event_card.png
 ```
 
-Para trocar selos sem alterar codigo:
+Para trocar selos sem alterar código:
 
 ```text
 assets/stamps/aprendiz.png
@@ -145,15 +145,15 @@ assets/potencias/comab.png
 assets/branding/bode_andarilho_watermark.png
 ```
 
-Para ajustar hierarquia, espacamentos, fontes, opacidade ou posicoes, editar
-somente o bloco do template padrao em `src/render_cards.py`.
+Para ajustar hierarquia, espaçamentos, fontes, opacidade ou posições, editar
+somente o bloco do template padrão em `src/render_cards.py`.
 
-## 8. Potencias
+## 8. Potências
 
-Padrao oficial:
+Padrão oficial:
 
 - `potencia`: apenas `GOB`, `CMSB` ou `COMAB`
-- `potencia_complemento`: texto livre obrigatorio para todas
+- `potencia_complemento`: texto livre obrigatório para todas
 
 Exemplos de complemento:
 
@@ -176,20 +176,20 @@ Bucket recomendado:
 event-cards
 ```
 
-Estrutura logica:
+Estrutura lógica:
 
 - `lojas/{loja_id}/template.*`
 - `eventos/{id_evento}/render.png`
 - `eventos/{id_evento}/especial.*`
 
-## 10. Verificacao rapida
+## 10. Verificação rápida
 
 ```bash
 python -m compileall main.py src
 ```
 
-## 11. Referencias
+## 11. Referências
 
 - Fluxos atualizados: `docs/fluxos_atualizados_2026_04.md`
 - Ajuda/FAQ: `src/ajuda/faq.py`
-- Manutencao da base de IA/ajuda: `docs/manutencao_ajuda_e_ia.md`
+- Manutenção da base de IA/ajuda: `docs/manutencao_ajuda_e_ia.md`

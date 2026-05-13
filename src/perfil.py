@@ -1,4 +1,4 @@
-﻿# ============================================
+# ============================================
 # BODE ANDARILHO - PERFIL DO USUÁRIO
 # ============================================
 # 
@@ -70,14 +70,14 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not membro:
         # Usuário não tem cadastro
         teclado = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📝 Fazer cadastro", callback_data="iniciar_cadastro")],
+            [InlineKeyboardButton("📝 Realizar Registro", callback_data="iniciar_cadastro")],
             [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
         ])
         
         await navegar_para(
             update, context,
             "Meu Perfil",
-            "👤 *Meu cadastro*\n\nVocê ainda não possui um registro ativo.\nSeus dados permanecem sempre *acobertos* por segurança.\n\nClique abaixo para iniciar:",
+            "👤 *Meu Registro*\n\nVocê ainda não possui um registro regular.\nSeus dados permanecem sempre *acobertos* por segurança.\n\nClique abaixo para iniciar:",
             teclado
         )
         return
@@ -95,8 +95,8 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nivel = str(membro.get("Nivel") or "1")
 
     # Texto amigável para o nível de permissão
-    niveis = {"1": "Membro", "2": "Secretário", "3": "Administrador"}
-    nivel_texto = niveis.get(nivel, "Membro")
+    niveis = {"1": "Obreiro", "2": "Secretário", "3": "Administrador"}
+    nivel_texto = niveis.get(nivel, "Obreiro")
 
     # Formatação do número da loja se existir
     numero_fmt = f" - Nº {numero_loja}" if numero_loja and str(numero_loja) not in ("0", "Não informado") else ""
@@ -112,7 +112,7 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"*Potência:* {potencia}\n"
         f"*Venerável Mestre:* {vm}\n"
         f"*Nível de acesso:* {nivel_texto}\n"
-        f"*Permissões:* consultar sessões, confirmar presença e editar seus dados.\n"
+        f"*Permissões:* consultar sessões, confirmar presença e atualizar seus dados.\n"
     )
 
     conquistas = await calcular_conquistas_membro(user_id)
@@ -123,7 +123,7 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
         texto += "\n_Você ainda não possui títulos de Andarilho._"
 
     teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✏️ Editar perfil", callback_data="editar_perfil")],
+        [InlineKeyboardButton("✏️ Atualizar perfil", callback_data="editar_perfil")],
         [InlineKeyboardButton("🏆 Ver minhas conquistas", callback_data="mostrar_conquistas_membro")],
         [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
     ])

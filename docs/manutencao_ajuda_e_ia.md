@@ -11,7 +11,7 @@ Garantir que:
 - mudanças de fluxo não gerem respostas desatualizadas;
 - o Mini App (formulários) seja o caminho preferencial sempre que possível.
 
-## Arquivos de referencia
+## Arquivos de referência
 
 - Documentação técnica geral: `docs/documentacao_tecnica.md`
 - Fluxos atualizados: `docs/fluxos_atualizados_2026_04.md`

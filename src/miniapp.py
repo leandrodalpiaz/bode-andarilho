@@ -1374,7 +1374,7 @@ if(tg && tg.MainButton){
   }catch(e){}
 })();
 """
-    return _html_wrap("Cadastro de Membro", body, script)
+    return _html_wrap("Registro de Obreiro", body, script)
 
 
 
@@ -1490,7 +1490,7 @@ tg.MainButton.onClick(async()=>{
   }catch(e){}
 })();
 """
-    return _html_wrap("Cadastro de Loja", body, script)
+    return _html_wrap("Registro de Loja", body, script)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1503,7 +1503,7 @@ def html_cadastro_evento() -> str:
   <div class="info">Preencha os dados e continue. A publicação final será confirmada no chat do bot.</div>
 </div>
 <div id="lojas_card" class="card" style="display:none">
-  <div class="card-title">Atalho - Lojas cadastradas</div>
+  <div class="card-title">Atalho - Lojas registradas</div>
   <div class="field">
     <label for="loja_sel">Selecione para auto-preencher</label>
     <select id="loja_sel">
@@ -1844,7 +1844,7 @@ if(btnCancelar){
   btnCancelar.addEventListener('click',()=>closeMiniAppSafe());
 }
 """
-    return _html_wrap("Cadastro de Evento", body, script)
+    return _html_wrap("Agendamento de Sessão", body, script)
 
 
 

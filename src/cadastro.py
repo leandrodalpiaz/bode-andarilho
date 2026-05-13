@@ -229,7 +229,7 @@ def _teclado_confirmar() -> InlineKeyboardMarkup:
     """Cria teclado para tela de confirmação."""
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("✅ Confirmar cadastro", callback_data="confirmar_cadastro")],
+            [InlineKeyboardButton("✅ Confirmar registro", callback_data="confirmar_cadastro")],
             [
                 InlineKeyboardButton("⬅️ Voltar", callback_data=f"voltar|{POTENCIA}"),
                 InlineKeyboardButton("❌ Cancelar", callback_data="cancelar"),
@@ -245,7 +245,7 @@ def _teclado_inicio(
 ) -> InlineKeyboardMarkup:
     """Cria teclado da tela inicial de cadastro."""
     btn_webapp = (
-        InlineKeyboardButton("🧾 Abrir formulário de cadastro", web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO))
+        InlineKeyboardButton("🧾 Abrir formulário de registro", web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO))
         if WEBAPP_URL_MEMBRO
         else None
     )
@@ -296,10 +296,10 @@ async def _navegar_etapa(
 ) -> int:
     """Exibe a etapa solicitada com teclado e instruções apropriadas."""
     if estado == GRAU:
-        await navegar_para(update, context, "Cadastro", _texto_etapa(GRAU, retomada=retomada), _teclado_grau())
+        await navegar_para(update, context, "Registro", _texto_etapa(GRAU, retomada=retomada), _teclado_grau())
         return GRAU
     if estado == VM:
-        await navegar_para(update, context, "Cadastro", _texto_etapa(VM, retomada=retomada), _teclado_vm())
+        await navegar_para(update, context, "Registro", _texto_etapa(VM, retomada=retomada), _teclado_vm())
         return VM
     if estado == CONFIRMAR:
         await _mostrar_confirmacao(update, context)
@@ -308,7 +308,7 @@ async def _navegar_etapa(
     await navegar_para(
         update,
         context,
-        "Cadastro",
+        "Registro",
         _texto_etapa(estado, retomada=retomada),
         _teclado_nav(max(NOME, estado - 1)),
     )
@@ -316,7 +316,7 @@ async def _navegar_etapa(
 
 
 def _caminho_etapa(estado: int) -> str:
-    return "Confirmar Cadastro" if estado == CONFIRMAR else "Cadastro"
+    return "Confirmar Registro" if estado == CONFIRMAR else "Registro"
 
 
 def _teclado_etapa(estado: int) -> InlineKeyboardMarkup:
@@ -528,7 +528,7 @@ async def editar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT
     if not membro:
         teclado = (
             InlineKeyboardMarkup(
-                [[InlineKeyboardButton("🧾 Abrir formulário de cadastro", web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO))]]
+                [[InlineKeyboardButton("🧾 Abrir formulário de registro", web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO))]]
             )
             if WEBAPP_URL_MEMBRO
             else InlineKeyboardMarkup(
@@ -537,7 +537,7 @@ async def editar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT
         )
         await _enviar_ou_editar_mensagem(
             context, telegram_id, TIPO_RESULTADO,
-            "Você ainda não tem cadastro. Vamos iniciar agora.",
+            "Você ainda não possui registro. Vamos iniciar agora.",
             teclado
         )
         return ConversationHandler.END
@@ -557,7 +557,7 @@ async def editar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT
 
     await navegar_para(
         update, context,
-        "Editar Cadastro",
+        "Atualizar Registro",
         CADASTRO_REVALIDAR_INTRO_TMPL.format(etapa_nome=_texto_etapa(NOME)),
         _teclado_nav(NOME)
     )
@@ -665,7 +665,7 @@ async def receber_grau_texto(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await navegar_para(
             update,
             context,
-            "Cadastro",
+            "Registro",
             CADASTRO_ERRO_GRAU_TEXTO,
             _teclado_grau(),
         )
@@ -682,7 +682,7 @@ async def receber_vm_texto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await navegar_para(
             update,
             context,
-            "Cadastro",
+            "Registro",
             CADASTRO_ERRO_VM_TEXTO,
             _teclado_vm(),
         )

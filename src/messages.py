@@ -9,14 +9,14 @@
 # ============================================
 
 # ============================================
-# BOAS-VINDAS E CADASTRO
+# BOAS-VINDAS E REGISTRO
 # ============================================
 
 BOAS_VINDAS = (
     "Saudações Fraternas, meu Irmão! 📜\n\n"
     "Bem-vindo ao *Bode Andarilho*. Sou o seu auxílio no fortalecimento da "
     "visitação e na organização das nossas agendas em Loja.\n\n"
-    "Para que possamos caminhar juntos, peço que realize um breve cadastro. "
+    "Para que possamos caminhar juntos, peço que realize um breve registro. "
     "É um processo simples para que as Colunas o reconheçam."
 )
 
@@ -29,13 +29,13 @@ BOAS_VINDAS_RETORNO = (
 MENU_PRINCIPAL = "Por favor, selecione a oficina ou a ação desejada no menu abaixo:"
 
 CADASTRO_CONCLUIDO = (
-    "✅ *Cadastro realizado a contento!*\n\n"
+    "✅ *Registro realizado a contento!*\n\n"
     "Os seus dados foram registrados. Agora, use /start para acessar o "
     "Painel do Obreiro e ver as sessões disponíveis."
 )
 
 CADASTRO_CANCELADO = (
-    "Cadastro interrompido. Quando desejar retomar o seu lugar em nossa "
+    "Registro interrompido. Quando desejar retomar o seu lugar em nossa "
     "oficina virtual, basta digitar /start."
 )
 
@@ -74,7 +74,7 @@ NAO_CONFIRMOU = "Não encontramos registro da sua confirmação para esta sessã
 # ÁREAS RESTRITAS
 # ============================================
 
-ACESSO_NEGADO = "⛔ Acesso restrito. Este grau de permissão não foi concedido ao seu perfil."
+ACESSO_NEGADO = "⛔ Acesso restrito. Este nível de acesso não foi concedido ao seu perfil."
 
 APENAS_ADMIN = "Esta operação é exclusiva para os Administradores do sistema."
 
@@ -168,8 +168,8 @@ TEXTO_MENU_AJUDA_PRINCIPAL = (
 )
 
 TEXTO_GUIA_MEMBRO = (
-    "👤 *Guia do Membro*\n\n"
-    "Aqui você encontra o básico para usar o Bode Andarilho como membro comum."
+    "👤 *Guia do Obreiro*\n\n"
+    "Aqui você encontra o básico para usar o Bode Andarilho como obreiro."
 )
 
 TEXTO_GUIA_SECRETARIO = (
@@ -246,14 +246,14 @@ TEXTO_CELEBRACAO_MENSAL = (
 # [CONTEXTO] Ao usar /cadastro em grupo; orienta para o privado
 # [CANAL] Grupo (mensagem direta)
 CADASTRO_REDIRECIONAR_PRIVADO = (
-    "🔒 Para realizar seu cadastro, fale comigo no privado.\n\n"
+    "🔒 Para realizar seu registro, fale comigo no privado.\n\n"
     "Clique aqui: @BodeAndarilhoBot e envie /start"
 )
 
 # [CONTEXTO] Cadastro estava inativo após saída do grupo; solicita revalidação
 # [CANAL] Privado
 CADASTRO_REVALIDACAO_NECESSARIA = (
-    "🔄 *Revalidação de cadastro necessária*\n\n"
+    "🔄 *Revalidação de registro necessária*\n\n"
     "Identificamos que seu cadastro estava inativo por saída do grupo.\n"
     "Para voltar ao uso normal, atualize seus dados agora.\n\n"
     "_Isso garante informações atuais para administração e secretaria._"
@@ -262,8 +262,8 @@ CADASTRO_REVALIDACAO_NECESSARIA = (
 # [CONTEXTO] Membro possui dados parcialmente preenchidos; pode continuar ou recomeçar
 # [CANAL] Privado
 CADASTRO_PARCIAL_EM_ANDAMENTO = (
-    "🧾 *Cadastro em andamento*\n\n"
-    "Identifiquei dados já preenchidos do seu cadastro.\n"
+    "🧾 *Registro em andamento*\n\n"
+    "Identifiquei dados já preenchidos do seu registro.\n"
     "Você pode continuar de onde parou ou recomeçar do início.\n\n"
     "_O processo tem 8 passos rápidos e você pode usar Voltar/Cancelar a qualquer momento._"
 )
@@ -272,16 +272,16 @@ CADASTRO_PARCIAL_EM_ANDAMENTO = (
 # [CANAL] Privado
 CADASTRO_BOAS_VINDAS_GRUPO = (
     "🐐 *Seja bem-vindo ao Bode Andarilho!*\n\n"
-    "Para seguir no sistema, primeiro vamos fazer seu cadastro.\n"
-    "Toque em *Iniciar cadastro* e eu te guiarei passo a passo.\n\n"
+    "Para seguir no sistema, primeiro vamos realizar seu registro.\n"
+    "Toque em *Iniciar Registro* e eu te guiarei passo a passo.\n\n"
     "_Suas informações estão sob a proteção do sigilo maçônico._"
 )
 
 # [CONTEXTO] Tela inicial padrão de cadastro
 # [CANAL] Privado
 CADASTRO_INICIO_PADRAO = (
-    "👤 *Cadastro*\n\n"
-    "Aqui você pode iniciar ou editar seu cadastro.\n"
+    "👤 *Registro*\n\n"
+    "Aqui você pode iniciar ou atualizar seu registro.\n"
     "O fluxo é guiado em *8 passos* com exemplos em cada etapa.\n\n"
     "_Lembre-se: suas informações estão sob a proteção do sigilo maçônico._"
 )
@@ -289,7 +289,7 @@ CADASTRO_INICIO_PADRAO = (
 # [CONTEXTO] Início do fluxo de novo cadastro (passo 1); {etapa_nome} = _texto_etapa(NOME)
 # [CANAL] Privado
 CADASTRO_NOVO_INTRO_TMPL = (
-    "🧾 *Novo cadastro iniciado*\n\n"
+    "🧾 *Novo registro iniciado*\n\n"
     "Vamos concluir em 8 passos rápidos.\n"
     "Use *Voltar* para corrigir qualquer dado e *Cancelar* se quiser sair.\n\n"
     "{etapa_nome}"
@@ -298,7 +298,7 @@ CADASTRO_NOVO_INTRO_TMPL = (
 # [CONTEXTO] Início do fluxo de revalidação de cadastro (passo 1); {etapa_nome} = _texto_etapa(NOME)
 # [CANAL] Privado
 CADASTRO_REVALIDAR_INTRO_TMPL = (
-    "✏️ *Revalidar cadastro*\n\n"
+    "✏️ *Atualizar registro*\n\n"
     "Vamos revisar seus dados em 8 passos para garantir que tudo esteja atualizado.\n\n"
     "{etapa_nome}"
 )
@@ -361,7 +361,7 @@ CADASTRO_ERRO_VM_INVALIDO = "❌ Opção inválida. Você é Venerável Mestre?"
 # [CANAL] Privado
 CADASTRO_REVISAO_FINAL_TMPL = (
     "✅ *Revisão final*\n"
-    "Confira os dados abaixo. Se estiver tudo certo, confirme o cadastro.\n\n"
+    "Confira os dados abaixo. Se estiver tudo certo, confirme o registro.\n\n"
     "{resumo}"
 )
 
@@ -375,14 +375,14 @@ CADASTRO_DADOS_PENDENTES = (
 # [CONTEXTO] Falha ao salvar o cadastro no banco de dados
 # [CANAL] Privado
 CADASTRO_FALHA_SALVAR = (
-    "❌ Não consegui salvar seu cadastro agora.\n"
+    "❌ Não consegui salvar seu registro agora.\n"
     "Tente confirmar novamente em instantes."
 )
 
 # [CONTEXTO] Prompt exibido quando confirmação é feita por texto em vez de botão
 # [CANAL] Privado
 CADASTRO_PROMPT_CONFIRMAR = (
-    "Para concluir, toque em *✅ Confirmar cadastro* ou digite *confirmar*."
+    "Para concluir, toque em *✅ Confirmar registro* ou digite *confirmar*."
 )
 
 # [CONTEXTO] Fluxo de cadastro cancelado via botão "Cancelar"
@@ -397,18 +397,18 @@ CADASTRO_OPERACAO_CANCELADA = "Operação cancelada."
 
 # [CONTEXTO] Usuário sem cadastro tenta confirmar presença
 # [CANAL] Privado
-CONFIRMACAO_SEM_CADASTRO = "Irmão, antes de confirmar sua presença, preciso registrar seu cadastro."
+CONFIRMACAO_SEM_CADASTRO = "Irmão, antes de confirmar sua presença, preciso realizar seu registro."
 
 # [CONTEXTO] Privado indisponível ao redirecionar para cadastro; alternativa no grupo
 # [CANAL] Grupo
 CONFIRMACAO_FALLBACK_GRUPO_CADASTRO = (
-    "📩 Não consegui te chamar no privado para iniciar o cadastro.\n\n"
+    "📩 Não consegui te chamar no privado para iniciar o registro.\n\n"
     "Toque no botão abaixo, abra meu chat e envie /start."
 )
 
 # [CONTEXTO] Toast/alert ao redirecionar para privado para completar cadastro
 # [CANAL] Privado (toast)
-CONFIRMACAO_CALLBACK_ABRIR_PRIVADO_CADASTRO = "Abra o privado do bot para concluir o cadastro."
+CONFIRMACAO_CALLBACK_ABRIR_PRIVADO_CADASTRO = "Abra o privado do bot para concluir o registro."
 
 # [CONTEXTO] Evento não encontrado ao tentar confirmar depois do cadastro
 # [CANAL] Privado
@@ -530,7 +530,7 @@ EDICAO_EVENTO_CANCELADA = "Edição cancelada."
 # [CANAL] Privado
 GRUPO_ONBOARDING_SEM_CADASTRO = (
     "👋 *Bem-vindo ao Bode Andarilho!*\n\n"
-    "Para começar de forma simples e segura, toque em *Iniciar cadastro* no privado."
+    "Para começar de forma simples e segura, toque em *Iniciar Registro* no privado."
 )
 
 # [CONTEXTO] Alternativa no grupo quando o privado estiver indisponível; botão com link para o privado
@@ -539,7 +539,7 @@ GRUPO_FALLBACK_ABRIR_PRIVADO = "📩 Para continuar, abra meu privado pelo botã
 
 # [CONTEXTO] Resposta no grupo para /start ou /cadastro
 # [CANAL] Grupo
-GRUPO_COMANDO_PRIVADO = "📩 Use o bot no privado para cadastro e menus."
+GRUPO_COMANDO_PRIVADO = "📩 Use o bot no privado para o registro e menus."
 
 # [CONTEXTO] Resposta no grupo para comandos não reconhecidos (auto-apagada em 15 s)
 # [CANAL] Grupo
@@ -552,7 +552,7 @@ GRUPO_COMANDO_NAO_RECONHECIDO = (
     "• /menu\n"
     "• painel\n"
     "• /painel\n\n"
-    "Para cadastro e funções completas, fale comigo no privado."
+    "Para o registro e funções completas, fale comigo no privado."
 )
 
 # [CONTEXTO] Boas-vindas de retorno enviado no privado ao membro com cadastro ativo;
@@ -560,7 +560,7 @@ GRUPO_COMANDO_NAO_RECONHECIDO = (
 # [CANAL] Privado
 GRUPO_BOAS_VINDAS_RETORNO_TMPL = (
     "Saudações, Ir.·. {nome}! 🤝\n\n"
-    "Bem-vindo de volta ao grupo. Seu cadastro está ativo.\n"
+    "Bem-vindo de volta ao grupo. Seu registro está regular.\n"
     "Digite *bode* no grupo ou use /start aqui para acessar o painel."
 )
 
@@ -570,11 +570,11 @@ GRUPO_ONBOARDING_NOVO_MEMBRO_TMPL = (
     "Salve, {nome}! 🐐\n\n"
     "Bem-vindo ao *Bode Andarilho*.\n\n"
     "Para acessar as sessões e confirmar presenças, complete o seu "
-    "cadastro. É rápido e seus dados ficam protegidos aqui no privado.\n\n"
+    "registro. É rápido e seus dados ficam protegidos aqui no privado.\n\n"
     "Toque no botão abaixo para começar:"
 )
 
 # [CONTEXTO] Alternativa mínima no grupo quando o privado estiver indisponível para novo membro;
 #            {nome} (auto-apagada em 30 s)
 # [CANAL] Grupo
-GRUPO_FALLBACK_NOVO_MEMBRO_TMPL = "Salve, {nome}! 🐐 Para se cadastrar, toque no botão abaixo."
+GRUPO_FALLBACK_NOVO_MEMBRO_TMPL = "Salve, {nome}! 🐐 Para realizar seu registro, toque no botão abaixo."

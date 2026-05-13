@@ -187,18 +187,18 @@ def _bloqueio_seguranca(texto: str) -> Optional[str]:
 
 	if any(p in t for p in padroes_dados_pessoais):
 		return (
-			"Por seguranca, nao posso expor dados pessoais de terceiros. "
-			"Posso te ajudar pelos fluxos oficiais do seu proprio acesso."
+			"Por segurança, não posso expor dados pessoais de terceiros. "
+			"Posso te ajudar pelos fluxos oficiais do seu próprio acesso."
 		)
 	if any(p in t for p in padroes_tecnicos_sensiveis):
 		return (
-			"Esse tipo de informacao tecnica sensivel nao pode ser exibida aqui. "
+			"Esse tipo de informação técnica sensível não pode ser exibida aqui. "
 			"Posso orientar apenas funcionalidades de uso do bot."
 		)
 	if any(p in t for p in padroes_admin_sensiveis):
 		return (
-			"Operacoes administrativas seguem permissao de nivel e fluxo oficial. "
-			"Posso te levar para as opcoes permitidas no seu perfil."
+			"Operações administrativas seguem permissão de nível e fluxo oficial. "
+			"Posso te levar para as opções permitidas no seu perfil."
 		)
 	return None
 
@@ -496,7 +496,7 @@ async def assistente_ia_stats(update: Update, context: ContextTypes.DEFAULT_TYPE
 			update,
 			context,
 			"Observabilidade IA",
-			"⛔ Este painel e restrito ao nivel de administrador.",
+			"⛔ Este painel é restrito ao nível de administrador.",
 			InlineKeyboardMarkup([[InlineKeyboardButton("Menu principal", callback_data="menu_principal")]]),
 		)
 		return
@@ -505,21 +505,21 @@ async def assistente_ia_stats(update: Update, context: ContextTypes.DEFAULT_TYPE
 	m168 = _agregar_metricas(168)
 	texto = (
 		"*Observabilidade da IA (segura)*\n\n"
-		"*Ultimas 24h*\n"
-		f"- Total de interacoes: {m24['total']}\n"
-		f"- Intencao reconhecida: {m24['matched']} ({m24['taxa_matched']})\n"
-		f"- Bloqueios de seguranca: {m24['blocked']} ({m24['taxa_blocked']})\n"
-		f"- Nao reconhecidas: {m24['unmatched']} ({m24['taxa_unmatched']})\n"
+		"*Últimas 24h*\n"
+		f"- Total de interações: {m24['total']}\n"
+		f"- Intenção reconhecida: {m24['matched']} ({m24['taxa_matched']})\n"
+		f"- Bloqueios de segurança: {m24['blocked']} ({m24['taxa_blocked']})\n"
+		f"- Não reconhecidas: {m24['unmatched']} ({m24['taxa_unmatched']})\n"
 		f"- Entradas vazias: {m24['empty_input']}\n\n"
-		"*Top intencoes (24h)*\n"
+		"*Top intenções (24h)*\n"
 		f"{_formatar_ranking(m24['top_intents'], '- Sem dados')}\n\n"
 		"*Top motivos de bloqueio (24h)*\n"
 		f"{_formatar_ranking(m24['top_block_reasons'], '- Sem bloqueios')}\n\n"
-		"*Ultimos 7 dias*\n"
-		f"- Total de interacoes: {m168['total']}\n"
-		f"- Intencao reconhecida: {m168['matched']} ({m168['taxa_matched']})\n"
-		f"- Bloqueios de seguranca: {m168['blocked']} ({m168['taxa_blocked']})\n"
-		f"- Nao reconhecidas: {m168['unmatched']} ({m168['taxa_unmatched']})\n\n"
+		"*Últimos 7 dias*\n"
+		f"- Total de interações: {m168['total']}\n"
+		f"- Intenção reconhecida: {m168['matched']} ({m168['taxa_matched']})\n"
+		f"- Bloqueios de segurança: {m168['blocked']} ({m168['taxa_blocked']})\n"
+		f"- Não reconhecidas: {m168['unmatched']} ({m168['taxa_unmatched']})\n\n"
 		"_Painel agregado: sem texto bruto e sem dados pessoais de terceiros._"
 	)
 	teclado = InlineKeyboardMarkup(
@@ -539,7 +539,7 @@ async def assistente_ia_relatorio(update: Update, context: ContextTypes.DEFAULT_
 			update,
 			context,
 			"Aprendizado IA",
-			"⛔ Este relatorio e restrito ao nivel de administrador.",
+			"⛔ Este relatório é restrito ao nível de administrador.",
 			InlineKeyboardMarkup([[InlineKeyboardButton("Menu principal", callback_data="menu_principal")]]),
 		)
 		return
@@ -547,24 +547,24 @@ async def assistente_ia_relatorio(update: Update, context: ContextTypes.DEFAULT_
 	dados = _sugestoes_aprendizado(168)
 	plano = _plano_semanal_aprendizado(168)
 	texto = (
-		"*Relatorio Semanal de Aprendizado da IA*\n\n"
-		"*Acoes recomendadas para esta semana*\n"
+		"*Relatório Semanal de Aprendizado da IA*\n\n"
+		"*Ações recomendadas para esta semana*\n"
 		"*Alta prioridade*\n"
-		f"{_formatar_linhas(plano['alta'], '- Nenhuma acao critica agora')}\n\n"
-		"*Media prioridade*\n"
-		f"{_formatar_linhas(plano['media'], '- Nenhuma acao media agora')}\n\n"
+		f"{_formatar_linhas(plano['alta'], '- Nenhuma ação crítica agora')}\n\n"
+		"*Média prioridade*\n"
+		f"{_formatar_linhas(plano['media'], '- Nenhuma ação média agora')}\n\n"
 		"*Monitorar*\n"
 		f"{_formatar_linhas(plano['monitorar'], '- Sem pontos de monitoramento')}\n\n"
-		"*Base de evidencias (7d)*\n"
-		"*Temas nao reconhecidos mais recorrentes (7d)*\n"
+		"*Base de evidências (7d)*\n"
+		"*Temas não reconhecidos mais recorrentes (7d)*\n"
 		f"{_formatar_ranking(dados['top_unmatched_topics'], '- Sem dados suficientes')}\n\n"
-		"*Intencoes mais usadas (7d)*\n"
+		"*Intenções mais usadas (7d)*\n"
 		f"{_formatar_ranking(dados['top_matched_intents'], '- Sem dados suficientes')}\n\n"
 		"*Motivos de bloqueio mais frequentes (7d)*\n"
 		f"{_formatar_ranking(dados['top_block_reasons'], '- Sem bloqueios relevantes')}\n\n"
-		"*Sugestoes brutas da analise*\n"
-		f"{_formatar_linhas(dados['sugestoes'], '- Sem sugestoes')}\n\n"
-		"_Aprovacao humana continua obrigatoria antes de alterar ajuda, YAML ou codigo._"
+		"*Sugestões brutas da análise*\n"
+		f"{_formatar_linhas(dados['sugestoes'], '- Sem sugestões')}\n\n"
+		"_Aprovação humana continua obrigatória antes de alterar ajuda, YAML ou código._"
 	)
 	teclado = InlineKeyboardMarkup(
 		[
@@ -603,7 +603,7 @@ async def _executar_assistente_ia(update: Update, context: ContextTypes.DEFAULT_
 			update,
 			context,
 			"Assistente IA",
-			"Escreva sua duvida normalmente aqui no privado. Exemplo: quais sessoes eu posso visitar essa semana?",
+			"Escreva sua dúvida normalmente aqui no privado. Exemplo: quais sessões eu posso visitar essa semana?",
 			teclado,
 		)
 		return
@@ -847,22 +847,22 @@ def _eh_chamada_menu_privado(texto: str) -> bool:
 async def abrir_assistente_ia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 	nivel = get_nivel(update.effective_user.id if update.effective_user else 0)
 	linhas = [
-		[InlineKeyboardButton("Ver sessoes", callback_data="ver_eventos")],
-		[InlineKeyboardButton("Minhas confirmacoes", callback_data="minhas_confirmacoes")],
+		[InlineKeyboardButton("Ver sessões", callback_data="ver_eventos")],
+		[InlineKeyboardButton("Minhas confirmações", callback_data="minhas_confirmacoes")],
 		[InlineKeyboardButton("Meu perfil", callback_data="meu_cadastro")],
 		[InlineKeyboardButton("Central de Ajuda", callback_data="menu_ajuda")],
 		[InlineKeyboardButton("Voltar ao menu", callback_data="menu_principal")],
 	]
 	if nivel == "3":
-		linhas.insert(3, [InlineKeyboardButton("Metricas IA", callback_data="abrir_assistente_stats")])
-		linhas.insert(4, [InlineKeyboardButton("Relatorio IA", callback_data="abrir_assistente_relatorio")])
+		linhas.insert(3, [InlineKeyboardButton("Métricas IA", callback_data="abrir_assistente_stats")])
+		linhas.insert(4, [InlineKeyboardButton("Relatório IA", callback_data="abrir_assistente_relatorio")])
 
 	teclado = InlineKeyboardMarkup(linhas)
 	await navegar_para(
 		update,
 		context,
 		"Assistente IA",
-		"Escreva sua duvida em linguagem natural aqui no privado. Tambem pode usar os atalhos abaixo.",
+		"Escreva sua dúvida em linguagem natural aqui no privado. Também pode usar os atalhos abaixo.",
 		teclado,
 	)
 

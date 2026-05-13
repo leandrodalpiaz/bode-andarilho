@@ -617,6 +617,13 @@ def cadastrar_membro(dados: dict) -> bool:
                 )
                 row.pop("status", None)
                 supabase.table("membros").insert(row).execute()
+            elif _coluna_ausente(e_ins, "potencia_complemento"):
+                logger.warning(
+                    "Coluna 'potencia_complemento' ausente em 'membros' — INSERT sem ela. "
+                    "Adicione-a: ALTER TABLE membros ADD COLUMN potencia_complemento TEXT DEFAULT '';"
+                )
+                row.pop("potencia_complemento", None)
+                supabase.table("membros").insert(row).execute()
             else:
                 raise
 
@@ -692,6 +699,14 @@ def atualizar_membro(telegram_id: int, dados_atualizados: dict, preservar_nivel:
                 )
                 update.pop("status", None)
                 if update:  # só executa se ainda houver outros campos
+                    supabase.table("membros").update(update).eq("telegram_id", tid).execute()
+            elif _coluna_ausente(e_upd, "potencia_complemento"):
+                logger.warning(
+                    "Coluna 'potencia_complemento' ausente em 'membros' — UPDATE sem ela. "
+                    "Adicione-a: ALTER TABLE membros ADD COLUMN potencia_complemento TEXT DEFAULT '';"
+                )
+                update.pop("potencia_complemento", None)
+                if update:
                     supabase.table("membros").update(update).eq("telegram_id", tid).execute()
             else:
                 raise
@@ -1277,7 +1292,7 @@ def buscar_loja_por_nome_numero(nome_loja: Any, numero_loja: Any) -> Optional[Di
             return None
         return _row_to_sheets("lojas", resp.data[0])
     except Exception as e:
-        logger.error("Erro ao buscar loja por nome/numero (%s/%s): %s", nome, numero, e)
+        logger.error("Erro ao buscar loja por nome/número (%s/%s): %s", nome, numero, e)
         return None
 
 
