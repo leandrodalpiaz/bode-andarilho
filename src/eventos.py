@@ -612,7 +612,6 @@ def montar_linha_confirmado(dados_membro_ou_snapshot: dict) -> str:
     loja = (dados_membro_ou_snapshot.get("Loja") or dados_membro_ou_snapshot.get("loja") or "").strip()
     numero = (
         dados_membro_ou_snapshot.get("Número da loja")
-        or dados_membro_ou_snapshot.get("NÃºmero da loja")
         or dados_membro_ou_snapshot.get("numero_loja")
         or ""
     )
@@ -621,14 +620,13 @@ def montar_linha_confirmado(dados_membro_ou_snapshot: dict) -> str:
     oriente = (dados_membro_ou_snapshot.get("Oriente") or dados_membro_ou_snapshot.get("oriente") or "").strip()
     potencia = (
         dados_membro_ou_snapshot.get("Potência")
-        or dados_membro_ou_snapshot.get("Potęncia")
-        or dados_membro_ou_snapshot.get("PotÃªncia")
         or dados_membro_ou_snapshot.get("potencia")
         or ""
     ).strip()
 
-    loja_composta = f"{loja} {numero}".strip()
-    return f"{nome} - {grau} - {loja_composta} - {oriente} - {potencia}"
+    num_fmt = f" nº {numero}" if numero and str(numero) != "0" else ""
+    loja_fmt = f"{loja}{num_fmt}".strip()
+    return f"• {nome} - {grau} - {loja_fmt} - {potencia}"
 
 
 def _status_evento_normalizado(evento: Optional[dict]) -> str:
@@ -1434,7 +1432,9 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
     if len(partes) < 3:
         return ConversationHandler.END
 
-    _, id_evento_cod, tipo_agape = partes
+    id_evento_cod = partes[1]
+    tipo_agape = partes[2]
+    bypass_grau = len(partes) >= 4 and partes[3] == "bypass"
     id_evento = _decode_cb(id_evento_cod)
     user_id = update.effective_user.id
 
@@ -1555,51 +1555,29 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
 
     grau_cadastrado = normalizar_grau_nome(membro.get("Grau", ""))
     grau_sessao = normalizar_grau_nome(evento.get("Grau", ""))
-    if not _pode_confirmar_presenca(grau_cadastrado, grau_sessao):
+    if not bypass_grau and not _pode_confirmar_presenca(grau_cadastrado, grau_sessao):
+        pauta = str(evento.get("Pauta", "") or "").strip()
+        texto_aviso = (
+            f"Ir.·., a sessão '{pauta}' é de Grau {grau_sessao}, mas seu cadastro consta como {grau_cadastrado}.\n\n"
+            f"Verifique seu cadastro com o secretário de sua oficina ou confirme assim mesmo caso seus dados estejam desatualizados. 🐐"
+        )
+        teclado = InlineKeyboardMarkup([
+            [InlineKeyboardButton("👉 Confirmar assim mesmo", callback_data=f"confirmar|{id_evento_cod}|{tipo_agape}|bypass")],
+            [InlineKeyboardButton("👤 Ver meu cadastro", callback_data="meu_cadastro")],
+            [InlineKeyboardButton("❌ Cancelar", callback_data="fechar_mensagem")],
+        ])
         await _enviar_ou_editar_mensagem(
-            context,
-            user_id,
-            TIPO_RESULTADO,
-            CONFIRMACAO_GRAU_INSUFICIENTE_TMPL.format(
-                grau_sessao=grau_sessao or "não informado",
-                grau_cadastrado=grau_cadastrado or "não informado",
-            ),
-            InlineKeyboardMarkup([
-                [InlineKeyboardButton("👤 Ver meu cadastro", callback_data="meu_cadastro")],
-                [InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")],
-            ]),
+            context, user_id, TIPO_RESULTADO,
+            texto_aviso,
+            teclado,
             limpar_conteudo=True
         )
         if update.effective_chat.type in ["group", "supergroup"]:
             await _responder_callback_seguro(query, "Verifique seu privado.", show_alert=True)
         return ConversationHandler.END
 
-    # INTERCEPTAÇÃO LOGÍSTICA: Aviso de Ágape (Hospitalaria Digital)
-    is_final = len(partes) >= 4 and partes[3] == "final"
-    
-    if tipo_agape != "sem" and not is_final:
-        botoes = [
-            [InlineKeyboardButton("✅ Confirmar Fisicamente", callback_data=f"confirmar|{id_evento_cod}|{tipo_agape}|final")],
-            [InlineKeyboardButton("❌ Cancelar", callback_data="fechar_mensagem")]
-        ]
-        
-        await _enviar_ou_editar_mensagem(
-            context, user_id, TIPO_RESULTADO,
-            "⚠️ *Responsabilidade Logística: Confirmação de Ágape*\n\n"
-            "Irmão, note que sua presença no ágape acarreta custos, preparo alimentar "
-            "e dimensionamento logístico pela *Hospitalaria* anfitriã.\n\n"
-            "Você confirma que estará fisicamente presente e assume este compromisso fraterno? 🐐",
-            InlineKeyboardMarkup(botoes),
-            limpar_conteudo=True
-        )
-        
-        if update.effective_chat.type in ["group", "supergroup"]:
-            await _responder_callback_seguro(
-                query, 
-                "Ir.·., verifique seu chat privado para confirmar seu compromisso com o Ágape.",
-                show_alert=True
-            )
-        return ConversationHandler.END
+    # INTERCEPTAÇÃO LOGÍSTICA REMOVIDA (Clique Único aplicado)
+    pass
 
     participacao_agape = "Confirmada" if tipo_agape != "sem" else "Não"
     confirmou_com_agape = tipo_agape != "sem"
@@ -1658,6 +1636,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
         await notificar_secretario(context, evento, membro, tipo_agape)
 
     data = str(evento.get("Data do evento", "") or "").strip()
+    pauta = str(evento.get("Pauta", "") or "").strip()
     nome_loja = str(evento.get("Nome da loja", "") or "").strip()
     numero_loja = str(evento.get("Número da loja", "") or "").strip()
     horario = str(evento.get("Hora", "") or "").strip()
@@ -1696,6 +1675,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
                 horario=horario,
                 participacao=texto_participacao,
                 msg_agape=MENSAGEM_CONFIRMACAO_AGAPE,
+                pauta=pauta,
             )
         else:
             resposta = CONFIRMACAO_SEM_AGAPE_TMPL.format(
@@ -1705,6 +1685,7 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
                 numero_fmt=numero_fmt,
                 horario=horario,
                 participacao=texto_participacao,
+                pauta=pauta,
             )
 
         teclado = InlineKeyboardMarkup([
@@ -1879,6 +1860,7 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
     await notificar_secretario(context, evento, membro, tipo_agape)
 
     data = str(evento.get("Data do evento", "") or "").strip()
+    pauta = str(evento.get("Pauta", "") or "").strip()
     nome_loja = str(evento.get("Nome da loja", "") or "").strip()
     numero_loja = str(evento.get("Número da loja", "") or "").strip()
     horario = str(evento.get("Hora", "") or "").strip()
@@ -2042,10 +2024,10 @@ async def cancelar_presenca(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 "Grau": c.get("Grau", c.get("grau", "")),
                                 "Nome": c.get("Nome", c.get("nome", "")),
                                 "Loja": c.get("Loja", c.get("loja", "")),
-                                "Número da loja": c.get("Número da loja", c.get("numero_loja", c.get("NÃƒÂºmero da loja", ""))),
+                                "Número da loja": c.get("Número da loja", c.get("numero_loja", "")),
                                 "Oriente": c.get("Oriente", c.get("oriente", "")),
-                                "Potência": c.get("Potência", c.get("potencia", c.get("PotÃƒÂªncia", ""))),
-                                "Venerável Mestre": c.get("Venerável Mestre", c.get("veneravel_mestre", c.get("VenerÃƒÂ¡vel Mestre", ""))),
+                                "Potência": c.get("Potência", c.get("potencia", "")),
+                                "Venerável Mestre": c.get("Venerável Mestre", c.get("veneravel_mestre", "")),
                             }
                             linhas.append(montar_linha_confirmado(snapshot))
 
@@ -2162,7 +2144,7 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ev_loja_nome = _clean(evento.get("Nome da loja") or evento.get("nome_loja"))
                 ev_loja_num = _clean(evento.get("Número da loja") or evento.get("numero_loja"))
                 c_loja_nome = _clean(c.get("Loja") or c.get("loja"))
-                c_loja_num = _clean(c.get("Número da loja") or c.get("numero_loja") or c.get("NÃºmero da loja"))
+                c_loja_num = _clean(c.get("Número da loja") or c.get("numero_loja"))
                 es_visitante = (ev_loja_nome != c_loja_nome) or (ev_loja_num != c_loja_num)
 
         suffix = " 🐐" if es_visitante else ""
@@ -2176,10 +2158,10 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Grau": c.get("Grau", c.get("grau", "")),
                 "Nome": (c.get("Nome") or c.get("nome") or "").strip() + suffix,
                 "Loja": c.get("Loja", c.get("loja", "")),
-                "Número da loja": c.get("Número da loja", c.get("numero_loja", c.get("NÃºmero da loja", ""))),
+                "Número da loja": c.get("Número da loja", c.get("numero_loja", "")),
                 "Oriente": c.get("Oriente", c.get("oriente", "")),
-                "Potência": c.get("Potência", c.get("potencia", c.get("PotÃªncia", ""))),
-                "Venerável Mestre": c.get("Venerável Mestre", c.get("veneravel_mestre", c.get("VenerÃ¡vel Mestre", ""))),
+                "Potência": c.get("Potência", c.get("potencia", "")),
+                "Venerável Mestre": c.get("Venerável Mestre", c.get("veneravel_mestre", "")),
             }
             linhas.append(montar_linha_confirmado(snapshot))
 
@@ -2225,7 +2207,7 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     context,
                     update.effective_chat.id,
                     msg.message_id,
-                    delay=10,
+                    delay=15,
                 )
             )
 
@@ -2385,7 +2367,14 @@ async def detalhes_confirmado(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"⚜️ {potencia}{agape_info}"
     )
 
+    endereco = str(evento.get("Endereço da sessão", "") or "").strip()
+    if "http://" in endereco.lower() or "https://" in endereco.lower():
+        btn_local = InlineKeyboardButton("📍 Localização", url=endereco)
+    else:
+        btn_local = InlineKeyboardButton("📍 Localização", callback_data=f"ver_local|{_encode_cb(id_evento)}")
+
     teclado = InlineKeyboardMarkup([
+        [btn_local],
         [InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar|{_encode_cb(id_evento)}")],
         [InlineKeyboardButton("🔙 Voltar", callback_data="minhas_confirmacoes_futuro")],
     ])

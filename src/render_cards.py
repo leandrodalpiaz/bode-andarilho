@@ -277,7 +277,7 @@ def _badge_items(
     for keys, label in (
         (("Grau", "grau"), "GRAU"),
         (("Rito", "rito"), "RITO"),
-        (("Potência", "PotÃªncia", "potencia"), "POTÊNCIA"),
+        (("Potência", "potencia"), "POTÊNCIA"),
     ):
         if label == "GRAU" and not include_grau:
             continue
@@ -288,40 +288,8 @@ def _badge_items(
             yield label, value.upper()
 
 
-def _event_visual_parts(evento: Dict[str, Any]) -> Dict[str, str]:
-    numero = _norm(_get_any(evento, "Número da loja", "NÃºmero da loja", "numero_loja"))
-    numero_fmt = f" {numero}" if numero and numero != "0" else ""
-    loja = f"{_norm(_get_any(evento, 'Nome da loja', 'nome_loja'))}{numero_fmt}".strip()
-    oriente_potencia = " - ".join(
-        [
-            v
-            for v in (
-                _norm(_get_any(evento, "Oriente", "oriente")),
-                _norm(_get_any(evento, "Potência", "PotÃªncia", "potencia")),
-            )
-            if v
-        ]
-    )
-    potencia = _norm(_get_any(evento, "Potência", "PotÃªncia", "potencia"))
-    potencia_complemento = _norm(_get_any(evento, "Potência complemento", "PotÃªncia complemento", "potencia_complemento"))
-    return {
-        "titulo": _norm(_get_any(evento, "Título", "Titulo", "titulo")) or "NOVA SESSÃO",
-        "data_hora": f"{_norm(_get_any(evento, 'Data do evento', 'data_evento', 'data'))} • {_norm(_get_any(evento, 'Hora', 'hora'))}".strip(" •"),
-        "grau": _norm(_get_any(evento, "Grau", "grau")),
-        "loja": loja or "Loja",
-        "oriente_potencia": oriente_potencia,
-        "potencia": potencia,
-        "potencia_complemento": potencia_complemento,
-        "tipo": _norm(_get_any(evento, "Tipo de sessão", "Tipo de sessÃ£o", "tipo_sessao", "tipo_evento")),
-        "rito": _norm(_get_any(evento, "Rito", "rito")),
-        "traje": _norm(_get_any(evento, "Traje obrigatório", "Traje obrigatÃ³rio", "traje_obrigatorio")),
-        "agape": _norm(_get_any(evento, "Ágape", "Ãgape", "agape")),
-        "observacoes": _norm(_get_any(evento, "Observações", "ObservaÃ§Ãµes", "observacoes", "ordem_do_dia")),
-    }
-
-
 def _is_default_template_source(template: str, loja: Dict[str, Any]) -> bool:
-    custom_template = _norm(_get_any(loja, "Template sessão URL", "Template sessÃ£o URL", "template_sessao_url"))
+    custom_template = _norm(_get_any(loja, "Template sessão URL", "template_sessao_url"))
     if not custom_template:
         return True
     try:
@@ -349,7 +317,7 @@ def _draw_badges_artistic(
         color_keys = {
             "grau": ("Cor selo grau", "cor_selo_grau"),
             "rito": ("Cor selo rito", "cor_selo_rito"),
-            "potencia": ("Cor selo potência", "Cor selo potÃªncia", "cor_selo_potencia"),
+            "potencia": ("Cor selo potência", "Cor selo potência", "cor_selo_potencia"),
         }[kind]
         fill = _hex_to_rgba(_norm(_get_any(loja, *color_keys)) or DEFAULT_BADGE_COLORS[kind], 230)
         text = f"{label}: {value}"
@@ -522,117 +490,14 @@ def _draw_potencia_stamp(
         return False
 
 
-def _render_default_template_card(
-    image: Image.Image,
-    evento: Dict[str, Any],
-    loja: Dict[str, Any],
-    output_dir: Optional[str],
-) -> RenderResult:
-    draw = ImageDraw.Draw(image)
-    width, height = image.size
-    warnings: List[str] = []
-    preferred_font = _norm(_get_any(loja, "Fonte padrão", "Fonte padrÃ£o", "fonte_padrao"))
-    ink = _hex_to_rgba(_norm(_get_any(loja, "Cor texto padrão", "Cor texto padrÃ£o", "cor_texto_padrao")) or DEFAULT_TEXT_COLOR, 255)
-    soft_ink = _hex_to_rgba("#3a2410", 245)
-    parts = _event_visual_parts(evento)
-    stamp_applied = _draw_degree_stamp(image, parts["grau"])
-
-    margin_x = int(width * 0.145)
-    top_y = int(height * 0.205)
-    content_w = width - margin_x * 2
-    center_x = width // 2
-
-    badge_font = _load_font(max(18, width // 54), preferred_font, TITLE_FONT_CANDIDATES)
-    potencia_stamp_applied = _draw_potencia_stamp(
-        image,
-        draw,
-        parts["potencia"],
-        parts["potencia_complemento"],
-        _load_font(max(14, width // 68), preferred_font, TITLE_FONT_CANDIDATES),
-    )
-    badges_bottom = _draw_badges_artistic(
-        draw,
-        evento,
-        loja,
-        margin_x,
-        top_y + (int(height * 0.04) if potencia_stamp_applied else 0),
-        int(content_w * 0.46) if potencia_stamp_applied else content_w,
-        badge_font,
-        include_grau=not stamp_applied,
-        include_potencia=not potencia_stamp_applied,
-    )
-    y = badges_bottom + int(height * 0.055)
-
-    title_font = _load_font(max(28, width // 30), preferred_font, TITLE_FONT_CANDIDATES)
-    loja_font = _fit_font(draw, parts["loja"], int(content_w * 0.92), max(46, width // 15), max(30, width // 28), preferred_font, TITLE_FONT_CANDIDATES)
-    date_font = _load_font(max(30, width // 27), preferred_font, BODY_FONT_CANDIDATES)
-    body_font = _load_font(max(27, width // 33), preferred_font, BODY_FONT_CANDIDATES)
-    section_font = _load_font(max(28, width // 31), preferred_font, TITLE_FONT_CANDIDATES)
-    note_font = _load_font(max(26, width // 35), preferred_font, BODY_FONT_CANDIDATES)
-
-    _draw_text_shadow(draw, (center_x, y), parts["titulo"].upper(), title_font, ink, anchor="ma")
-    y += int(height * 0.048)
-
-    loja_lines = _wrap_text(draw, parts["loja"], loja_font, int(content_w * 0.94))
-    if len(loja_lines) > 2:
-        loja_font = _fit_font(draw, parts["loja"], int(content_w * 0.94), max(34, width // 22), max(24, width // 38), preferred_font, TITLE_FONT_CANDIDATES)
-        loja_lines = _wrap_text(draw, parts["loja"], loja_font, int(content_w * 0.94))[:2]
-        warnings.append("Nome da Loja longo; card renderizado em tamanho reduzido.")
-    y = _draw_centered_lines(draw, loja_lines, center_x, y, loja_font, ink, max(8, height // 135))
-    if parts["oriente_potencia"]:
-        y = _draw_centered_lines(draw, _wrap_text(draw, parts["oriente_potencia"], body_font, content_w), center_x, y + 2, body_font, soft_ink, 6)
-
-    y += int(height * 0.032)
-    if parts["data_hora"]:
-        _draw_text_shadow(draw, (center_x, y), parts["data_hora"], date_font, ink, anchor="ma")
-        y += int(height * 0.045)
-    if parts["grau"]:
-        _draw_text_shadow(draw, (center_x, y), f"Grau: {parts['grau']}", body_font, soft_ink, anchor="ma")
-        y += int(height * 0.04)
-
-    y += int(height * 0.025)
-    _draw_text_shadow(draw, (center_x, y), "SESSÃO", section_font, ink, anchor="ma")
-    y += int(height * 0.042)
-
-    detail_lines = [
-        f"Tipo: {parts['tipo']}" if parts["tipo"] else "",
-        f"Rito: {parts['rito']}" if parts["rito"] else "",
-        f"Traje: {parts['traje']}" if parts["traje"] else "",
-        f"Ágape: {parts['agape']}" if parts["agape"] else "",
-    ]
-    for line in [line for line in detail_lines if line]:
-        y = _draw_centered_lines(draw, _wrap_text(draw, line, body_font, content_w), center_x, y, body_font, ink, 5)
-
-    if parts["observacoes"]:
-        y += int(height * 0.04)
-        _draw_text_shadow(draw, (center_x, y), "ORDEM DO DIA", section_font, ink, anchor="ma")
-        y += int(height * 0.043)
-        max_note_bottom = int(height * 0.75)
-        note_lines = _wrap_text(draw, parts["observacoes"], note_font, int(content_w * 0.88))
-        line_h = max(_measure(draw, "Ag", note_font)[1], getattr(note_font, "size", 24)) + 6
-        max_lines = max(1, (max_note_bottom - y) // line_h)
-        if len(note_lines) > max_lines:
-            note_lines = note_lines[:max_lines]
-            note_lines[-1] = note_lines[-1].rstrip(" .") + "..."
-            warnings.append("Ordem do dia longa; card renderizado com corte.")
-        _draw_centered_lines(draw, note_lines, center_x, y, note_font, ink, 6)
-
-    out_dir = output_dir or tempfile.gettempdir()
-    os.makedirs(out_dir, exist_ok=True)
-    event_id = _norm(_get_any(evento, "ID Evento", "id_evento", "id") or "preview") or "preview"
-    out_path = os.path.join(out_dir, f"bode_event_card_{event_id}.png")
-    image.convert("RGB").save(out_path, "PNG", optimize=True)
-    return RenderResult(path=out_path, warnings=warnings)
-
-
 def _event_visual_parts(evento: Dict[str, Any]) -> Dict[str, str]:
-    numero = _norm(_get_any(evento, "Numero da loja", "Número da loja", "NÃºmero da loja", "NÃƒÂºmero da loja", "numero_loja", "numero"))
+    numero = _norm(_get_any(evento, "Numero da loja", "Número da loja", "numero_loja", "numero"))
     numero_fmt = f" {numero}" if numero and numero != "0" else ""
     loja = f"{_norm(_get_any(evento, 'Nome da loja', 'nome_loja'))}{numero_fmt}".strip()
     cidade = _norm(_get_any(evento, "Cidade", "cidade", "Oriente", "oriente"))
     uf = _norm(_get_any(evento, "UF", "uf", "Estado", "estado"))
-    potencia = _norm(_get_any(evento, "Potencia", "Potência", "PotÃªncia", "PotÃƒÂªncia", "potencia"))
-    potencia_complemento = _norm(_get_any(evento, "Potencia complemento", "Potência complemento", "PotÃªncia complemento", "PotÃƒÂªncia complemento", "potencia_complemento"))
+    potencia = _norm(_get_any(evento, "Potencia", "Potência", "potencia"))
+    potencia_complemento = _norm(_get_any(evento, "Potencia complemento", "Potência complemento", "potencia_complemento"))
     potencia_display = potencia_complemento or potencia
     local_potencia = " - ".join([v for v in (cidade, uf, potencia_display) if v])
     data = _norm(_get_any(evento, "Data do evento", "Data", "data_evento", "data"))
@@ -654,11 +519,11 @@ def _event_visual_parts(evento: Dict[str, Any]) -> Dict[str, str]:
         "local_potencia": local_potencia,
         "potencia": potencia,
         "potencia_complemento": potencia_complemento,
-        "tipo": _norm(_get_any(evento, "Sessao", "Sessão", "Tipo de sessao", "Tipo de sessão", "Tipo de sessÃ£o", "Tipo de sessÃƒÂ£o", "tipo_sessao", "tipo_evento")),
+        "tipo": _norm(_get_any(evento, "Sessao", "Sessão", "Tipo de sessao", "Tipo de sessão", "tipo_sessao", "tipo_evento")),
         "rito": _norm(_get_any(evento, "Rito", "rito")),
-        "traje": _norm(_get_any(evento, "Traje obrigatorio", "Traje obrigatório", "Traje obrigatÃ³rio", "Traje obrigatÃƒÂ³rio", "traje_obrigatorio", "Traje")),
-        "agape": _norm(_get_any(evento, "Agape", "Ágape", "Ãgape", "ÃƒÂgape", "agape")),
-        "observacoes": _norm(_get_any(evento, "Ordem do dia", "Ordem do dia / observacoes", "Ordem do dia / observações", "Observacoes", "Observações", "ObservaÃ§Ãµes", "ObservaÃƒÂ§ÃƒÂµes", "observacoes", "ordem_do_dia")),
+        "traje": _norm(_get_any(evento, "Traje obrigatorio", "Traje obrigatório", "traje_obrigatorio", "Traje")),
+        "agape": _norm(_get_any(evento, "Agape", "Ágape", "agape")),
+        "observacoes": _norm(_get_any(evento, "Ordem do dia", "Ordem do dia / observacoes", "Ordem do dia / observações", "Observacoes", "Observações", "observacoes", "ordem_do_dia")),
     }
 
 
@@ -780,8 +645,8 @@ def _render_default_template_card(
     draw = ImageDraw.Draw(image)
     width, height = image.size
     warnings: List[str] = []
-    preferred_font = _norm(_get_any(loja, "Fonte padrão", "Fonte padrÃ£o", "Fonte padrÃƒÂ£o", "fonte_padrao"))
-    ink = _hex_to_rgba(_norm(_get_any(loja, "Cor texto padrão", "Cor texto padrÃ£o", "Cor texto padrÃƒÂ£o", "cor_texto_padrao")) or DEFAULT_TEXT_COLOR, 255)
+    preferred_font = _norm(_get_any(loja, "Fonte padrão", "fonte_padrao"))
+    ink = _hex_to_rgba(_norm(_get_any(loja, "Cor texto padrão", "cor_texto_padrao")) or DEFAULT_TEXT_COLOR, 255)
     soft_ink = _hex_to_rgba("#3a2410", 235)
     accent = _hex_to_rgba("#0c5265", 255)
     rito_accent = _hex_to_rgba("#0c5265", 245)
@@ -980,3 +845,4 @@ def render_event_card(evento: Dict[str, Any], loja: Dict[str, Any], output_dir: 
     out_path = os.path.join(out_dir, f"bode_event_card_{event_id}.png")
     image.convert("RGB").save(out_path, "PNG", optimize=True)
     return RenderResult(path=out_path, warnings=warnings)
+

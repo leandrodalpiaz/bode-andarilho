@@ -83,6 +83,7 @@ CAMPOS_EDITAVEIS = {
     "cargo": {"nome": "Cargo", "chave": "Cargo", "nivel_minimo": "2"},
     "veneravel_mestre": {"nome": "Venerável Mestre (Sim/Não)", "chave": "Venerável Mestre", "nivel_minimo": "2"},
     "nivel": {"nome": "Nível (1,2,3)", "chave": "Nivel", "nivel_minimo": "3"},  # Apenas admin pode editar nível
+    "status": {"nome": "Status", "chave": "Status", "nivel_minimo": "2"},
 }
 
 
@@ -220,6 +221,27 @@ async def aplicar_valor_inline_membro(update: Update, context: ContextTypes.DEFA
         context.user_data.pop("editando_campo", None)
         return ConversationHandler.END
 
+    # Tratador genérico para outros campos suportados com opções via botão inline (ex: Grau, Status)
+    campo_info = CAMPOS_EDITAVEIS.get(campo_id)
+    if not campo_info:
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO, "Erro: Campo de edição inválido."
+        )
+        return ConversationHandler.END
+
+    chave = campo_info["chave"]
+    ok = atualizar_membro(telegram_id, {chave: valor}, preservar_nivel=True)
+    if ok:
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO, f"✅ {campo_info['nome']} atualizado com sucesso!"
+        )
+    else:
+        await _enviar_ou_editar_mensagem(
+            context, update.effective_user.id, TIPO_RESULTADO, f"❌ Falha ao atualizar {campo_info['nome']}."
+        )
+    context.user_data.pop("editando_membro_id", None)
+    context.user_data.pop("editando_membro_dados", None)
+    context.user_data.pop("editando_campo", None)
     return ConversationHandler.END
 
 
@@ -1083,6 +1105,27 @@ async def selecionar_campo_membro(update: Update, context: ContextTypes.DEFAULT_
             ),
             _teclado_inline_potencia_admin(),
         )
+        return SELECIONAR_CAMPO
+
+    if campo_id == "grau":
+        teclado_grau = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Aprendiz", callback_data="editar_valor_membro|grau|Aprendiz")],
+            [InlineKeyboardButton("Companheiro", callback_data="editar_valor_membro|grau|Companheiro")],
+            [InlineKeyboardButton("Mestre", callback_data="editar_valor_membro|grau|Mestre")],
+            [InlineKeyboardButton("Mestre Instalado", callback_data="editar_valor_membro|grau|Mestre Instalado")],
+            [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_edicao")],
+        ])
+        await navegar_para(update, context, "Admin > Editar > Grau", "Selecione o Grau do Obreiro:", teclado_grau)
+        return SELECIONAR_CAMPO
+
+    if campo_id == "status":
+        teclado_status = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Ativo", callback_data="editar_valor_membro|status|Ativo")],
+            [InlineKeyboardButton("Inativo", callback_data="editar_valor_membro|status|Inativo")],
+            [InlineKeyboardButton("Pendente", callback_data="editar_valor_membro|status|Pendente")],
+            [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_edicao")],
+        ])
+        await navegar_para(update, context, "Admin > Editar > Status", "Selecione o Status do Obreiro:", teclado_status)
         return SELECIONAR_CAMPO
 
     titulo = f"Admin > Editar > {campo_info['nome']}"

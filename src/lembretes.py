@@ -144,18 +144,15 @@ async def enviar_lembretes_24h(bot: Bot):
                 continue
 
             # Monta mensagem usando template
-            texto = (
-                f"{LEMBRETE_TITULO}\n\n"
-                + LEMBRETE_CORPO.format(
-                    nome=nome,
-                    data=data_evento,
-                    loja=nome_loja,
-                    horario=horario,
-                    local=local,
-                    grau=grau,
-                    traje=traje,
-                    agape=agape,
-                )
+            texto = LEMBRETE_CORPO.format(
+                nome=nome,
+                data=data_evento,
+                loja=nome_loja,
+                horario=horario,
+                local=local,
+                grau=grau,
+                traje=traje,
+                agape=agape,
             )
 
             try:
@@ -264,15 +261,12 @@ async def enviar_lembretes_meio_dia(bot: Bot):
                 continue
 
             # Monta mensagem usando template
-            texto = (
-                f"{LEMBRETE_MEIO_DIA_TITULO}\n\n"
-                + LEMBRETE_MEIO_DIA_CORPO.format(
-                    nome=nome,
-                    loja=nome_loja,
-                    numero=numero_fmt,
-                    local=local,
-                    horario=horario,
-                )
+            texto = LEMBRETE_MEIO_DIA_CORPO.format(
+                nome=nome,
+                loja=nome_loja,
+                numero=numero_fmt,
+                local=local,
+                horario=horario,
             )
 
             try:

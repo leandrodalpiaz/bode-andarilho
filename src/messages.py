@@ -91,25 +91,16 @@ APENAS_SECRETARIO = (
 LEMBRETE_TITULO = "🐐 *Lembrete de Visitação — Bode Andarilho*"
 
 LEMBRETE_CORPO = (
-    "Saudações, Ir.·. {nome}! Amanhã teremos um encontro em Loja:\n\n"
-    "🏛️ *Loja:* {loja}\n"
-    "📅 *Data:* {data}\n"
-    "🕐 *Horário:* {horario}\n"
-    "📍 *Local:* {local}\n"
-    "🔷 *Grau da Sessão:* {grau}\n"
-    "👔 *Traje:* {traje}\n"
-    "🍽️ *Ágape:* {agape}\n\n"
-    "A sua presença fortalecerá a nossa Ordem! 🤝"
+    "Ir.·., passando para lembrar de sua presença confirmada amanhã ({data}) às {horario} na Loja {loja}. "
+    "Caso tenha havido algum imprevisto, pedimos a gentileza de cancelar até hoje para evitar desperdícios. 🐐"
 )
 
 LEMBRETE_MEIO_DIA_TITULO = "🕛 *MEIO-DIA EM PONTO!*"
 
 LEMBRETE_MEIO_DIA_CORPO = (
-    "Ir.·. {nome}, o sol está no seu zênite. Hoje é dia de trabalho!\n\n"
-    "🏛 *Loja {loja} nº {numero}*\n"
-    "📍 {local}\n"
-    "🕕 {horario}\n\n"
-    "Encontramo-nos em breve no Templo! 🤝"
+    "Meio dia em ponto!\n\n"
+    "Hoje é dia de trabalho! Sua presença está confirmada para as {horario} na Loja {loja}. "
+    "Desejamos uma profícua sessão. T.·.F.·.A.·. 🐐"
 )
 
 LEMBRETE_SECRETARIO_TITULO = "📋 *CIRCULAR AO SECRETÁRIO*"
@@ -442,25 +433,19 @@ CONFIRMACAO_SECRETARIO_TMPL = (
 #            {nome},{data},{loja},{numero_fmt},{horario},{participacao},{msg_agape}
 # [CANAL] Privado
 CONFIRMACAO_COM_AGAPE_TMPL = (
-    "✅ Presença confirmada, irmão {nome}!\n\n"
-    "Resumo:\n"
-    "📅 {data} — {loja}{numero_fmt}\n"
-    "🕕 Horário: {horario}\n"
-    "🍽 {participacao}\n\n"
-    "{msg_agape}\n\n"
-    "Até lá!"
+    "Ir.·., agradecemos sua visita! Presença CONFIRMADA (Com Ágape) para a sessão: {pauta} na Loja {loja}{numero_fmt}.\n\n"
+    "📅 {data} às {horario}\n\n"
+    "⚠️ Pedimos que cancelamentos sejam feitos com 24h de antecedência para nossa melhor organização.\n\n"
+    "⚠️ A confirmação via bot não garante o ingresso no templo, ficam permanecidas às verificações habituais. 🐐"
 )
 
 # [CONTEXTO] Confirmação de presença para membro sem ágape;
 #            {nome},{data},{loja},{numero_fmt},{horario},{participacao}
 # [CANAL] Privado
 CONFIRMACAO_SEM_AGAPE_TMPL = (
-    "✅ Presença confirmada, irmão {nome}!\n\n"
-    "Resumo:\n"
-    "📅 {data} — {loja}{numero_fmt}\n"
-    "🕕 Horário: {horario}\n"
-    "🍽 {participacao}\n\n"
-    "Até lá!"
+    "Ir.·., agradecemos sua visita! Presença CONFIRMADA (Sem Ágape) para a sessão: {pauta} na Loja {loja}{numero_fmt}.\n\n"
+    "📅 {data} às {horario}\n\n"
+    "⚠️ A confirmação via bot não garante o ingresso no templo, ficam permanecidas às verificações habituais. 🐐"
 )
 
 # [CONTEXTO] Mensagem sobre importância da confirmação de ágape (incluída na confirmação)

@@ -1729,6 +1729,7 @@ async def _exibir_menu_secretario_seguro(update: Update, context: ContextTypes.D
     opcoes.extend([
         [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
         [InlineKeyboardButton("👥 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
+        [InlineKeyboardButton("👥 Membros da Minha Oficina", callback_data="admin_editar_membro")],
         [InlineKeyboardButton("🏛️ Minhas lojas", callback_data="menu_lojas")],
         [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
         [InlineKeyboardButton("🏆 Meus Marcos de Secretário", callback_data="mostrar_marcos_secretario")],
