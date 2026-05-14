@@ -179,11 +179,30 @@ _GRAUS_MAP = {
 
 def _extrair_grau(texto: str) -> Optional[str]:
     t = _norm(texto)
+    
+    # Remove pontos e colons colados para normalizar abreviações como a:.m:. -> am
+    t_clean = re.sub(r"[:.]", "", t)
+    t_clean = re.sub(r"\s+", " ", t_clean).strip()
+    
+    # Mapeamento de Abreviações Maçônicas canônicas com word boundary
+    if re.search(r"\bam\b|\ba\s+m\b", t_clean):
+        return "Aprendiz"
+    if re.search(r"\bcm\b|\bc\s+m\b", t_clean):
+        return "Companheiro"
+    if re.search(r"\bmm\b|\bm\s+m\b", t_clean):
+        return "Mestre"
+    if re.search(r"\bmi\b|\bm\s+i\b", t_clean):
+        return "Mestre Instalado"
+    if re.search(r"\bvm\b|\bv\s+m\b", t_clean):
+        return "Mestre Instalado"  # Venerável Mestre mapeia para nível de Mestre Instalado
+
+    # Fallback para termos longos ordinais
     # Ordem longa → curta para evitar falso match de "mestre" em "mestre instalado"
     for chave in ("mestre instalado", "mi", "companheiro", "aprendiz", "mestre"):
         if chave in t:
             return _GRAUS_MAP[chave]
     return None
+
 
 
 # ============================================
@@ -297,10 +316,19 @@ def classificar_intencao_multinivel(
     if nivel == "3" and _parece_comando_admin(t):
         return _classificar_comando_admin(t, result)
 
+    # ── QUALQUER NÍVEL: Saudações Fraternas ─────────────────────────
+    if _parece_saudacao_fraterna(t):
+        return _classificar_saudacao_fraterna(result)
+
+    # ── QUALQUER NÍVEL: Busca Natural de Sessões ────────────────────
+    if _parece_busca_eventos(t):
+        return _classificar_busca_eventos(texto, result)
+
     # ── NÍVEL 1: Navegação assistida ────────────────────────────────
     nav = _classificar_navegacao(t, nivel)
     if nav:
         return nav
+
 
     # Sem match seguro → devolver para o fallback YAML base
     return result
@@ -418,7 +446,7 @@ def _match_loja_no_texto(
     return melhor
 
 
-_CAMPOS_EVENTO_OBRIGATORIOS = ["data", "hora", "nome_loja"]
+_CAMPOS_EVENTO_OBRIGATORIOS = ["data", "hora", "nome_loja", "grau", "tipo_sessao", "agape"]
 
 
 def _campos_evento_faltantes(entities: Dict[str, str]) -> List[str]:
@@ -433,23 +461,30 @@ _NOMES_CAMPO_AMIGAVEL = {
     "data": "data do evento (ex: 25/04/2026 ou próxima quarta)",
     "hora": "horário (ex: 19:30)",
     "nome_loja": "nome da loja",
+    "grau": "grau (ex: Aprendiz, Companheiro ou Mestre)",
+    "tipo_sessao": "tipo de sessão (ex: Ordinária, Magna)",
+    "agape": "se haverá ágape e o tipo (ex: pago ou gratuito)",
 }
 
 
 def _perguntar_campos_faltantes(faltantes: List[str], nivel: str = "") -> str:
     if not faltantes:
         return ""
+
+    # Interação Polida da Chancelaria
+    if len(faltantes) == 1 and faltantes[0] == "agape":
+        return "Irmão, não consegui identificar se o ágape desta sessão é pago ou gratuito. Poderia me informar?"
+
     if nivel == "3" and faltantes == ["nome_loja"]:
         return "Como você não possui loja vinculada, informe a loja do evento."
+    
     partes = [_NOMES_CAMPO_AMIGAVEL.get(c, c) for c in faltantes]
-    if nivel == "3" and "nome_loja" in faltantes:
-        partes = [
-            "loja do evento" if campo == "nome_loja" else _NOMES_CAMPO_AMIGAVEL.get(campo, campo)
-            for campo in faltantes
-        ]
+    
     if len(partes) == 1:
-        return f"Para criar o evento, preciso saber: {partes[0]}."
-    return "Para criar o evento, preciso saber:\n" + "\n".join(f"• {p}" for p in partes)
+        return f"Meu Irmão, para criar a sessão, preciso saber por gentileza: {partes[0]}."
+        
+    return "Meu Irmão, para agendar a sessão com perfeição, preciso que informe:\n" + "\n".join(f"• {p}" for p in partes)
+
 
 
 def _montar_preview_evento_parcial(entities: Dict[str, str], faltantes: List[str]) -> str:
@@ -509,18 +544,36 @@ def _extrair_campos_evento_extras(texto: str, entities: Dict[str, str]) -> None:
     """Extrai campos opcionais de evento do texto."""
     t = _norm(texto)
 
-    # Tipo de sessão
-    tipos_sessao = {
-        "sessao magna": "Magna", "magna": "Magna",
-        "sessao ordinaria": "Ordinária", "ordinaria": "Ordinária",
-        "sessao extraordinaria": "Extraordinária", "extraordinaria": "Extraordinária",
-        "sessao branca": "Branca", "branca": "Branca",
-        "sessao funebre": "Fúnebre", "funebre": "Fúnebre",
+    # Detecção Automática de Magnas (Chancelaria)
+    magna_pautas = {
+        "iniciacao": "Iniciação",
+        "elevacao": "Elevação",
+        "exaltacao": "Exaltação",
+        "instalacao": "Instalação",
     }
-    for chave, valor in tipos_sessao.items():
+    foi_magna = False
+    for chave, pauta in magna_pautas.items():
         if chave in t:
-            entities.setdefault("tipo_sessao", valor)
+            entities["tipo_sessao"] = "Magna"
+            # Preenche a pauta automaticamente se não estiver informada
+            if not entities.get("observacoes"):
+                entities["observacoes"] = f"Sessão Magna de {pauta}"
+            foi_magna = True
             break
+
+    # Tipo de sessão normal (se não capturada pela detecção magna acima)
+    if not foi_magna:
+        tipos_sessao = {
+            "sessao magna": "Magna", "magna": "Magna",
+            "sessao ordinaria": "Ordinária", "ordinaria": "Ordinária",
+            "sessao extraordinaria": "Extraordinária", "extraordinaria": "Extraordinária",
+            "sessao branca": "Branca", "branca": "Branca",
+            "sessao funebre": "Fúnebre", "funebre": "Fúnebre",
+        }
+        for chave, valor in tipos_sessao.items():
+            if chave in t:
+                entities.setdefault("tipo_sessao", valor)
+                break
 
     # Traje
     trajes = {
@@ -532,6 +585,7 @@ def _extrair_campos_evento_extras(texto: str, entities: Dict[str, str]) -> None:
         if chave in t:
             entities.setdefault("traje", valor)
             break
+
 
 
 # ============================================
@@ -925,3 +979,186 @@ def validar_escopo_loja_secretario(
                 return True
 
     return False
+
+
+# ============================================
+# MOTOR DE BUSCA NATURAL E SAUDAÇÕES (ORADOR)
+# ============================================
+
+_ESTADOS_UF_MAP = {
+    "AC": "AC", "acre": "AC",
+    "AL": "AL", "alagoas": "AL",
+    "AP": "AP", "amapa": "AP",
+    "AM": "AM", "amazonas": "AM",
+    "BA": "BA", "bahia": "BA",
+    "CE": "CE", "ceara": "CE",
+    "DF": "DF", "distrito federal": "DF",
+    "ES": "ES", "espirito santo": "ES",
+    "GO": "GO", "goias": "GO",
+    "MA": "MA", "maranhao": "MA",
+    "MT": "MT", "mato grosso": "MT",
+    "MS": "MS", "mato grosso do sul": "MS",
+    "MG": "MG", "minas gerais": "MG", "minas": "MG",
+    "PB": "PB", "paraiba": "PB",
+    "PR": "PR", "parana": "PR",
+    "PE": "PE", "pernambuco": "PE",
+    "PI": "PI", "piaui": "PI",
+    "RJ": "RJ", "rio de janeiro": "RJ", "rio": "RJ",
+    "RN": "RN", "rio grande do norte": "RN",
+    "RS": "RS", "rio grande do sul": "RS",
+    "RO": "RO", "rondonia": "RO",
+    "RR": "RR", "roraima": "RR",
+    "SC": "SC", "santa catarina": "SC",
+    "SP": "SP", "sao paulo": "SP",
+    "SE": "SE", "sergipe": "SE",
+    "TO": "TO", "tocantins": "TO"
+}
+
+def _extrair_uf(texto: str) -> Optional[str]:
+    t = _norm(texto)
+    
+    # Tratamento isolado para "PA" para evitar falsos positivos com a preposição "para"
+    if "no para " in t or "do para " in t or "no estado do para" in t:
+        return "PA"
+    if re.search(r"\bpa\b", t) and not "para" in t:
+        # Apenas assume se for a sigla literal sem preposição "para"
+        return "PA"
+
+    # Demais siglas e nomes
+    for nome, sigla in _ESTADOS_UF_MAP.items():
+        if len(nome) > 2:
+            if nome in t:
+                return sigla
+        else:
+            if re.search(rf"\b{nome}\b", t):
+                return sigla
+    return None
+
+
+def _extrair_rito(texto: str) -> Optional[str]:
+    t = _norm(texto)
+    ritos_map = {
+        "reaa": "REAA",
+        "escoces": "REAA",
+        "york": "York",
+        "emulacao": "Emulação",
+        "schroder": "Schröder",
+        "brasileiro": "Brasileiro",
+        "adonhiramita": "Adonhiramita",
+        "moderno": "Moderno",
+        "frances": "Moderno"
+    }
+    for chave, valor in ritos_map.items():
+        if chave in t:
+            return valor
+    return None
+
+
+def _extrair_potencia(texto: str) -> Optional[str]:
+    t = _norm(texto)
+    if re.search(r"\bgob\b", t):
+        return "GOB"
+    if re.search(r"\bcmsb\b|\bgl\b|\bgrande loja\b", t):
+        return "CMSB"
+    if re.search(r"\bcomab\b|\bgo\b|\bgrande oriente\b", t):
+        return "COMAB"
+    return None
+
+
+def _extrair_cidade(texto: str) -> Optional[str]:
+    t_orig = str(texto or "").strip()
+    # Procura capturar a capitalização correta de cidades após preposições
+    padroes = [
+        r"\b(?:em|no|na|de)\s+([A-Z][a-zà-ú]+(?:\s+[A-Z][a-zà-ú]+)*)\b",
+    ]
+    for pat in padroes:
+        m = re.search(pat, t_orig)
+        if m:
+            cid = m.group(1).strip()
+            # Pular palavras tipicamente reservadas para evitar ruídos
+            if cid.lower() in ["mestre", "aprendiz", "companheiro", "sessao", "loja", "rito", "potencia", "segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo"]:
+                continue
+            # Se a cidade extraída coincide com UF do mapa, ignora
+            if cid.upper() in _ESTADOS_UF_MAP:
+                continue
+            return cid
+    return None
+
+
+def _parece_saudacao_fraterna(t: str) -> bool:
+    # Normaliza removendo pontos triplices
+    t_clean = re.sub(r"[:.]", "", t)
+    t_clean = re.sub(r"\s+", " ", t_clean).strip()
+    
+    if re.search(r"\btfa\b|\bsalve\b", t_clean):
+        return True
+    
+    gatilhos = ["bom dia", "boa tarde", "boa noite", "saudacoes", "saudo a", "sauda a", "ola", "oi"]
+    return any(g in t for g in gatilhos)
+
+
+def _classificar_saudacao_fraterna(result: IAResult) -> IAResult:
+    result.intent = "saudacao_fraterna"
+    result.confidence = "high"
+    result.preview_text = "T.·.F.·.A.·. meu respeitável Irmão! Como posso ser útil aos seus trabalhos no dia de hoje? 🐐✨"
+    return result
+
+
+def _parece_busca_eventos(t: str) -> bool:
+    gatilhos = [
+        "buscar", "procurar", "achar", "encontrar", "listar", "ver",
+        "sessao", "sessoes", "evento", "eventos", "agenda", "calendario", "trabalho", "oficina"
+    ]
+    if any(g in t for g in gatilhos):
+        return True
+    # Se contém elementos claros de filtro que indicam procura implícita
+    if _extrair_grau(t) and (_extrair_data(t) or _extrair_uf(t)):
+        return True
+    return False
+
+
+def _classificar_busca_eventos(texto: str, result: IAResult) -> IAResult:
+    result.intent = "buscar_eventos_natural"
+    result.confidence = "high"
+    
+    entities = {}
+    
+    data = _extrair_data(texto)
+    grau = _extrair_grau(texto)
+    uf = _extrair_uf(texto)
+    cidade = _extrair_cidade(texto)
+    rito = _extrair_rito(texto)
+    potencia = _extrair_potencia(texto)
+    
+    if data:
+        entities["data"] = data
+    if grau:
+        entities["grau"] = grau
+    if uf:
+        entities["uf"] = uf
+    if cidade:
+        entities["cidade"] = cidade
+    if rito:
+        entities["rito"] = rito
+    if potencia:
+        entities["potencia"] = potencia
+        
+    result.entities = entities
+    
+    # Preview em tom Fraterno
+    filtros = []
+    if grau: filtros.append(f"grau {grau}")
+    if rito: filtros.append(f"rito {rito}")
+    if potencia: filtros.append(f"potência {potencia}")
+    if uf: filtros.append(f"UF {uf}")
+    if cidade: filtros.append(f"cidade {cidade}")
+    if data: filtros.append(f"data {data}")
+    
+    if filtros:
+        desc = ", ".join(filtros)
+        result.preview_text = f"Meu respeitável Irmão, buscarei agora no Templo da Informação por sessões filtradas por: {desc}."
+    else:
+        result.preview_text = "Meu respeitável Irmão, irei consultar o Livro da Arquitetura para encontrar as próximas sessões disponíveis."
+        
+    return result
+

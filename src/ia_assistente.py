@@ -172,35 +172,21 @@ def carregar_intencoes_base() -> List[IntentItem]:
 def _bloqueio_seguranca(texto: str) -> Optional[str]:
 	t = _norm_text(texto)
 
-	padroes_dados_pessoais = [
-		"dados pessoais", "cpf", "telefone", "email", "endereco", "nascimento", "perfil de outro",
-		"dados de outro", "dados do irmao", "vazar", "exportar membros", "lista de membros completa",
-	]
-	padroes_tecnicos_sensiveis = [
-		"supabase key", "token", "senha", "secret", "credentials", "webhook secret",
-		"variavel de ambiente", "acesso banco", "query sql", "estrutura interna", "codigo fonte sensivel",
-	]
-	padroes_admin_sensiveis = [
-		"promover sem permissao", "rebaixar sem permissao", "editar membro sem permissao",
-		"cancelar evento de outro", "dados admin", "area admin sem acesso",
+	# Guardrails de Segurança (Zeladoria Administrativa da Chancelaria)
+	# Protege regras de negócio, permissões, chaves, dados pessoais e código fonte.
+	padroes_bloqueio = [
+		"supabase key", "token", "senha", "secret", "credentials", "webhook", "banco", "sql", 
+		"variavel de ambiente", "dados de outro", "permissao do nivel", "niveis de acesso", 
+		"regras de negocio", "como funciona por tras", "codigo fonte", "permissoes", 
+		"estrutura interna", "admin", "promover", "rebaixar", "dados pessoais", "cpf", 
+		"telefone", "email", "endereco", "nascimento", "perfil de outro", "vazar", "exportar membros"
 	]
 
-	if any(p in t for p in padroes_dados_pessoais):
-		return (
-			"Por segurança, não posso expor dados pessoais de terceiros. "
-			"Posso te ajudar pelos fluxos oficiais do seu próprio acesso."
-		)
-	if any(p in t for p in padroes_tecnicos_sensiveis):
-		return (
-			"Esse tipo de informação técnica sensível não pode ser exibida aqui. "
-			"Posso orientar apenas funcionalidades de uso do bot."
-		)
-	if any(p in t for p in padroes_admin_sensiveis):
-		return (
-			"Operações administrativas seguem permissão de nível e fluxo oficial. "
-			"Posso te levar para as opções permitidas no seu perfil."
-		)
+	if any(p in t for p in padroes_bloqueio):
+		return "Irmão, essas informações fogem ao meu conhecimento. Posso ajudá-lo com suas sessões ou dados de perfil?"
+
 	return None
+
 
 
 def _classificar_intencao(texto: str, nivel: str, intencoes: List[IntentItem]) -> Optional[IntentItem]:
@@ -495,8 +481,8 @@ async def assistente_ia_stats(update: Update, context: ContextTypes.DEFAULT_TYPE
 		await navegar_para(
 			update,
 			context,
-			"Observabilidade IA",
-			"⛔ Este painel é restrito ao nível de administrador.",
+			"Assistente IA",
+			"Irmão, essas informações fogem ao meu conhecimento. Posso ajudá-lo com suas sessões ou dados de perfil?",
 			InlineKeyboardMarkup([[InlineKeyboardButton("Menu principal", callback_data="menu_principal")]]),
 		)
 		return
@@ -538,8 +524,8 @@ async def assistente_ia_relatorio(update: Update, context: ContextTypes.DEFAULT_
 		await navegar_para(
 			update,
 			context,
-			"Aprendizado IA",
-			"⛔ Este relatório é restrito ao nível de administrador.",
+			"Assistente IA",
+			"Irmão, essas informações fogem ao meu conhecimento. Posso ajudá-lo com suas sessões ou dados de perfil?",
 			InlineKeyboardMarkup([[InlineKeyboardButton("Menu principal", callback_data="menu_principal")]]),
 		)
 		return
@@ -688,6 +674,100 @@ def _obter_lojas_do_ator(user_id: int, nivel: str) -> Optional[List[Dict[str, st
 		return []
 
 
+async def _executar_busca_eventos_ia(
+	update: Update,
+	context: ContextTypes.DEFAULT_TYPE,
+	entities: Dict[str, str],
+	user_id: int,
+	nivel: str,
+) -> None:
+	"""Executa busca assistida de eventos baseada em filtros extraídos por IA."""
+	from src.sheets_supabase import listar_eventos, buscar_membro
+	from src.eventos import (
+		_resolver_dados_geo_loja, _lojas_map_cache, _linha_botao_evento, 
+		_encode_cb, parse_data_evento, normalizar_id_evento, _eventos_ordenados
+	)
+	import asyncio
+
+	# 1) Carrega dados necessários paralelamente para otimização
+	eventos_brutos, membro = await asyncio.gather(
+		asyncio.to_thread(listar_eventos),
+		asyncio.to_thread(buscar_membro, user_id)
+	)
+	eventos = eventos_brutos or []
+	lojas_map = _lojas_map_cache()
+
+	f_grau = entities.get("grau")
+	f_rito = entities.get("rito")
+	f_potencia = entities.get("potencia")
+	f_uf = entities.get("uf")
+	f_cidade = entities.get("cidade")
+	f_data = entities.get("data")
+
+	# Contexto do Usuário: se UF/Cidade ausentes na busca, herda do Oriente cadastrado
+	if membro and not f_uf and not f_cidade:
+		perfil_oriente = str(membro.get("Oriente") or "").strip()
+		if " - " in perfil_oriente:
+			partes = perfil_oriente.split(" - ")
+			if len(partes[-1]) == 2:
+				f_uf = partes[-1].strip().upper()
+				f_cidade = partes[0].strip()
+
+	filtrados = []
+	for ev in eventos:
+		# Ignora eventos cancelados na listagem de busca ativa
+		status = str(ev.get("Status", "")).strip().lower()
+		if status == "cancelado":
+			continue
+
+		ev_uf, ev_cidade = _resolver_dados_geo_loja(ev, lojas_map)
+
+		# Aplica múltiplos filtros com normalização resiliente
+		if f_uf and ev_uf.upper() != f_uf.upper():
+			continue
+		if f_cidade and f_cidade.lower() not in ev_cidade.lower():
+			continue
+		if f_grau and f_grau.lower() not in str(ev.get("Grau", "")).lower():
+			continue
+		if f_rito and f_rito.lower() not in str(ev.get("Rito", "")).lower():
+			continue
+		if f_potencia and f_potencia.lower() not in str(ev.get("Potência", "")).lower():
+			continue
+		
+		if f_data:
+			ev_dt = parse_data_evento(ev.get("Data do evento", ""))
+			ev_dt_str = ev_dt.strftime("%d/%m/%Y") if ev_dt else ""
+			if ev_dt_str != f_data:
+				continue
+				
+		filtrados.append(ev)
+
+	if not filtrados:
+		texto = (
+			"Meu respeitável Irmão, realizei buscas em nossas colunas, mas nenhuma sessão agendada "
+			"corresponde exatamente a estes filtros no momento.\n\n"
+			"Gostaria de abrir o calendário completo e explorar outras datas?"
+		)
+		teclado = InlineKeyboardMarkup([
+			[InlineKeyboardButton("📅 Ver sessões no calendário", callback_data="ver_eventos")],
+			[InlineKeyboardButton("Menu principal", callback_data="menu_principal")]
+		])
+		await navegar_para(update, context, "Assistente IA > Busca", texto, teclado)
+		return
+
+	# Ordena e limita a 10 itens para manter UX condensada no chat privado
+	filtrados = _eventos_ordenados(filtrados)[:10]
+
+	texto = "Meu respeitável Irmão, eis as sessões justas e perfeitas localizadas em nossas colunas:\n\n"
+	botoes = []
+	for ev in filtrados:
+		id_ev = normalizar_id_evento(ev)
+		botoes.append([InlineKeyboardButton(_linha_botao_evento(ev), callback_data=f"evento|{_encode_cb(id_ev)}")])
+
+	botoes.append([InlineKeyboardButton("Menu principal", callback_data="menu_principal")])
+	await navegar_para(update, context, "Assistente IA > Resultados", texto, InlineKeyboardMarkup(botoes))
+
+
 async def _despachar_ia_result(
 	update: Update,
 	context: ContextTypes.DEFAULT_TYPE,
@@ -711,6 +791,25 @@ async def _despachar_ia_result(
 		await navegar_para(update, context, "Assistente IA", result.preview_text, teclado)
 		return
 
+	# ── ORADOR: Saudação Fraterna ──
+	if result.intent == "saudacao_fraterna":
+		_auditar_evento("intent_matched", user_id, nivel, texto_entrada, intent_id="saudacao_fraterna", topic_hint="")
+		teclado = InlineKeyboardMarkup([
+			[InlineKeyboardButton("Ver sessões", callback_data="ver_eventos")],
+			[InlineKeyboardButton("Menu principal", callback_data="menu_principal")],
+		])
+		await navegar_para(update, context, "Assistente IA", result.preview_text, teclado)
+		return
+
+	# ── ORADOR: Busca Natural de Eventos ──
+	if result.intent == "buscar_eventos_natural":
+		_auditar_evento(
+			"intent_matched", user_id, nivel, texto_entrada,
+			intent_id="buscar_eventos_natural",
+			topic_hint=_extrair_topic_hint(texto_entrada),
+		)
+		await _executar_busca_eventos_ia(update, context, result.entities, user_id, nivel)
+		return
 
 	# Criação de evento com dados faltantes → mostrar preview e opções de ação
 	if result.intent == "criar_evento_natural" and result.disambiguation:
@@ -721,9 +820,9 @@ async def _despachar_ia_result(
 			action_type="multi_turno_preview",
 			topic_hint=_extrair_topic_hint(texto_entrada),
 		)
-		texto_resposta = result.preview_text + "\n\n" + "⚠️ Dados faltantes: " + result.disambiguation + "\n\nVocê pode editar/completar os dados no formulário."
+		texto_resposta = result.preview_text + "\n\n" + "⚠️ Informações faltantes: " + result.disambiguation + "\n\nComplete as informações abaixo ou utilize o formulário."
 		teclado = InlineKeyboardMarkup([
-			[InlineKeyboardButton("✏️ Editar/completar dados", callback_data="ia_editar_evento")],
+			[InlineKeyboardButton("📝 Completar Dados (Mini App)", callback_data="ia_editar_evento")],
 			[InlineKeyboardButton("❌ Cancelar", callback_data="ia_cancelar_evento")],
 		])
 		await navegar_para(update, context, "Assistente IA > Criar Evento", texto_resposta, teclado)
@@ -739,7 +838,7 @@ async def _despachar_ia_result(
 			topic_hint=_extrair_topic_hint(texto_entrada),
 		)
 		teclado = InlineKeyboardMarkup([
-			[InlineKeyboardButton("✅ Confirmar e publicar", callback_data="ia_confirmar_evento")],
+			[InlineKeyboardButton("🚀 Publicar Agora", callback_data="ia_confirmar_evento")],
 			[InlineKeyboardButton("✏️ Editar dados", callback_data="ia_editar_evento")],
 			[InlineKeyboardButton("❌ Cancelar", callback_data="ia_cancelar_evento")],
 		])
@@ -762,6 +861,7 @@ async def _despachar_ia_result(
 		])
 		await navegar_para(update, context, "Assistente IA", result.preview_text, teclado)
 		return
+
 
 
 async def _tratar_complemento_evento(
