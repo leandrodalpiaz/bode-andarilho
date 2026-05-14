@@ -657,7 +657,7 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Segurança e Privacidade: Trava de cliques genéricos em grupo
     chat = update.effective_chat
     if chat and chat.type in ("group", "supergroup"):
-        prefixos_permitidos = ("confirmar|", "ver_confirmados|", "evento|")
+        prefixos_permitidos = ("confirmar|", "ver_confirmados|", "evento|", "ver_local|")
         tags_permitidas = {"fechar_mensagem", "remover_mensagem", "iniciar_cadastro"}
         
         permitido = False
@@ -759,6 +759,12 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data.startswith("evento|"):
         from src.eventos import mostrar_detalhes_evento
         await mostrar_detalhes_evento(update, context)
+    elif data.startswith("ver_local|"):
+        from src.eventos import ver_localizacao_evento
+        await ver_localizacao_evento(update, context)
+    elif data.startswith("ver_local|"):
+        from src.eventos import ver_localizacao_evento
+        await ver_localizacao_evento(update, context)
     elif data.startswith("calendario|"):
         from src.eventos import mostrar_calendario
         await mostrar_calendario(update, context)

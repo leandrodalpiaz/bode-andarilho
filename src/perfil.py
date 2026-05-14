@@ -151,11 +151,59 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
         texto += "\n_Você ainda não possui medalhas na sua Jornada do Obreiro._"
 
     teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✏️ Atualizar perfil", callback_data="editar_perfil")],
-        [InlineKeyboardButton("🏆 Ver minhas conquistas", callback_data="mostrar_conquistas_membro")],
-        [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
+        [InlineKeyboardButton("✏️ Editar Perfil", callback_data="editar_perfil")],
+        [InlineKeyboardButton("🔙 Voltar ao Menu", callback_data="menu_principal")],
     ])
 
+    # Geração do Diploma Digital Heráldico (Coluna 4)
+    try:
+        from src.render_diploma import renderizar_diploma
+        
+        # Passa os dados estruturados do membro e as conquistas reais
+        caminho_diploma = renderizar_diploma(membro, slugs_obtidos)
+        
+        if caminho_diploma and os.path.exists(caminho_diploma):
+            # Se disparado via clique em botão, apagamos o menu anterior para evitar poluição
+            query = update.callback_query
+            if query:
+                try:
+                    await query.message.delete()
+                except Exception:
+                    pass
+            
+            # Envia o pergaminho visual
+            with open(caminho_diploma, "rb") as photo:
+                msg_diploma = await context.bot.send_photo(
+                    chat_id=user_id,
+                    photo=photo,
+                    caption="📜 *Diploma do Andarilho - Jornada do Obreiro*\n\n"
+                            "Suas medalhas, dados e visto oficial da Chancelaria.",
+                    parse_mode="Markdown",
+                    reply_markup=teclado
+                )
+                
+            # Registra o ID da mensagem no rastreador global de navegação para limpeza futura automática
+            from src.bot import estado_mensagens
+            if user_id not in estado_mensagens:
+                estado_mensagens[user_id] = {}
+            
+            estado_mensagens[user_id][TIPO_RESULTADO] = {
+                "message_id": msg_diploma.message_id,
+                "content_hash": None  # Evita colisão de hash e força renderização
+            }
+            
+            # Remove arquivo temporário de forma segura após envio
+            try:
+                os.remove(caminho_diploma)
+            except Exception:
+                pass
+                
+            return
+            
+    except Exception as err:
+        logger.error("Falha ao gerar ou enviar diploma digital: %s. Usando fallback textual.", err)
+
+    # Fallback seguro: Envia a tela puramente textual se houver qualquer erro na imagem
     await navegar_para(
         update, context,
         "Meu Perfil",

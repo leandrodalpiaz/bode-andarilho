@@ -835,6 +835,46 @@ async def _despachar_ia_result(
 		await _executar_busca_eventos_ia(update, context, result.entities, user_id, nivel)
 		return
 
+	# Trava de Segurança Administrativa: Nível 2 exige Loja antes da criação
+	if result.intent == "criar_evento_natural" and str(nivel) == "2":
+		try:
+			from src.sheets_supabase import get_loja_por_secretario
+			loja = get_loja_por_secretario(user_id)
+			if not loja:
+				texto_trava = """⚠️ *VÍNCULO INSTITUCIONAL EXIGIDO*
+
+Ir.·. Secretário, identificamos que você deseja criar uma nova sessão via comando de voz ou texto, mas ainda não há nenhuma Oficina vinculada ao seu perfil administrativo.
+
+Por favor, realize o registro inicial de sua Loja para habilitar as publicações da IA:"""
+				teclado_trava = InlineKeyboardMarkup([
+					[InlineKeyboardButton("🏛️ Cadastrar Minha Loja", callback_data="cadastrar_loja_inicio")],
+					[InlineKeyboardButton("🔙 Voltar", callback_data="menu_principal")],
+				])
+				await navegar_para(update, context, "Assistente IA > Trava", texto_trava, teclado_trava)
+				return
+		except Exception as e:
+			logger.warning("Erro ao verificar trava de loja no assistente IA: %s", e)
+
+	# Trava de Segurança Administrativa: Nível 2 exige Loja antes da criação
+	if result.intent == "criar_evento_natural" and str(nivel) == "2":
+		try:
+			from src.sheets_supabase import get_loja_por_secretario
+			loja = get_loja_por_secretario(user_id)
+			if not loja:
+				texto_trava = """⚠️ *VÍNCULO INSTITUCIONAL EXIGIDO*
+
+Ir.·. Secretário, identificamos que você deseja criar uma nova sessão via comando de voz ou texto, mas ainda não há nenhuma Oficina vinculada ao seu perfil administrativo.
+
+Por favor, realize o registro inicial de sua Loja para habilitar as publicações da IA:"""
+				teclado_trava = InlineKeyboardMarkup([
+					[InlineKeyboardButton("🏛️ Cadastrar Minha Loja", callback_data="cadastrar_loja_inicio")],
+					[InlineKeyboardButton("🔙 Voltar", callback_data="menu_principal")],
+				])
+				await navegar_para(update, context, "Assistente IA > Trava", texto_trava, teclado_trava)
+				return
+		except Exception as e:
+			logger.warning("Erro ao verificar trava de loja no assistente IA: %s", e)
+
 	# Criação de evento com dados faltantes → mostrar preview e opções de ação
 	if result.intent == "criar_evento_natural" and result.disambiguation:
 		context.user_data["ia_evento_pendente"] = result.entities

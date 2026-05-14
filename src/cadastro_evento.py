@@ -16,7 +16,6 @@
 # ============================================
 
 from __future__ import annotations
-
 import os
 import re
 import logging
@@ -510,7 +509,7 @@ def _teclado_previa_visual(tem_duplicado: bool) -> InlineKeyboardMarkup:
     else:
         linhas.append([InlineKeyboardButton("✅ Publicar no grupo", callback_data="confirmar_publicacao")])
     linhas.append([InlineKeyboardButton("✏️ Editar dados", callback_data="refazer_cadastro")])
-    linhas.append([InlineKeyboardButton("🖼 Trocar card", callback_data="trocar_card_evento")])
+    linhas.append([InlineKeyboardButton("🎨 Enviar Arte Própria (Card Pronto)", callback_data="trocar_card_evento")])
     linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_publicacao")])
     return InlineKeyboardMarkup(linhas)
 
@@ -533,7 +532,7 @@ async def trocar_card_evento(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context,
         update.effective_user.id,
         TIPO_RESULTADO,
-        "Envie agora a imagem pronta do card especial como foto ou documento.",
+        "🎨 *Modo Autonomia Visual (Card Pronto)*\n\nEnvie agora a imagem oficial do seu convite (card já editado) como foto ou documento no formato vertical ou quadrado:",
         InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_publicacao")]]),
         limpar_conteudo=True,
     )
@@ -623,6 +622,29 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             limpar_conteudo=True
         )
         return ConversationHandler.END
+
+    # Trava de Segurança Administrativa: Nível 2 exige Loja
+    if str(nivel) == "2":
+        try:
+            from src.sheets_supabase import get_loja_por_secretario
+            loja = get_loja_por_secretario(user_id)
+            if not loja:
+                texto_trava = """⚠️ *VÍNCULO INSTITUCIONAL EXIGIDO*
+
+Ir.·. Secretário, identificamos que você deseja criar uma nova sessão, mas ainda não há nenhuma Oficina vinculada ao seu perfil administrativo.
+
+Para garantir a integridade dos dados e o layout correto dos convites, é necessário registrar sua Loja antes de publicar qualquer pauta.
+
+Por favor, registre sua Loja tocando no botão abaixo:"""
+                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                teclado_trava = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🏛️ Cadastrar Minha Loja", callback_data="cadastrar_loja_inicio")],
+                    [InlineKeyboardButton("🔙 Voltar", callback_data="menu_principal")],
+                ])
+                await navegar_para(update, context, "Cadastrar Sessão > Trava", texto_trava, teclado_trava)
+                return ConversationHandler.END
+        except Exception as e:
+            logger.warning("Erro ao verificar trava de loja no cadastro: %s", e)
 
     _limpar_contexto_evento(context)
 

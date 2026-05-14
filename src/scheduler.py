@@ -43,6 +43,18 @@ async def job_aniversarios_cadastro(app: Application):
         logger.error("Erro ao executar crawler de aniversários de cadastro: %s", e)
 
 
+async def job_limpeza_midias_passadas(app: Application):
+    """Job diário para apagar imagens físicas de eventos passados do Storage."""
+    try:
+        import asyncio
+        from src.sheets_supabase import limpar_midias_eventos_passados
+        removidos = await asyncio.to_thread(limpar_midias_eventos_passados)
+        if removidos > 0:
+            logger.info("Job de efemeridade concluiu a limpeza de %d arquivos.", removidos)
+    except Exception as e:
+        logger.error("Erro ao executar job de limpeza de mídias passadas: %s", e)
+
+
 async def job_faxina_membros(app: Application):
     """
     Job semanal de faxina de membros.
@@ -183,6 +195,15 @@ async def iniciar_scheduler(app: Application):
         minute=0,
         args=[app],
         id="job_flush_notificacoes_secretario",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        job_limpeza_midias_passadas,
+        "cron",
+        hour=4,
+        minute=0,
+        args=[app],
+        id="job_limpeza_midias_passadas",
         replace_existing=True,
     )
     scheduler.add_job(

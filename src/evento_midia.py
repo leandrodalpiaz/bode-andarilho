@@ -126,11 +126,14 @@ async def publicar_evento_no_grupo(
                 "Modo visual": midia.modo,
                 "Telegram tipo mensagem grupo": "photo",
             }
-            if midia.modo == "template_loja":
+            if midia.modo in ("template_loja", "card_especial"):
                 url = salvar_render_no_storage(evento, midia.path)
                 if url:
                     sync["Card renderizado URL"] = url
                     evento["Card renderizado URL"] = url
+                    if midia.modo == "card_especial":
+                        sync["Card especial URL"] = url
+                        evento["Card especial URL"] = url
             if file_id:
                 sync["Card file_id Telegram"] = file_id
             atualizar_evento(0, sync)

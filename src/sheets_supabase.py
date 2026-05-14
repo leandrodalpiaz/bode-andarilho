@@ -2298,3 +2298,91 @@ def checar_marco_coletivo_existente(marco_slug: str) -> bool:
     except Exception as e:
         logger.error("Erro ao checar marco coletivo: %s", e)
         return False
+
+
+def _extrair_path_storage_do_url(url: str, bucket: str) -> Optional[str]:
+    """Extrai o caminho interno do arquivo dentro do bucket a partir de uma URL pública do Supabase."""
+    if not url or bucket not in url:
+        return None
+    marcador = f"/public/{bucket}/"
+    idx = url.find(marcador)
+    if idx == -1:
+        return None
+    # Remove tudo antes e incluindo o marcador
+    return url[idx + len(marcador):]
+
+
+def limpar_midias_eventos_passados() -> int:
+    """
+    Varre o banco por eventos passados e remove suas imagens físicas do Supabase Storage (efemeridade).
+    Retorna a quantidade de arquivos removidos com sucesso.
+    """
+    from datetime import datetime
+    hoje = datetime.now().date()
+    arquivos_removidos = 0
+    bucket = "event-cards"
+    
+    try:
+        # Seleciona colunas essenciais de todos os eventos que possuam alguma URL salva
+        resp = supabase.table("eventos").select("id, data_evento, card_especial_url, card_renderizado_url").execute()
+        rows = resp.data or []
+    except Exception as e:
+        logger.error("Erro ao buscar eventos para limpeza de mídias: %s", e)
+        return 0
+
+    if not rows:
+        return 0
+
+    logger.info("Iniciando análise de %d eventos para coleta de lixo de mídias...", len(rows))
+    
+    storage = supabase.storage.from_(bucket)
+    
+    for row in rows:
+        ev_id = row.get("id")
+        data_raw = row.get("data_evento")
+        if not data_raw:
+            continue
+            
+        # Converte data para comparação
+        dt_ev = _parse_data_generica(data_raw)
+        if not dt_ev:
+            continue
+            
+        # Se o evento ocorreu em dias passados
+        if dt_ev.date() < hoje:
+            candidatos = []
+            
+            # 1. Checa card especial
+            url_esp = row.get("card_especial_url")
+            if url_esp:
+                path_esp = _extrair_path_storage_do_url(url_esp, bucket)
+                if path_esp:
+                    candidatos.append(path_esp)
+                    
+            # 2. Checa card renderizado
+            url_ren = row.get("card_renderizado_url")
+            if url_ren:
+                path_ren = _extrair_path_storage_do_url(url_ren, bucket)
+                if path_ren:
+                    candidatos.append(path_ren)
+            
+            # Se houver mídias físicas, removemos
+            if candidatos:
+                try:
+                    logger.info("Excluindo %d mídias expiradas do evento %s (Data: %s)", len(candidatos), ev_id, data_raw)
+                    storage.remove(candidatos)
+                    arquivos_removidos += len(candidatos)
+                    
+                    # Limpa os campos no banco para evitar reprocessamento
+                    supabase.table("eventos").update({
+                        "card_especial_url": None,
+                        "card_renderizado_url": None
+                    }).eq("id", ev_id).execute()
+                    
+                except Exception as err:
+                    logger.warning("Falha ao excluir arquivos %s do storage: %s", candidatos, err)
+                    
+    if arquivos_removidos > 0:
+        logger.info("Limpeza de efemeridade concluída: %d mídias limpas do storage.", arquivos_removidos)
+    
+    return arquivos_removidos

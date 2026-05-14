@@ -359,14 +359,19 @@ def montar_teclado_publicacao_evento(evento: dict) -> Optional[InlineKeyboardMar
     id_evento = normalizar_id_evento(evento)
     agape = str(evento.get("Ágape", "") or "")
     endereco_raw = "" if evento.get("Endereço da sessão") is None else str(evento.get("Endereço da sessão")).strip()
-    url_local = _normalizar_url_local(endereco_raw)
     linhas = _teclado_confirmacao_evento(id_evento, agape)
     linhas.append([InlineKeyboardButton("👥 Ver confirmados", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")])
     # Cancelamento é visível para todos (teclado inline é global no Telegram).
     # Se o usuário não estiver confirmado, o handler responde com um toast amigável.
     linhas.append([InlineKeyboardButton("❌ Cancelar presença", callback_data=f"cancelar_card|{_encode_cb(id_evento)}")])
-    if url_local:
-        linhas.append([InlineKeyboardButton("📍 Abrir no mapa", url=url_local)])
+    
+    # Botão de Localização Dinâmico (Coluna 3)
+    if endereco_raw:
+        if endereco_raw.startswith(("http://", "https://")):
+            linhas.append([InlineKeyboardButton("📍 Localização", url=endereco_raw)])
+        else:
+            linhas.append([InlineKeyboardButton("📍 Localização", callback_data=f"ver_local|{_encode_cb(id_evento)}")])
+            
     return InlineKeyboardMarkup(linhas)
 
 
@@ -2610,3 +2615,55 @@ async def mostrar_eventos_por_potencia_filtro(update: Update, context: ContextTy
         f"*{titulo}*\n\nSelecione uma sessão:",
         InlineKeyboardMarkup(botoes)
     )
+
+
+async def ver_localizacao_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Envia o endereço da sessão via DM para cópia com um clique, ou exibe alerta se privado indisponível."""
+    query = update.callback_query
+    if not query:
+        return
+        
+    partes = query.data.split("|", 1)
+    if len(partes) < 2:
+        await _responder_callback_seguro(query, "Erro ao decodificar requisição.", show_alert=True)
+        return
+        
+    id_evento = _decode_cb(partes[1])
+    eventos = listar_eventos() or []
+    evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
+    
+    if not evento:
+        await _responder_callback_seguro(query, "Sessão indisponível para consulta.", show_alert=True)
+        return
+        
+    endereco = str(evento.get("Endereço da sessão", "") or "").strip()
+    nome_loja = str(evento.get("Nome da loja", "") or "Loja").strip()
+    
+    if not endereco:
+        await _responder_callback_seguro(query, "Esta sessão não possui endereço configurado.", show_alert=True)
+        return
+        
+    await _responder_callback_seguro(query, "📍 Processando endereço...")
+    
+    # Formata texto com backticks para cópia ultra-rápida no Telegram
+    texto_dm = (
+        f"📍 *Localização da Sessão*\n\n"
+        f"🏛️ *{nome_loja}*\n\n"
+        f"Toque no texto abaixo para copiar o endereço completo:\n\n"
+        f"`{endereco}`"
+    )
+    
+    user_id = update.effective_user.id
+    try:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=texto_dm,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.warning("Falha ao enviar DM de endereço para %s: %s", user_id, e)
+        # Fallback de pop-up curto se não for possível enviar a DM
+        await query.answer(
+            text=f"📍 Endereço da Sessão:\n\n{endereco[:150]}",
+            show_alert=True
+        )
