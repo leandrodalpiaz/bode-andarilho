@@ -102,16 +102,16 @@ def menu_principal_teclado(nivel: str) -> InlineKeyboardMarkup:
     """
     botoes = [
         [
-            InlineKeyboardButton("📅 Sessões", callback_data="ver_eventos"),
-            InlineKeyboardButton("✅ Presenças", callback_data="minhas_confirmacoes"),
+            InlineKeyboardButton("🔍 Buscar Sessões", callback_data="ver_eventos"),
+            InlineKeyboardButton("📅 Minhas Presenças", callback_data="minhas_confirmacoes"),
         ],
         [
-            InlineKeyboardButton("👤 Perfil", callback_data="meu_cadastro"),
-            InlineKeyboardButton("❓ Ajuda", callback_data="menu_ajuda"),
+            InlineKeyboardButton("📜 Meu Perfil / Diploma", callback_data="meu_cadastro"),
+            InlineKeyboardButton("⚙️ Editar Dados", callback_data="editar_perfil"),
         ],
         [
             InlineKeyboardButton("🔔 Lembretes", callback_data="menu_lembretes"),
-            InlineKeyboardButton("🤖 Assistente IA", callback_data="abrir_assistente_ia"),
+            InlineKeyboardButton("🧹 Organizar", callback_data="limpar_historico"),
         ],
     ]
 
@@ -122,8 +122,6 @@ def menu_principal_teclado(nivel: str) -> InlineKeyboardMarkup:
     # Apenas Administradores (Nível 3)
     if nivel == "3":
         botoes.append([InlineKeyboardButton("⚙️ Administração", callback_data="area_admin")])
-
-    botoes.append([InlineKeyboardButton("🧹 Organizar conversa", callback_data="limpar_historico")])
 
     return InlineKeyboardMarkup(botoes)
 
@@ -183,8 +181,8 @@ def _texto_painel_inicial(membro: dict, observacao: str = "") -> str:
         "",
         f"Saudações, Ir.·. {nome}!" if nome else "Saudações fraternas!",
         "",
-        "Escolha uma opção abaixo para continuar.",
-        "Se limpar a conversa, basta digitar /start para reconstruir este painel.",
+        "Escolha uma opção abaixo para continuar os trabalhos.",
+        "Se o chat ficar poluído, use o botão Organizar para limpar as mensagens antigas.",
     ]
     observacao = str(observacao or "").strip()
     if observacao:

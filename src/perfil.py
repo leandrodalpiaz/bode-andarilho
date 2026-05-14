@@ -157,6 +157,13 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Geração do Diploma Digital Heráldico (Coluna 4)
     try:
+        query = update.callback_query
+        if query:
+            try:
+                await query.answer("Preparando Diploma... 📜", show_alert=False)
+            except Exception:
+                pass
+        
         from src.render_diploma import renderizar_diploma
         
         # Passa os dados estruturados do membro e as conquistas reais

@@ -1015,22 +1015,29 @@ def gerar_calendario_mes(ano: int, mes: int, eventos: List[dict]) -> str:
 
 async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📅 Calendário do mês", callback_data="calendario|0|0")],
-        [InlineKeyboardButton("📅 Esta semana", callback_data=f"data|{TOKEN_SEMANA_ATUAL}")],
-        [InlineKeyboardButton("📅 Próxima semana", callback_data=f"data|{TOKEN_PROXIMA_SEMANA}")],
-        [InlineKeyboardButton("📅 Este mês", callback_data=f"data|{TOKEN_MES_ATUAL}")],
-        [InlineKeyboardButton("📅 Próximos meses", callback_data=f"data|{TOKEN_PROXIMOS_MESES}")],
-        [InlineKeyboardButton("🔺 Por grau", callback_data=f"data|{TOKEN_POR_GRAU_MENU}")],
-        [InlineKeyboardButton("📜 Por rito", callback_data=f"data|{TOKEN_POR_RITO_MENU}")],
-        [InlineKeyboardButton("📍 Por localidade", callback_data=f"data|{TOKEN_POR_LOCALIDADE_MENU}")],
-        [InlineKeyboardButton("🏛️ Por potência", callback_data=f"data|{TOKEN_POR_POTENCIA_MENU}")],
+        [
+            InlineKeyboardButton("📍 Localização", callback_data=f"data|{TOKEN_POR_LOCALIDADE_MENU}"),
+            InlineKeyboardButton("⚖️ Grau", callback_data=f"data|{TOKEN_POR_GRAU_MENU}"),
+        ],
+        [
+            InlineKeyboardButton("📜 Rito", callback_data=f"data|{TOKEN_POR_RITO_MENU}"),
+            InlineKeyboardButton("📅 Esta semana", callback_data=f"data|{TOKEN_SEMANA_ATUAL}"),
+        ],
+        [
+            InlineKeyboardButton("🗓️ Calendário Geral", callback_data="calendario|0|0"),
+        ],
         [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
     ])
+
+    texto_busca = (
+        "📅 *Como deseja visualizar as sessões?*\n\n"
+        "Ou, se preferir, diga-me o que procura (Ex: 'Quero uma sessão de Mestre em Curitiba na quinta-feira')."
+    )
 
     await navegar_para(
         update, context,
         "Ver Sessões",
-        "📅 *Como deseja visualizar as sessões?*",
+        texto_busca,
         teclado
     )
 
