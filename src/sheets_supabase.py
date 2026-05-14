@@ -2447,3 +2447,194 @@ def listar_auditores_por_potencia(potencia_complemento: str) -> List[int]:
     except Exception as e:
         logger.error("Erro ao buscar auditores por potencia %s: %s", potencia_complemento, e)
         return []
+
+
+# ============================================
+# HERALDO: MARCOS DE EXPANSÃO COLETIVA
+# ============================================
+
+def get_total_confirmacoes() -> int:
+    """Retorna o total agregado de confirmações registradas no banco de dados."""
+    try:
+        resp = supabase.table("confirmacoes").select("id_evento", count="exact").limit(1).execute()
+        if hasattr(resp, 'count') and resp.count is not None:
+            return resp.count
+        return len(resp.data or [])
+    except Exception as e:
+        logger.error("Erro ao contar total de confirmacoes: %s", e)
+        return 0
+
+
+def is_first_of_potencia(potencia: str, potencia_comp: str) -> bool:
+    """Verifica se a loja recém inserida é a única desta Potência + Complemento."""
+    try:
+        pot = str(potencia).strip().upper()
+        comp = str(potencia_comp).strip().upper()
+        
+        query = supabase.table("lojas").select("id", count="exact")
+        query = query.ilike("potencia", pot)
+        
+        if comp:
+            query = query.ilike("potencia_complemento", comp)
+        else:
+            query = query.or_("potencia_complemento.is.null,potencia_complemento.eq.")
+            
+        resp = query.execute()
+        c = resp.count if hasattr(resp, 'count') and resp.count is not None else len(resp.data or [])
+        return c <= 1
+    except Exception as e:
+        logger.error("Erro ao verificar primeira loja da potencia: %s", e)
+        return False
+
+
+def get_estatisticas_vigor(loja_id: str, usar_mes_anterior: bool = False) -> Dict[str, Any]:
+    """
+    Calcula os indices de vigor administrativo da Secretaria:
+    1. Vigor de Agenda: Media de dias de antecedencia na criacao de sessoes.
+    2. Acolhimento: Contagem de confirmacoes de visitantes (membro.loja_id != loja_id).
+    3. Engajamento: Porcentagem de membros ativos que confirmaram presencas no periodo.
+    """
+    from datetime import datetime, timedelta
+    import statistics
+
+    agora = datetime.now()
+    lid_str = str(loja_id).strip()
+
+    if usar_mes_anterior:
+        primeiro_dia_mes_atual = agora.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        ultimo_dia_mes_anterior = primeiro_dia_mes_atual - timedelta(seconds=1)
+        primeiro_dia_mes_anterior = ultimo_dia_mes_anterior.replace(day=1, hour=0, minute=0, second=0)
+        data_inicio = primeiro_dia_mes_anterior
+        data_fim = ultimo_dia_mes_anterior
+    else:
+        # Janela movel dos ultimos 30 dias ate o futuro proximo
+        data_inicio = agora - timedelta(days=30)
+        data_fim = agora + timedelta(days=60)
+
+    try:
+        # 1. BUSCAR EVENTOS DA LOJA NO PERÍODO
+        resp_ev = supabase.table("eventos") \
+            .select("id_evento, created_at, data_evento") \
+            .eq("loja_id", lid_str) \
+            .eq("status", "Ativo") \
+            .execute()
+
+        eventos_filtrados = []
+        diferencas_dias = []
+
+        for ev in (resp_ev.data or []):
+            data_ev = _parse_data_generica(ev.get("data_evento"))
+            if data_ev and data_inicio <= data_ev <= data_fim:
+                eventos_filtrados.append(ev)
+                
+                # Processamento da Média de Antecedência
+                dt_cre_str = str(ev.get("created_at") or "")[:10]
+                dt_cre = _parse_data_generica(dt_cre_str)
+                if not dt_cre:
+                    try:
+                        dt_cre = datetime.fromisoformat(ev.get("created_at").replace("Z", "+00:00")).replace(tzinfo=None)
+                    except:
+                        continue
+                if data_ev and dt_cre:
+                    diff = (data_ev - dt_cre).days
+                    diferencas_dias.append(max(0, diff))
+
+        vigor_agenda = round(statistics.mean(diferencas_dias), 1) if diferencas_dias else 0.0
+
+        # 2. ÍNDICE DE ACOLHIMENTO (VISITANTES)
+        ids_eventos = [ev["id_evento"] for ev in eventos_filtrados]
+        total_visitantes = 0
+        if ids_eventos:
+            resp_conf = supabase.table("confirmacoes") \
+                .select("telegram_id") \
+                .in_("id_evento", ids_eventos) \
+                .execute()
+            
+            tids = list(set([str(c.get("telegram_id")) for c in (resp_conf.data or []) if c.get("telegram_id")]))
+            
+            if tids:
+                resp_memb = supabase.table("membros") \
+                    .select("telegram_id, loja_id") \
+                    .in_("telegram_id", tids) \
+                    .execute()
+                
+                map_membros = {str(m["telegram_id"]): str(m["loja_id"]).strip() for m in (resp_memb.data or []) if m.get("telegram_id") and m.get("loja_id")}
+                
+                for c in (resp_conf.data or []):
+                    tid = str(c.get("telegram_id"))
+                    m_loja_id = map_membros.get(tid)
+                    # Se o loja_id cadastrado do confirmante difere do loja_id da sessão, é visitante!
+                    if m_loja_id and m_loja_id != lid_str:
+                        total_visitantes += 1
+
+        # 3. TAXA DE ENGAJAMENTO (QUÓRUM)
+        resp_ativos = supabase.table("membros") \
+            .select("telegram_id") \
+            .eq("loja_id", lid_str) \
+            .eq("status", "Ativo") \
+            .execute()
+        
+        ativos_count = len(resp_ativos.data or [])
+        ativos_ids = [str(m.get("telegram_id")) for m in (resp_ativos.data or []) if m.get("telegram_id")]
+        
+        presentes_count = 0
+        if ativos_ids:
+            resp_tot_conf = supabase.table("confirmacoes") \
+                .select("telegram_id, data_hora") \
+                .in_("telegram_id", ativos_ids) \
+                .execute()
+            
+            confirmantes_unicos = set()
+            for c in (resp_tot_conf.data or []):
+                dt_conf = _parse_data_generica(c.get("data_hora"))
+                if not dt_conf:
+                    try:
+                        dt_conf = datetime.fromisoformat(c.get("data_hora").replace("Z", "+00:00")).replace(tzinfo=None)
+                    except:
+                        continue
+                if dt_conf and data_inicio <= dt_conf <= data_fim:
+                    confirmantes_unicos.add(str(c.get("telegram_id")))
+            
+            presentes_count = len(confirmantes_unicos)
+
+        taxa_engajamento = round((presentes_count / ativos_count * 100), 1) if ativos_count > 0 else 0.0
+
+        # 4. CAPTURA METADADOS DA LOJA
+        loja_nome = "Oficina"
+        loja_num = ""
+        resp_loja = supabase.table("lojas").select("nome_loja, numero").eq("id", lid_str).limit(1).execute()
+        if resp_loja.data:
+            loja_nome = resp_loja.data[0].get("nome_loja") or "Oficina"
+            loja_num = resp_loja.data[0].get("numero") or ""
+
+        return {
+            "loja_id": lid_str,
+            "nome_loja": loja_nome,
+            "numero_loja": loja_num,
+            "periodo_inicio": data_inicio.strftime("%d/%m/%Y"),
+            "periodo_fim": data_fim.strftime("%d/%m/%Y"),
+            "vigor_agenda": vigor_agenda,
+            "acolhimento": total_visitantes,
+            "ativos_quadro": ativos_count,
+            "presentes_quadro": presentes_count,
+            "engajamento": taxa_engajamento,
+            "eventos_no_periodo": len(eventos_filtrados)
+        }
+
+    except Exception as e:
+        logger.error("Erro ao calcular estatisticas de vigor para loja %s: %s", lid_str, e)
+        return {
+            "loja_id": lid_str,
+            "nome_loja": "Erro de Leitura",
+            "numero_loja": "",
+            "periodo_inicio": data_inicio.strftime("%d/%m/%Y"),
+            "periodo_fim": data_fim.strftime("%d/%m/%Y"),
+            "vigor_agenda": 0.0,
+            "acolhimento": 0,
+            "ativos_quadro": 0,
+            "presentes_quadro": 0,
+            "engajamento": 0.0,
+            "eventos_no_periodo": 0
+        }
+
+

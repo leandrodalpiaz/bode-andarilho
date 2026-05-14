@@ -531,13 +531,15 @@ def register_handlers(app: Application) -> None:
         bastao_listar,
         bastao_confirmar,
         bastao_executar,
-        ajuda_voucher_boasvindas
+        ajuda_voucher_boasvindas,
+        vigor_painel
     )
     app.add_handler(voucher_handler)
     app.add_handler(CallbackQueryHandler(bastao_listar, pattern="^bastao_listar$"))
     app.add_handler(CallbackQueryHandler(bastao_confirmar, pattern=r"^bastao_conf\|"))
     app.add_handler(CallbackQueryHandler(bastao_executar, pattern=r"^bastao_executar\|"))
     app.add_handler(CallbackQueryHandler(ajuda_voucher_boasvindas, pattern="^ajuda_voucher_boasvindas$"))
+    app.add_handler(CallbackQueryHandler(vigor_painel, pattern="^vigor_painel$"))
 
     app.add_handler(confirmacao_presenca_handler)
     app.add_handler(CallbackQueryHandler(processar_pedido_fundacao_usuario, pattern="^fundacao_solicitar$"))
@@ -576,6 +578,7 @@ def register_handlers(app: Application) -> None:
         if update.message:
             await update.message.reply_text("OK")
     app.add_handler(CommandHandler("ping", ping))
+    app.add_handler(CommandHandler("vigor", vigor_painel))
 
     # ===== 3. CALLBACKS DA CENTRAL DE AJUDA =====
     for handler in ajuda_handlers:

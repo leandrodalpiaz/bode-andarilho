@@ -142,6 +142,91 @@ async def job_faxina_membros(app: Application):
     )
 
 
+
+async def job_mobilizacao_coletiva(app: Application):
+    """Job horario que verifica marcos cumulativos globais e dispara o card correspondente."""
+    try:
+        from src.notificacoes_coletivas import checar_marcos_mobilizacao
+        await checar_marcos_mobilizacao(app.bot)
+    except Exception as e:
+        logger.error("Erro no job horario de mobilizacao coletiva: %s", e)
+
+
+async def job_mensal_fechamento_vigor(app: Application):
+    """
+    Job mensal que processa o Vigor Administrativo das Lojas referente ao mes anterior,
+    gerando o card oficial de vigor e enviando ao Secretario Responsavel.
+    Roda no dia 01 de cada mes as 08:00.
+    """
+    logger.info("--- INICIANDO FECHAMENTO MENSAL DE VIGOR ADMINISTRATIVO ---")
+    try:
+        from src.sheets_supabase import listar_lojas, get_estatisticas_vigor
+        from src.render_marcos import renderizar_relatorio_vigor
+        import os
+
+        lojas = await asyncio.to_thread(listar_lojas)
+        if not lojas:
+            logger.info("Nenhuma loja cadastrada para processar fechamento.")
+            return
+
+        processadas = 0
+        for loja in lojas:
+            lid = loja.get("ID") or loja.get("id")
+            sec_id_str = loja.get("Telegram ID do secretario responsavel") or loja.get("secretario_responsavel_id")
+
+            if not lid or not sec_id_str:
+                continue
+
+            try:
+                sec_id = int(float(str(sec_id_str).strip()))
+            except:
+                continue
+
+            try:
+                await asyncio.sleep(0.5)
+                
+                # Processa o mes anterior completo
+                stats = await asyncio.to_thread(get_estatisticas_vigor, str(lid), usar_mes_anterior=True)
+                card_path = await asyncio.to_thread(renderizar_relatorio_vigor, stats)
+
+                nome = stats.get("nome_loja") or "Oficina"
+                num = stats.get("numero_loja") or ""
+
+                msg = (
+                    f"📜 *RELATORIO OFICIAL DE ENCERRAMENTO*\n"
+                    f"🏛️ *{nome} nº {num}*\n\n"
+                    f"Saudacoes Ir.·. Secretario! Consolidamos o Livro de Arquitetura e apresentamos o **Card de Vigor Oficial** referente ao fechamento do mes anterior.\n\n"
+                    f"📊 *Metas Alcancadas:*\n"
+                    f"• Media de Agenda: `{stats.get('vigor_agenda', 0.0)}` dias de antecedencia\n"
+                    f"• Acolhimento: `{stats.get('acolhimento', 0)}` visitantes acolhidos\n"
+                    f"• Quorum do Quadro: `{stats.get('engajamento', 0.0)}%` de engajamento\n\n"
+                    f"📐 _Este card representa o vigor de sua gestao. Parabens pelo zelo administrativo!_ 🤝🖋️🐐"
+                )
+
+                with open(card_path, "rb") as photo:
+                    await app.bot.send_photo(
+                        chat_id=sec_id,
+                        photo=photo,
+                        caption=msg,
+                        parse_mode="Markdown"
+                    )
+
+                if os.path.exists(card_path):
+                    os.remove(card_path)
+
+                processadas += 1
+                logger.info("Card de Vigor mensal enviado para loja %s", nome)
+
+            except Exception as sub_err:
+                logger.warning("Erro ao processar vigor da loja %s: %s", lid, sub_err)
+                continue
+
+        logger.info("FECHAMENTO CONCLUIDO! %d cards disparados.", processadas)
+
+    except Exception as e:
+        logger.error("Falha geral no job_mensal_fechamento_vigor: %s", e)
+
+
 async def iniciar_scheduler(app: Application):
     global _scheduler
 
@@ -217,8 +302,37 @@ async def iniciar_scheduler(app: Application):
         replace_existing=True,
     )
 
+    # --- JOB HERALDO: MONITORAMENTO DE MOBILIZACAO HORARIO ---
+    scheduler.add_job(
+        job_mobilizacao_coletiva,
+        "cron",
+        minute=45,  # Executa aos 45 minutos de cada hora
+        args=[app],
+        id="job_mobilizacao_coletiva",
+        replace_existing=True,
+    )
+
+    # --- JOB HERALDO: FECHAMENTO MENSAL DE VIGOR ---
+    scheduler.add_job(
+        job_mensal_fechamento_vigor,
+        "cron",
+        day="1",
+        hour=8,
+        minute=0,
+        args=[app],
+        id="job_mensal_fechamento_vigor",
+        replace_existing=True,
+    )
+
     scheduler.start()
     _scheduler = scheduler
     logger.info(
         "Scheduler iniciado com jobs de lembretes, celebração mensal, flush e faxina semanal."
     )
+
+    # --- RITO DE ABERTURA HISTÓRICA (Retroatividade Unificada) ---
+    try:
+        from src.notificacoes_coletivas import realizar_abertura_historica
+        asyncio.create_task(realizar_abertura_historica(app.bot))
+    except Exception as boot_err:
+        logger.warning("Falha silenciosa ao registrar o rito de abertura historica no boot: %s", boot_err)

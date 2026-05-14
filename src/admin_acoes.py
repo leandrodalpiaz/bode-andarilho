@@ -1912,6 +1912,15 @@ async def outorgar_malhete_admin(update: Update, context: ContextTypes.DEFAULT_T
         )
         await context.bot.send_message(chat_id=obreiro_id, text=msg_sec, parse_mode="Markdown")
         
+        # --- ALERTA COLETIVO: HERALDO DE EXPANSÃO ---
+        try:
+            from src.notificacoes_coletivas import processar_alerta_fundacao
+            import asyncio
+            # Envia os dados da loja inseridos no Supabase para processamento de ineditismo
+            asyncio.create_task(processar_alerta_fundacao(ins_resp.data[0], context.bot))
+        except Exception as h_err:
+            logger.warning("Falha silenciosa ao acionar Heraldo de expansao: %s", h_err)
+            
     except Exception as e:
         logger.error("Erro na outorga de malhete: %s", e)
         await query.message.reply_text(f"❌ Ocorreu um erro no banco de dados durante a outorga: {e}")

@@ -1727,6 +1727,7 @@ async def _exibir_menu_secretario_seguro(update: Update, context: ContextTypes.D
         opcoes.append([InlineKeyboardButton("🤝 Passagem de Bastão", callback_data="bastao_listar")])
         
     opcoes.extend([
+        [InlineKeyboardButton("📊 Painel de Vigor da Oficina", callback_data="vigor_painel")],
         [InlineKeyboardButton("📋 Meus eventos", callback_data="meus_eventos")],
         [InlineKeyboardButton("👥 Ver confirmados por evento", callback_data="ver_confirmados_secretario")],
         [InlineKeyboardButton("👥 Membros da Minha Oficina", callback_data="admin_editar_membro")],
@@ -2082,6 +2083,136 @@ async def ajuda_voucher_boasvindas(update: Update, context: ContextTypes.DEFAULT
         update, context, "Ajuda Voucher", texto,
         InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar à Área do Secretário", callback_data="menu_secretario")]])
     )
+
+
+async def vigor_painel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Processa e exibe o Card de Vigor da Oficina e a análise de IA da gestão.
+    Suporta ativação por comando (/vigor) ou clique no botão do painel (vigor_painel).
+    """
+    user_id = update.effective_user.id
+    query = update.callback_query
+    
+    # 1. Valida Nível Administrativo (2 ou 3)
+    nivel = get_nivel(user_id)
+    if nivel not in ["2", "3"]:
+        msg = "⛔ *Acesso Restrito*\n\nO Painel de Vigor da Oficina é de uso exclusivo dos Secretários (Nível 2) e Administradores."
+        if query:
+            await query.answer(msg, show_alert=True)
+        else:
+            await update.message.reply_text(msg, parse_mode="Markdown")
+        return
+        
+    # 2. Localiza a Oficina Vinculada
+    from src.sheets_supabase import get_loja_por_secretario, get_estatisticas_vigor
+    loja = get_loja_por_secretario(user_id)
+    
+    if not loja and nivel == "3":
+        msg_erro = "⚠️ Administrador Geral, você não está vinculado formalmente a nenhuma Loja para extrair vigor administrativo individual."
+        if query:
+            await query.answer(msg_erro, show_alert=True)
+        else:
+            await update.message.reply_text(msg_erro)
+        return
+        
+    if not loja:
+        msg_trava = "⚠️ Você ainda não possui uma Oficina vinculada sob sua responsabilidade administrativa."
+        if query:
+            await query.answer(msg_trava, show_alert=True)
+        else:
+            await update.message.reply_text(msg_trava)
+        return
+        
+    lid = loja.get("ID da loja") or loja.get("id")
+    
+    # 3. Feedback visual de carregamento
+    msg_carregando = "⏳ *Consultando o Livro de Arquitetura...*\nCompilando métricas de Agenda, Acolhimento e Quórum. Por favor, aguarde."
+    sent_msg = None
+    if query:
+        try:
+            await query.answer("Compilando métricas...")
+        except: pass
+        sent_msg = await query.message.reply_text(msg_carregando, parse_mode="Markdown")
+    else:
+        sent_msg = await update.message.reply_text(msg_carregando, parse_mode="Markdown")
+        
+    try:
+        # 4. Extração das Estatísticas Reais
+        stats = get_estatisticas_vigor(str(lid), usar_mes_anterior=False)
+        
+        # 5. Renderização do Card via Pillow
+        from src.render_marcos import renderizar_relatorio_vigor
+        card_path = renderizar_relatorio_vigor(stats)
+        
+        # 6. Heurística Inteligente (Mentoria Administrativa / IA local)
+        vigor_a = stats.get("vigor_agenda", 0.0)
+        acolh = stats.get("acolhimento", 0)
+        engaj = stats.get("engajamento", 0.0)
+        
+        conselhos = []
+        selos_atingidos = []
+        
+        if vigor_a >= 15.0:
+            selos_atingidos.append("🌟 *Oficina de Excelência* (Planejamento)")
+            conselhos.append("✨ *Planejamento Magnífico:* Sua antecedência de agenda está excepcional! Continue publicando sessões com folga para atrair caravanas.")
+        elif vigor_a >= 7.0:
+            conselhos.append("💡 *Dica de Agenda:* Seu planejamento é satisfatório. Se antecipar as criações para 15 dias ou mais, sua Loja receberá o selo de *Excelência*!")
+        else:
+            conselhos.append("⚠️ *Alerta de Agenda:* Sua média de antecedência está baixa. Tente cadastrar suas sessões com pelo menos 7 dias de folga para que os Irmãos consigam se planejar.")
+            
+        if acolh > 10:
+            selos_atingidos.append("🌟 *Farol da Região* (Hospitalidade)")
+            conselhos.append("🤝 *Farol Radiante:* Vocês acolheram mais de 10 visitantes! A hospitalidade da sua Oficina é uma referência na rede.")
+        elif acolh >= 3:
+            conselhos.append("💡 *Dica de Hospitalidade:* A acolhida está boa. Compartilhe os links de convite nos grupos principais para cruzar a barreira de 10 visitantes e ganhar o selo *Farol da Região*!")
+        else:
+            conselhos.append("🤝 *Foco em Hospitalidade:* Que tal incentivar caravanas? Publique as datas no canal de expansão para aumentar seu Acolhimento.")
+
+        if engaj >= 80.0:
+            conselhos.append("🔥 *Alta Fidelidade:* Seu quórum interno está espetacular! Praticamente todo o quadro frequenta ativamente.")
+        elif engaj >= 50.0:
+            conselhos.append("📊 *Engajamento Mediano:* Metade dos seus obreiros confirmou presença. Estimule os que estão 'em silêncio' a instalar o bot.")
+        else:
+            conselhos.append("⚠️ *Alerta de Evasão:* Menos de 50% do quadro registrou presença. Que tal rodar uma campanha interna para reativar as colunas?")
+            
+        # Compõe texto final
+        selos_bloco = "\n".join(selos_atingidos) if selos_atingidos else "_Nenhum selo conquistado este mês._"
+        dicas_bloco = "\n\n".join(conselhos)
+        
+        msg_caption = (
+            f"📊 *PAINEL DE VIGOR DA OFICINA*\n"
+            f"🏛️ *{stats.get('nome_loja')} nº {stats.get('numero_loja')}*\n\n"
+            f"🏅 *Conquistas Atuais:*\n{selos_bloco}\n\n"
+            f"🧠 *Mentoria de Gestão (IA Assistente):*\n{dicas_bloco}\n\n"
+            f"📐 _Continue zelando pelas colunas da sua Oficina!_"
+        )
+        
+        # 7. Dispara Card + Texto
+        with open(card_path, "rb") as photo:
+            await context.bot.send_photo(
+                chat_id=user_id,
+                photo=photo,
+                caption=msg_caption,
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 Voltar ao Painel", callback_data="menu_secretario")]
+                ])
+            )
+            
+        # 8. Limpa mensagens temporárias
+        try:
+            await sent_msg.delete()
+            if os.path.exists(card_path):
+                os.remove(card_path)
+        except:
+            pass
+            
+    except Exception as ex:
+        logger.error("Erro no controller de vigor: %s", ex)
+        try:
+            await sent_msg.edit_text(f"❌ *Erro ao gerar Painel:* {ex}")
+        except:
+            pass
 
 
 # ==========================================================
