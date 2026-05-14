@@ -144,6 +144,9 @@ _MEMBROS_SHEETS_TO_DB: Dict[str, str] = {
     "Mestre Instalado":   "mestre_instalado",
     "Notificações":       "notificacoes",
     "Status":             "status",
+    "CIM URL":            "cim_photo_url",
+    "Loja Manual":        "loja_manual",
+    "Status Auditoria":   "status_auditoria",
 }
 _MEMBROS_DB_TO_SHEETS: Dict[str, str] = {v: k for k, v in _MEMBROS_SHEETS_TO_DB.items()}
 
@@ -613,6 +616,9 @@ def cadastrar_membro(dados: dict) -> bool:
             ),
             "nivel": _norm_intlike(dados.get("Nivel")) or "1",
             "status": _norm_text(dados.get("Status") or dados.get("status")) or "Pendente",
+            "cim_photo_url": _norm_text(dados.get("CIM URL") or dados.get("cim_photo_url")),
+            "loja_manual": _norm_text(dados.get("Loja Manual") or dados.get("loja_manual")),
+            "status_auditoria": _norm_text(dados.get("Status Auditoria") or dados.get("status_auditoria")),
         }
 
         try:
@@ -684,6 +690,9 @@ def atualizar_membro(telegram_id: int, dados_atualizados: dict, preservar_nivel:
             "mestre_instalado": "Mestre Instalado",
             "notificacoes":   "Notificações",
             "status":         "Status",
+            "cim_photo_url":  "CIM URL",
+            "loja_manual":    "Loja Manual",
+            "status_auditoria": "Status Auditoria",
         }
 
         for k, v in dados_atualizados.items():
@@ -2386,3 +2395,55 @@ def limpar_midias_eventos_passados() -> int:
         logger.info("Limpeza de efemeridade concluída: %d mídias limpas do storage.", arquivos_removidos)
     
     return arquivos_removidos
+
+# =========================
+# Telhamento Digital e Fundação
+# =========================
+
+def solicitar_fundacao(membro_id: int, loja_dados: dict) -> bool:
+    """Registra pedido de fundação na tabela pedidos_fundacao."""
+    try:
+        mid = _norm_intlike(membro_id)
+        if not mid:
+            return False
+        row = {
+            "membro_id": int(float(mid)),
+            "status": "Pendente",
+            "loja_dados": loja_dados
+        }
+        supabase.table("pedidos_fundacao").insert(row).execute()
+        return True
+    except Exception as e:
+        logger.error("Erro ao registrar pedido de fundação para membro %s: %s", membro_id, e)
+        return False
+
+
+def listar_auditores_por_potencia(potencia_complemento: str) -> List[int]:
+    """
+    Retorna a lista de Telegram IDs de usuários que são Nível '2' ou '2.5'
+    e pertencem ao mesmo complemento de potência (ex: GOB-PR).
+    """
+    try:
+        pc = _norm_text(potencia_complemento).strip().lower()
+        if not pc:
+            return []
+
+        resp = (
+            supabase.table("membros")
+            .select("telegram_id, nivel, potencia_complemento")
+            .in_("nivel", ["2", "2.5"])
+            .execute()
+        )
+
+        ids = []
+        if resp.data:
+            for row in resp.data:
+                r_pc = _norm_text(row.get("potencia_complemento")).strip().lower()
+                if r_pc == pc:
+                    tid = _safe_cache_int(row.get("telegram_id"))
+                    if tid:
+                        ids.append(tid)
+        return ids
+    except Exception as e:
+        logger.error("Erro ao buscar auditores por potencia %s: %s", potencia_complemento, e)
+        return []

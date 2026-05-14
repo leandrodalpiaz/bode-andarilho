@@ -2026,7 +2026,7 @@ async def bastao_executar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         from src.conquistas import checar_e_conceder
         import asyncio
-        asyncio.create_task(checar_e_conceder(user_id, "guardiao_chave", context.bot))
+        asyncio.create_task(checar_e_conceder(user_id, "pm", context.bot))
     except Exception:
         pass
 

@@ -20,14 +20,17 @@ DEFAULT_TEXT_COLOR = (58, 36, 16, 255)  # Castanho envelhecido elegante
 GOLD_TEXT_COLOR = (235, 195, 100, 230)   # Dourado queimado para lacres de cera
 
 CONQUISTAS_MONOGRAMAS = {
-    "iniciado_colher": {"sigla": "IC", "nome": "Iniciado na Colher"},
-    "andarilho_marca": {"sigla": "AM", "nome": "Andarilho de Marca"},
-    "sete_fronteiras": {"sigla": "M7", "nome": "Sete Fronteiras"},
-    "noaquita_estrada": {"sigla": "NE", "nome": "Noaquita da Estrada"},
-    "patriarca_sistema": {"sigla": "PS", "nome": "Patriarca do Sistema"},
-    "escriturario_sistema": {"sigla": "ES", "nome": "Escriturário do Sistema"},
-    "provedor_tabernaculo": {"sigla": "PT", "nome": "Provedor Tabernáculo"},
-    "guardiao_chave": {"sigla": "GC", "nome": "Guardião da Chave"},
+    "ic": {"sigla": "IC", "nome": "Iniciado na Colher"},
+    "mp": {"sigla": "MP", "nome": "Mestre de Marca"},
+    "e9": {"sigla": "E9", "nome": "Eleito dos Nove"},
+    "ce": {"sigla": "CE", "nome": "Cavaleiro da Estrada"},
+    "og": {"sigla": "OG", "nome": "Cavaleiro do Garfo"},
+    "pj": {"sigla": "PJ", "nome": "Príncipe Jerusalém"},
+    "rc": {"sigla": "RC", "nome": "Rosa-Cruz de Visitas"},
+    "na": {"sigla": "NA", "nome": "Noaquita Asfalto"},
+    "rs": {"sigla": "RS", "nome": "Real Segredo"},
+    "io": {"sigla": "IO", "nome": "Intendente Oficina"},
+    "pm": {"sigla": "PM", "nome": "Mestre Passado"},
 }
 
 
@@ -182,7 +185,7 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str]) ->
             start_x = center_x - (row_w // 2)
             
             # Prepara fonte do monograma na escala do selo
-            monogram_font = _load_custom_font("Cinzel-Regular.ttf", int(target_seal_size * 0.32))
+            monogram_font = _load_custom_font("Cinzel-Bold.ttf", int(target_seal_size * 0.34))
             label_font = _load_custom_font("CormorantGaramond-SemiBold.ttf", int(width * 0.020))
             
             for idx, info in enumerate(conquistas_exibidas):
@@ -209,8 +212,12 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str]) ->
                 sc_x = target_seal_size // 2
                 sc_y = target_seal_size // 2 - 2
                 
-                # Desenha uma leve sombra no texto para parecer gravado no cera
-                s_draw.text((sc_x+1, sc_y+1), sigla, font=monogram_font, fill=(40, 0, 0, 150), anchor="mm")
+                # --- TIPOGRAFIA METÁLICA E RELEVO 3D EM OURO ---
+                # Sombra profunda abaixo/direita para efeito fundido
+                s_draw.text((sc_x+2, sc_y+2), sigla, font=monogram_font, fill=(30, 5, 5, 180), anchor="mm")
+                # Brilho suave acima/esquerda (emboss)
+                s_draw.text((sc_x-1, sc_y-1), sigla, font=monogram_font, fill=(255, 235, 180, 140), anchor="mm")
+                # Texto Principal em Ouro Envelhecido Metálico
                 s_draw.text((sc_x, sc_y), sigla, font=monogram_font, fill=GOLD_TEXT_COLOR, anchor="mm")
                 
                 # Aplica o selo no diploma usando composite
@@ -263,6 +270,31 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str]) ->
     draw.line((center_x - int(width * 0.15), y_rodape + 15, center_x + int(width * 0.15), y_rodape + 15), fill=(110, 80, 50, 120), width=1)
     _draw_centered(draw, "Visto da Chancelaria", center_x, y_rodape + 20, font_metadado, (110, 80, 50, 210))
     
+    # --- ESTETICA DO RIGOR: MARCA D'AGUA DIAGONAL PENDENTE ---
+    status_aud = str(membro.get("status_auditoria") or membro.get("Status Auditoria") or "").strip()
+    if status_aud == "Pendente_Identidade":
+        try:
+            stamp_layer = Image.new("RGBA", diploma.size, (255, 255, 255, 0))
+            draw_stamp = ImageDraw.Draw(stamp_layer)
+            
+            stamp_text = "AGUARDANDO VALIDAÇÃO"
+            font_stamp = _load_custom_font("Cinzel-Bold.ttf", int(width * 0.06))
+            
+            bbox = draw_stamp.textbbox((0, 0), stamp_text, font=font_stamp)
+            tw = bbox[2] - bbox[0]
+            th = bbox[3] - bbox[1]
+            
+            tx = (width - tw) // 2
+            ty = (height - th) // 2
+            
+            draw_stamp.text((tx, ty), stamp_text, font=font_stamp, fill=(180, 40, 40, 60))
+            
+            rotated_stamp = stamp_layer.rotate(30, resample=Image.Resampling.BICUBIC, center=(width//2, height//2))
+            diploma.alpha_composite(rotated_stamp)
+            logger.info("Marca d'agua de validacao pendente aplicada com sucesso.")
+        except Exception as e_stamp:
+            logger.warning("Erro ao aplicar marca d'agua estetica: %s", e_stamp)
+
     # Salva no diretório temporário de saída
     temp_dir = tempfile.gettempdir()
     uid = membro.get("telegram_id", membro.get("Telegram ID", "anon"))

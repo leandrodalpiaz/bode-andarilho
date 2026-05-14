@@ -115,6 +115,12 @@ from src.cadastro_evento import cadastro_evento_handler
 
 # Ações administrativas
 from src.admin_acoes import (
+    processar_auditoria_validar,
+    processar_auditoria_recusar,
+    processar_pedido_fundacao_usuario,
+    confirmar_pedido_fundacao_usuario,
+    outorgar_malhete_admin,
+    recusar_outorga_admin,
     promover_handler,
     rebaixar_handler,
     editar_membro_handler,
@@ -534,6 +540,12 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(ajuda_voucher_boasvindas, pattern="^ajuda_voucher_boasvindas$"))
 
     app.add_handler(confirmacao_presenca_handler)
+    app.add_handler(CallbackQueryHandler(processar_pedido_fundacao_usuario, pattern="^fundacao_solicitar$"))
+    app.add_handler(CallbackQueryHandler(confirmar_pedido_fundacao_usuario, pattern="^fundacao_confirmar_envio$"))
+    app.add_handler(CallbackQueryHandler(outorgar_malhete_admin, pattern=r"^fundacao_outorgar\|"))
+    app.add_handler(CallbackQueryHandler(recusar_outorga_admin, pattern=r"^fundacao_recusar\|"))
+    app.add_handler(CallbackQueryHandler(processar_auditoria_validar, pattern=r"^auditar_validar\|"))
+    app.add_handler(CallbackQueryHandler(processar_auditoria_recusar, pattern=r"^auditar_recusar\|"))
     app.add_handler(cadastro_evento_handler)
     app.add_handler(promover_handler)
     app.add_handler(rebaixar_handler)

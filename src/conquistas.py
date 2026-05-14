@@ -2,6 +2,7 @@
 import os
 import logging
 import asyncio
+import re
 from datetime import datetime
 from typing import Optional, Any, Dict, List
 
@@ -12,47 +13,65 @@ logger = logging.getLogger(__name__)
 # ============================================
 
 CONQUISTAS_INFO = {
-    "iniciado_colher": {
+    "ic": {
         "titulo": "Iniciado na Colher",
-        "descricao": "Primeira confirmação de ágape realizada.",
+        "descricao": "Primeira confirmacao de agape realizada.",
         "emoji": "🥄",
     },
-    "andarilho_marca": {
-        "titulo": "Andarilho de Marca",
-        "descricao": "Primeira visita a uma Loja diferente da sua cadastrada.",
+    "mp": {
+        "titulo": "Mestre de Marca",
+        "descricao": "Visita confirmada a 5 Lojas distintas.",
         "emoji": "📍",
     },
-    "sete_fronteiras": {
-        "titulo": "Mestre das Sete Fronteiras",
-        "descricao": "Frequência comprovada em 7 cidades ou orientes distintos.",
+    "e9": {
+        "titulo": "Eleito dos Nove Orientes",
+        "descricao": "Frequencia comprovada em 9 cidades ou orientes distintos.",
         "emoji": "🌍",
     },
-    "noaquita_estrada": {
-        "titulo": "Noaquita da Estrada",
-        "descricao": "1 ano completo de caminhada e uso do sistema.",
-        "emoji": "⏳",
+    "ce": {
+        "titulo": "Cavaleiro da Estrada",
+        "descricao": "Visita a Lojas de 3 Estados (UF) distintos.",
+        "emoji": "🛣️",
     },
-    "patriarca_sistema": {
-        "titulo": "Patriarca do Sistema",
-        "descricao": "2 anos ou mais de atividade ininterrupta com o bot.",
-        "emoji": "📜",
-    },
-    "escriturario_sistema": {
-        "titulo": "Escriturário do Sistema",
-        "descricao": "Primeiro cadastro de sessão realizado diretamente (sem correções da IA).",
-        "emoji": "✍️",
-    },
-    "provedor_tabernaculo": {
-        "titulo": "Provedor do Tabernáculo",
-        "descricao": "Primeiro cadastro de uma sessão com Ágape Gratuito.",
+    "og": {
+        "titulo": "Cavaleiro do Garfo",
+        "descricao": "Frequencia comprovada em 15 agapes no ecossistema.",
         "emoji": "🍷",
     },
-    "guardiao_chave": {
-        "titulo": "Guardião da Chave Passada",
-        "descricao": "Passagem de Bastão executada, transferindo as chaves da Oficina ao sucessor.",
-        "emoji": "🔑",
+    "pj": {
+        "titulo": "Principe de Jerusalem",
+        "descricao": "Presenca em Oficina com distancia superior a 200km da Loja Sede.",
+        "emoji": "🏰",
+    },
+    "rc": {
+        "titulo": "Rosa-Cruz das Visitacoes",
+        "descricao": "Frequencia comprovada em Lojas de 3 ritos distintos.",
+        "emoji": "🌹",
+    },
+    "na": {
+        "titulo": "Noaquita do Asfalto",
+        "descricao": "1 ano completo de registro ativo e uso do sistema.",
+        "emoji": "⏳",
+    },
+    "rs": {
+        "titulo": "Real Segredo Logistico",
+        "descricao": "Presencas registradas cobrindo GOB, CMSB e COMAB.",
+        "emoji": "👑",
+    },
+    "io": {
+        "titulo": "Intendente das Oficinas",
+        "descricao": "Perfil da sua Oficina 100% atualizado (GPS, CEP, Rito, Endereco).",
+        "emoji": "💼",
+    },
+    "pm": {
+        "titulo": "Mestre Passado Digital",
+        "descricao": "Outorgado pela passagem bem-sucedida de Bastao ao sucessor.",
+        "emoji": "🤝",
     },
 }
+
+CONQUISTAS = CONQUISTAS_INFO
+
 
 # ============================================
 # MOTOR DE CONCESSÃO
@@ -288,3 +307,190 @@ async def checar_aniversarios_cadastro(bot: Any) -> None:
                 
     except Exception as e:
         logger.error("Erro em job checar_aniversarios_cadastro: %s", e)
+
+
+
+
+# ============================================
+# APURAÇÃO MASSIVA DE MERITOS (DIPLOMA ENGINE)
+# ============================================
+
+async def verificar_novas_conquistas(user_id: int, bot: Any) -> None:
+    """
+    Executa a varredura agregada de estatisticas de presencas,
+    cidades, UFs e prazos para outorgar automaticamente novas medalhas.
+    Invocado transparente e assincronamente antes da abertura de Perfil.
+    """
+    try:
+        from src.sheets_supabase import (
+            buscar_membro,
+            buscar_confirmacoes_membro,
+            supabase,
+            _row_to_sheets
+        )
+        
+        uid = int(float(user_id))
+        membro = buscar_membro(uid)
+        if not membro:
+            return
+            
+        # 1. Buscar Historico de Confirmacoes
+        confirmacoes = await buscar_confirmacoes_membro(uid)
+        if not confirmacoes:
+            confirmacoes = []
+            
+        # 2. Buscar Metadados dos Eventos confirmados
+        eventos = []
+        ids_eventos = list({c.get("ID Evento") or c.get("id_evento") for c in confirmacoes if c.get("ID Evento") or c.get("id_evento")})
+        if ids_eventos:
+            def _fetch_evs():
+                resp = supabase.table("eventos").select("*").in_("id_evento", ids_eventos).execute()
+                return [_row_to_sheets("eventos", r) for r in (resp.data or [])]
+            eventos = await asyncio.to_thread(_fetch_evs)
+            
+        # 3. Buscar Lojas vinculadas a esses eventos
+        lojas_visitadas_db = []
+        ids_lojas = list({str(ev.get("ID da loja") or ev.get("loja_id")) for ev in eventos if ev.get("ID da loja") or ev.get("loja_id")})
+        if ids_lojas:
+            def _fetch_lojas():
+                resp = supabase.table("lojas").select("*").in_("id", ids_lojas).execute()
+                return [_row_to_sheets("lojas", r) for r in (resp.data or [])]
+            lojas_visitadas_db = await asyncio.to_thread(_fetch_lojas)
+            
+        # 4. Buscar Loja Sede do membro
+        loja_sede = None
+        loja_sede_id = membro.get("loja_id") or membro.get("ID da loja")
+        if loja_sede_id:
+            def _fetch_sede():
+                resp = supabase.table("lojas").select("*").eq("id", loja_sede_id).execute()
+                if resp.data:
+                    return _row_to_sheets("lojas", resp.data[0])
+                return None
+            loja_sede = await asyncio.to_thread(_fetch_sede)
+            
+        # ==========================================
+        # APURAÇÃO E AGREGAÇÃO DE CONJUNTOS
+        # ==========================================
+        
+        # AGAPES
+        contagem_agape = sum(1 for c in confirmacoes if "sim" in str(c.get("Ágape") or c.get("agape") or "").lower())
+        
+        # LOJAS
+        lojas_visitadas_set = set()
+        for ev in eventos:
+            lid = str(ev.get("ID da loja") or ev.get("loja_id") or "").strip()
+            if lid:
+                lojas_visitadas_set.add(lid)
+            else:
+                nome_l = str(ev.get("Nome da loja") or ev.get("nome_loja") or "").strip().lower()
+                if nome_l:
+                    lojas_visitadas_set.add(nome_l)
+                    
+        # CIDADES (ORIENTES)
+        cidades_visitadas = set()
+        for ev in eventos:
+            ori = str(ev.get("Oriente") or ev.get("oriente") or "").strip()
+            # Limpa e extrai a cidade
+            cid = ori.split("-")[0].split("/")[0].strip().title()
+            if cid and cid not in ("Nao Informado", "Não Informado", ""):
+                cidades_visitadas.add(cid)
+                
+        # UFS, RITOS E POTÊNCIAS
+        ufs_visitados = set()
+        ritos_visitados = set()
+        potencias_visitadas = set()
+        
+        for lj in lojas_visitadas_db:
+            uf = str(lj.get("Estado UF") or lj.get("estado_uf") or "").strip().upper()
+            if uf: ufs_visitados.add(uf)
+            rit = str(lj.get("Rito") or lj.get("rito") or "").strip().upper()
+            if rit: ritos_visitados.add(rit)
+            pot = str(lj.get("Potência") or lj.get("potencia") or "").strip().upper()
+            if pot: potencias_visitadas.add(pot)
+            
+        # Fallbacks via parsing de strings para resiliencia legada
+        for ev in eventos:
+            ori = str(ev.get("Oriente") or ev.get("oriente") or "").strip().upper()
+            m_uf = re.search(r"[-\/]\s*([A-Z]{2})$", ori)
+            if m_uf:
+                ufs_visitados.add(m_uf.group(1))
+                
+            rit = str(ev.get("Rito") or ev.get("rito") or "").strip().upper()
+            if rit: ritos_visitados.add(rit)
+            
+            pot = str(ev.get("Potência") or ev.get("potencia") or "").strip().upper()
+            if pot: potencias_visitadas.add(pot)
+            
+        # ==========================================
+        # VERIFICAÇÃO INDIVIDUAL DE REGRAS
+        # ==========================================
+        
+        # 🥄 IC: Iniciado na Colher (Count Agape >= 1)
+        if contagem_agape >= 1:
+            await checar_e_conceder(uid, "ic", bot)
+            
+        # 🍷 OG: Cavaleiro do Garfo (Count Agape >= 15)
+        if contagem_agape >= 15:
+            await checar_e_conceder(uid, "og", bot)
+            
+        # 📍 MP: Mestre de Marca (Lojas distintas >= 5)
+        if len(lojas_visitadas_set) >= 5:
+            await checar_e_conceder(uid, "mp", bot)
+            
+        # 🌍 E9: Eleito dos Nove Orientes (Cidades >= 9)
+        if len(cidades_visitadas) >= 9:
+            await checar_e_conceder(uid, "e9", bot)
+            
+        # 🛣️ CE: Cavaleiro da Estrada (UFs distintas >= 3)
+        if len(ufs_visitados) >= 3:
+            await checar_e_conceder(uid, "ce", bot)
+            
+        # 🌹 RC: Rosa-Cruz das Visitações (Ritos distintos >= 3)
+        if len(ritos_visitados) >= 3:
+            await checar_e_conceder(uid, "rc", bot)
+            
+        # 👑 RS: Principe do Real Segredo (GOB, CMSB e COMAB)
+        tem_gob = any("GOB" in p for p in potencias_visitadas)
+        tem_cmsb = any("CMSB" in p or "GL" in p for p in potencias_visitadas) # CMSB costuma ter GL (Grandes Lojas)
+        tem_comab = any("COMAB" in p or "GOP" in p for p in potencias_visitadas) # COMAB/GOP
+        if tem_gob and tem_cmsb and tem_comab:
+            await checar_e_conceder(uid, "rs", bot)
+            
+        # 🏰 PJ: Principe de Jerusalem (Distancia > 200km - Heuristica UF diferente)
+        if loja_sede:
+            sede_uf = str(loja_sede.get("Estado UF") or loja_sede.get("estado_uf") or "").strip().upper()
+            if sede_uf:
+                for lj in lojas_visitadas_db:
+                    v_uf = str(lj.get("Estado UF") or lj.get("estado_uf") or "").strip().upper()
+                    if v_uf and v_uf != sede_uf:
+                        await checar_e_conceder(uid, "pj", bot)
+                        break
+                        
+        # ⏳ NA: Noaquita do Asfalto (Data Cadastro >= 365 dias)
+        data_cad_str = membro.get("Data de cadastro") or membro.get("data_cadastro")
+        if data_cad_str:
+            dt_cad = None
+            for fmt in ("%d/%m/%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+                try:
+                    dt_cad = datetime.strptime(str(data_cad_str)[:19].strip(), fmt)
+                    break
+                except:
+                    pass
+            if dt_cad:
+                if (datetime.now() - dt_cad).days >= 365:
+                    await checar_e_conceder(uid, "na", bot)
+                    
+        # 💼 IO: Intendente das Oficinas (Secretario com perfil 100% preenchido)
+        nivel = str(membro.get("Nivel") or membro.get("nivel") or "1").strip()
+        if nivel in ("2", "2.5", "3") and loja_sede:
+            end = str(loja_sede.get("Endereço") or loja_sede.get("endereco") or "").strip()
+            cep = str(loja_sede.get("CEP") or loja_sede.get("cep") or "").strip()
+            cid = str(loja_sede.get("Cidade") or loja_sede.get("cidade") or "").strip()
+            uf = str(loja_sede.get("Estado UF") or loja_sede.get("estado_uf") or "").strip()
+            rit = str(loja_sede.get("Rito") or loja_sede.get("rito") or "").strip()
+            pot = str(loja_sede.get("Potência") or loja_sede.get("potencia") or "").strip()
+            if all([end, cep, cid, uf, rit, pot]):
+                await checar_e_conceder(uid, "io", bot)
+                
+    except Exception as e:
+        logger.error("Erro em verificar_novas_conquistas para %s: %s", user_id, e)

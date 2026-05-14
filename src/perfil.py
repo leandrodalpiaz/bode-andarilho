@@ -117,15 +117,19 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     # 2. Carregar Conquistas reais do Supabase
+    from src.conquistas import CONQUISTAS, verificar_novas_conquistas
     from src.sheets_supabase import listar_conquistas_obtidas
-    from src.conquistas import CONQUISTAS
     
+    # --- GATILHO ASSÍNCRONO DE VERIFICAÇÃO DE CONQUISTAS ---
+    try:
+        await verificar_novas_conquistas(user_id, context.bot)
+    except Exception as ev_err:
+        logger.warning("Falha silenciosa ao apurar novas conquistas: %s", ev_err)
+        
     slugs_obtidos = listar_conquistas_obtidas(user_id) or []
     
     ordem_hierarquia = [
-        "patriarca_sistema", "noaquita_estrada", "sete_fronteiras",
-        "andarilho_marca", "iniciado_colher", "guardiao_chave",
-        "provedor_tabernaculo", "escriturario_sistema"
+        "rs", "rc", "pj", "ce", "e9", "og", "mp", "na", "ic", "pm", "io"
     ]
     
     titulo_destaque = "Iniciando Caminhada"
@@ -150,10 +154,17 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         texto += "\n_Você ainda não possui medalhas na sua Jornada do Obreiro._"
 
-    teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✏️ Editar Perfil", callback_data="editar_perfil")],
-        [InlineKeyboardButton("🔙 Voltar ao Menu", callback_data="menu_principal")],
-    ])
+    # --- RITO DE FUNDACAO BOTÃO INTENCAO ---
+    botoes_perfil = [[InlineKeyboardButton("✏️ Editar Perfil", callback_data="editar_perfil")]]
+    
+    is_nivel_1 = str(membro.get("Nivel") or membro.get("nivel") or "1") == "1"
+    loja_man = membro.get("Loja Manual") or membro.get("loja_manual")
+    
+    if is_nivel_1 and loja_man:
+        botoes_perfil.append([InlineKeyboardButton("🏛️ Quero Gerenciar minha Oficina", callback_data="fundacao_solicitar")])
+        
+    botoes_perfil.append([InlineKeyboardButton("🔙 Voltar ao Menu", callback_data="menu_principal")])
+    teclado = InlineKeyboardMarkup(botoes_perfil)
 
     # Geração do Diploma Digital Heráldico (Coluna 4)
     try:

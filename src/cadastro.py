@@ -84,7 +84,7 @@ logger = logging.getLogger(__name__)
 # ============================================
 
 # Estados da conversação
-NOME, DATA_NASC, GRAU, VM, LOJA, NUMERO_LOJA, ORIENTE, POTENCIA, POTENCIA_COMPLEMENTO, CONFIRMAR = range(10)
+NOME, DATA_NASC, GRAU, VM, LOJA, NUMERO_LOJA, ORIENTE, POTENCIA, POTENCIA_COMPLEMENTO, FOTO_CIM, CONFIRMAR = range(11)
 
 # Opções fixas
 GRAUS_OPCOES = [
@@ -107,6 +107,7 @@ CADASTRO_ETAPAS = (
     "cadastro_oriente",
     "cadastro_potencia",
     "cadastro_potencia_complemento",
+    "cadastro_foto_cim",
 )
 
 
@@ -146,6 +147,13 @@ def _estado_pendente_cadastro(context: ContextTypes.DEFAULT_TYPE) -> int:
         return POTENCIA
     if not _campo_preenchido(context, "cadastro_potencia_complemento"):
         return POTENCIA_COMPLEMENTO
+    
+    # Se for Loja Manual, nao tiver voucher e faltar foto_cim, exige foto
+    is_manual = context.user_data.get("cadastro_loja_manual", False)
+    has_voucher = bool(context.user_data.get("cadastro_voucher"))
+    if is_manual and not has_voucher and not _campo_preenchido(context, "cadastro_foto_cim"):
+        return FOTO_CIM
+        
     return CONFIRMAR
 
 
@@ -162,6 +170,7 @@ def _texto_etapa(estado: int, retomada: bool = False) -> str:
         ORIENTE: "🧭 *Passo 7/9*\nInforme seu *Oriente*.",
         POTENCIA: "🧭 *Passo 8/9*\nInforme sua *Potência principal* (GOB, CMSB ou COMAB).",
         POTENCIA_COMPLEMENTO: "🧭 *Passo 9/9*\nInforme o *complemento da Potência*.",
+        FOTO_CIM: "🛡️ *COMPROVACAO VISUAL REQUERIDA*\n\nComo a sua Oficina ainda nao esta edificada em nosso sistema, precisamos de um registro de verificacao.\n\nPor favor, **envie uma foto** de sua Credencial Maconcia (CIM) ou Patente ativa.\n\n_🔒 A imagem sera armazenada em ambiente seguro para auditoria exclusiva da Potencia._",
     }
     return f"{prefixo}{textos.get(estado, 'Envie a informação solicitada:')}"
 
@@ -603,13 +612,131 @@ async def receber_data_nasc(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def receber_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Recebe o nome da loja."""
-    loja = (update.message.text or "").strip()
-    if len(loja) < 2:
+    """Recebe o nome da loja com busca hibrida."""
+    loja_digitada = (update.message.text or "").strip()
+    if len(loja_digitada) < 2:
         return await _reexibir_etapa(update, context, LOJA, CADASTRO_ERRO_LOJA)
 
-    context.user_data["cadastro_loja"] = loja
-    return await _navegar_etapa(update, context, NUMERO_LOJA)
+    from src.sheets_supabase import listar_lojas
+    import unicodedata
+    
+    def _limpar(t: str) -> str:
+        b = unicodedata.normalize("NFKD", t.strip().lower())
+        return "".join(ch for ch in b if not unicodedata.combining(ch))
+        
+    clean_digitada = _limpar(loja_digitada)
+    
+    todas = listar_lojas(0, include_todas=True) or []
+    correspondencias = []
+    for l in todas:
+        nome = l.get("Nome da Loja") or l.get("nome_loja") or ""
+        clean_nome = _limpar(nome)
+        if clean_digitada in clean_nome or clean_nome in clean_digitada:
+            correspondencias.append(l)
+            
+    if correspondencias:
+        botoes = []
+        for l in correspondencias[:4]:
+            nome = l.get("Nome da Loja") or l.get("nome_loja") or "Loja"
+            num = str(l.get("Número") or l.get("numero") or "0")
+            lid = l.get("id") or l.get("ID da loja")
+            botoes.append([InlineKeyboardButton(f"🏛️ {nome} n. {num}", callback_data=f"sel_loja_existente|{lid}")])
+            
+        botoes.append([InlineKeyboardButton("✍️ Usar Nome Digitado (Nova)", callback_data="sel_loja_manual")])
+        botoes.append([InlineKeyboardButton("🔙 Digitar Outro Nome", callback_data=f"voltar|{LOJA}")])
+        
+        context.user_data["temp_loja_digitada"] = loja_digitada
+        teclado = InlineKeyboardMarkup(botoes)
+        
+        await update.message.reply_text(
+            f"🔍 *Busca de Oficinas*\n\nEncontramos correspondencias para '{loja_digitada}'.\nSelecione abaixo para se vincular ou use o nome digitado:",
+            reply_markup=teclado,
+            parse_mode="Markdown"
+        )
+        return LOJA
+    else:
+        context.user_data["cadastro_loja"] = loja_digitada
+        context.user_data["cadastro_loja_manual"] = True
+        
+        await update.message.reply_text(
+            f"📝 A Loja *{loja_digitada}* nao foi localizada. Seguira como Nova Oficina pendente de validacao.",
+            parse_mode="Markdown"
+        )
+        return await _navegar_etapa(update, context, NUMERO_LOJA)
+
+
+async def callback_loja_hibrida(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Processa selecao de loja existente ou manual."""
+    query = update.callback_query
+    await _responder_callback_seguro(query)
+    
+    dados = query.data.split("|")
+    acao = dados[0]
+    
+    if acao == "sel_loja_manual":
+        loja_dig = context.user_data.get("temp_loja_digitada", "Minha Loja")
+        context.user_data["cadastro_loja"] = loja_dig
+        context.user_data["cadastro_loja_manual"] = True
+        context.user_data.pop("temp_loja_digitada", None)
+        
+        await query.message.edit_text("✍️ Prosseguindo com o cadastro de Nova Oficina.")
+        return await _navegar_etapa(query, context, NUMERO_LOJA)
+        
+    elif acao == "sel_loja_existente":
+        loja_id = dados[1]
+        from src.sheets_supabase import listar_lojas
+        todas = listar_lojas(0, include_todas=True) or []
+        loja_encontrada = next((l for l in todas if str(l.get("id") or l.get("ID da loja")) == str(loja_id)), None)
+        
+        if loja_encontrada:
+            nome = (loja_encontrada.get("Nome da Loja") or loja_encontrada.get("nome_loja") or "").strip()
+            num = str(loja_encontrada.get("Número") or loja_encontrada.get("numero") or "0").strip()
+            ori = (loja_encontrada.get("Oriente da Loja") or loja_encontrada.get("oriente") or "").strip()
+            pot = (loja_encontrada.get("Potência") or loja_encontrada.get("potencia") or "").strip()
+            
+            context.user_data["cadastro_loja"] = nome
+            context.user_data["cadastro_numero_loja"] = num
+            context.user_data["cadastro_oriente"] = ori
+            context.user_data["cadastro_potencia"] = pot
+            context.user_data["cadastro_potencia_complemento"] = "N/A"
+            context.user_data["cadastro_loja_id"] = str(loja_id)
+            context.user_data["cadastro_loja_manual"] = False
+            
+            await query.message.edit_text(f"✅ Vinculado à Oficina: *{nome}* n. {num}", parse_mode="Markdown")
+            return await _navegar_etapa(query, context, CONFIRMAR)
+        else:
+            await query.message.edit_text("❌ Erro ao recuperar dados. Tente novamente.")
+            return LOJA
+
+
+async def receber_foto_cim(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Recebe a foto da CIM e faz o upload."""
+    if not update.message.photo:
+        return await _reexibir_etapa(update, context, FOTO_CIM, "⚠️ Por favor, envie uma foto nitida da sua CIM ou Patente.")
+        
+    try:
+        msg_wait = await update.message.reply_text("🔄 Processando credencial digital...")
+        
+        photo_file = await update.message.photo[-1].get_file()
+        photo_bytes = await photo_file.download_as_bytearray()
+        
+        from src.sheets_supabase import upload_storage_publico
+        import uuid
+        
+        file_name = f"cim_{update.effective_user.id}_{uuid.uuid4().hex[:8]}.jpg"
+        public_url = upload_storage_publico("credentials", file_name, bytes(photo_bytes), "image/jpeg")
+        
+        if public_url:
+            context.user_data["cadastro_foto_cim"] = public_url
+            await msg_wait.delete()
+            return await _navegar_etapa(update, context, CONFIRMAR)
+        else:
+            await msg_wait.edit_text("❌ Falha no upload seguro. Tente reenviar a foto.")
+            return FOTO_CIM
+            
+    except Exception as e:
+        logger.error("Erro foto cim: %s", e)
+        return await _reexibir_etapa(update, context, FOTO_CIM, "❌ Erro ao processar imagem. Tente novamente.")
 
 
 async def receber_numero_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -767,6 +894,18 @@ def _dados_para_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Di
     }
     if context.user_data.get("cadastro_voucher"):
         payload["status"] = "Ativo"
+        
+    if context.user_data.get("cadastro_loja_manual"):
+        payload["loja_manual"] = context.user_data.get("cadastro_loja", "")
+        payload["status_auditoria"] = "Pendente_Identidade"
+        payload["status"] = "Pendente"
+        
+    if context.user_data.get("cadastro_foto_cim"):
+        payload["cim_photo_url"] = context.user_data.get("cadastro_foto_cim")
+        
+    if context.user_data.get("cadastro_loja_id"):
+        payload["loja_id"] = context.user_data.get("cadastro_loja_id")
+        
     return payload
 
 
@@ -946,6 +1085,7 @@ cadastro_handler = ConversationHandler(
             CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
         ],
         LOJA: [
+            CallbackQueryHandler(callback_loja_hibrida, pattern=r"^(sel_loja_existente\||sel_loja_manual$)"),
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_loja),
             CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
         ],
@@ -964,6 +1104,11 @@ cadastro_handler = ConversationHandler(
         POTENCIA_COMPLEMENTO: [
             MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, receber_potencia_complemento),
             CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
+        ],
+        FOTO_CIM: [
+            MessageHandler(filters.ChatType.PRIVATE & filters.PHOTO, receber_foto_cim),
+            CallbackQueryHandler(navegacao_callback, pattern=r"^(voltar\|\d+|cancelar)$"),
+            MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, lambda u, c: _reexibir_etapa(u, c, FOTO_CIM, "⚠️ Envie uma FOTO da CIM, não texto.")),
         ],
         CONFIRMAR: [
             CallbackQueryHandler(confirmar_cadastro, pattern=r"^confirmar_cadastro$"),
@@ -999,6 +1144,57 @@ async def notificar_validacao_pendente(
     from src.sheets_supabase import listar_lojas, _secretario_responsavel_loja_id, listar_membros
     
     try:
+        # --- TELHAMENTO DIGITAL INTERCEPT ---
+        cim_url = dados_membro.get("cim_photo_url") or dados_membro.get("CIM URL")
+        if cim_url:
+            pot_comp = dados_membro.get("potencia_complemento") or dados_membro.get("Potência complemento", "")
+            from src.sheets_supabase import listar_auditores_por_potencia, listar_membros
+            auditores = listar_auditores_por_potencia(pot_comp)
+            
+            if not auditores:
+                membros = listar_membros() or []
+                auditores = [
+                    int(float(m.get("Telegram ID") or m.get("telegram_id"))) 
+                    for m in membros 
+                    if str(m.get("Nivel") or m.get("nivel") or "1") == "3"
+                ]
+                
+            nome_obreiro = dados_membro.get("nome") or dados_membro.get("Nome") or "Ir.·. Obreiro"
+            grau_obreiro = dados_membro.get("grau") or dados_membro.get("Grau") or "Aprendiz"
+            loja_txt = dados_membro.get("loja_manual") or dados_membro.get("Loja Manual") or dados_membro.get("loja") or "Nova Oficina"
+            tid_obreiro = dados_membro.get("telegram_id") or dados_membro.get("Telegram ID")
+            
+            msg_auditoria = (
+                f"🛡️ *TELHAMENTO DIGITAL: VALIDAÇÃO DE IDENTIDADE*\n\n"
+                f"Um novo Ir.·. se cadastrou informando pertencer a uma *Oficina não edificada* e sua credencial visual está aguardando auditoria:\n\n"
+                f"👤 *Nome:* {nome_obreiro}\n"
+                f"⚖️ *Grau:* {grau_obreiro}\n"
+                f"🏛️ *Oficina Manual:* {loja_txt}\n"
+                f"📜 *Complemento:* {pot_comp}\n\n"
+                f"Por favor, examine a imagem da CIM/Patente anexa e decida sobre a validação:"
+            )
+            
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            botoes = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("✅ Validar Identidade", callback_data=f"auditar_validar|{tid_obreiro}"),
+                    InlineKeyboardButton("❌ Recusar", callback_data=f"auditar_recusar|{tid_obreiro}")
+                ]
+            ])
+            
+            for aud_id in auditores:
+                try:
+                    await context.bot.send_photo(
+                        chat_id=int(float(aud_id)),
+                        photo=cim_url,
+                        caption=msg_auditoria,
+                        reply_markup=botoes,
+                        parse_mode="Markdown"
+                    )
+                except Exception as e_snd:
+                    logger.warning("Erro ao notificar auditor %s de telhamento: %s", aud_id, e_snd)
+            return 
+            
         # 1. Tenta localizar a Loja informada no cadastro do obreiro
         def _norm_resiliente(t: Any) -> str:
             b = unicodedata.normalize("NFKD", str(t or "").strip())
