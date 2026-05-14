@@ -34,6 +34,15 @@ async def job_flush_notificacoes_secretario(app: Application):
     await flush_notificacoes_secretario_adiadas(app.bot)
 
 
+async def job_aniversarios_cadastro(app: Application):
+    """Job diário para calcular tempo de casa e conceder conquistas de aniversário."""
+    try:
+        from src.conquistas import checar_aniversarios_cadastro
+        await checar_aniversarios_cadastro(app.bot)
+    except Exception as e:
+        logger.error("Erro ao executar crawler de aniversários de cadastro: %s", e)
+
+
 async def job_faxina_membros(app: Application):
     """
     Job semanal de faxina de membros.
@@ -156,6 +165,15 @@ async def iniciar_scheduler(app: Application):
         minute=0,
         args=[app],
         id="job_celebracao_mensal",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        job_aniversarios_cadastro,
+        "cron",
+        hour=9,
+        minute=30,
+        args=[app],
+        id="job_aniversarios_cadastro",
         replace_existing=True,
     )
     scheduler.add_job(

@@ -101,7 +101,8 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Formatação do número da loja se existir
     numero_fmt = f" - Nº {numero_loja}" if numero_loja and str(numero_loja) not in ("0", "Não informado") else ""
 
-    texto = (
+    # 1. Montar dados cadastrais
+    corpo_perfil = (
         f"👤 *Meu Perfil*\n\n"
         f"*Nome:* {nome}\n"
         f"*Data de nascimento:* {data_nasc}\n"
@@ -115,12 +116,39 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"*Permissões:* consultar sessões, confirmar presença e atualizar seus dados.\n"
     )
 
-    conquistas = await calcular_conquistas_membro(user_id)
-    if conquistas:
-        texto += "\n*🏆 Minhas Conquistas:*\n"
-        texto += "\n".join(conquistas)
+    # 2. Carregar Conquistas reais do Supabase
+    from src.sheets_supabase import listar_conquistas_obtidas
+    from src.conquistas import CONQUISTAS
+    
+    slugs_obtidos = listar_conquistas_obtidas(user_id) or []
+    
+    ordem_hierarquia = [
+        "patriarca_sistema", "noaquita_estrada", "sete_fronteiras",
+        "andarilho_marca", "iniciado_colher", "guardiao_chave",
+        "provedor_tabernaculo", "escriturario_sistema"
+    ]
+    
+    titulo_destaque = "Iniciando Caminhada"
+    for s in ordem_hierarquia:
+        if s in slugs_obtidos:
+            meta = CONQUISTAS.get(s)
+            if meta:
+                titulo_destaque = meta["nome"]
+            break
+            
+    cabecalho_nivel = f"Seu Nível de Andarilho: *{titulo_destaque}* 🐐\n\n"
+    texto = cabecalho_nivel + corpo_perfil
+    
+    if slugs_obtidos:
+        texto += "\n*🏆 Minhas Medalhas Digitais:*\n"
+        linhas_medalhas = []
+        for s in slugs_obtidos:
+            meta = CONQUISTAS.get(s)
+            if meta:
+                linhas_medalhas.append(f"🏅 *{meta['nome']}*: {meta['descricao']}")
+        texto += "\n".join(linhas_medalhas)
     else:
-        texto += "\n_Você ainda não possui títulos de Andarilho._"
+        texto += "\n_Você ainda não possui medalhas na sua Jornada do Obreiro._"
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("✏️ Atualizar perfil", callback_data="editar_perfil")],

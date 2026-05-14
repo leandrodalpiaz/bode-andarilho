@@ -118,6 +118,8 @@ from src.admin_acoes import (
     promover_handler,
     rebaixar_handler,
     editar_membro_handler,
+    broadcast_handler,
+    admin_toggle_comunicacao,
     ver_todos_membros,
     membros_pagina_anterior,
     membros_pagina_proxima,
@@ -536,6 +538,7 @@ def register_handlers(app: Application) -> None:
     app.add_handler(promover_handler)
     app.add_handler(rebaixar_handler)
     app.add_handler(editar_membro_handler)
+    app.add_handler(broadcast_handler)
     app.add_handler(editar_perfil_handler)
     app.add_handler(editar_evento_secretario_handler)
     app.add_handler(cadastro_loja_handler)
@@ -545,6 +548,7 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler(["ia", "assistente"], assistente_ia))
     app.add_handler(CommandHandler(["ia_stats", "assistente_stats"], assistente_ia_stats))
     app.add_handler(CommandHandler(["ia_relatorio", "assistente_relatorio"], assistente_ia_relatorio))
+    app.add_handler(CommandHandler("admin_toggle_comunicacao", admin_toggle_comunicacao))
     
     # Novos atalhos centralizados com redirecionamento inteligente
     async def cmd_perfil(update: Update, context):

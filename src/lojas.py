@@ -886,6 +886,15 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
 
     if sucesso:
         logger.info(f"Loja cadastrada com sucesso para usuário {user_id}: {dados.get('nome')}")
+        
+        # Hook Conquistas Coletivas (Marcos Regionais)
+        try:
+            from src.conquistas import checar_e_disparar_marco_coletivo
+            import asyncio
+            asyncio.create_task(checar_e_disparar_marco_coletivo(context.bot, dados))
+        except Exception:
+            pass
+            
         loja = buscar_loja_por_nome_numero(dados.get("nome", ""), dados.get("numero", ""))
         loja_id = _norm_text((loja or {}).get("ID") or (loja or {}).get("id"))
         texto = (

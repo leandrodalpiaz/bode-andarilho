@@ -288,6 +288,7 @@ async def exibir_menu_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
         [InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")],
         [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
+        [InlineKeyboardButton("📢 Broadcast Segmentado", callback_data="admin_broadcast_inicio")],
         [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
     ])
 
@@ -1346,4 +1347,275 @@ editar_membro_handler = ConversationHandler(
     ],
     name="editar_membro_handler",
     persistent=False,
+)
+
+
+BROADCAST_UF, BROADCAST_CIDADE, BROADCAST_RITO, BROADCAST_MENSAGEM, BROADCAST_CONFIRMAR = range(100, 105)
+
+
+# ============================================
+# BROADCAST SEGMENTADO (NÍVEL 3)
+# ============================================
+
+async def broadcast_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = update.effective_user.id
+    if get_nivel(user_id) != "3":
+        return ConversationHandler.END
+
+    # Coletar UFs ativas das lojas
+    from src.sheets_supabase import listar_lojas
+    lojas = listar_lojas() or []
+    ufs = sorted(list(set(str(l.get("estado_uf", "")).upper().strip() for l in lojas if l.get("estado_uf"))))
+
+    botoes = [[InlineKeyboardButton("🌎 Todas as UFs", callback_data="br_uf|TODAS")]]
+    for uf in ufs:
+        botoes.append([InlineKeyboardButton(f"📍 {uf}", callback_data=f"br_uf|{uf}")])
+    botoes.append([InlineKeyboardButton("❌ Cancelar", callback_data="br_cancelar")])
+
+    await navegar_para(
+        update, context,
+        "Broadcast > UF",
+        "📢 *Broadcast Segmentado*\n\nSelecione o Estado (UF) dos Secretários que deseja filtrar:",
+        InlineKeyboardMarkup(botoes)
+    )
+    return BROADCAST_UF
+
+
+async def broadcast_escolher_uf(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    if data == "br_cancelar":
+        await exibir_menu_admin(update, context)
+        return ConversationHandler.END
+
+    uf = data.split("|")[1]
+    context.user_data["br_uf"] = uf
+
+    # Coletar cidades ativas
+    from src.sheets_supabase import listar_lojas
+    lojas = listar_lojas() or []
+    cidades = set()
+    for l in lojas:
+        if not l.get("cidade"):
+            continue
+        if uf != "TODAS" and str(l.get("estado_uf", "")).upper().strip() != uf:
+            continue
+        cidades.add(str(l.get("cidade", "")).strip().title())
+
+    cidades_list = sorted(list(cidades))
+    botoes = [[InlineKeyboardButton("🌆 Todas as Cidades", callback_data="br_cid|TODAS")]]
+    for cid in cidades_list:
+        botoes.append([InlineKeyboardButton(f"🏙️ {cid}", callback_data=f"br_cid|{cid}")])
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="br_voltar_uf")])
+
+    await navegar_para(
+        update, context,
+        f"Broadcast > Cidade ({uf})",
+        "📢 *Broadcast Segmentado*\n\nSelecione a Cidade alvo:",
+        InlineKeyboardMarkup(botoes)
+    )
+    return BROADCAST_CIDADE
+
+
+async def broadcast_escolher_cidade(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    if data == "br_voltar_uf":
+        return await broadcast_inicio(update, context)
+
+    cidade = data.split("|")[1]
+    context.user_data["br_cidade"] = cidade
+    uf = context.user_data.get("br_uf", "TODAS")
+
+    # Ritos disponíveis
+    from src.sheets_supabase import listar_lojas
+    lojas = listar_lojas() or []
+    ritos = set()
+    for l in lojas:
+        if not l.get("rito"):
+            continue
+        if uf != "TODAS" and str(l.get("estado_uf", "")).upper().strip() != uf:
+            continue
+        if cidade != "TODAS" and str(l.get("cidade", "")).strip().title() != cidade:
+            continue
+        ritos.add(str(l.get("rito", "")).strip())
+
+    ritos_list = sorted(list(ritos))
+    botoes = [[InlineKeyboardButton("🔮 Todos os Ritos", callback_data="br_rito|TODOS")]]
+    for rito in ritos_list:
+        botoes.append([InlineKeyboardButton(f"📜 {rito}", callback_data=f"br_rito|{rito}")])
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="br_voltar_cid")])
+
+    await navegar_para(
+        update, context,
+        f"Broadcast > Rito ({cidade})",
+        "📢 *Broadcast Segmentado*\n\nSelecione o Rito alvo:",
+        InlineKeyboardMarkup(botoes)
+    )
+    return BROADCAST_RITO
+
+
+async def broadcast_escolher_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    if data == "br_voltar_cid":
+        # Simula retorno
+        query.data = f"br_uf|{context.user_data.get('br_uf', 'TODAS')}"
+        return await broadcast_escolher_uf(update, context)
+
+    rito = data.split("|")[1]
+    context.user_data["br_rito"] = rito
+    uf = context.user_data.get("br_uf", "TODAS")
+    cidade = context.user_data.get("br_cidade", "TODAS")
+
+    from src.sheets_supabase import get_secretarios_filtrados
+    destinatarios = get_secretarios_filtrados(uf=uf, cidade=cidade, rito=rito)
+    context.user_data["br_destinatarios"] = destinatarios
+
+    botoes = [[InlineKeyboardButton("❌ Cancelar", callback_data="br_cancelar")]]
+
+    texto = (
+        f"📢 *Broadcast Segmentado*\n\n"
+        f"*Filtros Atuais:*\n"
+        f"- UF: {uf}\n"
+        f"- Cidade: {cidade}\n"
+        f"- Rito: {rito}\n\n"
+        f"👥 *Público Alvo:* {len(destinatarios)} Secretário(s) localizado(s).\n\n"
+        f"✍️ Por favor, *digite a mensagem* que deseja enviar abaixo:"
+    )
+
+    await navegar_para(
+        update, context,
+        "Broadcast > Digitar Mensagem",
+        texto,
+        InlineKeyboardMarkup(botoes)
+    )
+    return BROADCAST_MENSAGEM
+
+
+async def broadcast_receber_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    msg_text = (update.message.text or "").strip()
+    
+    if not msg_text:
+        await update.message.reply_text("⚠️ A mensagem não pode ser vazia. Por favor, digite o texto:")
+        return BROADCAST_MENSAGEM
+
+    context.user_data["br_msg"] = msg_text
+    uf = context.user_data.get("br_uf", "TODAS")
+    cidade = context.user_data.get("br_cidade", "TODAS")
+    rito = context.user_data.get("br_rito", "TODAS")
+    total = len(context.user_data.get("br_destinatarios", []))
+
+    botoes = [
+        [InlineKeyboardButton("🚀 Confirmar Envio", callback_data="br_confirmar_disparo")],
+        [InlineKeyboardButton("❌ Cancelar", callback_data="br_cancelar")]
+    ]
+
+    preview = (
+        f"👀 *Revisão do Disparo*\n\n"
+        f"📍 *Alvo:* {uf} / {cidade} / {rito}\n"
+        f"👥 *Destinatários:* {total}\n\n"
+        f"📝 *Conteúdo da Mensagem:*\n"
+        f"---------------------------\n"
+        f"{msg_text}\n"
+        f"---------------------------\n\n"
+        f"Deseja realizar o envio definitivo agora?"
+    )
+
+    from src.bot import _enviar_ou_editar_mensagem, TIPO_RESULTADO
+    await _enviar_ou_editar_mensagem(
+        context, user_id, TIPO_RESULTADO,
+        preview,
+        InlineKeyboardMarkup(botoes)
+    )
+    return BROADCAST_CONFIRMAR
+
+
+async def broadcast_confirmar_disparo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    from src.sheets_supabase import get_modo_comunicacao_ativo
+    comunicacao_ativa = get_modo_comunicacao_ativo()
+
+    if not comunicacao_ativa:
+        await query.answer(
+            "⚠️ Painel de Comunicação calibrado, mas em modo de escuta.",
+            show_alert=True
+        )
+        await navegar_para(
+            update, context,
+            "Broadcast > Bloqueado",
+            "⚠️ *Aviso: Trava de Prudência*\n\n"
+            "Painel de Comunicação calibrado, mas em modo de escuta. "
+            "As mensagens para os Secretários estão desabilitadas durante a fase de maturação dos dados.\n\n"
+            "Disparo não efetuado.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("Menu principal", callback_data="area_admin")]])
+        )
+        return ConversationHandler.END
+
+    msg_text = context.user_data.get("br_msg", "")
+    destinatarios = context.user_data.get("br_destinatarios", [])
+    
+    sucessos = 0
+    for tid in destinatarios:
+        try:
+            await context.bot.send_message(
+                chat_id=tid,
+                text=f"📢 *Comunicado da Administração*\n\n{msg_text}",
+                parse_mode="Markdown"
+            )
+            sucessos += 1
+        except Exception:
+            pass
+
+    await navegar_para(
+        update, context,
+        "Broadcast > Concluído",
+        f"✅ *Disparo Finalizado*\n\n"
+        f"Mensagem enviada com sucesso para {sucessos} de {len(destinatarios)} Secretários.",
+        InlineKeyboardMarkup([[InlineKeyboardButton("Menu principal", callback_data="area_admin")]])
+    )
+    return ConversationHandler.END
+
+
+async def admin_toggle_comunicacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if get_nivel(user_id) != "3":
+        return
+    
+    from src.sheets_supabase import get_modo_comunicacao_ativo, set_modo_comunicacao_ativo
+    status = get_modo_comunicacao_ativo()
+    novo_status = not status
+    set_modo_comunicacao_ativo(novo_status)
+    
+    await update.message.reply_text(
+        f"⚙️ *Trava de Comunicação Administrativa*\n\n"
+        f"Modo alterado com sucesso para:\n"
+        f"➔ *{'🟢 ATIVO' if novo_status else '🔴 DESATIVADO / MODO ESCUTA'}*",
+        parse_mode="Markdown"
+    )
+
+
+# HANDLER REGISTRATION
+broadcast_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(broadcast_inicio, pattern="^admin_broadcast_inicio$")],
+    states={
+        BROADCAST_UF: [CallbackQueryHandler(broadcast_escolher_uf, pattern="^(br_uf\\|.*|br_cancelar)$")],
+        BROADCAST_CIDADE: [CallbackQueryHandler(broadcast_escolher_cidade, pattern="^(br_cid\\|.*|br_voltar_uf)$")],
+        BROADCAST_RITO: [CallbackQueryHandler(broadcast_escolher_rito, pattern="^(br_rito\\|.*|br_voltar_cid)$")],
+        BROADCAST_MENSAGEM: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, broadcast_receber_mensagem),
+            CallbackQueryHandler(broadcast_inicio, pattern="^br_cancelar$")
+        ],
+        BROADCAST_CONFIRMAR: [
+            CallbackQueryHandler(broadcast_confirmar_disparo, pattern="^br_confirmar_disparo$"),
+            CallbackQueryHandler(broadcast_inicio, pattern="^br_cancelar$")
+        ]
+    },
+    fallbacks=[CommandHandler("cancelar", broadcast_inicio)],
+    name="broadcast_handler",
+    persistent=False
 )

@@ -1193,7 +1193,9 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
     if token_or_data in (TOKEN_SEMANA_ATUAL, TOKEN_PROXIMA_SEMANA, TOKEN_MES_ATUAL, TOKEN_PROXIMOS_MESES):
         titulo, filtrados = _filtrar_por_periodo(eventos, token_or_data)
 
+        from src.sheets_supabase import registrar_log_busca
         if not filtrados:
+            registrar_log_busca(grau=grau, encontrou_resultados=False)
             await _enviar_ou_editar_mensagem(
                 context, update.effective_user.id, TIPO_RESULTADO,
                 f"*{titulo}*\n\nNão há sessões agendadas para este período.",
@@ -1203,6 +1205,10 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
             )
             return
 
+        from src.sheets_supabase import registrar_log_busca
+        registrar_log_busca(grau=grau, encontrou_resultados=True)
+        from src.sheets_supabase import registrar_log_busca
+        registrar_log_busca(rito=rito, encontrou_resultados=True)
         filtrados = filtrados[:MAX_EVENTOS_LISTA]
         botoes = []
         for ev in filtrados:
@@ -1235,7 +1241,9 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
     if data_or_menu == TOKEN_POR_GRAU_MENU:
         titulo, filtrados = _filtrar_por_grau(eventos, grau)
 
+        from src.sheets_supabase import registrar_log_busca
         if not filtrados:
+            registrar_log_busca(rito=rito, encontrou_resultados=False)
             await _enviar_ou_editar_mensagem(
                 context, update.effective_user.id, TIPO_RESULTADO,
                 f"*{titulo}*\n\nNão há sessões para este grau no momento.",
@@ -1623,6 +1631,14 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             await _responder_callback_seguro(query, "Falha ao confirmar. Tente novamente.", show_alert=True)
         return ConversationHandler.END
 
+    # Hook Conquistas
+    try:
+        from src.conquistas import checar_conquistas_presenca
+        import asyncio
+        asyncio.create_task(checar_conquistas_presenca(user_id, evento, membro, participacao_agape, context.bot))
+    except Exception:
+        pass
+
     # Verificar se o usuário é o secretário do evento
     secretario_id = evento.get("Telegram ID do secretário", "")
     try:
@@ -1846,6 +1862,14 @@ async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: Con
         if update.effective_chat.type in ["group", "supergroup"]:
             await _responder_callback_seguro(query, "Falha ao confirmar. Tente novamente.", show_alert=True)
         return
+
+    # Hook Conquistas
+    try:
+        from src.conquistas import checar_conquistas_presenca
+        import asyncio
+        asyncio.create_task(checar_conquistas_presenca(user_id, evento, membro, participacao_agape, context.bot))
+    except Exception:
+        pass
 
     await notificar_secretario(context, evento, membro, tipo_agape)
 
@@ -2481,7 +2505,9 @@ async def mostrar_eventos_por_uf(update: Update, context: ContextTypes.DEFAULT_T
     
     cidades = _cidades_ativas_eventos(eventos, lojas_map, uf)
     
+    from src.sheets_supabase import registrar_log_busca
     if not cidades:
+        registrar_log_busca(uf=uf, encontrou_resultados=False)
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
             f"📍 *Sessões em {uf}*\n\nNão há sessões programadas para cidades deste estado no momento.",
@@ -2489,6 +2515,8 @@ async def mostrar_eventos_por_uf(update: Update, context: ContextTypes.DEFAULT_T
         )
         return
         
+    from src.sheets_supabase import registrar_log_busca
+    registrar_log_busca(uf=uf, encontrou_resultados=True)
     botoes = []
     for cid in cidades[:MAX_EVENTOS_LISTA]:
         botoes.append([InlineKeyboardButton(f"🌆 {cid}", callback_data=f"geo_cid|{uf}|{cid}")])
@@ -2516,7 +2544,9 @@ async def mostrar_eventos_por_cidade(update: Update, context: ContextTypes.DEFAU
     
     titulo, filtrados = _filtrar_por_cidade(eventos, lojas_map, uf, cidade)
     
+    from src.sheets_supabase import registrar_log_busca
     if not filtrados:
+        registrar_log_busca(uf=uf, cidade=cidade, encontrou_resultados=False)
         await _enviar_ou_editar_mensagem(
             context, update.effective_user.id, TIPO_RESULTADO,
             f"*{titulo}*\n\nNão há sessões para esta cidade no momento.",
@@ -2524,6 +2554,8 @@ async def mostrar_eventos_por_cidade(update: Update, context: ContextTypes.DEFAU
         )
         return
         
+    from src.sheets_supabase import registrar_log_busca
+    registrar_log_busca(uf=uf, cidade=cidade, encontrou_resultados=True)
     filtrados = filtrados[:MAX_EVENTOS_LISTA]
     botoes = []
     for ev in filtrados:

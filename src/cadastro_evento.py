@@ -1615,6 +1615,21 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
     if not atualizar_evento(0, evento_sync):
         logger.warning("Evento %s publicado, mas não foi possível salvar Telegram Message ID do grupo.", id_evento)
 
+    # Hook Conquistas da Secretaria
+    try:
+        from src.conquistas import checar_e_conceder
+        import asyncio
+        
+        # 1. Provedor do Tabernáculo (Ágape Gratuito)
+        if "gratuito" in str(evento.get("agape", "")).lower():
+            asyncio.create_task(checar_e_conceder(user_id, "provedor_tabernaculo", context.bot))
+            
+        # 2. Escriturário do Sistema (Sem erros/pendências de IA)
+        if not context.user_data.get("ia_dados_faltantes", False):
+            asyncio.create_task(checar_e_conceder(user_id, "escriturario_sistema", context.bot))
+    except Exception:
+        pass
+
     # 3) Confirma no privado
     msg = "✅ Evento cadastrado e publicado no grupo."
     if forcar:

@@ -532,6 +532,26 @@ async def assistente_ia_relatorio(update: Update, context: ContextTypes.DEFAULT_
 
 	dados = _sugestoes_aprendizado(168)
 	plano = _plano_semanal_aprendizado(168)
+	
+	from src.sheets_supabase import obter_gaps_sessoes, get_modo_comunicacao_ativo
+	gaps = obter_gaps_sessoes(30)
+	modo_ativo = get_modo_comunicacao_ativo()
+	
+	linhas_gaps = []
+	for g in gaps[:5]:
+		r = f" no rito {g['rito']}" if g.get('rito') else ""
+		u = f"/{g['uf']}" if g.get('uf') else ""
+		linhas_gaps.append(f"- Identificamos {g['total_buscas']} busca(s) frustrada(s) em {g['cidade']}{u}{r}, sem sessões publicadas.")
+	
+	bloco_vigilante = ""
+	if linhas_gaps:
+		bloco_vigilante = "\n\n*🏛️ Visão do Vigilante (Demandas Reprimidas)*\n" + "\n".join(linhas_gaps)
+		alvo = gaps[0]['cidade']
+		status_txt = "ATIVADA" if modo_ativo else "DESATIVADA/Calibragem"
+		bloco_vigilante += f"\n\n*💡 Sugestão de ação:*\nIncentivar secretários de {alvo}. (Comunicação atualmente {status_txt})"
+	else:
+		bloco_vigilante = "\n\n*🏛️ Visão do Vigilante (Demandas Reprimidas)*\nSem demandas reprimidas expressivas nos últimos 30 dias."
+	
 	texto = (
 		"*Relatório Semanal de Aprendizado da IA*\n\n"
 		"*Ações recomendadas para esta semana*\n"
@@ -549,7 +569,8 @@ async def assistente_ia_relatorio(update: Update, context: ContextTypes.DEFAULT_
 		"*Motivos de bloqueio mais frequentes (7d)*\n"
 		f"{_formatar_ranking(dados['top_block_reasons'], '- Sem bloqueios relevantes')}\n\n"
 		"*Sugestões brutas da análise*\n"
-		f"{_formatar_linhas(dados['sugestoes'], '- Sem sugestões')}\n\n"
+		f"{_formatar_linhas(dados['sugestoes'], '- Sem sugestões')}"
+		f"{bloco_vigilante}\n\n"
 		"_Aprovação humana continua obrigatória antes de alterar ajuda, YAML ou código._"
 	)
 	teclado = InlineKeyboardMarkup(
@@ -742,11 +763,13 @@ async def _executar_busca_eventos_ia(
 				
 		filtrados.append(ev)
 
+	from src.sheets_supabase import registrar_log_busca
 	if not filtrados:
+		registrar_log_busca(uf=f_uf, cidade=f_cidade, rito=f_rito, grau=f_grau, encontrou_resultados=False)
 		texto = (
-			"Meu respeitável Irmão, realizei buscas em nossas colunas, mas nenhuma sessão agendada "
-			"corresponde exatamente a estes filtros no momento.\n\n"
-			"Gostaria de abrir o calendário completo e explorar outras datas?"
+			"Realizei a busca, mas nenhuma sessão agendada "
+			"corresponde a esses filtros no momento.\n\n"
+			"Deseja abrir o calendário completo?"
 		)
 		teclado = InlineKeyboardMarkup([
 			[InlineKeyboardButton("📅 Ver sessões no calendário", callback_data="ver_eventos")],
@@ -755,10 +778,11 @@ async def _executar_busca_eventos_ia(
 		await navegar_para(update, context, "Assistente IA > Busca", texto, teclado)
 		return
 
+	registrar_log_busca(uf=f_uf, cidade=f_cidade, rito=f_rito, grau=f_grau, encontrou_resultados=True)
 	# Ordena e limita a 10 itens para manter UX condensada no chat privado
 	filtrados = _eventos_ordenados(filtrados)[:10]
 
-	texto = "Meu respeitável Irmão, eis as sessões justas e perfeitas localizadas em nossas colunas:\n\n"
+	texto = "Aqui estão as sessões localizadas:\n\n"
 	botoes = []
 	for ev in filtrados:
 		id_ev = normalizar_id_evento(ev)
@@ -814,6 +838,7 @@ async def _despachar_ia_result(
 	# Criação de evento com dados faltantes → mostrar preview e opções de ação
 	if result.intent == "criar_evento_natural" and result.disambiguation:
 		context.user_data["ia_evento_pendente"] = result.entities
+		context.user_data["ia_dados_faltantes"] = True
 		_auditar_evento(
 			"intent_matched", user_id, nivel, texto_entrada,
 			intent_id="criar_evento_natural",

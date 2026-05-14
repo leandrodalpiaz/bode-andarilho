@@ -2019,3 +2019,282 @@ def listar_membros_ativos() -> list[dict[str, Any]]:
 def marcar_como_inativo(telegram_id: int) -> bool:
     """Marca o status do cadastro do membro como 'Inativo'."""
     return atualizar_status_membro(telegram_id, 'Inativo')
+
+
+# ============================================
+# TELEMETRIA E PAINEL DO VIGILANTE (NÍVEL 3)
+# ============================================
+
+def registrar_log_busca(
+    uf: str = None, 
+    cidade: str = None, 
+    rito: str = None, 
+    grau: int = None, 
+    encontrou_resultados: bool = False
+) -> bool:
+    try:
+        uf_val = (uf or "").strip().upper()[:2] or None
+        cid_val = (cidade or "").strip().lower() or None
+        if cid_val:
+            cid_val = cid_val.title()
+        rito_val = (rito or "").strip() or None
+        
+        grau_val = None
+        if grau:
+            try:
+                grau_val = int(grau)
+            except Exception:
+                pass
+
+        row = {
+            "uf": uf_val,
+            "cidade": cid_val,
+            "rito": rito_val,
+            "grau": grau_val,
+            "encontrou_resultados": bool(encontrou_resultados),
+        }
+        
+        supabase.table("logs_busca").insert(row).execute()
+        return True
+    except Exception as e:
+        logger.error("Erro ao registrar log de busca: %s", e)
+        return False
+
+
+def get_modo_comunicacao_ativo() -> bool:
+    try:
+        resp = supabase.table("configuracoes_globais").select("valor_bool").eq("chave", "modo_comunicacao_ativo").execute()
+        if resp.data:
+            return bool(resp.data[0].get("valor_bool", False))
+    except Exception as e:
+        logger.error("Erro ao ler modo_comunicacao_ativo: %s", e)
+    return False
+
+
+def set_modo_comunicacao_ativo(ativo: bool) -> bool:
+    try:
+        supabase.table("configuracoes_globais").update({"valor_bool": bool(ativo)}).eq("chave", "modo_comunicacao_ativo").execute()
+        return True
+    except Exception as e:
+        logger.error("Erro ao atualizar modo_comunicacao_ativo: %s", e)
+        return False
+
+
+def obter_gaps_sessoes(dias: int = 30) -> list:
+    try:
+        from datetime import datetime, timedelta
+        limite = datetime.utcnow() - timedelta(days=dias)
+        
+        resp = (
+            supabase.table("logs_busca")
+            .select("uf, cidade, rito, grau")
+            .eq("encontrou_resultados", False)
+            .gte("created_at", limite.isoformat())
+            .execute()
+        )
+        
+        logs = resp.data or []
+        if not logs:
+            return []
+            
+        from collections import Counter
+        contagem = Counter()
+        for log in logs:
+            uf = (log.get("uf") or "").strip().upper()
+            cid = (log.get("cidade") or "").strip()
+            rito = (log.get("rito") or "").strip()
+            if not cid:
+                continue
+            contagem[(uf, cid, rito)] += 1
+            
+        from src.eventos import listar_eventos
+        eventos = listar_eventos() or []
+        hoje = datetime.utcnow().date()
+        
+        sessoes_futuras_locais = set()
+        for ev in eventos:
+            if str(ev.get("Status", "")).lower() in ("cancelado", "inativo"):
+                continue
+            
+            data_str = ev.get("Data do evento", "")
+            try:
+                dt = datetime.strptime(data_str, "%d/%m/%Y").date()
+                if dt < hoje:
+                    continue
+            except Exception:
+                pass
+                
+            ori = ev.get("Oriente", "")
+            if "/" in ori:
+                partes = ori.split("/")
+                cid_ev = partes[0].strip().title()
+                uf_ev = partes[1].strip().upper()
+            else:
+                cid_ev = ori.strip().title()
+                uf_ev = ""
+                
+            rito_ev = (ev.get("Rito") or "").strip()
+            sessoes_futuras_locais.add((uf_ev, cid_ev, rito_ev))
+            
+        gaps = []
+        for (uf, cid, rito), total in contagem.most_common():
+            encontrou_oferta = False
+            for (uf_fut, cid_fut, rito_fut) in sessoes_futuras_locais:
+                if cid.lower() == cid_fut.lower():
+                    if rito and rito_fut and rito.lower() != rito_fut.lower():
+                        continue
+                    encontrou_oferta = True
+                    break
+                    
+            if not encontrou_oferta:
+                gaps.append({
+                    "uf": uf,
+                    "cidade": cid,
+                    "rito": rito,
+                    "total_buscas": total
+                })
+                
+        return gaps
+    except Exception as e:
+        logger.error("Erro ao obter gaps de sessões: %s", e)
+        return []
+
+
+def get_secretarios_filtrados(
+    uf: str = None,
+    cidade: str = None,
+    rito: str = None
+) -> list:
+    try:
+        resp_lojas = supabase.table("lojas").select("*").execute()
+        lojas = resp_lojas.data or []
+        
+        uf_f = (uf or "").strip().upper()
+        cid_f = (cidade or "").strip().lower()
+        rito_f = (rito or "").strip().lower()
+        
+        sec_validos = set()
+        for loja in lojas:
+            sec_id = _norm_intlike(loja.get("secretario_responsavel_id"))
+            if not sec_id:
+                continue
+                
+            if uf_f and uf_f != "TODAS":
+                st = (loja.get("estado_uf") or "").strip().upper()
+                if st != uf_f:
+                    continue
+                    
+            if cid_f and cid_f != "todas":
+                c = (loja.get("cidade") or "").strip().lower()
+                if c != cid_f:
+                    continue
+                    
+            if rito_f and rito_f != "todos":
+                r = (loja.get("rito") or "").strip().lower()
+                if rito_f not in r:
+                    continue
+                    
+            try:
+                sec_validos.add(int(float(sec_id)))
+            except Exception:
+                pass
+                
+        if not sec_validos:
+            return []
+            
+        membros = listar_membros(include_inativos=False)
+        ids_finais = []
+        for m in membros:
+            tid_str = _norm_intlike(m.get("Telegram ID") or m.get("telegram_id"))
+            if not tid_str:
+                continue
+            try:
+                tid = int(float(tid_str))
+                if tid in sec_validos and str(m.get("Nivel", "1")) in ("2", "3"):
+                    ids_finais.append(tid)
+            except Exception:
+                continue
+                
+        return ids_finais
+    except Exception as e:
+        logger.error("Erro ao obter secretários filtrados: %s", e)
+        return []
+
+
+# ============================================
+# MOTOR DE GAMIFICAÇÃO (JORNADA DO OBREIRO)
+# ============================================
+
+def registrar_conquista(user_id: int, conquista_slug: str) -> bool:
+    """
+    Registra uma conquista vitalícia para o obreiro.
+    Ignora silenciosamente se já possuir (unique key constraint).
+    """
+    try:
+        uid = _norm_intlike(user_id)
+        if not uid:
+            return False
+            
+        payload = {
+            "user_id": int(float(uid)),
+            "conquista_slug": conquista_slug.strip().lower()
+        }
+        
+        supabase.table("membro_conquistas").insert(payload).execute()
+        logger.info("Nova conquista registrada: %s para user %s", conquista_slug, uid)
+        return True
+    except Exception as e:
+        # Pode ser conflito de PK/Unique, tratamos como sucesso funcional (já gravado)
+        logger.debug("Ignorando tentativa de duplicar conquista %s para %s: %s", conquista_slug, user_id, e)
+        return True
+
+
+def listar_conquistas_obtidas(user_id: int) -> List[str]:
+    """Retorna a lista de slugs de conquistas já obtidas pelo obreiro."""
+    try:
+        uid = _norm_intlike(user_id)
+        if not uid:
+            return []
+            
+        resp = supabase.table("membro_conquistas") \
+            .select("conquista_slug") \
+            .eq("user_id", int(float(uid))) \
+            .execute()
+            
+        if not resp.data:
+            return []
+            
+        return [str(item.get("conquista_slug", "")) for item in resp.data]
+    except Exception as e:
+        logger.error("Erro ao listar conquistas de %s: %s", user_id, e)
+        return []
+
+
+def registrar_marco_coletivo(marco_slug: str, categoria: str) -> bool:
+    """Registra a ocorrência de um marco sistêmico de crescimento."""
+    try:
+        payload = {
+            "marco_slug": marco_slug.strip().lower(),
+            "categoria": categoria.strip()
+        }
+        supabase.table("marcos_coletivos").insert(payload).execute()
+        return True
+    except Exception as e:
+        logger.debug("Marco coletivo já registrado ou erro: %s", e)
+        return True
+
+
+def checar_marco_coletivo_existente(marco_slug: str) -> bool:
+    """Verifica se um determinado marco de crescimento já ocorreu antes."""
+    try:
+        slug = marco_slug.strip().lower()
+        resp = supabase.table("marcos_coletivos") \
+            .select("marco_slug") \
+            .eq("marco_slug", slug) \
+            .limit(1) \
+            .execute()
+            
+        return len(resp.data or []) > 0
+    except Exception as e:
+        logger.error("Erro ao checar marco coletivo: %s", e)
+        return False

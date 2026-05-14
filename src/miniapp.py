@@ -499,6 +499,14 @@ async def draft_loja_confirmar(update: Update, context) -> None:
     if not ok:
         await query.answer("Não consegui registrar a loja agora.", show_alert=True)
         return
+
+    # Hook Conquistas Coletivas
+    try:
+        from src.conquistas import checar_e_disparar_marco_coletivo
+        import asyncio
+        asyncio.create_task(checar_e_disparar_marco_coletivo(context.bot, dados))
+    except Exception:
+        pass
     _limpar_rascunho(_RASCUNHOS_LOJA, telegram_id)
     loja = buscar_loja_por_nome_numero(dados.get("nome", ""), dados.get("numero", ""))
     loja_id = _norm_text((loja or {}).get("ID") or (loja or {}).get("id"))
@@ -768,6 +776,17 @@ async def _confirmar_evento(update: Update, context, salvar_loja: bool) -> None:
         if not ok_loja:
             await query.answer("Não consegui salvar a loja vinculada a esta sessão.", show_alert=True)
             return
+
+        # Hook Conquistas Coletivas
+        try:
+            from src.conquistas import checar_e_disparar_marco_coletivo
+            import asyncio
+            asyncio.create_task(checar_e_disparar_marco_coletivo(context.bot, {
+                "nome": dados.get("nome_loja"),
+                "oriente": dados.get("oriente")
+            }))
+        except Exception:
+            pass
     evento = _payload_evento(dados, secretario_id)
     id_evento = cadastrar_evento(evento)
     if not id_evento:
@@ -2072,6 +2091,15 @@ async def api_cadastro_loja(request: Request) -> JSONResponse:
     ok = cadastrar_loja(int(telegram_id), dados_loja)
     if not ok:
         return JSONResponse({"ok": False, "error": "Falha ao salvar a loja. Tente novamente."}, status_code=500)
+
+    # Hook Conquistas Coletivas
+    try:
+        from src.conquistas import checar_e_disparar_marco_coletivo
+        import asyncio
+        bot = request.app.state.telegram_app.bot
+        asyncio.create_task(checar_e_disparar_marco_coletivo(bot, dados_loja))
+    except Exception:
+        pass
 
     try:
         bot = request.app.state.telegram_app.bot

@@ -458,12 +458,13 @@ def _campos_evento_faltantes(entities: Dict[str, str]) -> List[str]:
 
 
 _NOMES_CAMPO_AMIGAVEL = {
-    "data": "data do evento (ex: 25/04/2026 ou próxima quarta)",
-    "hora": "horário (ex: 19:30)",
-    "nome_loja": "nome da loja",
-    "grau": "grau (ex: Aprendiz, Companheiro ou Mestre)",
-    "tipo_sessao": "tipo de sessão (ex: Ordinária, Magna)",
-    "agape": "se haverá ágape e o tipo (ex: pago ou gratuito)",
+    "data": "Data",
+    "hora": "Hora da sessão",
+    "grau": "Grau",
+    "rito": "Rito",
+    "nome_loja": "Loja",
+    "tipo_sessao": "Tipo de Sessão",
+    "agape": "Tipo de Ágape",
 }
 
 
@@ -471,19 +472,23 @@ def _perguntar_campos_faltantes(faltantes: List[str], nivel: str = "") -> str:
     if not faltantes:
         return ""
 
-    # Interação Polida da Chancelaria
     if len(faltantes) == 1 and faltantes[0] == "agape":
-        return "Irmão, não consegui identificar se o ágape desta sessão é pago ou gratuito. Poderia me informar?"
+        return "Irmão Secretário, para publicar falta informar: o ágape é pago ou por conta da Loja?"
 
     if nivel == "3" and faltantes == ["nome_loja"]:
-        return "Como você não possui loja vinculada, informe a loja do evento."
-    
+        return "Falta informar: Loja realizadora do evento."
+
     partes = [_NOMES_CAMPO_AMIGAVEL.get(c, c) for c in faltantes]
     
     if len(partes) == 1:
-        return f"Meu Irmão, para criar a sessão, preciso saber por gentileza: {partes[0]}."
+        return f"Falta informar: {partes[0]}."
         
-    return "Meu Irmão, para agendar a sessão com perfeição, preciso que informe:\n" + "\n".join(f"• {p}" for p in partes)
+    if len(partes) == 2:
+        lista_txt = f"{partes[0]} e {partes[1]}"
+    else:
+        lista_txt = ", ".join(partes[:-1]) + f" e {partes[-1]}"
+
+    return f"Faltam os seguintes dados para a publicação: {lista_txt}." 
 
 
 

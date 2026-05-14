@@ -2021,6 +2021,14 @@ async def bastao_executar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "❌ Falha crítica na transação. Tente novamente.")
         return
         
+    # Hook Conquistas: Guardião da Chave Passada
+    try:
+        from src.conquistas import checar_e_conceder
+        import asyncio
+        asyncio.create_task(checar_e_conceder(user_id, "guardiao_chave", context.bot))
+    except Exception:
+        pass
+
     texto_ant = (
         "🤝 *BASTÃO TRANSMITIDO COM SUCESSO*\n\n"
         f"Agradecemos imensamente por seus valiosos serviços na administração da Oficina *{nome_loja}*.\n\n"
