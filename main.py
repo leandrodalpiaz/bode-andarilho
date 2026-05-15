@@ -966,6 +966,15 @@ async def main():
 
     from src.scheduler import iniciar_scheduler
     await iniciar_scheduler(telegram_app)
+    
+    # Configurar o botão nativo Menu do Telegram (Acessibilidade Sênior)
+    try:
+        from telegram import BotCommand
+        await telegram_app.bot.set_my_commands([
+            BotCommand("start", "🏠 Abrir Menu Principal")
+        ])
+    except Exception as e:
+        logger.warning(f"Erro ao configurar botão nativo Menu: {e}")
 
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):

@@ -60,6 +60,24 @@ TIPO_CONTEXTO = "contexto"
 TIPO_RESULTADO = "resultado"
 
 ATALHOS_TEXTO_PRIVADO = {
+    # Teclado Persistente (Acessibilidade)
+    "🏠 menu principal": "menu_principal",
+    "📍 buscar sessões": "ver_eventos",
+    "👤 meu perfil": "meu_cadastro",
+
+    # Saudações Básicas
+    "oi": "menu_principal",
+    "ola": "menu_principal",
+    "olá": "menu_principal",
+    "bom dia": "menu_principal",
+    "boa tarde": "menu_principal",
+    "boa noite": "menu_principal",
+    "start": "menu_principal",
+    "/start": "menu_principal",
+    "oie": "menu_principal",
+    "fala": "menu_principal",
+    
+    # Navegação Geral
     "menu": "menu_principal",
     "painel": "menu_principal",
     "bode": "menu_principal",
@@ -68,27 +86,58 @@ ATALHOS_TEXTO_PRIVADO = {
     "menu principal": "menu_principal",
     "abrir menu": "menu_principal",
     "voltar menu": "menu_principal",
+    "voltar": "menu_principal",
+    "home": "menu_principal",
+    
+    # Pedidos de Ajuda / Confusão
+    "ajuda": "menu_ajuda",
+    "central de ajuda": "menu_ajuda",
+    "help": "menu_ajuda",
+    "socorro": "menu_ajuda",
+    "como uso": "menu_ajuda",
+    "como funciona": "menu_ajuda",
+    "nao sei usar": "menu_ajuda",
+    "não sei usar": "menu_ajuda",
+    
+    # Sessões (Com erros ortográficos previstos)
     "sessoes": "ver_eventos",
     "sessões": "ver_eventos",
     "ver sessoes": "ver_eventos",
     "ver sessões": "ver_eventos",
     "agenda": "ver_eventos",
+    "reuniao": "ver_eventos",
+    "reunião": "ver_eventos",
+    "cessao": "ver_eventos",
+    "cessão": "ver_eventos",
+    "ceçao": "ver_eventos",
+    "lojas": "ver_eventos",
+    "buscar sessoes": "ver_eventos",
+    "buscar": "ver_eventos",
+    
+    # Presenças
     "minhas presencas": "minhas_confirmacoes",
     "minhas presenças": "minhas_confirmacoes",
     "presencas": "minhas_confirmacoes",
     "presenças": "minhas_confirmacoes",
+    
+    # Perfil
     "meu perfil": "meu_cadastro",
     "perfil": "meu_cadastro",
     "cadastro": "meu_cadastro",
+    
+    # Lembretes
     "meus lembretes": "menu_lembretes",
     "lembretes": "menu_lembretes",
+    
+    # Assistente IA
     "assistente ia": "abrir_assistente_ia",
     "assistente": "abrir_assistente_ia",
     "ia": "abrir_assistente_ia",
-    "ajuda": "menu_ajuda",
-    "central de ajuda": "menu_ajuda",
+    
+    # Organização
     "organizar conversa": "limpar_historico",
     "limpar conversa": "limpar_historico",
+    "limpar": "limpar_historico",
 }
 
 
@@ -467,6 +516,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if membro and membro_esta_ativo(membro):
         await _limpar_mensagens_anteriores(context, telegram_id)
+        
+        # Injeção do Teclado Permanente (Acessibilidade Sênior)
+        from telegram import ReplyKeyboardMarkup, KeyboardButton
+        teclado_fixo = ReplyKeyboardMarkup([
+            [KeyboardButton("🏠 Menu Principal")],
+            [KeyboardButton("📍 Buscar Sessões"), KeyboardButton("👤 Meu Perfil")]
+        ], resize_keyboard=True, is_persistent=True)
+        
+        try:
+            msg_teclado = await context.bot.send_message(
+                chat_id=telegram_id,
+                text="🔄 _Sincronizando controles de atalho..._",
+                reply_markup=teclado_fixo,
+                parse_mode="Markdown"
+            )
+            import asyncio
+            # Deletamos a mensagem de sincronização em seguida para não poluir, 
+            # mas o teclado configurado na base do celular permanecerá ativo!
+            asyncio.create_task(context.bot.delete_message(chat_id=telegram_id, message_id=msg_teclado.message_id))
+        except Exception:
+            pass
+            
         await criar_estrutura_inicial(context, telegram_id, membro)
     else:
         from src.cadastro import cadastro_start as iniciar_cadastro

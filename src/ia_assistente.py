@@ -634,6 +634,22 @@ async def _executar_assistente_ia(update: Update, context: ContextTypes.DEFAULT_
 		await navegar_para(update, context, "Assistente IA", mensagem_bloqueio, teclado)
 		return
 
+	# Filtro de Empatia (Frustrações/Acessibilidade Sênior)
+	palavras_frustracao = ["bosta", "merda", "lixo", "burro", "nao funciona", "ruim", "porcaria", "caralho", "porra", "inferno"]
+	if any(p in _norm_text(texto_entrada) for p in palavras_frustracao):
+		_auditar_evento("empathy_fallback", user_id, nivel, texto_entrada, topic_hint="")
+		teclado = InlineKeyboardMarkup([
+			[InlineKeyboardButton("Menu principal", callback_data="menu_principal")],
+			[InlineKeyboardButton("Central de Ajuda", callback_data="menu_ajuda")],
+		])
+		texto_empatia = (
+			"Me desculpe se algo não está funcionando como esperado, meu Irmão.\n\n"
+			"Estou em constante aprendizado para tornar o sistema o mais simples possível. "
+			"Por favor, use os botões abaixo para recomeçar com calma."
+		)
+		await navegar_para(update, context, "Assistente IA", texto_empatia, teclado)
+		return
+
 	# ── 1) Verificar se é continuação de criação de evento multi-turno ──
 	pending = context.user_data.get("ia_evento_pendente")
 	if pending and isinstance(pending, dict):

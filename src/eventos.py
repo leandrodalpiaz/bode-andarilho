@@ -199,6 +199,9 @@ TOKEN_POR_GRAU_MENU = "por_grau"
 TOKEN_POR_RITO_MENU = "por_rito"
 TOKEN_POR_LOCALIDADE_MENU = "por_localidade"
 TOKEN_POR_POTENCIA_MENU = "por_potencia"
+TOKEN_TODAS_DISPONIVEIS = "todas_disponiveis"
+TOKEN_POR_DATA_MENU = "por_data_menu"
+TOKEN_GEO_RAIO_MENU = "geo_raio_menu"
 
 # Graus
 GRAU_APRENDIZ = "Aprendiz"
@@ -783,16 +786,95 @@ def _formatar_data_curta(ev: dict) -> str:
     return f"{dt.strftime('%d/%m')} ({dia_semana})"
 
 
-def _linha_botao_evento(ev: dict) -> str:
-    nome = str(ev.get("Nome da loja", "") or "").strip() or "Evento"
+def _linha_botao_evento(ev: dict, omitir_grau: bool = False, omitir_rito: bool = False) -> str:
+    """
+    Monta uma linha ultracompacta para exibição no botão inline do Telegram,
+    omitindo dados de forma inteligente de acordo com o contexto de filtro e
+    abreviando nomes longos para evitar o corte da tela (truncamento '...').
+    Formato: 📅 DD/MM • Grau • Loja Nº (Pot) • Rito • Hh
+    """
+    # 1. Data
+    dt_obj = parse_data_evento(ev.get("Data do evento", ""))
+    data_fmt = dt_obj.strftime("%d/%m") if dt_obj else "?"
+    
+    # 2. Grau (Abreviação)
+    grau_txt = ""
+    if not omitir_grau:
+        grau_raw = normalizar_grau_nome(ev.get("Grau", ""))
+        if grau_raw == GRAU_APRENDIZ:
+            grau_txt = "Apr"
+        elif grau_raw == GRAU_COMPANHEIRO:
+            grau_txt = "Comp"
+        elif grau_raw == GRAU_MESTRE:
+            grau_txt = "Mest"
+        elif "Instalado" in grau_raw:
+            grau_txt = "MI"
+        else:
+            grau_txt = grau_raw[:4]
+            
+    # 3. Loja e Potência (Compactação)
+    nome_loja = str(ev.get("Nome da loja", "") or "").strip()
+    if len(nome_loja) > 16:
+        # Abrevia palavras longas ou trunca
+        palavras = nome_loja.split()
+        if len(palavras) > 1:
+            nome_loja = " ".join(p[:4] + "." if len(p) > 4 and p.lower() not in ("da","do","de","dos","das") else p for p in palavras)
+        if len(nome_loja) > 16:
+            nome_loja = nome_loja[:14] + ".."
+            
     numero = str(ev.get("Número da loja", "") or "").strip()
-    hora = str(ev.get("Hora", "") or "").strip()
-
-    numero_fmt = f" {numero}" if numero else ""
-    hora_fmt = hora if hora else "—"
-    data_curta = _formatar_data_curta(ev)
-
-    return f"📅 {data_curta} • 🕕 {hora_fmt} • 🏛 {nome}{numero_fmt}"
+    numero_fmt = f" {numero}" if numero and numero != "0" else ""
+    
+    potencia = formatar_potencia(*potencia_de_dados(ev))
+    pot_fmt = f" ({potencia})" if potencia else ""
+    
+    # 4. Rito (Abreviação)
+    rito_txt = ""
+    if not omitir_rito:
+        rito_raw = _normalizar_rito(ev.get("Rito", ""))
+        if rito_raw:
+            rl = rito_raw.lower()
+            if "escocês" in rl or "reaa" in rl:
+                rito_txt = "REAA"
+            elif "york" in rl:
+                rito_txt = "York"
+            elif "brasileiro" in rl:
+                rito_txt = "Bras"
+            elif "moderno" in rl:
+                rito_txt = "Mod"
+            elif "schroder" in rl or "schröder" in rl:
+                rito_txt = "Schr"
+            elif "adonhiramita" in rl:
+                rito_txt = "Adon"
+            else:
+                rito_txt = rito_raw[:4].strip()
+                
+    # 5. Hora Curta (ex: 20h, 19h30)
+    hora_raw = str(ev.get("Hora", "") or "").strip()
+    hora_fmt = ""
+    if hora_raw:
+        partes = hora_raw.split(":")
+        hh = partes[0].strip()
+        mm = partes[1].strip() if len(partes) > 1 else "00"
+        if mm == "00" or mm == "0":
+            hora_fmt = f"{hh}h"
+        else:
+            hora_fmt = f"{hh}:{mm}"
+            
+    # Monta os componentes omitindo vazios
+    componentes = [f"📅 {data_fmt}"]
+    if grau_txt:
+        componentes.append(grau_txt)
+    
+    componentes.append(f"{nome_loja}{numero_fmt}{pot_fmt}")
+    
+    if rito_txt:
+        componentes.append(rito_txt)
+        
+    if hora_fmt:
+        componentes.append(hora_fmt)
+        
+    return " • ".join(componentes)
 
 
 # ============================================
@@ -1014,24 +1096,34 @@ def gerar_calendario_mes(ano: int, mes: int, eventos: List[dict]) -> str:
 # ============================================
 
 async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    eventos = listar_eventos() or []
+    agora = datetime.now()
+    
+    # Contabiliza apenas eventos ativos no futuro
+    total_futuros = 0
+    for ev in eventos:
+        dt = _data_hora_evento(ev)
+        if dt and dt >= agora and _status_evento_normalizado(ev) != "cancelado":
+            total_futuros += 1
+
     teclado = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📍 Localização", callback_data=f"data|{TOKEN_POR_LOCALIDADE_MENU}"),
-            InlineKeyboardButton("⚖️ Grau", callback_data=f"data|{TOKEN_POR_GRAU_MENU}"),
+            InlineKeyboardButton(f"📋 Sessões Disponíveis ({total_futuros})", callback_data=f"data|{TOKEN_TODAS_DISPONIVEIS}"),
         ],
         [
-            InlineKeyboardButton("📜 Rito", callback_data=f"data|{TOKEN_POR_RITO_MENU}"),
-            InlineKeyboardButton("📅 Esta semana", callback_data=f"data|{TOKEN_SEMANA_ATUAL}"),
+            InlineKeyboardButton("📅 Por Data", callback_data=f"data|{TOKEN_POR_DATA_MENU}"),
+            InlineKeyboardButton("⚖️ Por Grau", callback_data=f"data|{TOKEN_POR_GRAU_MENU}"),
         ],
         [
-            InlineKeyboardButton("🗓️ Calendário Geral", callback_data="calendario|0|0"),
+            InlineKeyboardButton("📜 Por Rito", callback_data=f"data|{TOKEN_POR_RITO_MENU}"),
+            InlineKeyboardButton("📍 Por Localização", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}"),
         ],
         [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
     ])
 
     texto_busca = (
         "📅 *Como deseja visualizar as sessões?*\n\n"
-        "Ou, se preferir, diga-me o que procura (Ex: 'Quero uma sessão de Mestre em Curitiba na quinta-feira')."
+        "Selecione uma opção acima para explorar a agenda."
     )
 
     await navegar_para(
@@ -1102,7 +1194,249 @@ async def calendario_atual(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     _, token_or_data = query.data.split("|", 1)
-    token_or_data = (token_or_data or "").strip()
+    if token_or_data == TOKEN_POR_DATA_MENU:
+        teclado = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📅 Esta Semana", callback_data=f"data|{TOKEN_SEMANA_ATUAL}")],
+            [InlineKeyboardButton("📅 Neste Mês", callback_data=f"data|{TOKEN_MES_ATUAL}")],
+            [InlineKeyboardButton("📅 Próximos Meses", callback_data=f"data|{TOKEN_PROXIMOS_MESES}")],
+            [InlineKeyboardButton("🗓️ Calendário Geral", callback_data="calendario|0|0")],
+            [InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")],
+        ])
+        await navegar_para(
+            update, context,
+            "Ver Sessões > Por Data",
+            "📅 *Filtrar sessões por período:*",
+            teclado
+        )
+        return
+
+    if token_or_data == TOKEN_TODAS_DISPONIVEIS:
+        eventos = listar_eventos() or []
+        agora = datetime.now()
+        filtrados = []
+        for ev in eventos:
+            dt = _data_hora_evento(ev)
+            if dt and dt >= agora and _status_evento_normalizado(ev) != "cancelado":
+                filtrados.append(ev)
+        
+        filtrados.sort(key=lambda x: _data_hora_evento(x) or agora)
+        
+        if not filtrados:
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "📋 *Todas as Sessões Disponíveis*\n\nNão há sessões agendadas no momento.",
+                InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
+            )
+            return
+            
+        filtrados = filtrados[:MAX_EVENTOS_LISTA]
+        botoes = []
+        for ev in filtrados:
+            id_evento = normalizar_id_evento(ev)
+            botoes.append([InlineKeyboardButton(
+                _linha_botao_evento(ev),
+                callback_data=f"evento|{_encode_cb(id_evento)}"
+            )])
+        botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")])
+        
+        await navegar_para(
+            update, context,
+            "Ver Sessões > Todas",
+            "📋 *Todas as sessões futuras agendadas:*",
+            InlineKeyboardMarkup(botoes)
+        )
+        return
+
+    if token_or_data.startswith(TOKEN_GEO_RAIO_MENU):
+        import re
+        from src.sheets_supabase import buscar_membro, buscar_loja_por_id, buscar_loja_por_nome_numero
+        from src.location_service import filtrar_locais_por_raio
+        
+        # Determina o raio solicitado (padrão: 100km)
+        partes_geo = token_or_data.split("|")
+        raio_km = 100.0
+        if len(partes_geo) > 1:
+            try:
+                raio_km = float(partes_geo[1])
+            except:
+                raio_km = 100.0
+                
+        membro = buscar_membro(update.effective_user.id)
+        if not membro:
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "❌ *Perfil não encontrado*\n\nVocê precisa possuir um registro regular para utilizar a busca geográfica.",
+                InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
+            )
+            return
+            
+        oriente_raw = str(membro.get("Oriente") or membro.get("oriente") or "").strip()
+        if not oriente_raw or oriente_raw.lower() in ("não informado", "nao informado"):
+             await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "⚠️ *Oriente não configurado*\n\nSeu perfil não possui um Oriente (Cidade) cadastrado. Edite seus dados para usar esta função.",
+                InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
+            )
+             return
+             
+        # 1. Extração e limpeza do Oriente de Origem (cidade sem o estado no nome)
+        cidade_origem = re.split(r"[-/]", oriente_raw)[0].strip()
+        
+        # 2. Descoberta da UF do membro (via Loja ou extração textual)
+        uf_origem = ""
+        loja_id = membro.get("ID da loja") or membro.get("loja_id")
+        loja = buscar_loja_por_id(loja_id) if loja_id else None
+        if not loja:
+            l_nome = membro.get("Loja") or membro.get("loja")
+            l_num = membro.get("Número da loja") or membro.get("numero_loja")
+            if l_nome:
+                loja = buscar_loja_por_nome_numero(l_nome, l_num)
+        if loja:
+            uf_origem = str(loja.get("Estado UF") or loja.get("estado_uf") or "").strip().upper()
+            
+        if not uf_origem:
+            # Fallback: tentar achar match de UF na string do Oriente original (ex: "Torres-RS")
+            match = re.search(r"[-/]\s*([A-Za-z]{2})\b", oriente_raw)
+            if match:
+                uf_origem = match.group(1).upper()
+                
+        if not uf_origem:
+             # Fallback final: Se não tem UF de jeito nenhum, pedimos para validar o cadastro
+             await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "⚠️ *Estado (UF) ausente*\n\nNão conseguimos identificar a UF de sua Loja para o cálculo preciso. Atualize seu registro.",
+                InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
+            )
+             return
+             
+        await query.answer(f"Calculando raio de {int(raio_km)}km...", show_alert=False)
+             
+        # 3. Coletar destinos únicos de eventos futuros
+        eventos = listar_eventos() or []
+        agora = datetime.now()
+        eventos_futuros = []
+        cidades_com_eventos = []
+        
+        lojas_map = _lojas_map_cache()
+        
+        for ev in eventos:
+            dt = _data_hora_evento(ev)
+            if dt and dt >= agora and _status_evento_normalizado(ev) != "cancelado":
+                # Resolve cidade e UF da loja do evento
+                l_id = ev.get("ID da loja") or ev.get("loja_id")
+                loja_ev = lojas_map.get(l_id) if l_id else None
+                
+                # Oriente do evento
+                ori_ev_raw = str(ev.get("Oriente") or "").strip()
+                cid_ev = re.split(r"[-/]", ori_ev_raw)[0].strip()
+                
+                uf_ev = ""
+                if loja_ev:
+                    uf_ev = str(loja_ev.get("Estado UF") or loja_ev.get("estado_uf") or "").strip().upper()
+                if not uf_ev:
+                    m_uf = re.search(r"[-/]\s*([A-Za-z]{2})\b", ori_ev_raw)
+                    uf_ev = m_uf.group(1).upper() if m_uf else ""
+                    
+                if cid_ev and uf_ev:
+                    eventos_futuros.append({
+                        "evento": ev,
+                        "cidade": cid_ev,
+                        "uf": uf_ev
+                    })
+                    cidades_com_eventos.append({
+                        "cidade": cid_ev,
+                        "uf": uf_ev
+                    })
+                    
+        if not cidades_com_eventos:
+             await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "📍 *Sem sessões agendadas*\n\nNão encontramos nenhuma sessão futura com coordenadas válidas para busca.",
+                InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
+            )
+             return
+             
+        # 4. Aplicar Filtro de Raio Geográfico
+        cidades_filtradas = filtrar_locais_por_raio(cidade_origem, uf_origem, cidades_com_eventos, raio_km=raio_km)
+        
+        if not cidades_filtradas:
+             # Constrói teclado mesmo vazio para permitir alterar raio
+             teclado_botoes = [
+                 [
+                     InlineKeyboardButton("🎯 25km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|25"),
+                     InlineKeyboardButton("🎯 50km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|50"),
+                 ],
+                 [
+                     InlineKeyboardButton("🎯 100km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|100"),
+                     InlineKeyboardButton("🎯 200km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|200"),
+                 ],
+                 [InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]
+             ]
+             
+             await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                f"📍 *Nenhuma sessão próxima*\n\nNão encontramos sessões num raio de *{int(raio_km)}km* a partir de *{cidade_origem}-{uf_origem}*.\n\nTente expandir o raio de busca nos botões abaixo:",
+                InlineKeyboardMarkup(teclado_botoes)
+            )
+             return
+             
+        # Map das menores distâncias por cidade para exibição
+        mapa_distancias = {f"{c['cidade'].lower()}-{c['uf'].upper()}": c["distancia_km"] for c in cidades_filtradas}
+        
+        # 5. Cruzar resultados e montar botões
+        botoes_resultado = []
+        eventos_filtrados_com_dist = []
+        for item_fut in eventos_futuros:
+            chave = f"{item_fut['cidade'].lower()}-{item_fut['uf'].upper()}"
+            if chave in mapa_distancias:
+                ev_dist = dict(item_fut)
+                ev_dist["distancia"] = mapa_distancias[chave]
+                eventos_filtrados_com_dist.append(ev_dist)
+                
+        # Ordena por proximidade geográfica e secundariamente cronológico
+        eventos_filtrados_com_dist.sort(key=lambda x: (x["distancia"], _data_hora_evento(x["evento"]) or agora))
+        
+        # Limita quantidade
+        eventos_filtrados_com_dist = eventos_filtrados_com_dist[:MAX_EVENTOS_LISTA]
+        
+        # Agrupa e cria os botões adicionando distância ao texto
+        for item in eventos_filtrados_com_dist:
+            ev = item["evento"]
+            dist = item["distancia"]
+            dist_txt = f"{dist:.0f}km" if dist >= 1 else "próximo"
+            
+            # Linha de texto padrão do evento
+            texto_base = _linha_botao_evento(ev)
+            # Adiciona a distância no final para o usuário saber quão perto é
+            texto_completo = f"{texto_base} ({dist_txt})"
+            
+            id_evento = normalizar_id_evento(ev)
+            botoes_resultado.append([InlineKeyboardButton(
+                texto_completo,
+                callback_data=f"evento|{_encode_cb(id_evento)}"
+            )])
+            
+        # 6. Adicionar Seletor Rápido de Raio no rodapé
+        botoes_resultado.append([
+            InlineKeyboardButton("🎯 25km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|25"),
+            InlineKeyboardButton("🎯 50km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|50")
+        ])
+        botoes_resultado.append([
+            InlineKeyboardButton("🎯 100km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|100"),
+            InlineKeyboardButton("🎯 200km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|200")
+        ])
+        botoes_resultado.append([InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")])
+        
+        from src.sheets_supabase import registrar_log_busca
+        registrar_log_busca(uf=uf_origem, cidade=cidade_origem, encontrou_resultados=True)
+        
+        await navegar_para(
+            update, context,
+            f"Ver Sessões > Proximidade ({int(raio_km)}km)",
+            f"📍 *Sessões próximas ({int(raio_km)}km):*\nCalculado a partir de *{cidade_origem}-{uf_origem}*.\n\nSelecione uma abaixo ou altere o raio:",
+            InlineKeyboardMarkup(botoes_resultado)
+        )
+        return
 
     if token_or_data == TOKEN_POR_GRAU_MENU:
         teclado = InlineKeyboardMarkup([
@@ -1268,7 +1602,7 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
         for ev in filtrados:
             id_evento = normalizar_id_evento(ev)
             botoes.append([InlineKeyboardButton(
-                _linha_botao_evento(ev),
+                _linha_botao_evento(ev, omitir_grau=True),
                 callback_data=f"evento|{_encode_cb(id_evento)}"
             )])
 
@@ -1310,7 +1644,7 @@ async def mostrar_eventos_por_rito(update: Update, context: ContextTypes.DEFAULT
         for ev in filtrados:
             id_evento = normalizar_id_evento(ev)
             botoes.append([InlineKeyboardButton(
-                _linha_botao_evento(ev),
+                _linha_botao_evento(ev, omitir_rito=True),
                 callback_data=f"evento|{_encode_cb(id_evento)}"
             )])
 
