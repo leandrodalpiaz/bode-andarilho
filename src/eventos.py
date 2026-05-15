@@ -46,6 +46,7 @@ from src.sheets_supabase import (
     listar_secretarios_com_notificacoes_pendentes,
     registrar_notificacao_secretario_pendente,
     remover_notificacoes_secretario_pendentes,
+    registrar_log_busca,
 )
 from src.ajuda.dicas import enviar_dica_contextual
 from src.messages import (
@@ -1427,7 +1428,6 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         ])
         botoes_resultado.append([InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")])
         
-        from src.sheets_supabase import registrar_log_busca
         registrar_log_busca(uf=uf_origem, cidade=cidade_origem, encontrou_resultados=True)
         
         await navegar_para(
@@ -1537,9 +1537,8 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
     if token_or_data in (TOKEN_SEMANA_ATUAL, TOKEN_PROXIMA_SEMANA, TOKEN_MES_ATUAL, TOKEN_PROXIMOS_MESES):
         titulo, filtrados = _filtrar_por_periodo(eventos, token_or_data)
 
-        from src.sheets_supabase import registrar_log_busca
         if not filtrados:
-            registrar_log_busca(grau=grau, encontrou_resultados=False)
+            registrar_log_busca(encontrou_resultados=False)
             await _enviar_ou_editar_mensagem(
                 context, update.effective_user.id, TIPO_RESULTADO,
                 f"*{titulo}*\n\nNão há sessões agendadas para este período.",
@@ -1549,10 +1548,7 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
             )
             return
 
-        from src.sheets_supabase import registrar_log_busca
-        registrar_log_busca(grau=grau, encontrou_resultados=True)
-        from src.sheets_supabase import registrar_log_busca
-        registrar_log_busca(rito=rito, encontrou_resultados=True)
+        registrar_log_busca(encontrou_resultados=True)
         filtrados = filtrados[:MAX_EVENTOS_LISTA]
         botoes = []
         for ev in filtrados:
@@ -1585,9 +1581,8 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
     if data_or_menu == TOKEN_POR_GRAU_MENU:
         titulo, filtrados = _filtrar_por_grau(eventos, grau)
 
-        from src.sheets_supabase import registrar_log_busca
         if not filtrados:
-            registrar_log_busca(rito=rito, encontrou_resultados=False)
+            registrar_log_busca(grau=grau, encontrou_resultados=False)
             await _enviar_ou_editar_mensagem(
                 context, update.effective_user.id, TIPO_RESULTADO,
                 f"*{titulo}*\n\nNão há sessões para este grau no momento.",
