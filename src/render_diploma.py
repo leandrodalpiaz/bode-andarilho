@@ -249,27 +249,37 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str]) ->
         )
         y_cursor += 40
         
-    # 7. Assinatura e Rodapé Final
+    # 7. Assinatura e Rodapé Final (Assinatura Maçônica Estilizada)
     y_rodape = int(height * 0.82)
     
-    if sig_path.exists():
+    # Desenha a assinatura estilizada com os 3 pontos
+    font_assinatura = _load_custom_font("CormorantGaramond-Italic.ttf", int(width * 0.05))
+    _draw_centered(draw, "Bode Andarilho :.", center_x, y_rodape - 40, font_assinatura, (60, 45, 30, 240))
+    
+    # 8. Personagem do Grau (Simpson/Flintstones Style)
+    char_map = {
+        "aprendiz": "char_aprendiz.png",
+        "companheiro": "char_companheiro.png",
+        "mestre": "char_mestre.png"
+    }
+    char_file = char_map.get(grau.lower(), "char_aprendiz.png")
+    char_path = BRANDING_DIR / char_file
+    
+    if char_path.exists():
         try:
-            sig = Image.open(sig_path).convert("RGBA")
-            # Redimensiona para parecer uma assinatura graciosa e sutil
-            sig_w = int(width * 0.16)
-            sig_ratio = sig_w / sig.size[0]
-            sig_h = int(sig.size[1] * sig_ratio)
-            sig = sig.resize((sig_w, sig_h), Image.Resampling.LANCZOS)
+            personagem = Image.open(char_path).convert("RGBA")
+            # Redimensiona para um tamanho harmônico no canto
+            p_h = int(height * 0.22)
+            p_ratio = p_h / personagem.size[1]
+            p_w = int(personagem.size[0] * p_ratio)
+            personagem = personagem.resize((p_w, p_h), Image.Resampling.LANCZOS)
             
-            # Ajusta a opacidade da assinatura para mesclar no papel
-            alpha = sig.getchannel("A").point(lambda p: int(p * 0.35))
-            sig.putalpha(alpha)
-            
-            # Coloca no centro abaixo
-            sig_x = center_x - (sig_w // 2)
-            diploma.alpha_composite(sig, (sig_x, y_rodape - 10))
-        except Exception as es:
-            logger.warning("Não consegui aplicar assinatura no diploma: %s", es)
+            # Posiciona no canto inferior esquerdo
+            px = int(width * 0.08)
+            py = height - p_h - int(height * 0.08)
+            diploma.alpha_composite(personagem, (px, py))
+        except Exception as ep:
+            logger.warning("Falha ao inserir personagem do grau no diploma: %s", ep)
             
     draw.line((center_x - int(width * 0.15), y_rodape + 20, center_x + int(width * 0.15), y_rodape + 20), fill=(110, 80, 50, 100), width=1)
     _draw_centered(draw, "Visto da Chancelaria", center_x, y_rodape + 25, font_metadado, (80, 55, 35, 230))

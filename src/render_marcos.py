@@ -90,31 +90,8 @@ def renderizar_card_celebracao(
         font_det = _load_font("CormorantGaramond-SemiBold.ttf", 34)
         font_footer = _load_font("CormorantGaramond-Italic.ttf", 26)
         
-        # 3. Plotagem do Brasão da Potência (Esquerda)
-        pot_filename = f"{str(potencia).strip().lower()}.png"
-        pot_path = POTENCIAS_DIR / pot_filename
-        
-        if not pot_path.exists():
-            # Fallback generic
-            pot_path = POTENCIAS_DIR / "gob.png" if (POTENCIAS_DIR / "gob.png").exists() else None
-            
-        if pot_path and pot_path.exists():
-            try:
-                brasao = Image.open(pot_path).convert("RGBA")
-                b_w = 220
-                ratio = b_w / brasao.size[0]
-                b_h = int(brasao.size[1] * ratio)
-                brasao = brasao.resize((b_w, b_h), Image.Resampling.LANCZOS)
-                
-                # Adiciona suavidade alpha para mesclar no papel
-                alpha = brasao.getchannel("A").point(lambda p: int(p * 0.85))
-                brasao.putalpha(alpha)
-                
-                bx = 80
-                by = (height - b_h) // 2
-                canvas.alpha_composite(brasao, (bx, by))
-            except Exception as eb:
-                logger.warning("Falha ao compor brasao esquerdo no card: %s", eb)
+        # 3. Selo de Cera (Centralizado Lateralmente ou à Direita)
+        # Removido Brasão de Potência Oficial conforme solicitação
                 
         # 4. Plotagem do Selo de Cera (Direita)
         selo_path = BRANDING_DIR / "selo_cera_base.png"
