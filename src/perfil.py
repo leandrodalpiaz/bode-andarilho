@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -137,7 +138,7 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if s in slugs_obtidos:
             meta = CONQUISTAS.get(s)
             if meta:
-                titulo_destaque = meta["nome"]
+                titulo_destaque = meta.get("titulo", "Desconhecido")
             break
             
     cabecalho_nivel = f"Seu Nível de Andarilho: *{titulo_destaque}* 🐐\n\n"
@@ -149,13 +150,16 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for s in slugs_obtidos:
             meta = CONQUISTAS.get(s)
             if meta:
-                linhas_medalhas.append(f"🏅 *{meta['nome']}*: {meta['descricao']}")
+                linhas_medalhas.append(f"🏅 *{meta.get('titulo', s.upper())}*: {meta.get('descricao', '')}")
         texto += "\n".join(linhas_medalhas)
     else:
         texto += "\n_Você ainda não possui medalhas na sua Jornada do Obreiro._"
 
     # --- RITO DE FUNDACAO BOTÃO INTENCAO ---
-    botoes_perfil = [[InlineKeyboardButton("✏️ Editar Perfil", callback_data="editar_perfil")]]
+    botoes_perfil = [
+        [InlineKeyboardButton("✏️ Editar Perfil", callback_data="editar_perfil")],
+        [InlineKeyboardButton("🏆 Galeria de Conquistas", callback_data="abrir_galeria")]
+    ]
     
     is_nivel_1 = str(membro.get("Nivel") or membro.get("nivel") or "1") == "1"
     loja_man = membro.get("Loja Manual") or membro.get("loja_manual")

@@ -494,3 +494,222 @@ async def verificar_novas_conquistas(user_id: int, bot: Any) -> None:
                 
     except Exception as e:
         logger.error("Erro em verificar_novas_conquistas para %s: %s", user_id, e)
+
+
+# ============================================
+# INTERFACE DE COMANDOS DO BOT
+# ============================================
+
+async def cmd_conquistas(update: Any, context: Any) -> None:
+    """
+    Handler do comando /conquistas e callback 'abrir_galeria'.
+    Exibe o menu principal da Sala de Trofeus.
+    """
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    from src.bot import navegar_para
+    from src.sheets_supabase import buscar_membro
+    
+    query = update.callback_query
+    if query:
+        try:
+            await query.answer()
+        except:
+            pass
+            
+    user_id = update.effective_user.id
+    membro = buscar_membro(user_id)
+    
+    if not membro:
+        msg = "Irmao, para abrir sua Galeria de Conquistas, voce precisa concluir seu registro primeiro. Use /start."
+        if query:
+            await query.edit_message_text(msg)
+        else:
+            await update.message.reply_text(msg)
+        return
+        
+    texto = (
+        "🏆 *Sala de Troféus e Conquistas*\n\n"
+        "Seja bem-vindo, Ir.·.!\n"
+        "Aqui voce pode acompanhar a sua jornada de gamificacao no ecossistema. "
+        "Consulte suas medalhas de andarilho, o vigor historico da sua Oficina ou gere um Quadro de Honra em alta resolucao.\n\n"
+        "Escolha sua inspecao heraldica:"
+    )
+    
+    from src.miniapp import _webapp_base_url
+    btn_app = []
+    base_url = _webapp_base_url()
+    if base_url:
+        # Inclui o deep-linking startapp=galeria
+        url_galeria = f"{base_url}/webapp/galeria?startapp=galeria"
+        from telegram import WebAppInfo
+        btn_app = [InlineKeyboardButton("📱 Abrir Sala no Mini App", web_app=WebAppInfo(url=url_galeria))]
+
+    teclado_lista = [
+        [InlineKeyboardButton("🎖️ Minhas Medalhas", callback_data="galeria_medalhas")],
+        [InlineKeyboardButton("🏆 Conquistas da Oficina", callback_data="galeria_oficina")],
+        [InlineKeyboardButton("🖼️ Gerar Quadro de Honra", callback_data="galeria_gerar_quadro")]
+    ]
+    if btn_app:
+        teclado_lista.insert(0, btn_app)
+        
+    teclado_lista.append([InlineKeyboardButton("🔙 Voltar ao Menu", callback_data="menu_principal")])
+    teclado = InlineKeyboardMarkup(teclado_lista)
+    
+    await navegar_para(update, context, "Galeria", texto, teclado)
+
+
+async def menu_galeria_medalhas(update: Any, context: Any) -> None:
+    """
+    Lista em formato textual estendido as 11 medalhas e o status de desbloqueio.
+    """
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    from src.bot import navegar_para
+    from src.sheets_supabase import buscar_membro, get_galeria_completa
+    
+    query = update.callback_query
+    if query:
+        await query.answer()
+        
+    user_id = update.effective_user.id
+    membro = buscar_membro(user_id)
+    loja_id = membro.get("loja_id") or membro.get("ID da loja")
+    
+    galeria = get_galeria_completa(user_id, loja_id)
+    individuais = galeria.get("conquistas_individuais", [])
+    
+    texto = "🎖️ *Minhas Medalhas Individuais*\n\n"
+    
+    linhas = []
+    for b in individuais:
+        status = "🟢 Conquistada" if b.get("desbloqueada") else "🔴 Bloqueada"
+        info_local = CONQUISTAS_INFO.get(b["slug"], {})
+        emoji = info_local.get("emoji", "🏅")
+        linhas.append(f"{emoji} *{b['titulo']}* — {status}\n_{b['descricao']}_\n")
+        
+    texto += "\n".join(linhas)
+    
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🖼️ Gerar Quadro de Honra", callback_data="galeria_gerar_quadro")],
+        [InlineKeyboardButton("🔙 Voltar à Galeria", callback_data="abrir_galeria")]
+    ])
+    
+    await navegar_para(update, context, "Minhas Medalhas", texto, teclado)
+
+
+async def menu_galeria_oficina(update: Any, context: Any) -> None:
+    """
+    Lista os selos de vigor obtidos pela oficina nos ultimos 6 meses e marcos globais.
+    """
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    from src.bot import navegar_para
+    from src.sheets_supabase import buscar_membro, get_galeria_completa
+    
+    query = update.callback_query
+    if query:
+        await query.answer()
+        
+    user_id = update.effective_user.id
+    membro = buscar_membro(user_id)
+    loja_id = membro.get("loja_id") or membro.get("ID da loja")
+    
+    galeria = get_galeria_completa(user_id, loja_id)
+    marcos_of = galeria.get("marcos_oficina", [])
+    marcos_exp = galeria.get("marcos_expansao", [])
+    
+    texto = "🏆 *Conquistas da Oficina & Expansão*\n\n"
+    texto += "🏛️ *Vigor Administrativo (Últimos 6 meses):*\n"
+    
+    if not marcos_of:
+        texto += "_Nenhum selo de vigor ou excelencia registrado recentemente._\n\n"
+    else:
+        for m in marcos_of:
+            selos = []
+            if m.get("excelencia"): selos.append("Oficina de Excelencia 🎗️")
+            if m.get("farol"): selos.append("Farol da Regiao 🎗️")
+            texto += f"• *{m['mes_formatado']}*: {', '.join(selos)}\n"
+        texto += "\n"
+        
+    texto += "🌍 *Marcos Globais e Coletivos:*\n"
+    if not marcos_exp:
+        texto += "_A expansao heraldica global segue em andamento._\n"
+    else:
+        for e in marcos_exp:
+            texto += f"• 🚩 *{e['titulo']}*\n"
+            
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🖼️ Gerar Quadro de Honra", callback_data="galeria_gerar_quadro")],
+        [InlineKeyboardButton("🔙 Voltar à Galeria", callback_data="abrir_galeria")]
+    ])
+    
+    await navegar_para(update, context, "Conquistas Oficina", texto, teclado)
+
+
+async def menu_gerar_quadro(update: Any, context: Any) -> None:
+    """
+    Dispara a engine Pillow, apaga o menu texto e posta o card comemorativo 1200x675.
+    """
+    query = update.callback_query
+    if query:
+        try:
+            await query.answer("Forjando seu Quadro de Honra... 🔨🔥", show_alert=False)
+            await query.message.delete()
+        except:
+            pass
+            
+    user_id = update.effective_user.id
+    from src.sheets_supabase import buscar_membro, get_galeria_completa
+    
+    membro = buscar_membro(user_id)
+    nome_membro = membro.get("Nome") or membro.get("nome") or "Obreiro"
+    loja_id = membro.get("loja_id") or membro.get("ID da loja")
+    
+    dados = get_galeria_completa(user_id, loja_id)
+    nome_loja = dados.get("nome_loja", "Oficina")
+    
+    from src.render_marcos import renderizar_badge_wall
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    try:
+        caminho_png = renderizar_badge_wall(dados, nome_membro, nome_loja)
+        
+        if caminho_png and os.path.exists(caminho_png):
+            teclado = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Voltar à Galeria", callback_data="abrir_galeria")]
+            ])
+            
+            with open(caminho_png, "rb") as photo:
+                msg_enviada = await context.bot.send_photo(
+                    chat_id=user_id,
+                    photo=photo,
+                    caption="📜 *Quadro de Honra e Sala de Troféus*\n\n"
+                            "Obreiro autenticado e lacrado com o selo de autenticidade digital.",
+                    parse_mode="Markdown",
+                    reply_markup=teclado
+                )
+                
+            # Regista no rastreador para navegacao limpa
+            from src.bot import estado_mensagens, TIPO_RESULTADO
+            if user_id not in estado_mensagens:
+                estado_mensagens[user_id] = {}
+            estado_mensagens[user_id][TIPO_RESULTADO] = {
+                "message_id": msg_enviada.message_id,
+                "content_hash": None
+            }
+            
+            # Clean-up local seguro
+            try:
+                os.remove(caminho_png)
+            except:
+                pass
+        else:
+            raise FileNotFoundError("Imagem nao gerada.")
+            
+    except Exception as e:
+        logger.error("Erro ao renderizar e despachar quadro de honra: %s", e)
+        from src.bot import _enviar_ou_editar_mensagem, TIPO_RESULTADO
+        teclado_err = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar à Galeria", callback_data="abrir_galeria")]])
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO, 
+            "⚠️ *Erro de Fundição heráldica!*\nNão conseguimos compor seu Quadro de Honra gráfico agora. Consulte as telas de texto temporariamente.",
+            teclado_err
+        )

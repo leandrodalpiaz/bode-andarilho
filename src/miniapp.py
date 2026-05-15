@@ -2255,3 +2255,356 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
 
     return JSONResponse({"ok": True})
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MÓDULO SALA DE TROFÉUS (GALERIA DE CONQUISTAS)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def html_galeria() -> str:
+    """Retorna o layout premium dark mode / glassmorphism para o Mini App."""
+    styles = """
+:root {
+  --gold: #d4af37;
+  --gold-light: #f3e5ab;
+  --bg-dark: #0d0f14;
+  --card-bg: rgba(255, 255, 255, 0.04);
+  --card-border: rgba(255, 255, 255, 0.06);
+  --text-primary: #f0f2f5;
+  --text-secondary: #9ca3af;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: linear-gradient(180deg, #111827 0%, #030712 100%);
+  color: var(--text-primary);
+  min-height: 100vh;
+  padding: 16px 16px 80px;
+  -webkit-font-smoothing: antialiased;
+}
+.header-premium {
+  text-align: center;
+  margin-bottom: 24px;
+  padding: 24px 16px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 20px;
+  border: 1px solid var(--card-border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+.header-premium h1 {
+  font-family: 'Cinzel', serif;
+  font-size: 20px;
+  font-weight: 700;
+  background: linear-gradient(90deg, var(--gold) 0%, var(--gold-light) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 6px;
+  letter-spacing: 1.5px;
+}
+.header-premium .subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.section-title {
+  font-family: 'Cinzel', serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 1px;
+  margin: 28px 0 14px 4px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-transform: uppercase;
+}
+.section-title::after {
+  content: '';
+  flex-grow: 1;
+  height: 1px;
+  background: linear-gradient(to right, rgba(212, 175, 55, 0.3), transparent);
+}
+.grid-badges {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+@media (min-width: 480px) {
+  .grid-badges { grid-template-columns: repeat(4, 1fr); }
+}
+.badge-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 16px 8px 12px;
+  text-align: center;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+.badge-card:active {
+  transform: scale(0.94);
+  background: rgba(255, 255, 255, 0.07);
+}
+.badge-card.locked {
+  opacity: 0.35;
+  filter: grayscale(100%);
+}
+.badge-card.unlocked {
+  border-color: rgba(212, 175, 55, 0.25);
+  box-shadow: 0 4px 20px rgba(212, 175, 55, 0.04);
+}
+.badge-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(212,175,55,0.15) 0%, rgba(212,175,55,0.02) 100%);
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--gold);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  box-shadow: inset 0 0 12px rgba(212,175,55,0.12);
+}
+.locked .badge-icon {
+  background: rgba(255,255,255,0.03);
+  color: #777;
+  border-color: rgba(255,255,255,0.1);
+  box-shadow: none;
+}
+.badge-title {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-primary);
+  height: 2.6em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.list-item-glass {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  backdrop-filter: blur(4px);
+}
+.item-info h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+.item-info p {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.badge-pill {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 5px 10px;
+  border-radius: 20px;
+  background: rgba(212, 175, 55, 0.12);
+  color: var(--gold);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+}
+.loader {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+"""
+
+    body = """
+<div class="header-premium">
+  <h1 id="el_nome">CARREGANDO OBREIRO...</h1>
+  <div class="subtitle" id="el_loja">Aguardando conexao digital...</div>
+</div>
+
+<div class="section-title">🎖️ Medalhas Individuais</div>
+<div class="grid-badges" id="el_grid">
+  <div class="loader">Solicitando arquivos da Chancelaria...</div>
+</div>
+
+<div class="section-title">🏛️ Vigor da Oficina (6 Meses)</div>
+<div id="el_vigor_lista">
+  <div class="loader">Processando atas de presenca...</div>
+</div>
+
+<div class="section-title">🌍 Expansao Coletiva</div>
+<div id="el_exp_lista">
+  <div class="loader">Sincronizando coordenadas...</div>
+</div>
+"""
+
+    script = """
+(async () => {
+  try {
+    const resp = await fetch('/api/galeria', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ init_data: tgInitData() })
+    });
+    
+    const dados = await resp.json();
+    if (!dados.ok) {
+      document.body.innerHTML = `<div style="padding:40px 20px; text-align:center; color:#ef4444; font-weight:600;">Acesso nao autorizado. Por favor abra atraves do Bot oficial.</div>`;
+      return;
+    }
+    
+    // Preenchimento
+    document.getElementById('el_nome').textContent = dados.nome_membro.toUpperCase();
+    document.getElementById('el_loja').textContent = dados.nome_loja;
+    
+    // 1. Grid Medalhas
+    const grid = document.getElementById('el_grid');
+    grid.innerHTML = '';
+    dados.conquistas_individuais.forEach(b => {
+      const card = document.createElement('div');
+      card.className = `badge-card ${b.desbloqueada ? 'unlocked' : 'locked'}`;
+      card.onclick = () => {
+        if (tg && tg.showAlert) {
+          tg.showAlert(`${b.titulo}\\n\\n${b.descricao}\\n\\nStatus: ${b.desbloqueada ? 'DESBLOQUEADA ✅' : 'BLOQUEADA 🔒'}`);
+        } else {
+          alert(`${b.titulo}\\n${b.descricao}`);
+        }
+      };
+      
+      const icon = document.createElement('div');
+      icon.className = 'badge-icon';
+      icon.textContent = b.slug.toUpperCase();
+      
+      const title = document.createElement('div');
+      title.className = 'badge-title';
+      title.textContent = b.titulo.replace('Iniciado na ', '').replace('Mestre dos ', '').replace('Estrela de ', '');
+      
+      card.appendChild(icon);
+      card.appendChild(title);
+      grid.appendChild(card);
+    });
+    
+    // 2. Vigor Oficina
+    const vigorBox = document.getElementById('el_vigor_lista');
+    vigorBox.innerHTML = '';
+    if (!dados.marcos_oficina || dados.marcos_oficina.length === 0) {
+      vigorBox.innerHTML = '<div style="text-align:center; font-size:12px; padding:10px; color:#6b7280;">Nenhum selo de vigor computado recentemente.</div>';
+    } else {
+      dados.marcos_oficina.forEach(v => {
+        const div = document.createElement('div');
+        div.className = 'list-item-glass';
+        
+        let pills = [];
+        if (v.excelencia) pills.push('<span class="badge-pill">Oficina de Excelencia</span>');
+        if (v.farol) pills.push('<span class="badge-pill" style="margin-left:4px;">Farol da Regiao</span>');
+        
+        div.innerHTML = `
+          <div class="item-info">
+            <h4>${v.mes_formatado}</h4>
+            <p>Historico de Vigor Administrativo</p>
+          </div>
+          <div>${pills.join('')}</div>
+        `;
+        vigorBox.appendChild(div);
+      });
+    }
+    
+    // 3. Expansao
+    const expBox = document.getElementById('el_exp_lista');
+    expBox.innerHTML = '';
+    if (!dados.marcos_expansao || dados.marcos_expansao.length === 0) {
+      expBox.innerHTML = '<div style="text-align:center; font-size:12px; padding:10px; color:#6b7280;">Expandindo colunas pelo territorio nacional.</div>';
+    } else {
+      dados.marcos_expansao.forEach(e => {
+        const div = document.createElement('div');
+        div.className = 'list-item-glass';
+        div.innerHTML = `
+          <div class="item-info">
+            <h4>${e.titulo}</h4>
+            <p>Marco Global de Integracao</p>
+          </div>
+          <span class="badge-pill">🚩 EXPANSÃO</span>
+        `;
+        expBox.appendChild(div);
+      });
+    }
+    
+    // Deep linking startapp trigger
+    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param === 'galeria') {
+      try {
+        tg.HapticFeedback.notificationOccurred('success');
+      } catch(h){}
+    }
+    
+  } catch (e) {
+    console.error(e);
+    document.body.innerHTML = `<div style="padding:40px 20px; text-align:center; color:#ef4444;">Falha critica ao conectar com o backend.</div>`;
+  }
+})();
+"""
+
+    return (
+        f'<!DOCTYPE html><html lang="pt-BR">'
+        f'<head><meta charset="UTF-8">'
+        f'<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">'
+        f'<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">'
+        f'<title>Sala de Troféus — Bode Andarilho</title>'
+        f'<script src="https://telegram.org/js/telegram-web-app.js"></script>'
+        f'<style>{styles}</style></head>'
+        f'<body>'
+        f'{body}'
+        f'<script>{_JS_BASE}{script}</script>'
+        f'</body></html>'
+    )
+
+
+async def get_galeria(request: Request) -> HTMLResponse:
+    """Serve a interface grafica web do Módulo de Conquistas."""
+    return HTMLResponse(html_galeria())
+
+
+async def api_galeria(request: Request) -> JSONResponse:
+    """Endpoint API autenticado que alimenta os dados da Sala de Trofeus."""
+    bot_token: str = request.app.state.bot_token
+    try:
+        body: dict = await request.json()
+    except Exception:
+        return JSONResponse({"ok": False, "error": "JSON inválido."}, status_code=400)
+
+    init_data = (body.get("init_data") or "").strip()
+    user = verify_telegram_webapp_data(init_data, bot_token)
+    if not user:
+        return JSONResponse({"ok": False, "error": "Não autorizado."}, status_code=403)
+
+    telegram_id = user.get("id")
+    if not telegram_id:
+        return JSONResponse({"ok": False, "error": "Usuário não identificado."}, status_code=403)
+
+    from src.sheets_supabase import buscar_membro, get_galeria_completa
+    
+    membro = buscar_membro(int(telegram_id))
+    if not membro:
+        return JSONResponse({"ok": False, "error": "Membro não cadastrado."}, status_code=404)
+        
+    loja_id = membro.get("loja_id") or membro.get("ID da loja")
+    nome_membro = membro.get("Nome") or membro.get("nome") or "Obreiro"
+    
+    dados = get_galeria_completa(int(telegram_id), loja_id)
+    dados["nome_membro"] = nome_membro
+    dados["ok"] = True
+    
+    return JSONResponse(dados)
+

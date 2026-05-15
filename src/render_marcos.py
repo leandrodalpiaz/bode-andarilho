@@ -317,3 +317,213 @@ def renderizar_relatorio_vigor(dados_vigor: Dict[str, Any]) -> str:
         logger.error("Erro critico na geracao do card de vigor: %s", e)
         raise e
 
+
+def renderizar_badge_wall(
+    dados_conquistas: Dict[str, Any], 
+    nome_membro: str, 
+    nome_loja: str
+) -> str:
+    """
+    Gera a Galeria de Conquistas (1200x675) no formato de Parede de Medalhas.
+    Dispoe o catalogo de 11 medalhas em um grid centrado e os marcos coletivos na base.
+    Filtros aplicados: dourado plena cor para desbloqueadas, grayscale+transparencia para bloqueadas.
+    """
+    from PIL import ImageOps, ImageEnhance
+    import uuid
+    
+    bg_path = BRANDING_DIR / "marco_celebracao_bg.png"
+    if not bg_path.exists():
+        bg_path = BRANDING_DIR / "diploma_pergaminho_bg.png"
+        
+    selo_path = BRANDING_DIR / "selo_cera_base.png"
+    
+    try:
+        # 1. Inicializar Canvas
+        canvas = Image.open(bg_path).convert("RGBA")
+        canvas = canvas.resize((1200, 675), Image.Resampling.LANCZOS)
+        width, height = canvas.size
+        draw = ImageDraw.Draw(canvas)
+        cx = width // 2
+        
+        # 2. Carregar Fontes
+        font_galeria = _load_font("Cinzel-Regular.ttf", 26)
+        font_nome = _load_font("Cinzel-Bold.ttf", 40)
+        font_sub = _load_font("CormorantGaramond-Italic.ttf", 22)
+        font_med_init = _load_font("Cinzel-Bold.ttf", 32)
+        font_med_lbl = _load_font("CormorantGaramond-SemiBold.ttf", 15)
+        font_secao = _load_font("Cinzel-Bold.ttf", 20)
+        font_bottom_lbl = _load_font("CormorantGaramond-BoldItalic.ttf", 17)
+        
+        # 3. Cabecalho
+        y_cur = 95
+        y_cur = _draw_centered_x(draw, "SALA DE TROFÉUS E CONQUISTAS", cx, y_cur, font_galeria, DEFAULT_GOLD) + 10
+        draw.line((cx - 220, y_cur, cx + 220, y_cur), fill=(DEFAULT_GOLD[0], DEFAULT_GOLD[1], DEFAULT_GOLD[2], 140), width=2)
+        y_cur += 20
+        
+        y_cur = _draw_centered_x(draw, str(nome_membro).upper(), cx, y_cur, font_nome, CRIMSON_RED) + 5
+        y_cur = _draw_centered_x(draw, str(nome_loja).upper(), cx, y_cur, font_sub, DARK_TEXT) + 25
+        
+        # 4. Mapear as 11 Medalhas Individuais
+        badges = dados_conquistas.get("conquistas_individuais", [])
+        # Garante que temos exatamente o catalogo ordenado
+        map_badges = {b["slug"]: b for b in badges}
+        ordem = ["ic", "mp", "e9", "ce", "og", "pj", "rc", "na", "rs", "io", "pm"]
+        
+        badges_ordenadas = []
+        for s in ordem:
+            if s in map_badges:
+                badges_ordenadas.append(map_badges[s])
+            else:
+                # Mock fallback se ausente no dicionario
+                badges_ordenadas.append({"slug": s, "titulo": s.upper(), "desbloqueada": False})
+                
+        # Grid Setup (2 linhas: 6 e 5 itens)
+        med_size = 90
+        gap_x = 40
+        
+        # Linha 1 (6 itens)
+        w_l1 = 6 * med_size + 5 * gap_x
+        start_x_l1 = cx - (w_l1 // 2)
+        y_l1 = 270
+        
+        # Linha 2 (5 itens)
+        w_l2 = 5 * med_size + 4 * gap_x
+        start_x_l2 = cx - (w_l2 // 2)
+        y_l2 = 415
+        
+        # Composicao procedural e colagem de medalhas
+        for idx, item in enumerate(badges_ordenadas):
+            slug = item["slug"]
+            is_unlocked = item.get("desbloqueada", False)
+            titulo_curto = item.get("titulo", "").replace("Iniciado na ", "").replace("Mestre dos ", "").replace("Estrela de ", "")
+            
+            # Determinar posicao
+            if idx < 6:
+                x = start_x_l1 + idx * (med_size + gap_x)
+                y = y_l1
+            else:
+                x = start_x_l2 + (idx - 6) * (med_size + gap_x)
+                y = y_l2
+                
+            # 1. Criar Asset da Medalha
+            medal_path = ASSETS_DIR / "badges" / f"{slug}.png"
+            
+            comp_img = None
+            if medal_path.exists():
+                try:
+                    comp_img = Image.open(medal_path).convert("RGBA")
+                    comp_img = comp_img.resize((med_size, med_size), Image.Resampling.LANCZOS)
+                except:
+                    comp_img = None
+                    
+            if not comp_img:
+                # Fallback procedural usando selo base
+                if selo_path.exists():
+                    try:
+                        comp_img = Image.open(selo_path).convert("RGBA")
+                        comp_img = comp_img.resize((med_size, med_size), Image.Resampling.LANCZOS)
+                        s_draw = ImageDraw.Draw(comp_img)
+                        sigla = slug.upper()
+                        
+                        # Centralizado no selo
+                        sc_x = med_size // 2
+                        sc_y = med_size // 2 - 2
+                        s_draw.text((sc_x+2, sc_y+2), sigla, font=font_med_init, fill=(30, 5, 5, 190), anchor="mm")
+                        s_draw.text((sc_x-1, sc_y-1), sigla, font=font_med_init, fill=(255, 235, 180, 150), anchor="mm")
+                        s_draw.text((sc_x, sc_y), sigla, font=font_med_init, fill=(235, 195, 100, 230), anchor="mm")
+                    except:
+                        comp_img = Image.new("RGBA", (med_size, med_size), (0,0,0,0))
+                else:
+                    # Fallback circular se nada existir
+                    comp_img = Image.new("RGBA", (med_size, med_size), (0,0,0,0))
+                    s_draw = ImageDraw.Draw(comp_img)
+                    s_draw.ellipse((0,0,med_size,med_size), fill=(130, 100, 60, 255))
+                    s_draw.text((med_size//2, med_size//2), slug.upper(), font=font_med_init, fill=(255,255,255,255), anchor="mm")
+
+            # 2. Aplicar Filtro Grayscale + Opacidade se Bloqueado
+            if comp_img:
+                if not is_unlocked:
+                    # Grayscale mantendo canal Alpha
+                    r, g, b, a = comp_img.split()
+                    gray = ImageOps.grayscale(comp_img)
+                    comp_img = Image.merge("RGBA", (gray, gray, gray, a))
+                    # Suavizar alpha para 35-40%
+                    alpha = comp_img.getchannel("A").point(lambda p: int(p * 0.40))
+                    comp_img.putalpha(alpha)
+                
+                # Colagem no Canvas
+                canvas.alpha_composite(comp_img, (int(x), int(y)))
+                
+            # 3. Legenda abaixo do icone
+            txt_color = DARK_TEXT if is_unlocked else (150, 150, 150, 255)
+            _wrap_text_centered(draw, titulo_curto, int(x + med_size//2), int(y + med_size + 8), font_med_lbl, txt_color, med_size + 30)
+            
+        # 5. Area de Conquistas da Oficina e Expansao (Rodape)
+        y_bottom_secao = 550
+        draw.text((cx, y_bottom_secao), "❂  CONQUISTAS COLETIVAS E EXPANSÃO  ❂", font=font_secao, fill=DEFAULT_GOLD, anchor="mm")
+        
+        # Contagem de marcos
+        marcos_of = dados_conquistas.get("marcos_oficina", [])
+        tot_exc = sum(1 for m in marcos_of if m.get("excelencia"))
+        tot_far = sum(1 for m in marcos_of if m.get("farol"))
+        tot_exp = len(dados_conquistas.get("marcos_expansao", []))
+        
+        # Montar selos de rodape
+        selos_rodape = []
+        if tot_exc > 0:
+            selos_rodape.append({"sigla": "OE", "titulo": "Excelência", "count": tot_exc})
+        if tot_far > 0:
+            selos_rodape.append({"sigla": "FR", "titulo": "Farol", "count": tot_far})
+        if tot_exp > 0:
+            selos_rodape.append({"sigla": "EX", "titulo": "Expansão", "count": tot_exp})
+            
+        if not selos_rodape:
+            # Mensagem neutra se vazia
+            draw.text((cx, 605), "Nenhum selo coletivo obtido nos últimos 6 meses.", font=font_sub, fill=(150, 150, 150, 255), anchor="mm")
+        else:
+            s_bot_size = 65
+            bot_gap = 100
+            w_bot = len(selos_rodape) * s_bot_size + (len(selos_rodape)-1) * bot_gap
+            st_x_bot = cx - (w_bot // 2)
+            y_bot_seal = 575
+            
+            for i_b, s_b in enumerate(selos_rodape):
+                xb = st_x_bot + i_b * (s_bot_size + bot_gap)
+                
+                # Desenhar miniatura de selo cera
+                if selo_path.exists():
+                    try:
+                        s_img = Image.open(selo_path).convert("RGBA")
+                        s_img = s_img.resize((s_bot_size, s_bot_size), Image.Resampling.LANCZOS)
+                        sd = ImageDraw.Draw(s_img)
+                        
+                        font_mini_in = _load_font("Cinzel-Bold.ttf", 22)
+                        sc_x = s_bot_size // 2
+                        sc_y = s_bot_size // 2 - 2
+                        
+                        sd.text((sc_x+1, sc_y+1), s_b["sigla"], font=font_mini_in, fill=(30, 5, 5, 180), anchor="mm")
+                        sd.text((sc_x, sc_y), s_b["sigla"], font=font_mini_in, fill=(235, 195, 100, 220), anchor="mm")
+                        
+                        canvas.alpha_composite(s_img, (int(xb), y_bot_seal))
+                    except:
+                        pass
+                
+                # Desenhar Rotulo ao lado/abaixo com contador
+                lbl_x = xb + s_bot_size // 2
+                lbl_y = y_bot_seal + s_bot_size + 6
+                txt_label = f"{s_b['titulo']} (x{s_b['count']})"
+                draw.text((lbl_x, lbl_y), txt_label.upper(), font=font_bottom_lbl, fill=CRIMSON_RED, anchor="mm")
+
+        # 6. Salvar Canvas Temporario
+        temp_dir = tempfile.gettempdir()
+        out_name = f"bode_galeria_{uuid.uuid4().hex[:8]}.png"
+        out_path = os.path.join(temp_dir, out_name)
+        
+        canvas.convert("RGB").save(out_path, "PNG", optimize=True)
+        logger.info("Quadro de Honra renderizado com sucesso em: %s", out_path)
+        return out_path
+
+    except Exception as e:
+        logger.error("Falha critico ao renderizar Badge Wall: %s", e)
+        raise e
+

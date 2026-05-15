@@ -41,6 +41,8 @@ from src.miniapp import (
     api_cadastro_membro,
     api_cadastro_evento,
     api_cadastro_loja,
+    get_galeria,
+    api_galeria,
     api_rascunho_membro,
     api_rascunho_loja,
     api_rascunho_evento,
@@ -597,6 +599,19 @@ def register_handlers(app: Application) -> None:
         mostrar_conquistas_membro, pattern=r"^mostrar_conquistas_membro$"
     ))
 
+    # ===== 4.5 CALLBACKS E COMANDOS DA GALERIA DE CONQUISTAS =====
+    from src.conquistas import (
+        cmd_conquistas,
+        menu_galeria_medalhas,
+        menu_galeria_oficina,
+        menu_gerar_quadro
+    )
+    app.add_handler(CommandHandler("conquistas", cmd_conquistas))
+    app.add_handler(CallbackQueryHandler(cmd_conquistas, pattern=r"^abrir_galeria$"))
+    app.add_handler(CallbackQueryHandler(menu_galeria_medalhas, pattern=r"^galeria_medalhas$"))
+    app.add_handler(CallbackQueryHandler(menu_galeria_oficina, pattern=r"^galeria_oficina$"))
+    app.add_handler(CallbackQueryHandler(menu_gerar_quadro, pattern=r"^galeria_gerar_quadro$"))
+
     # ===== 5. CALLBACKS ESPECÍFICOS DE EVENTOS =====
     app.add_handler(CallbackQueryHandler(
         mostrar_eventos, pattern=r"^(ver_eventos|mostrar_eventos|eventos|voltar_eventos)$"
@@ -924,9 +939,11 @@ async def main():
             Route("/webapp/cadastro_membro", get_cadastro_membro, methods=["GET"]),
             Route("/webapp/cadastro_evento", get_cadastro_evento, methods=["GET"]),
             Route("/webapp/cadastro_loja", get_cadastro_loja, methods=["GET"]),
+            Route("/webapp/galeria", get_galeria, methods=["GET"]),
             Route("/api/cadastro_membro", api_cadastro_membro, methods=["POST"]),
             Route("/api/cadastro_evento", api_cadastro_evento, methods=["POST"]),
             Route("/api/cadastro_loja", api_cadastro_loja, methods=["POST"]),
+            Route("/api/galeria", api_galeria, methods=["POST"]),
             Route("/api/rascunho_membro", api_rascunho_membro, methods=["POST"]),
             Route("/api/rascunho_evento", api_rascunho_evento, methods=["POST"]),
             Route("/api/rascunho_loja", api_rascunho_loja, methods=["POST"]),

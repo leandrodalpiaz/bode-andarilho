@@ -1,4 +1,4 @@
-﻿# src/permissoes.py
+# src/permissoes.py
 # ============================================
 # BODE ANDARILHO - GERENCIAMENTO DE PERMISSÕES
 # ============================================
@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import os
 from src.sheets_supabase import buscar_membro, membro_esta_ativo
 
 
@@ -39,7 +40,12 @@ def get_nivel(user_id: int) -> str:
     # Se não houver user_id, retorna nível comum
     if not user_id:
         return "1"
-    
+
+    # 1. Super-Admin definido por variável de ambiente tem nível 3 imediato (Recuperação de Desastre)
+    admin_id = os.getenv("ADMIN_TELEGRAM_ID")
+    if admin_id and str(user_id) == admin_id.strip():
+        return "3"
+
     # Busca o membro na planilha
     membro = buscar_membro(user_id)
     

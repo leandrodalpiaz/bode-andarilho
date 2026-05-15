@@ -2638,3 +2638,186 @@ def get_estatisticas_vigor(loja_id: str, usar_mes_anterior: bool = False) -> Dic
         }
 
 
+def get_galeria_completa(telegram_id: int, loja_id: str) -> Dict[str, Any]:
+    """
+    Consolida toda a gamificacao individual e coletiva (Sala de Trofeus) em um unico payload.
+    1. Coleta as conquistas individuais obtidas pelo usuario.
+    2. Realiza a agregacao dinamica de vigor nos ultimos 6 meses para extracao de selos OE e FR.
+    3. Retorna os marcos globais de expansao do ecossistema.
+    """
+    from datetime import datetime, timedelta
+    import collections
+    import statistics
+
+    uid = _norm_intlike(telegram_id)
+    lid_str = str(loja_id or "").strip()
+    
+    # 1. CONQUISTAS INDIVIDUAIS
+    catalogo_badges = [
+        {"slug": "ic", "titulo": "Iniciado na Colher", "descricao": "Primeira presenca confirmada no ecossistema."},
+        {"slug": "mp", "titulo": "Mestre dos Portais", "descricao": "Confirmou presenca em 10 sessoes."},
+        {"slug": "e9", "titulo": "Estrela de 9 Pontas", "descricao": "Confirmou em 9 potencias ou ritos."},
+        {"slug": "ce", "titulo": "Colunista de Ebano", "descricao": "100% assiduidade nos ultimos 3 meses."},
+        {"slug": "og", "titulo": "Obreiro Global", "descricao": "Presenca em 3 Estados diferentes."},
+        {"slug": "pj", "titulo": "Peregrino da Justa", "descricao": "Visitante em 5 lojas diferentes."},
+        {"slug": "rc", "titulo": "Reconstrutor do Templo", "descricao": "Indicou ou cadastrou nova Loja."},
+        {"slug": "na", "titulo": "Navegador do Asfalto", "descricao": "Mais de 500km em deslocamentos."},
+        {"slug": "rs", "titulo": "Redentor do Silencio", "descricao": "Um ano ininterrupto com status Ativo."},
+        {"slug": "io", "titulo": "Inspirador de Obreiros", "descricao": "Desafio mensal de novos membros."},
+        {"slug": "pm", "titulo": "Protetor da Malha", "descricao": "Contribricoes notaveis ao suporte."}
+    ]
+    
+    obtidas = set(listar_conquistas_obtidas(uid) if uid else [])
+    for badge in catalogo_badges:
+        badge["desbloqueada"] = badge["slug"] in obtidas
+
+    # 2. MARCOS DE VIGOR DA OFICINA (ULTIMOS 6 MESES)
+    marcos_oficina = []
+    if lid_str:
+        try:
+            agora = datetime.now()
+            seis_meses_atras = agora - timedelta(days=180)
+            
+            resp_ev = supabase.table("eventos") \
+                .select("id_evento, created_at, data_evento") \
+                .eq("loja_id", lid_str) \
+                .eq("status", "Ativo") \
+                .execute()
+            
+            eventos_janela = []
+            ids_janela = []
+            for ev in (resp_ev.data or []):
+                dt_ev = _parse_data_generica(ev.get("data_evento"))
+                if dt_ev and seis_meses_atras <= dt_ev <= agora:
+                    eventos_janela.append(ev)
+                    ids_janela.append(ev["id_evento"])
+            
+            confirmacoes = []
+            if ids_janela:
+                resp_conf = supabase.table("confirmacoes") \
+                    .select("id_evento, telegram_id") \
+                    .in_("id_evento", ids_janela) \
+                    .execute()
+                confirmacoes = resp_conf.data or []
+                
+            tids = list(set([str(c.get("telegram_id")) for c in confirmacoes if c.get("telegram_id")]))
+            map_membros = {}
+            if tids:
+                resp_memb = supabase.table("membros") \
+                    .select("telegram_id, loja_id") \
+                    .in_("telegram_id", tids) \
+                    .execute()
+                map_membros = {str(m["telegram_id"]): str(m["loja_id"]).strip() for m in (resp_memb.data or []) if m.get("telegram_id")}
+                
+            # Agrupamento
+            dados_meses = collections.defaultdict(lambda: {"diferencas": [], "visitantes": 0})
+            map_ev_mes = {}
+            
+            for ev in eventos_janela:
+                dt_ev = _parse_data_generica(ev.get("data_evento"))
+                if not dt_ev:
+                    continue
+                mes_str = dt_ev.strftime("%Y-%m")
+                map_ev_mes[ev["id_evento"]] = mes_str
+                
+                dt_cre_str = str(ev.get("created_at") or "")[:10]
+                dt_cre = _parse_data_generica(dt_cre_str)
+                if not dt_cre:
+                    try:
+                        dt_cre = datetime.fromisoformat(ev.get("created_at").replace("Z", "+00:00")).replace(tzinfo=None)
+                    except:
+                        pass
+                if dt_cre:
+                    diff = (dt_ev - dt_cre).days
+                    dados_meses[mes_str]["diferencas"].append(max(0, diff))
+                    
+            for conf in confirmacoes:
+                ev_id = conf.get("id_evento")
+                mes_str = map_ev_mes.get(ev_id)
+                if not mes_str:
+                    continue
+                
+                tid = str(conf.get("telegram_id"))
+                m_loja_id = map_membros.get(tid)
+                if m_loja_id and m_loja_id != lid_str:
+                    dados_meses[mes_str]["visitantes"] += 1
+                    
+            # Ordenacao dos ultimos 6 meses
+            meses_lista = []
+            curr = agora
+            for _ in range(6):
+                meses_lista.append(curr.strftime("%Y-%m"))
+                primeiro = curr.replace(day=1)
+                anterior = primeiro - timedelta(days=1)
+                curr = anterior
+            meses_lista.reverse()
+            
+            for mes in meses_lista:
+                d = dados_meses[mes]
+                difs = d["diferencas"]
+                total_visitantes = d["visitantes"]
+                
+                vigor_agenda = statistics.mean(difs) if difs else 0.0
+                
+                excelencia = vigor_agenda >= 15.0
+                farol = total_visitantes > 10
+                
+                if excelencia or farol:
+                    try:
+                        dt_mes = datetime.strptime(mes, "%Y-%m")
+                        nome_formatado = dt_mes.strftime("%b/%Y").capitalize()
+                    except:
+                        nome_formatado = mes
+                        
+                    marcos_oficina.append({
+                        "mes": mes,
+                        "mes_formatado": nome_formatado,
+                        "excelencia": excelencia,
+                        "farol": farol
+                    })
+        except Exception as e_vigor:
+            logger.error("Falha ao calcular vigor retroativo para galeria: %s", e_vigor)
+
+    # 3. MARCOS DE EXPANSAO COLETIVA
+    marcos_expansao = []
+    try:
+        resp_col = supabase.table("marcos_coletivos").select("marco_slug, categoria").execute()
+        for item in (resp_col.data or []):
+            slug = str(item.get("marco_slug", "")).strip()
+            cat = str(item.get("categoria", "")).strip()
+            
+            nome_fmt = slug.upper()
+            if "expansao_geo|" in slug:
+                uf = slug.split("|")[-1].upper()
+                nome_fmt = f"Cruz Vermelha Territorial ({uf})"
+            elif "arco_integracao|" in slug:
+                pot = slug.split("|")[-1].replace("_", " ").title()
+                nome_fmt = f"Arco da Integracao ({pot})"
+            elif "rito_abertura" in slug:
+                nome_fmt = "Abertura de Chancelaria"
+                
+            marcos_expansao.append({
+                "slug": slug,
+                "categoria": cat,
+                "titulo": nome_fmt
+            })
+    except Exception as e_col:
+        logger.error("Falha ao obter marcos coletivos para galeria: %s", e_col)
+
+    # 4. DADOS DE NOME DA LOJA
+    nome_loja = "Oficina"
+    if lid_str:
+        try:
+            resp_l = supabase.table("lojas").select("nome_loja").eq("id", lid_str).limit(1).execute()
+            if resp_l.data:
+                nome_loja = resp_l.data[0].get("nome_loja") or "Oficina"
+        except:
+            pass
+
+    return {
+        "loja_id": lid_str,
+        "nome_loja": nome_loja,
+        "conquistas_individuais": catalogo_badges,
+        "marcos_oficina": marcos_oficina,
+        "marcos_expansao": marcos_expansao
+    }
