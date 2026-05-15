@@ -2640,10 +2640,10 @@ def get_estatisticas_vigor(loja_id: str, usar_mes_anterior: bool = False) -> Dic
 
 def get_galeria_completa(telegram_id: int, loja_id: str) -> Dict[str, Any]:
     """
-    Consolida toda a gamificacao individual e coletiva (Sala de Trofeus) em um unico payload.
+    Consolida toda a gamificação individual e coletiva (Sala de Troféus) em um único payload.
     1. Coleta as conquistas individuais obtidas pelo usuario.
-    2. Realiza a agregacao dinamica de vigor nos ultimos 6 meses para extracao de selos OE e FR.
-    3. Retorna os marcos globais de expansao do ecossistema.
+    2. Realiza a agregação dinâmica de vigor nos últimos 6 meses para extração de selos OE e FR.
+    3. Retorna os marcos globais de expansão do ecossistema.
     """
     from datetime import datetime, timedelta
     import collections
@@ -2654,24 +2654,24 @@ def get_galeria_completa(telegram_id: int, loja_id: str) -> Dict[str, Any]:
     
     # 1. CONQUISTAS INDIVIDUAIS
     catalogo_badges = [
-        {"slug": "ic", "titulo": "Iniciado na Colher", "descricao": "Primeira presenca confirmada no ecossistema."},
-        {"slug": "mp", "titulo": "Mestre dos Portais", "descricao": "Confirmou presenca em 10 sessoes."},
-        {"slug": "e9", "titulo": "Estrela de 9 Pontas", "descricao": "Confirmou em 9 potencias ou ritos."},
-        {"slug": "ce", "titulo": "Colunista de Ebano", "descricao": "100% assiduidade nos ultimos 3 meses."},
-        {"slug": "og", "titulo": "Obreiro Global", "descricao": "Presenca em 3 Estados diferentes."},
+        {"slug": "ic", "titulo": "Iniciado na Colher", "descricao": "Primeira presença confirmada no ecossistema."},
+        {"slug": "mp", "titulo": "Mestre dos Portais", "descricao": "Confirmou presença em 10 sessões."},
+        {"slug": "e9", "titulo": "Estrela de 9 Pontas", "descricao": "Confirmou em 9 potências ou ritos."},
+        {"slug": "ce", "titulo": "Colunista de Ébano", "descricao": "100% assiduidade nos últimos 3 meses."},
+        {"slug": "og", "titulo": "Obreiro Global", "descricao": "Presença em 3 Estados diferentes."},
         {"slug": "pj", "titulo": "Peregrino da Justa", "descricao": "Visitante em 5 lojas diferentes."},
         {"slug": "rc", "titulo": "Reconstrutor do Templo", "descricao": "Indicou ou cadastrou nova Loja."},
         {"slug": "na", "titulo": "Navegador do Asfalto", "descricao": "Mais de 500km em deslocamentos."},
-        {"slug": "rs", "titulo": "Redentor do Silencio", "descricao": "Um ano ininterrupto com status Ativo."},
+        {"slug": "rs", "titulo": "Redentor do Silêncio", "descricao": "Um ano ininterrupto com status Ativo."},
         {"slug": "io", "titulo": "Inspirador de Obreiros", "descricao": "Desafio mensal de novos membros."},
-        {"slug": "pm", "titulo": "Protetor da Malha", "descricao": "Contribricoes notaveis ao suporte."}
+        {"slug": "pm", "titulo": "Protetor da Malha", "descricao": "Contribuições notáveis ao suporte."}
     ]
     
     obtidas = set(listar_conquistas_obtidas(uid) if uid else [])
     for badge in catalogo_badges:
         badge["desbloqueada"] = badge["slug"] in obtidas
 
-    # 2. MARCOS DE VIGOR DA OFICINA (ULTIMOS 6 MESES)
+    # 2. MARCOS DE VIGOR DA OFICINA (ÚLTIMOS 6 MESES)
     marcos_oficina = []
     if lid_str:
         try:
@@ -2742,7 +2742,7 @@ def get_galeria_completa(telegram_id: int, loja_id: str) -> Dict[str, Any]:
                 if m_loja_id and m_loja_id != lid_str:
                     dados_meses[mes_str]["visitantes"] += 1
                     
-            # Ordenacao dos ultimos 6 meses
+            # Ordenação dos últimos 6 meses
             meses_lista = []
             curr = agora
             for _ in range(6):
@@ -2778,7 +2778,7 @@ def get_galeria_completa(telegram_id: int, loja_id: str) -> Dict[str, Any]:
         except Exception as e_vigor:
             logger.error("Falha ao calcular vigor retroativo para galeria: %s", e_vigor)
 
-    # 3. MARCOS DE EXPANSAO COLETIVA
+    # 3. MARCOS DE EXPANSÃO COLETIVA
     marcos_expansao = []
     try:
         resp_col = supabase.table("marcos_coletivos").select("marco_slug, categoria").execute()
@@ -2792,7 +2792,7 @@ def get_galeria_completa(telegram_id: int, loja_id: str) -> Dict[str, Any]:
                 nome_fmt = f"Cruz Vermelha Territorial ({uf})"
             elif "arco_integracao|" in slug:
                 pot = slug.split("|")[-1].replace("_", " ").title()
-                nome_fmt = f"Arco da Integracao ({pot})"
+                nome_fmt = f"Arco da Integração ({pot})"
             elif "rito_abertura" in slug:
                 nome_fmt = "Abertura de Chancelaria"
                 

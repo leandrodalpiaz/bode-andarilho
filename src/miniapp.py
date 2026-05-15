@@ -2432,7 +2432,7 @@ body {
     body = """
 <div class="header-premium">
   <h1 id="el_nome">CARREGANDO OBREIRO...</h1>
-  <div class="subtitle" id="el_loja">Aguardando conexao digital...</div>
+  <div class="subtitle" id="el_loja">Aguardando conexão digital...</div>
 </div>
 
 <div class="section-title">🎖️ Medalhas Individuais</div>
@@ -2442,10 +2442,10 @@ body {
 
 <div class="section-title">🏛️ Vigor da Oficina (6 Meses)</div>
 <div id="el_vigor_lista">
-  <div class="loader">Processando atas de presenca...</div>
+  <div class="loader">Processando atas de presença...</div>
 </div>
 
-<div class="section-title">🌍 Expansao Coletiva</div>
+<div class="section-title">🌍 Expansão Coletiva</div>
 <div id="el_exp_lista">
   <div class="loader">Sincronizando coordenadas...</div>
 </div>
@@ -2462,7 +2462,7 @@ body {
     
     const dados = await resp.json();
     if (!dados.ok) {
-      document.body.innerHTML = `<div style="padding:40px 20px; text-align:center; color:#ef4444; font-weight:600;">Acesso nao autorizado. Por favor abra atraves do Bot oficial.</div>`;
+      document.body.innerHTML = `<div style="padding:40px 20px; text-align:center; color:#ef4444; font-weight:600;">Acesso não autorizado. Por favor abra através do Bot oficial.</div>`;
       return;
     }
     
@@ -2508,13 +2508,13 @@ body {
         div.className = 'list-item-glass';
         
         let pills = [];
-        if (v.excelencia) pills.push('<span class="badge-pill">Oficina de Excelencia</span>');
-        if (v.farol) pills.push('<span class="badge-pill" style="margin-left:4px;">Farol da Regiao</span>');
+        if (v.excelencia) pills.push('<span class="badge-pill">Oficina de Excelência</span>');
+        if (v.farol) pills.push('<span class="badge-pill" style="margin-left:4px;">Farol da Região</span>');
         
         div.innerHTML = `
           <div class="item-info">
             <h4>${v.mes_formatado}</h4>
-            <p>Historico de Vigor Administrativo</p>
+            <p>Histórico de Vigor Administrativo</p>
           </div>
           <div>${pills.join('')}</div>
         `;
@@ -2526,7 +2526,7 @@ body {
     const expBox = document.getElementById('el_exp_lista');
     expBox.innerHTML = '';
     if (!dados.marcos_expansao || dados.marcos_expansao.length === 0) {
-      expBox.innerHTML = '<div style="text-align:center; font-size:12px; padding:10px; color:#6b7280;">Expandindo colunas pelo territorio nacional.</div>';
+      expBox.innerHTML = '<div style="text-align:center; font-size:12px; padding:10px; color:#6b7280;">Expandindo colunas pelo território nacional.</div>';
     } else {
       dados.marcos_expansao.forEach(e => {
         const div = document.createElement('div');
@@ -2534,7 +2534,7 @@ body {
         div.innerHTML = `
           <div class="item-info">
             <h4>${e.titulo}</h4>
-            <p>Marco Global de Integracao</p>
+            <p>Marco Global de Integração</p>
           </div>
           <span class="badge-pill">🚩 EXPANSÃO</span>
         `;
@@ -2551,7 +2551,7 @@ body {
     
   } catch (e) {
     console.error(e);
-    document.body.innerHTML = `<div style="padding:40px 20px; text-align:center; color:#ef4444;">Falha critica ao conectar com o backend.</div>`;
+    document.body.innerHTML = `<div style="padding:40px 20px; text-align:center; color:#ef4444;">Falha crítica ao conectar com o backend.</div>`;
   }
 })();
 """
@@ -2572,12 +2572,12 @@ body {
 
 
 async def get_galeria(request: Request) -> HTMLResponse:
-    """Serve a interface grafica web do Módulo de Conquistas."""
+    """Serve a interface gráfica web do Módulo de Conquistas."""
     return HTMLResponse(html_galeria())
 
 
 async def api_galeria(request: Request) -> JSONResponse:
-    """Endpoint API autenticado que alimenta os dados da Sala de Trofeus."""
+    """Endpoint API autenticado que alimenta os dados da Sala de Troféus."""
     bot_token: str = request.app.state.bot_token
     try:
         body: dict = await request.json()

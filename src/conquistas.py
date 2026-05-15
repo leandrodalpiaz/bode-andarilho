@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 CONQUISTAS_INFO = {
     "ic": {
         "titulo": "Iniciado na Colher",
-        "descricao": "Primeira confirmacao de agape realizada.",
+        "descricao": "Primeira confirmação de ágape realizada.",
         "emoji": "🥄",
     },
     "mp": {
@@ -25,7 +25,7 @@ CONQUISTAS_INFO = {
     },
     "e9": {
         "titulo": "Eleito dos Nove Orientes",
-        "descricao": "Frequencia comprovada em 9 cidades ou orientes distintos.",
+        "descricao": "Frequência comprovada em 9 cidades ou orientes distintos.",
         "emoji": "🌍",
     },
     "ce": {
@@ -35,17 +35,17 @@ CONQUISTAS_INFO = {
     },
     "og": {
         "titulo": "Cavaleiro do Garfo",
-        "descricao": "Frequencia comprovada em 15 agapes no ecossistema.",
+        "descricao": "Frequência comprovada em 15 ágapes no ecossistema.",
         "emoji": "🍷",
     },
     "pj": {
-        "titulo": "Principe de Jerusalem",
-        "descricao": "Presenca em Oficina com distancia superior a 200km da Loja Sede.",
+        "titulo": "Príncipe de Jerusalém",
+        "descricao": "Presença em Oficina com distância superior a 200km da Loja Sede.",
         "emoji": "🏰",
     },
     "rc": {
-        "titulo": "Rosa-Cruz das Visitacoes",
-        "descricao": "Frequencia comprovada em Lojas de 3 ritos distintos.",
+        "titulo": "Rosa-Cruz das Visitações",
+        "descricao": "Frequência comprovada em Lojas de 3 ritos distintos.",
         "emoji": "🌹",
     },
     "na": {
@@ -54,18 +54,18 @@ CONQUISTAS_INFO = {
         "emoji": "⏳",
     },
     "rs": {
-        "titulo": "Real Segredo Logistico",
-        "descricao": "Presencas registradas cobrindo GOB, CMSB e COMAB.",
+        "titulo": "Real Segredo Logístico",
+        "descricao": "Presenças registradas cobrindo GOB, CMSB e COMAB.",
         "emoji": "👑",
     },
     "io": {
         "titulo": "Intendente das Oficinas",
-        "descricao": "Perfil da sua Oficina 100% atualizado (GPS, CEP, Rito, Endereco).",
+        "descricao": "Perfil da sua Oficina 100% atualizado (GPS, CEP, Rito, Endereço).",
         "emoji": "💼",
     },
     "pm": {
         "titulo": "Mestre Passado Digital",
-        "descricao": "Outorgado pela passagem bem-sucedida de Bastao ao sucessor.",
+        "descricao": "Outorgado pela passagem bem-sucedida de Bastão ao sucessor.",
         "emoji": "🤝",
     },
 }
@@ -520,7 +520,7 @@ async def cmd_conquistas(update: Any, context: Any) -> None:
     membro = buscar_membro(user_id)
     
     if not membro:
-        msg = "Irmao, para abrir sua Galeria de Conquistas, voce precisa concluir seu registro primeiro. Use /start."
+        msg = "Ir.·., para abrir sua Galeria de Conquistas, você precisa concluir seu registro primeiro. Use /start."
         if query:
             await query.edit_message_text(msg)
         else:
@@ -530,9 +530,9 @@ async def cmd_conquistas(update: Any, context: Any) -> None:
     texto = (
         "🏆 *Sala de Troféus e Conquistas*\n\n"
         "Seja bem-vindo, Ir.·.!\n"
-        "Aqui voce pode acompanhar a sua jornada de gamificacao no ecossistema. "
-        "Consulte suas medalhas de andarilho, o vigor historico da sua Oficina ou gere um Quadro de Honra em alta resolucao.\n\n"
-        "Escolha sua inspecao heraldica:"
+        "Aqui você pode acompanhar a sua jornada de gamificação no ecossistema. "
+        "Consulte suas medalhas de andarilho, o vigor histórico da sua Oficina ou gere um Quadro de Honra em alta resolução.\n\n"
+        "Escolha sua inspeção heráldica:"
     )
     
     from src.miniapp import _webapp_base_url
@@ -620,18 +620,18 @@ async def menu_galeria_oficina(update: Any, context: Any) -> None:
     texto += "🏛️ *Vigor Administrativo (Últimos 6 meses):*\n"
     
     if not marcos_of:
-        texto += "_Nenhum selo de vigor ou excelencia registrado recentemente._\n\n"
+        texto += "_Nenhum selo de vigor ou excelência registrado recentemente._\n\n"
     else:
         for m in marcos_of:
             selos = []
-            if m.get("excelencia"): selos.append("Oficina de Excelencia 🎗️")
-            if m.get("farol"): selos.append("Farol da Regiao 🎗️")
+            if m.get("excelencia"): selos.append("Oficina de Excelência 🎗️")
+            if m.get("farol"): selos.append("Farol da Região 🎗️")
             texto += f"• *{m['mes_formatado']}*: {', '.join(selos)}\n"
         texto += "\n"
         
     texto += "🌍 *Marcos Globais e Coletivos:*\n"
     if not marcos_exp:
-        texto += "_A expansao heraldica global segue em andamento._\n"
+        texto += "_A expansão heráldica global segue em andamento._\n"
     else:
         for e in marcos_exp:
             texto += f"• 🚩 *{e['titulo']}*\n"

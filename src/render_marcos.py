@@ -325,8 +325,8 @@ def renderizar_badge_wall(
 ) -> str:
     """
     Gera a Galeria de Conquistas (1200x675) no formato de Parede de Medalhas.
-    Dispoe o catalogo de 11 medalhas em um grid centrado e os marcos coletivos na base.
-    Filtros aplicados: dourado plena cor para desbloqueadas, grayscale+transparencia para bloqueadas.
+    Dispõe o catálogo de 11 medalhas em um grid centrado e os marcos coletivos na base.
+    Filtros aplicados: dourado plena cor para desbloqueadas, grayscale+transparência para bloqueadas.
     """
     from PIL import ImageOps, ImageEnhance
     import uuid
@@ -354,7 +354,7 @@ def renderizar_badge_wall(
         font_secao = _load_font("Cinzel-Bold.ttf", 20)
         font_bottom_lbl = _load_font("CormorantGaramond-BoldItalic.ttf", 17)
         
-        # 3. Cabecalho
+        # 3. Cabeçalho
         y_cur = 95
         y_cur = _draw_centered_x(draw, "SALA DE TROFÉUS E CONQUISTAS", cx, y_cur, font_galeria, DEFAULT_GOLD) + 10
         draw.line((cx - 220, y_cur, cx + 220, y_cur), fill=(DEFAULT_GOLD[0], DEFAULT_GOLD[1], DEFAULT_GOLD[2], 140), width=2)
@@ -391,13 +391,13 @@ def renderizar_badge_wall(
         start_x_l2 = cx - (w_l2 // 2)
         y_l2 = 415
         
-        # Composicao procedural e colagem de medalhas
+        # Composição procedural e colagem de medalhas
         for idx, item in enumerate(badges_ordenadas):
             slug = item["slug"]
             is_unlocked = item.get("desbloqueada", False)
             titulo_curto = item.get("titulo", "").replace("Iniciado na ", "").replace("Mestre dos ", "").replace("Estrela de ", "")
             
-            # Determinar posicao
+            # Determinar posição
             if idx < 6:
                 x = start_x_l1 + idx * (med_size + gap_x)
                 y = y_l1
@@ -458,7 +458,7 @@ def renderizar_badge_wall(
             txt_color = DARK_TEXT if is_unlocked else (150, 150, 150, 255)
             _wrap_text_centered(draw, titulo_curto, int(x + med_size//2), int(y + med_size + 8), font_med_lbl, txt_color, med_size + 30)
             
-        # 5. Area de Conquistas da Oficina e Expansao (Rodape)
+        # 5. Área de Conquistas da Oficina e Expansão (Rodapé)
         y_bottom_secao = 550
         draw.text((cx, y_bottom_secao), "❂  CONQUISTAS COLETIVAS E EXPANSÃO  ❂", font=font_secao, fill=DEFAULT_GOLD, anchor="mm")
         
@@ -514,7 +514,7 @@ def renderizar_badge_wall(
                 txt_label = f"{s_b['titulo']} (x{s_b['count']})"
                 draw.text((lbl_x, lbl_y), txt_label.upper(), font=font_bottom_lbl, fill=CRIMSON_RED, anchor="mm")
 
-        # 6. Salvar Canvas Temporario
+        # 6. Salvar Canvas Temporário
         temp_dir = tempfile.gettempdir()
         out_name = f"bode_galeria_{uuid.uuid4().hex[:8]}.png"
         out_path = os.path.join(temp_dir, out_name)
@@ -524,6 +524,6 @@ def renderizar_badge_wall(
         return out_path
 
     except Exception as e:
-        logger.error("Falha critico ao renderizar Badge Wall: %s", e)
+        logger.error("Falha crítica ao renderizar Badge Wall: %s", e)
         raise e
 
