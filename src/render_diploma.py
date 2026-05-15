@@ -138,6 +138,7 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str]) ->
     y_cursor = _draw_centered(draw, nome, center_x, y_cursor, font_nome, DEFAULT_TEXT_COLOR) + 25
     
     # 5. Detalhes Maçônicos
+    # 5. Detalhes Maçônicos (Usando wrap para evitar corte em nomes longos)
     grau = str(membro.get("Grau", membro.get("grau", "Aprendiz"))).strip()
     loja = str(membro.get("Loja", membro.get("loja", "Loja não informada"))).strip()
     num_loja = str(membro.get("Número da loja", membro.get("numero_loja", ""))).strip()
@@ -145,11 +146,14 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str]) ->
     
     loja_texto = f"{loja}, nº {num_loja}" if num_loja and num_loja != "0" else loja
     
-    meta_texto = f"Grau: {grau}  |  Oficina: {loja_texto}"
+    meta_texto = f"{grau}  |  Oficina: {loja_texto}"
     if oriente:
         meta_texto += f"  |  Oriente: {oriente}"
         
-    y_cursor = _draw_centered(draw, meta_texto, center_x, y_cursor, font_corpo, DEFAULT_TEXT_COLOR) + 80
+    y_cursor = _wrap_and_draw_centered(
+        draw, meta_texto, center_x, y_cursor, font_corpo, 
+        DEFAULT_TEXT_COLOR, int(width * 0.72)
+    ) + 60
     
     # 6. Seção de Conquistas (Os Selos de Cera)
     conquistas_filtradas = []
@@ -235,15 +239,15 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str]) ->
             y_cursor += linhas_grid * (target_seal_size + v_gap + 30) + 20
     else:
         # Caso não tenha medalhas, exibe incentivo fraternal
-        y_cursor += 30
-        _draw_centered(
+        y_cursor += 10
+        y_cursor = _wrap_and_draw_centered(
             draw, 
             "Este obreiro iniciou recentemente sua jornada. Em breve novas medalhas ornarão seu diploma.", 
             center_x, y_cursor, 
             _load_custom_font("CormorantGaramond-SemiBold.ttf", int(width * 0.028)), 
-            (130, 100, 80, 180)
+            (70, 55, 40, 200), int(width * 0.65)
         )
-        y_cursor += 80
+        y_cursor += 40
         
     # 7. Assinatura e Rodapé Final
     y_rodape = int(height * 0.82)
@@ -267,8 +271,8 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str]) ->
         except Exception as es:
             logger.warning("Não consegui aplicar assinatura no diploma: %s", es)
             
-    draw.line((center_x - int(width * 0.15), y_rodape + 15, center_x + int(width * 0.15), y_rodape + 15), fill=(110, 80, 50, 120), width=1)
-    _draw_centered(draw, "Visto da Chancelaria", center_x, y_rodape + 20, font_metadado, (110, 80, 50, 210))
+    draw.line((center_x - int(width * 0.15), y_rodape + 20, center_x + int(width * 0.15), y_rodape + 20), fill=(110, 80, 50, 100), width=1)
+    _draw_centered(draw, "Visto da Chancelaria", center_x, y_rodape + 25, font_metadado, (80, 55, 35, 230))
     
     # --- ESTETICA DO RIGOR: MARCA D'AGUA DIAGONAL PENDENTE ---
     status_aud = str(membro.get("status_auditoria") or membro.get("Status Auditoria") or "").strip()
