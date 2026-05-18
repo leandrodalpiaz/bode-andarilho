@@ -148,10 +148,10 @@ def _estado_pendente_cadastro(context: ContextTypes.DEFAULT_TYPE) -> int:
     if not _campo_preenchido(context, "cadastro_potencia_complemento"):
         return POTENCIA_COMPLEMENTO
     
-    # Se for Loja Manual, nao tiver voucher e faltar foto_cim, exige foto
-    is_manual = context.user_data.get("cadastro_loja_manual", False)
-    has_voucher = bool(context.user_data.get("cadastro_voucher"))
-    if is_manual and not has_voucher and not _campo_preenchido(context, "cadastro_foto_cim"):
+    # Exige foto da CIM para todos os cadastros comuns (camada extra contra irregulares/goteiras)
+    # Apenas se o cadastro veio pelo link/token do Secretário a CIM é dispensada.
+    readonly_loja = bool(context.user_data.get("cadastro_readonly_loja"))
+    if not readonly_loja and not _campo_preenchido(context, "cadastro_foto_cim"):
         return FOTO_CIM
         
     return CONFIRMAR
@@ -170,7 +170,7 @@ def _texto_etapa(estado: int, retomada: bool = False) -> str:
         ORIENTE: "🧭 *Passo 7/9*\nInforme seu *Oriente*.",
         POTENCIA: "🧭 *Passo 8/9*\nInforme sua *Potência principal* (GOB, CMSB ou COMAB).",
         POTENCIA_COMPLEMENTO: "🧭 *Passo 9/9*\nInforme o *complemento da Potência*.",
-        FOTO_CIM: "🛡️ *COMPROVACAO VISUAL REQUERIDA*\n\nComo a sua Oficina ainda nao esta edificada em nosso sistema, precisamos de um registro de verificacao.\n\nPor favor, **envie uma foto** de sua Credencial Maconcia (CIM) ou Patente ativa.\n\n_🔒 A imagem sera armazenada em ambiente seguro para auditoria exclusiva da Potencia._",
+        FOTO_CIM: "🛡️ *COMPROVAÇÃO VISUAL REQUERIDA*\n\nComo camada de segurança extra contra goteiras e irregulares, precisamos de um registro de verificação.\n\nPor favor, **envie uma foto** de sua Credencial Maçônica (CIM) ou Patente ativa.\n\n_🔒 A imagem será armazenada em ambiente seguro para auditoria exclusiva de sua Potência Regional._",
     }
     return f"{prefixo}{textos.get(estado, 'Envie a informação solicitada:')}"
 
@@ -503,6 +503,48 @@ async def cadastro_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================================
 # INICIAR / CONTINUAR / EDITAR
 # ============================================
+
+async def iniciar_foto_cim_pwa(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Ponto de entrada para usuários vindos do PWA que precisam enviar a CIM.
+    Preenche context.user_data com os dados salvos e entra no estado FOTO_CIM.
+    """
+    query = update.callback_query
+    await _responder_callback_seguro(query)
+    
+    telegram_id = update.effective_user.id
+    
+    from src.miniapp import _obter_rascunho, _RASCUNHOS_MEMBRO
+    dados = _obter_rascunho(_RASCUNHOS_MEMBRO, telegram_id)
+    if not dados:
+        await query.message.reply_text("❌ Rascunho não localizado. Por favor, inicie seu cadastro novamente.")
+        return ConversationHandler.END
+        
+    # Preenche a sessão do chatbot
+    context.user_data["cadastro_nome"] = dados.get("nome", "").strip()
+    context.user_data["cadastro_data_nasc"] = dados.get("data_nasc", "").strip()
+    context.user_data["cadastro_grau"] = dados.get("grau", "").strip()
+    context.user_data["cadastro_vm"] = dados.get("vm", "").strip()
+    context.user_data["cadastro_loja"] = dados.get("loja", "").strip()
+    context.user_data["cadastro_numero_loja"] = dados.get("numero_loja", "0").strip()
+    context.user_data["cadastro_oriente"] = dados.get("oriente", "").strip()
+    context.user_data["cadastro_potencia"] = dados.get("potencia", "").strip()
+    context.user_data["cadastro_potencia_complemento"] = dados.get("potencia_complemento", "").strip()
+    context.user_data["cadastro_loja_manual"] = dados.get("loja_manual", False)
+    if dados.get("loja_id"):
+        context.user_data["cadastro_loja_id"] = dados.get("loja_id")
+        
+    texto = (
+        "🛡️ *COMPROVAÇÃO VISUAL REQUERIDA*\n\n"
+        "Como camada de segurança extra contra goteiras e irregulares, precisamos de um registro de verificação.\n\n"
+        "Por favor, **envie uma FOTO** de sua Credencial Maçônica (CIM) ou Patente ativa aqui no chat.\n\n"
+        "_🔒 A imagem será armazenada em ambiente seguro para auditoria de sua Potência Regional._"
+    )
+    teclado = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")]])
+    
+    await navegar_para(update, context, "Registro > Enviar CIM", texto, teclado, limpar_conteudo=True)
+    return FOTO_CIM
+
 
 async def iniciar_cadastro_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Inicia um novo cadastro."""
@@ -892,20 +934,19 @@ def _dados_para_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Di
         "telegram_id": update.effective_user.id,
         "veneravel_mestre": context.user_data.get("cadastro_vm", ""),
     }
+    # Por padrão, todo novo cadastro entra como Pendente (Nível 0)
+    payload["status"] = "Pendente"
+    payload["nivel"] = "0"
+    
     if context.user_data.get("token_cadastro_secretario"):
-        payload["status"] = "Pendente"
         payload["status_auditoria"] = "Pendente_Secretario"
-        payload["nivel"] = "0"
-    elif context.user_data.get("cadastro_readonly_loja"):
-        payload["status"] = "Pendente"
-        payload["nivel"] = "0"
     elif context.user_data.get("cadastro_voucher"):
         payload["status"] = "Ativo"
+        payload["nivel"] = "1"
         
     if context.user_data.get("cadastro_loja_manual"):
         payload["loja_manual"] = context.user_data.get("cadastro_loja", "")
         payload["status_auditoria"] = "Pendente_Identidade"
-        payload["status"] = "Pendente"
         
     if context.user_data.get("cadastro_foto_cim"):
         payload["cim_photo_url"] = context.user_data.get("cadastro_foto_cim")
@@ -1074,6 +1115,7 @@ cadastro_handler = ConversationHandler(
         CallbackQueryHandler(iniciar_cadastro_callback, pattern=r"^iniciar_cadastro$"),
         CallbackQueryHandler(continuar_cadastro_callback, pattern=r"^continuar_cadastro$"),
         CallbackQueryHandler(editar_cadastro_callback, pattern=r"^editar_cadastro$"),
+        CallbackQueryHandler(iniciar_foto_cim_pwa, pattern=r"^iniciar_foto_cim_pwa$"),
     ],
     states={
         NOME: [

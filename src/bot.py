@@ -257,15 +257,15 @@ def _gerar_hash_conteudo(texto: str, teclado) -> str:
     return hashlib.md5(conteudo.encode()).hexdigest()
 
 
-async def _responder_callback_seguro(query, texto: Optional[str] = None):
+async def _responder_callback_seguro(query, texto: Optional[str] = None, **kwargs):
     """Responde callback sem falhar quando a query já expirou no Telegram."""
     if not query:
         return
     try:
         if texto is None:
-            await query.answer()
+            await query.answer(**kwargs)
         else:
-            await query.answer(texto)
+            await query.answer(texto, **kwargs)
     except BadRequest as e:
         msg = str(e).lower()
         if "query is too old" in msg or "query id is invalid" in msg:

@@ -151,9 +151,10 @@ def _resumo_membro_md(dados: Dict[str, Any]) -> str:
 
 
 
-def _teclado_rascunho_membro() -> InlineKeyboardMarkup:
+def _teclado_rascunho_membro(readonly_loja: bool = False) -> InlineKeyboardMarkup:
+    cb_confirmar = "draft_membro_confirmar" if readonly_loja else "iniciar_foto_cim_pwa"
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Confirmar cadastro", callback_data="draft_membro_confirmar")],
+        [InlineKeyboardButton("✅ Confirmar cadastro", callback_data=cb_confirmar)],
         [_botao_editar_webapp("✏️ Editar dados", WEBAPP_URL_MEMBRO)],
         [InlineKeyboardButton("❌ Cancelar", callback_data="draft_membro_cancelar")],
     ])
@@ -268,19 +269,17 @@ def _validar_dados_membro(dados: Dict[str, Any]) -> Optional[str]:
 def _payload_membro(telegram_id: int, dados: Dict[str, Any], app = None) -> Dict[str, Any]:
     potencia, potencia_complemento = normalizar_potencia(dados.get("potencia"), dados.get("potencia_complemento"))
     
-    status = "Ativo"
-    nivel = "1"
+    status = "Pendente"
+    nivel = "0"
     status_auditoria = ""
     
     if app:
         user_data = app.user_data.get(telegram_id) or {}
         if user_data.get("token_cadastro_secretario"):
-            status = "Pendente"
-            nivel = "0"
             status_auditoria = "Pendente_Secretario"
-        elif user_data.get("cadastro_readonly_loja"):
-            status = "Pendente"
-            nivel = "0"
+        elif user_data.get("cadastro_voucher"):
+            status = "Ativo"
+            nivel = "1"
             
     return {
         "Telegram ID": str(telegram_id),
@@ -335,7 +334,7 @@ async def api_rascunho_membro(request: Request) -> JSONResponse:
         return _json_error(mensagem, 400)
     _salvar_rascunho(_RASCUNHOS_MEMBRO, telegram_id, dados)
     try:
-        await _enviar_resumo_rascunho_membro(request.app.state.telegram_app.bot, telegram_id)
+        await _enviar_resumo_rascunho_membro(request.app.state.telegram_app, telegram_id)
     except Exception as e:
         logger.warning("Falha ao enviar resumo do rascunho de membro para %s: %s", telegram_id, e)
     return JSONResponse({"ok": True, "message": "Rascunho salvo com sucesso."})
@@ -982,15 +981,18 @@ def _teclado_rascunho_evento(dados: Dict[str, Any], nivel: str, lojas_existentes
     return InlineKeyboardMarkup(linhas)
 
 
-async def _enviar_resumo_rascunho_membro(bot, telegram_id: int) -> None:
+async def _enviar_resumo_rascunho_membro(telegram_app, telegram_id: int) -> None:
     dados = _obter_rascunho(_RASCUNHOS_MEMBRO, telegram_id)
     if not dados:
         return
-    await bot.send_message(
+    user_data = telegram_app.user_data.get(telegram_id) or {}
+    readonly_loja = bool(user_data.get("cadastro_readonly_loja"))
+    
+    await telegram_app.bot.send_message(
         chat_id=telegram_id,
         text=_resumo_membro_md(dados),
         parse_mode="MarkdownV2",
-        reply_markup=_teclado_rascunho_membro(),
+        reply_markup=_teclado_rascunho_membro(readonly_loja),
     )
 
 
@@ -2154,19 +2156,17 @@ async def api_cadastro_membro(request: Request) -> JSONResponse:
     app = request.app.state.telegram_app
     user_data = app.user_data.get(int(telegram_id)) or {}
     
-    status = "Ativo"
-    nivel = "1"
+    status = "Pendente"
+    nivel = "0"
     status_auditoria = ""
     is_sec = False
     
     if user_data.get("token_cadastro_secretario"):
-        status = "Pendente"
-        nivel = "0"
         status_auditoria = "Pendente_Secretario"
         is_sec = True
-    elif user_data.get("cadastro_readonly_loja"):
-        status = "Pendente"
-        nivel = "0"
+    elif user_data.get("cadastro_voucher"):
+        status = "Ativo"
+        nivel = "1"
 
     dados: Dict[str, Any] = {
         "Telegram ID":        str(telegram_id),
