@@ -16,6 +16,8 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+
+logger = logging.getLogger(__name__)
 import re
 import unicodedata
 from typing import Dict, Optional, Set
@@ -567,6 +569,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if membro and membro_esta_ativo(membro):
         await _limpar_mensagens_anteriores(context, telegram_id)
         
+        # Interceptar o comando de secretário para membros ativos Nível 1
+        if raw_arg.upper() == "CADASTRO_SECRETARIO" and get_nivel(telegram_id) == "1":
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            teclado_promo = InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ Confirmar Solicitação", callback_data="solicitar_promo_sec_existente")],
+                [InlineKeyboardButton("❌ Cancelar", callback_data="menu_principal")]
+            ])
+            nome_ir = membro.get("Nome") or membro.get("nome") or "Irmão"
+            texto_promo = (
+                f"🏛️ *SOLICITAÇÃO DE MALHETE (SECRETÁRIO)*\n\n"
+                f"Saudações fraternas, Ir.·. *{nome_ir}*!\n\n"
+                f"Identificamos que você utilizou o link de acesso de *Secretário (Nível 2)*.\n\n"
+                f"Como você já possui um cadastro ativo de Membro no bot, não é necessário preencher uma nova ficha cadastral.\n\n"
+                f"Deseja encaminhar o seu pedido de promoção e outorga de Malhete para aprovação da Chancelaria Geral?"
+            )
+            await _enviar_ou_editar_mensagem(
+                context,
+                telegram_id,
+                TIPO_RESULTADO,
+                texto_promo,
+                teclado_promo,
+                limpar_conteudo=True,
+                incluir_rodape_global=False
+            )
+            return
+        
         # Injeção do Teclado Permanente (Acessibilidade Sênior)
         from telegram import ReplyKeyboardMarkup, KeyboardButton
         teclado_fixo = ReplyKeyboardMarkup([
@@ -818,6 +846,38 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
     await _responder_callback_seguro(query)
+
+    # Solicitação de promoção para secretário existente
+    if data == "solicitar_promo_sec_existente":
+        from src.sheets_supabase import buscar_membro, atualizar_membro
+        membro = buscar_membro(telegram_id)
+        if membro:
+            atualizar_membro(telegram_id, {"status_auditoria": "Pendente_Secretario"})
+            dados_membro = {
+                "nome": membro.get("Nome") or membro.get("nome") or "Ir.",
+                "grau": membro.get("Grau") or membro.get("grau") or "",
+                "loja": membro.get("Loja") or membro.get("loja") or "",
+                "numero_loja": membro.get("Número da loja") or membro.get("numero_loja") or "",
+                "potencia": membro.get("Potência") or membro.get("potencia") or "",
+                "telegram_id": telegram_id
+            }
+            from src.cadastro import notificar_secretario_pendente_adm
+            await notificar_secretario_pendente_adm(context, dados_membro)
+            
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            await _enviar_ou_editar_mensagem(
+                context,
+                telegram_id,
+                TIPO_RESULTADO,
+                (
+                    "📜 *Solicitação Transmitida com Sucesso!*\n\n"
+                    "Seu pedido de promoção a Secretário foi encaminhado aos Administradores Gerais.\n\n"
+                    "Você receberá uma notificação no privado assim que o encargo for homologado! 🤝🏛️"
+                ),
+                InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Menu Principal", callback_data="menu_principal")]]),
+                limpar_conteudo=True
+            )
+        return
 
     # Callbacks geridos por fluxos específicos (ConversationHandlers)
     if data in {"admin_promover", "admin_rebaixar", "editar_perfil", "admin_editar_membro"}:

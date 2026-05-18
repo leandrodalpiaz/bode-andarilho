@@ -1980,6 +1980,19 @@ async def aprovar_secretario_callback(update: Update, context: ContextTypes.DEFA
         await query.message.reply_text("❌ Secretário não localizado no banco.")
         return
 
+    # Proteção contra concorrência: Se já for Nível 2 ou superior
+    if str(membro.get("Nivel") or membro.get("nivel") or "1") == "2":
+        try:
+            await query.answer("⚠️ Este Secretário já foi promovido anteriormente por outro Admin!", show_alert=True)
+        except Exception:
+            pass
+        await query.message.edit_text(
+            f"ℹ️ *ESTE SOLICITANTE JÁ FOI PROMOVIDO A SECRETÁRIO ANTERIORMENTE!*\n\n"
+            f"O Ir.·. *{membro.get('Nome') or membro.get('nome') or 'Ir.'}* já consta com acesso de Nível 2 ativo no sistema.",
+            reply_markup=None, parse_mode="Markdown"
+        )
+        return
+
     nome = membro.get("Nome") or membro.get("nome") or "Ir."
     
     # Atualiza para Nível 2 e Status Ativo
@@ -2027,6 +2040,18 @@ async def recusar_secretario_callback(update: Update, context: ContextTypes.DEFA
 
     from src.sheets_supabase import excluir_membro, buscar_membro
     membro = buscar_membro(tid)
+    if not membro:
+        try:
+            await query.answer("⚠️ Este pedido já foi processado/deletado por outro Admin!", show_alert=True)
+        except Exception:
+            pass
+        await query.message.edit_text(
+            "❌ *ESTE PEDIDO JÁ FOI PROCESSADO E DELETADO ANTERIORMENTE!*",
+            reply_markup=None,
+            parse_mode="Markdown"
+        )
+        return
+
     nome = membro.get("Nome") or membro.get("nome") or "Ir."
 
     sucesso = excluir_membro(tid)

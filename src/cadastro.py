@@ -1234,7 +1234,8 @@ async def notificar_validacao_pendente(
                 ]
             ])
             
-            for aud_id in auditores:
+            import asyncio
+            async def _enviar_auditoria(aud_id):
                 try:
                     await context.bot.send_photo(
                         chat_id=int(float(aud_id)),
@@ -1245,6 +1246,10 @@ async def notificar_validacao_pendente(
                     )
                 except Exception as e_snd:
                     logger.warning("Erro ao notificar auditor %s de telhamento: %s", aud_id, e_snd)
+
+            tasks = [_enviar_auditoria(aud_id) for aud_id in auditores]
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
             return 
             
         # 1. Tenta localizar a Loja informada no cadastro do obreiro
@@ -1327,7 +1332,9 @@ async def notificar_validacao_pendente(
                 f"{texto_final}"
             )
             
-            for adm in admins:
+            import asyncio
+            async def _enviar_admin_fallback(adm):
+                nonlocal notificados
                 adm_id = adm.get("Telegram ID") or adm.get("telegram_id")
                 if adm_id:
                     try:
@@ -1339,6 +1346,10 @@ async def notificar_validacao_pendente(
                         notificados += 1
                     except Exception as e_adm:
                         logger.warning("Falha ao notificar Admin %s: %s", adm_id, e_adm)
+
+            tasks = [_enviar_admin_fallback(adm) for adm in admins]
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
                         
     except Exception as e_sec:
         logger.warning("Erro crítico durante ciclo de notificacao de governanca: %s", e_sec)
@@ -1383,8 +1394,13 @@ async def notificar_secretario_pendente_adm(context_or_app, dados_membro: dict):
         [InlineKeyboardButton("❌ Recusar Cadastro", callback_data=f"recusar_secretario|{tid}")]
     ])
 
-    for adm_id in admins:
+    import asyncio
+    async def _enviar_promo_admin(adm_id):
         try:
             await bot.send_message(chat_id=adm_id, text=msg, reply_markup=teclado, parse_mode="Markdown")
         except Exception as e:
             logger.warning("Falha ao notificar admin %s de secretario pendente: %s", adm_id, e)
+
+    tasks = [_enviar_promo_admin(adm_id) for adm_id in admins]
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
