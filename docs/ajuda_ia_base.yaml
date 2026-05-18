@@ -160,6 +160,33 @@ intencoes:
       valor: "regra_notificacao_secretario"
     origem: ["src/eventos.py", "src/scheduler.py"]
 
+  - intent_id: trolhamento_solidario
+    nivel_permitido: ["2", "3"]
+    gatilhos: ["trolhamento solidario", "trolhar potencia", "validar sem secretario", "trolhamento coletivo", "novos membros da potencia"]
+    resposta_oficial: "O Trolhamento Solidario permite que secretarios ativos aprovem membros da mesma Potencia Regional cuja oficina nao possui representante cadastrado. Voce encontra essa opcao na Area do Secretario."
+    acao_recomendada:
+      tipo: callback
+      valor: "trolhamento_coletivo_listar"
+    origem: ["src/eventos_secretario.py"]
+
+  - intent_id: camara_reflexao
+    nivel_permitido: ["0", "1", "2", "3"]
+    gatilhos: ["camara de reflexao", "estou bloqueado", "aguardando aprovacao", "trolhamento pendente", "por que nao consigo usar", "cadastro pendente"]
+    resposta_oficial: "Novos cadastros entram na Camara de Reflexao (Pendente) por seguranca. O acesso e liberado automaticamente assim que o secretario de sua Loja ou Potencia validar seu ingresso."
+    acao_recomendada:
+      tipo: informacao
+      valor: "triagem_onboarding_block"
+    origem: ["src/bot.py"]
+
+  - intent_id: recusa_trolhamento
+    nivel_permitido: ["2", "3"]
+    gatilhos: ["como recusar membro", "dados incorretos", "recusar por inconsistencia", "recusa amigavel", "membro nao localizado", "recusar obreiro"]
+    resposta_oficial: "Voce pode recusar de forma amigavel de duas maneiras no painel: por Inconsistencia (sugere verificar ficha na Potencia) ou por Dados Nao Localizados (sugere revisar erros de digitacao)."
+    acao_recomendada:
+      tipo: informacao
+      valor: "recusa_trolhamento_fluxo"
+    origem: ["src/eventos_secretario.py"]
+
 regras_de_roteamento:
   sem_permissao:
     mensagem: "Essa funcao depende de permissao de nivel mais alto."

@@ -27,11 +27,32 @@ async def guia_nivel2(update, context):
 			[InlineKeyboardButton("👥 Ver lista de confirmados", callback_data="ajuda_nivel2_ver_confirmados")],
 			[InlineKeyboardButton("📋 Copiar lista para ágape", callback_data="ajuda_nivel2_copiar_lista")],
 			[InlineKeyboardButton("🔔 Configurar notificações", callback_data="ajuda_nivel2_notificacoes")],
+			[InlineKeyboardButton("📋 Trolhamento Solidário e Triagem", callback_data="ajuda_nivel2_trolhamento")],
 			[InlineKeyboardButton("🔙 Voltar à Central de Ajuda", callback_data="menu_ajuda")],
 		]
 	)
 
 	await navegar_para(update, context, "Guia do Secretário", texto, teclado)
+
+
+async def ajuda_nivel2_trolhamento(update, context):
+	texto = (
+		"*📋 Trolhamento Solidário e Triagem Virtual:*\n\n"
+		"Como secretário ativo, você possui um papel crucial na segurança coletiva das oficinas da sua mesma Potência Regional.\n\n"
+		"▪️ *O que é o Trolhamento Solidário?*\n"
+		"Quando novos membros se cadastram em oficinas que não possuem um secretário ativo no bot, eles ficam na Câmara de Reflexão. O *Trolhamento Solidário* permite que qualquer secretário ativo da mesma Potência Regional valide esses irmãos.\n\n"
+		"▪️ *Como acessar?*\n"
+		"Se houverem solicitações pendentes na sua potência regional, o botão dinâmico `📋 Trolhamento Solidário (X)` aparecerá na sua Área do Secretário.\n\n"
+		"▪️ *As opções de auditoria:*\n"
+		"Ao auditar o irmão pendente, você tem três opções:\n"
+		" 1. *Aprovar Obreiro:* Ativa seu status e o notifica.\n"
+		" 2. *Recusar por Inconsistência:* Se houver divergências com os registros oficiais da potência. O bot envia uma mensagem orientando o irmão a entrar em contato com a secretaria da potência regional.\n"
+		" 3. *Recusar por Dados Não Localizados:* Caso suspeite de erros de digitação de loja ou número. Orienta o irmão a preencher novamente."
+	)
+	teclado = InlineKeyboardMarkup(
+		[[InlineKeyboardButton("🔙 Voltar ao Guia do Secretário", callback_data="ajuda_guia")]]
+	)
+	await navegar_para(update, context, "Trolhamento Solidário", texto, teclado)
 
 
 async def ajuda_nivel2_cadastrar_loja(update, context):

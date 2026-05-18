@@ -54,6 +54,10 @@ FAQ_NIVEL1 = [
 		"*Ainda tenho dúvidas. Com quem falo?*",
 		"Para questões sobre o bot, procure o *secretário da sua loja*. Ele é o responsável por ajudar os membros e pode resolver a maioria das questões.",
 	),
+	(
+		"*Acabei de me cadastrar, mas o bot diz que estou na 'Câmara de Reflexão'. O que significa?*",
+		"Isso significa que seu cadastro foi feito com sucesso e está aguardando a validação (Trolhamento) pelo secretário da sua Loja ou por um secretário da sua Potência (via Trolhamento Solidário). Esse processo é essencial para garantir que apenas maçons regulares tenham acesso às sessões e informações do bot. Aguarde um momento que você será notificado assim que for aprovado!",
+	),
 ]
 
 FAQ_NIVEL2 = [
@@ -104,6 +108,14 @@ FAQ_NIVEL2 = [
 	(
 		"*O bot parou de responder no meio do cadastro de um evento*",
 		"Isso pode acontecer se você demorou muito para responder (mais de 24 horas). O cadastro expira por segurança. Basta começar de novo pelo fluxo oficial ou refazer o pedido no Assistente IA.",
+	),
+	(
+		"*O que é o Trolhamento Solidário?*",
+		"É uma funcionalidade que permite que secretários ativos validem novos membros da mesma Potência Regional que se cadastraram em Lojas que ainda não possuem um secretário ativo no bot. Isso evita que novos irmãos fiquem presos na Câmara de Reflexão.",
+	),
+	(
+		"*Como funcionam as recusas de novos membros?*",
+		"Ao auditar um candidato, você tem duas opções de recusa amigável: 1) 'Recusar por Inconsistência' (caso haja divergências cadastrais na Potência, enviando uma mensagem orientando o irmão a verificar os dados diretamente com a secretaria da Potência) e 2) 'Recusar por Dados Não Localizados' (caso suspeite de erro de digitação de loja ou número, orientando o irmão a refazer o cadastro).",
 	),
 ]
 

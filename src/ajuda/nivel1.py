@@ -24,11 +24,28 @@ async def guia_nivel1(update, context):
 			[InlineKeyboardButton("📋 Minhas presenças", callback_data="ajuda_nivel1_minhas")],
 			[InlineKeyboardButton("🔔 Como funcionam os lembretes", callback_data="ajuda_nivel1_notificacoes")],
 			[InlineKeyboardButton("📅 Como encontrar sessões", callback_data="ajuda_nivel1_filtros")],
+			[InlineKeyboardButton("🔒 Triagem e Câmara de Reflexão", callback_data="ajuda_nivel1_triagem")],
 			[InlineKeyboardButton("🔙 Voltar à Ajuda", callback_data="menu_ajuda")],
 		]
 	)
 
 	await navegar_para(update, context, "Guia do Membro", texto, teclado)
+
+
+async def ajuda_nivel1_triagem(update, context):
+	texto = (
+		"*🔒 Triagem de Acesso e Câmara de Reflexão:*\n\n"
+		"Para garantir a absoluta regularidade e segurança dos nossos trabalhos virtuais, todo novo cadastro entra automaticamente no estado de pendência, conhecido como a *Câmara de Reflexão*.\n\n"
+		"▪️ *Quem aprova meu cadastro?*\n"
+		"O secretário responsável pela sua Loja cadastrada revisará seus dados.\n\n"
+		"▪️ *E se minha loja não tiver secretário no bot?*\n"
+		"Não se preocupe! O sistema conta com o *Trolhamento Solidário*: qualquer secretário ativo da sua mesma *Potência Regional* poderá auditar suas informações e liberar o seu acesso.\n\n"
+		"Durante o período de triagem, todas as funções do bot ficam temporariamente bloqueadas e você receberá uma notificação direta no privado assim que for validado."
+	)
+	teclado = InlineKeyboardMarkup(
+		[[InlineKeyboardButton("🔙 Voltar ao Guia do Membro", callback_data="ajuda_guia")]]
+	)
+	await navegar_para(update, context, "Triagem de Acesso", texto, teclado)
 
 
 async def ajuda_nivel1_confirmar(update, context):

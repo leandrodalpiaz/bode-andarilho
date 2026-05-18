@@ -9,6 +9,7 @@ from src.ajuda.nivel1 import (
 	ajuda_nivel1_filtros,
 	ajuda_nivel1_minhas,
 	ajuda_nivel1_notificacoes,
+	ajuda_nivel1_triagem,
 	guia_nivel1,
 )
 from src.ajuda.nivel2 import (
@@ -18,6 +19,7 @@ from src.ajuda.nivel2 import (
 	ajuda_nivel2_gerenciar_eventos,
 	ajuda_nivel2_notificacoes,
 	ajuda_nivel2_ver_confirmados,
+	ajuda_nivel2_trolhamento,
 	guia_nivel2,
 )
 from src.ajuda.nivel3 import (
@@ -76,12 +78,14 @@ ajuda_handlers = [
 	CallbackQueryHandler(ajuda_nivel1_minhas, pattern=r"^ajuda_nivel1_minhas$"),
 	CallbackQueryHandler(ajuda_nivel1_notificacoes, pattern=r"^ajuda_nivel1_notificacoes$"),
 	CallbackQueryHandler(ajuda_nivel1_filtros, pattern=r"^ajuda_nivel1_filtros$"),
+	CallbackQueryHandler(ajuda_nivel1_triagem, pattern=r"^ajuda_nivel1_triagem$"),
 	CallbackQueryHandler(ajuda_nivel2_cadastrar_loja, pattern=r"^ajuda_nivel2_cadastrar_loja$"),
 	CallbackQueryHandler(ajuda_nivel2_criar_sessao, pattern=r"^ajuda_nivel2_criar_sessao$"),
 	CallbackQueryHandler(ajuda_nivel2_gerenciar_eventos, pattern=r"^ajuda_nivel2_gerenciar_eventos$"),
 	CallbackQueryHandler(ajuda_nivel2_ver_confirmados, pattern=r"^ajuda_nivel2_ver_confirmados$"),
 	CallbackQueryHandler(ajuda_nivel2_copiar_lista, pattern=r"^ajuda_nivel2_copiar_lista$"),
 	CallbackQueryHandler(ajuda_nivel2_notificacoes, pattern=r"^ajuda_nivel2_notificacoes$"),
+	CallbackQueryHandler(ajuda_nivel2_trolhamento, pattern=r"^ajuda_nivel2_trolhamento$"),
 	CallbackQueryHandler(ajuda_nivel3_promover_rebaixar, pattern=r"^ajuda_nivel3_promover_rebaixar$"),
 	CallbackQueryHandler(ajuda_nivel3_editar_membros, pattern=r"^ajuda_nivel3_editar_membros$"),
 	CallbackQueryHandler(ajuda_nivel3_ver_membros, pattern=r"^ajuda_nivel3_ver_membros$"),
