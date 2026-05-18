@@ -265,6 +265,61 @@ async def _notificar_confirmados_evento(
 
 
 # ============================================
+# GERAÇÃO DE CONVITES (TOKEN PRE_)
+# ============================================
+
+async def cmd_convidar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gera um link de convite PRE_ com os dados da Loja do Secretário."""
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    if str(nivel) not in ["2", "3"]:
+        if update.message:
+            await update.message.reply_text("⛔ Acesso negado. Apenas Secretários podem gerar convites.")
+        return
+
+    membro = buscar_membro(user_id)
+    if not membro:
+        if update.message:
+            await update.message.reply_text("Seu cadastro não foi encontrado.")
+        return
+        
+    nome_loja = str(membro.get("Loja", "") or "").strip()
+    numero = str(membro.get("Número da loja", "") or "").strip()
+    potencia = str(membro.get("Potência", "") or "").strip()
+    
+    if not nome_loja or not potencia:
+        if update.message:
+            await update.message.reply_text("Sua ficha não possui os dados da Loja/Potência completos para gerar o convite.")
+        return
+        
+    from src.miniapp import limpar_nome_loja
+    import urllib.parse
+    
+    nome_limpo = limpar_nome_loja(nome_loja)
+    
+    # Gera a chave composta: NOME_NUMERO_POTENCIA
+    chave = f"{nome_limpo}_{numero}_{potencia}".replace(" ", "-")
+    chave_codificada = urllib.parse.quote(chave)
+    
+    username_bot = (getattr(context.bot, "username", None) or "BodeAndarilhoBot").lstrip("@")
+    link = f"https://t.me/{username_bot}?start=PRE_{chave_codificada}"
+    
+    numero_fmt = f" nº {numero}" if numero and str(numero) != "0" else ""
+    texto = (
+        "🎫 *Convite de Loja Gerado com Sucesso*\n\n"
+        "Encaminhe a mensagem abaixo para os Obreiros da sua Oficina:\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"Meus Irmãos da Oficina *{nome_limpo}{numero_fmt}*,\n\n"
+        "Clique no link abaixo para realizar seu registro no Bode Andarilho:\n\n"
+        f"{link}\n\n"
+        "*(⚠️ Aviso: este link é de uso exclusivo da nossa oficina. O acesso à agenda depende da aprovação direta do nosso Secretário. Cadastros de irmãos de outras oficinas serão sumariamente bloqueados na Câmara de Reflexão.)*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    )
+    
+    if update.message:
+        await update.message.reply_text(texto, parse_mode="Markdown")
+
+# ============================================
 # FUNÇÃO PRINCIPAL DO MENU SECRETÁRIO
 # ============================================
 
@@ -1716,12 +1771,34 @@ async def _exibir_menu_secretario_seguro(update: Update, context: ContextTypes.D
         except Exception:
             pass
 
+    trolhamentos_count = 0
+    if nivel == "2" and loja_vinculada:
+        from src.potencias import normalizar_potencia
+        pot_s = loja_vinculada.get("Potência") or loja_vinculada.get("potencia") or ""
+        comp_s = loja_vinculada.get("Potência complemento") or loja_vinculada.get("potencia_complemento") or ""
+        p_norm, c_norm = normalizar_potencia(pot_s, comp_s)
+        pot_reg = str(c_norm or p_norm).strip().upper()
+        try:
+            t_pendentes = obter_trolhamentos_coletivos_pendentes(pot_reg)
+            trolhamentos_count = len(t_pendentes)
+        except Exception as e_tr:
+            logger.warning("Erro ao obter trolhamentos pendentes: %s", e_tr)
+    elif nivel == "3":
+        try:
+            t_pendentes = obter_trolhamentos_coletivos_pendentes_admin()
+            trolhamentos_count = len(t_pendentes)
+        except Exception as e_tr:
+            logger.warning("Erro ao obter trolhamentos pendentes admin: %s", e_tr)
+
     # Construção do Teclado
     opcoes = [
         [_botao_cadastrar_evento()],
         [InlineKeyboardButton("✅ Validar Novos Irmãos", callback_data="listar_membros_pendentes")],
-        [InlineKeyboardButton(voucher_str, callback_data="gerar_voucher_inicio")],
     ]
+    if trolhamentos_count > 0:
+        opcoes.append([InlineKeyboardButton(f"📋 Trolhamento Solidário ({trolhamentos_count})", callback_data="trolhamento_coletivo_listar")])
+        
+    opcoes.append([InlineKeyboardButton(voucher_str, callback_data="gerar_voucher_inicio")])
     
     if loja_vinculada or nivel == "3":
         opcoes.append([InlineKeyboardButton("🤝 Passagem de Bastão", callback_data="bastao_listar")])
@@ -2232,3 +2309,410 @@ voucher_handler = ConversationHandler(
         CallbackQueryHandler(exibir_menu_secretario, pattern="^menu_secretario$"),
     ],
 )
+
+
+# ==========================================================
+# 14. MÓDULO DE TROLHAMENTO SOLIDÁRIO (COLETIVO REGIONAL)
+# ==========================================================
+
+def obter_trolhamentos_coletivos_pendentes(potencia_regional: str) -> list[dict]:
+    """Retorna todos os membros pendentes da mesma potência regional que estão em oficinas sem representante."""
+    from src.sheets_supabase import listar_membros, listar_lojas, _secretario_responsavel_loja_id
+    from src.potencias import normalizar_potencia
+    from typing import Any
+    import unicodedata
+    import re
+    
+    membros = listar_membros(include_inativos=True) or []
+    lojas = listar_lojas(0, include_todas=True) or []
+    
+    lojas_por_id = {str(l.get("ID") or l.get("id")): l for l in lojas}
+    
+    def _norm_resiliente(t: Any) -> str:
+        b = unicodedata.normalize("NFKD", str(t or "").strip())
+        b = "".join(ch for ch in b if not unicodedata.combining(ch))
+        return re.sub(r"\s+", "", b).lower()
+        
+    lojas_por_nome_num = {}
+    for l in lojas:
+        l_nome = _norm_resiliente(l.get("Nome da Loja") or l.get("nome_loja"))
+        l_num = _norm_resiliente(l.get("Número") or l.get("numero") or "0")
+        if l_nome:
+            lojas_por_nome_num[(l_nome, l_num)] = l
+
+    filtrados = []
+    for m in membros:
+        status = str(m.get("Status") or m.get("status") or "").strip().lower()
+        if status != "pendente":
+            continue
+            
+        pot_m = m.get("Potência") or m.get("potencia") or ""
+        comp_m = m.get("Potência complemento") or m.get("potencia_complemento") or ""
+        p_norm, c_norm = normalizar_potencia(pot_m, comp_m)
+        pot_reg_m = str(c_norm or p_norm).strip().upper()
+        
+        if pot_reg_m != potencia_regional.strip().upper():
+            continue
+            
+        status_aud = str(m.get("Status Auditoria") or m.get("status_auditoria") or "").strip()
+        if status_aud == "Pendente_Secretario":
+            continue
+
+        loja_manual = m.get("Loja Manual") or m.get("loja_manual") or ""
+        loja_id = str(m.get("ID da loja") or m.get("loja_id") or "").strip()
+        loja_nome = m.get("Loja") or m.get("loja") or ""
+        loja_num = str(m.get("Número da loja") or m.get("numero_loja") or "0").strip()
+        
+        sem_representante = False
+        if loja_manual:
+            sem_representante = True
+        elif not loja_id:
+            sem_representante = True
+        else:
+            loja_encontrada = lojas_por_id.get(loja_id)
+            if not loja_encontrada:
+                loja_encontrada = lojas_por_nome_num.get((_norm_resiliente(loja_nome), _norm_resiliente(loja_num)))
+                
+            if not loja_encontrada:
+                sem_representante = True
+            else:
+                sec_id = _secretario_responsavel_loja_id(loja_encontrada)
+                if not sec_id:
+                    sem_representante = True
+                    
+        if sem_representante:
+            filtrados.append(m)
+            
+    return filtrados
+
+
+def obter_trolhamentos_coletivos_pendentes_admin() -> list[dict]:
+    """Retorna todos os membros pendentes em oficinas sem representante (para Admins)."""
+    from src.sheets_supabase import listar_membros, listar_lojas, _secretario_responsavel_loja_id
+    from typing import Any
+    import unicodedata
+    import re
+    
+    membros = listar_membros(include_inativos=True) or []
+    lojas = listar_lojas(0, include_todas=True) or []
+    
+    lojas_por_id = {str(l.get("ID") or l.get("id")): l for l in lojas}
+    
+    def _norm_resiliente(t: Any) -> str:
+        b = unicodedata.normalize("NFKD", str(t or "").strip())
+        b = "".join(ch for ch in b if not unicodedata.combining(ch))
+        return re.sub(r"\s+", "", b).lower()
+        
+    lojas_por_nome_num = {}
+    for l in lojas:
+        l_nome = _norm_resiliente(l.get("Nome da Loja") or l.get("nome_loja"))
+        l_num = _norm_resiliente(l.get("Número") or l.get("numero") or "0")
+        if l_nome:
+            lojas_por_nome_num[(l_nome, l_num)] = l
+
+    filtrados = []
+    for m in membros:
+        status = str(m.get("Status") or m.get("status") or "").strip().lower()
+        if status != "pendente":
+            continue
+            
+        status_aud = str(m.get("Status Auditoria") or m.get("status_auditoria") or "").strip()
+        if status_aud == "Pendente_Secretario":
+            continue
+
+        loja_manual = m.get("Loja Manual") or m.get("loja_manual") or ""
+        loja_id = str(m.get("ID da loja") or m.get("loja_id") or "").strip()
+        loja_nome = m.get("Loja") or m.get("loja") or ""
+        loja_num = str(m.get("Número da loja") or m.get("numero_loja") or "0").strip()
+        
+        sem_representante = False
+        if loja_manual:
+            sem_representante = True
+        elif not loja_id:
+            sem_representante = True
+        else:
+            loja_encontrada = lojas_por_id.get(loja_id)
+            if not loja_encontrada:
+                loja_encontrada = lojas_por_nome_num.get((_norm_resiliente(loja_nome), _norm_resiliente(loja_num)))
+                
+            if not loja_encontrada:
+                sem_representante = True
+            else:
+                sec_id = _secretario_responsavel_loja_id(loja_encontrada)
+                if not sec_id:
+                    sem_representante = True
+                    
+        if sem_representante:
+            filtrados.append(m)
+            
+    return filtrados
+
+
+async def trolhamento_coletivo_listar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    
+    if nivel not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "⛔ Sem permissão.")
+        return
+        
+    from src.sheets_supabase import get_loja_por_secretario
+    from src.potencias import normalizar_potencia
+    
+    if query:
+        await query.answer()
+
+    pot_reg = ""
+    if nivel == "2":
+        loja_vinculada = get_loja_por_secretario(user_id)
+        if not loja_vinculada:
+            await query.answer("❌ Configuração de oficina pendente.")
+            return
+        pot_s = loja_vinculada.get("Potência") or loja_vinculada.get("potencia") or ""
+        comp_s = loja_vinculada.get("Potência complemento") or loja_vinculada.get("potencia_complemento") or ""
+        p_norm, c_norm = normalizar_potencia(pot_s, comp_s)
+        pot_reg = str(c_norm or p_norm).strip().upper()
+        
+        pendentes = obter_trolhamentos_coletivos_pendentes(pot_reg)
+    else:
+        pendentes = obter_trolhamentos_coletivos_pendentes_admin()
+        
+    if not pendentes:
+        await navegar_para(
+            update, context,
+            "Trolhamento Solidário",
+            "🎉 Nenhuma solicitação pendente na sua Potência no momento.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")]])
+        )
+        return
+        
+    botoes = []
+    for m in pendentes[:50]:
+        nome = m.get("Nome") or m.get("nome") or "Novo Obreiro"
+        loja_label = m.get("Loja") or m.get("loja") or "Sem Loja"
+        tid = m.get("Telegram ID") or m.get("telegram_id")
+        
+        label = f"👤 {nome} ({loja_label})"
+        if len(label) > 36:
+            label = label[:33] + "..."
+            
+        botoes.append([InlineKeyboardButton(label, callback_data=f"trolhamento_coletivo_detalhe|{tid}")])
+        
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario" if nivel == "2" else "area_admin")])
+    
+    await navegar_para(
+        update, context,
+        "Trolhamento Solidário",
+        f"📋 *Trolhamento Solidário ({len(pendentes)})*\n\nSelecione um Irmão da sua Potência para validar o ingresso:",
+        InlineKeyboardMarkup(botoes)
+    )
+
+
+async def trolhamento_coletivo_detalhe(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    
+    if nivel not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "⛔ Sem permissão.")
+        return
+        
+    if query:
+        await query.answer()
+
+    _, tid = query.data.split("|", 1)
+    
+    from src.sheets_supabase import buscar_membro
+    membro = buscar_membro(int(float(tid)))
+    
+    if not membro or str(membro.get("Status") or membro.get("status") or "").strip().lower() != "pendente":
+        await query.answer("⚠️ Esta solicitação já foi processada por outro Secretário da Potência. Obrigado!", show_alert=True)
+        await trolhamento_coletivo_listar(update, context)
+        return
+
+    nome = membro.get("Nome") or membro.get("nome") or "-"
+    grau = membro.get("Grau") or membro.get("grau") or "-"
+    cargo = membro.get("Cargo") or membro.get("cargo") or "Nenhum"
+    loja = membro.get("Loja") or membro.get("loja") or "-"
+    numero = membro.get("Número da loja") or membro.get("numero_loja") or ""
+    potencia = membro.get("Potência") or membro.get("potencia") or "-"
+    oriente = membro.get("Oriente") or membro.get("oriente") or "-"
+    veneravel = membro.get("Venerável Mestre") or membro.get("veneravel_mestre") or "-"
+    
+    num_fmt = f" nº {numero}" if numero else ""
+
+    texto = (
+        f"👤 *Análise de Credenciais (Trolhamento Solidário)*\n\n"
+        f"▪️ Nome: *{nome}*\n"
+        f"▪️ Grau: *{grau}*\n"
+        f"▪️ Cargo declarado: *{cargo or 'Nenhum'}*\n"
+        f"▪️ Loja: *{loja}{num_fmt}*\n"
+        f"▪️ Potência: *{potencia}*\n"
+        f"▪️ Oriente: *{oriente}*\n"
+        f"▪️ Venerável Mestre: *{veneravel}*\n\n"
+        f"Deseja validar o acesso deste obreiro ao painel do Bode Andarilho?"
+    )
+
+    teclado = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Aprovar Obreiro", callback_data=f"trolhamento_coletivo_aprovar|{tid}"),
+        ],
+        [
+            InlineKeyboardButton("⚠️ Recusar por Inconsistência", callback_data=f"trolhamento_coletivo_recusar_irreg|{tid}"),
+        ],
+        [
+            InlineKeyboardButton("🔍 Recusar por Dados Não Localizados", callback_data=f"trolhamento_coletivo_recusar_notfound|{tid}"),
+        ],
+        [InlineKeyboardButton("🔙 Voltar à lista", callback_data="trolhamento_coletivo_listar")]
+    ])
+
+    await navegar_para(
+        update, context,
+        "Trolhamento Solidário > Detalhe",
+        texto,
+        teclado
+    )
+
+
+async def trolhamento_coletivo_aprovar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    
+    if nivel not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "⛔ Sem permissão.")
+        return
+        
+    _, tid_str = query.data.split("|", 1)
+    tid = int(float(tid_str))
+    
+    from src.sheets_supabase import atualizar_membro, buscar_membro, _cache_membros
+    membro = buscar_membro(tid)
+    
+    if not membro or str(membro.get("Status") or membro.get("status") or "").strip().lower() != "pendente":
+        await query.answer("⚠️ Esta solicitação já foi processada por outro Secretário da Potência. Obrigado!", show_alert=True)
+        await trolhamento_coletivo_listar(update, context)
+        return
+        
+    if query:
+        await query.answer("Processando aprovação...")
+        
+    sucesso = atualizar_membro(tid, {"Status": "Ativo"}, preservar_nivel=True)
+    if sucesso:
+        _cache_membros.pop(tid, None)
+        
+        try:
+            await context.bot.send_message(
+                chat_id=tid,
+                text=(
+                    "✨ *Acesso Concedido!*\n\n"
+                    "Saudações, Ir.·.!\n"
+                    "Seu cadastro no Bode Andarilho foi validado e aprovado via Trolhamento Solidário pela secretaria de sua potência.\n\n"
+                    "Agora seu acesso completo ao Painel do Obreiro está liberado!\n\n"
+                    "Use o comando /start para acessar os recursos e confirmar presenças."
+                ),
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.warning("Erro ao notificar obreiro %s de aprovação: %s", tid, e)
+            
+        await navegar_para(
+            update, context,
+            "Trolhamento > Sucesso",
+            f"✅ O cadastro de *{membro.get('Nome') or membro.get('nome') or 'Obreiro'}* foi ativado com sucesso!\n\nO Irmão recebeu uma notificação no privado.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="trolhamento_coletivo_listar")]])
+        )
+    else:
+        await query.message.reply_text("❌ Falha técnica ao atualizar banco de dados. Tente novamente.")
+
+
+async def trolhamento_coletivo_recusar_irreg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    
+    if nivel not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "⛔ Sem permissão.")
+        return
+        
+    _, tid_str = query.data.split("|", 1)
+    tid = int(float(tid_str))
+    
+    from src.sheets_supabase import excluir_membro, buscar_membro
+    membro = buscar_membro(tid)
+    
+    if not membro or str(membro.get("Status") or membro.get("status") or "").strip().lower() != "pendente":
+        await query.answer("⚠️ Esta solicitação já foi processada por outro Secretário da Potência. Obrigado!", show_alert=True)
+        await trolhamento_coletivo_listar(update, context)
+        return
+        
+    if query:
+        await query.answer("Processando recusa...")
+        
+    try:
+        await context.bot.send_message(
+            chat_id=tid,
+            text=(
+                "Olá! Não foi possível validar os dados informados com a sua Potência. "
+                "Por favor, entre em contato diretamente com a secretaria da sua potência para verificar sua ficha cadastral e, em seguida, tente novamente por aqui!"
+            ),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.warning("Falha ao notificar recusa por irregularidade: %s", e)
+        
+    excluir_membro(tid)
+    
+    await navegar_para(
+        update, context,
+        "Trolhamento > Concluído",
+        f"🚫 Registro de *{membro.get('Nome') or membro.get('nome') or 'Obreiro'}* recusado por inconsistência e excluído com sucesso.",
+        InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="trolhamento_coletivo_listar")]])
+    )
+
+
+async def trolhamento_coletivo_recusar_notfound(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    
+    if nivel not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "⛔ Sem permissão.")
+        return
+        
+    _, tid_str = query.data.split("|", 1)
+    tid = int(float(tid_str))
+    
+    from src.sheets_supabase import excluir_membro, buscar_membro
+    membro = buscar_membro(tid)
+    
+    if not membro or str(membro.get("Status") or membro.get("status") or "").strip().lower() != "pendente":
+        await query.answer("⚠️ Esta solicitação já foi processada por outro Secretário da Potência. Obrigado!", show_alert=True)
+        await trolhamento_coletivo_listar(update, context)
+        return
+        
+    if query:
+        await query.answer("Processando recusa...")
+        
+    try:
+        await context.bot.send_message(
+            chat_id=tid,
+            text=(
+                "Não conseguimos localizar seu cadastro com os dados informados. "
+                "Por favor, revise suas informações (como o número da sua oficina ou a potência selecionada) e refaça o seu preenchimento. "
+                "Se precisar, peça ajuda ao seu secretário!"
+            ),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        logger.warning("Falha ao notificar recusa por não encontrado: %s", e)
+        
+    excluir_membro(tid)
+    
+    await navegar_para(
+        update, context,
+        "Trolhamento > Concluído",
+        f"🔍 Registro de *{membro.get('Nome') or membro.get('nome') or 'Obreiro'}* recusado por dados não localizados e excluído com sucesso.",
+        InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="trolhamento_coletivo_listar")]])
+    )

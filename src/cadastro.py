@@ -27,7 +27,7 @@ from typing import Any, Dict, Optional
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 
-from src.miniapp import WEBAPP_URL_MEMBRO  # noqa: E402
+from src.miniapp import WEBAPP_URL_MEMBRO, limpar_nome_loja  # noqa: E402
 from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
@@ -655,7 +655,7 @@ async def receber_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return LOJA
     else:
-        context.user_data["cadastro_loja"] = loja_digitada
+        context.user_data["cadastro_loja"] = limpar_nome_loja(loja_digitada)
         context.user_data["cadastro_loja_manual"] = True
         
         await update.message.reply_text(
@@ -675,7 +675,7 @@ async def callback_loja_hibrida(update: Update, context: ContextTypes.DEFAULT_TY
     
     if acao == "sel_loja_manual":
         loja_dig = context.user_data.get("temp_loja_digitada", "Minha Loja")
-        context.user_data["cadastro_loja"] = loja_dig
+        context.user_data["cadastro_loja"] = limpar_nome_loja(loja_dig)
         context.user_data["cadastro_loja_manual"] = True
         context.user_data.pop("temp_loja_digitada", None)
         
@@ -892,7 +892,14 @@ def _dados_para_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Di
         "telegram_id": update.effective_user.id,
         "veneravel_mestre": context.user_data.get("cadastro_vm", ""),
     }
-    if context.user_data.get("cadastro_voucher"):
+    if context.user_data.get("token_cadastro_secretario"):
+        payload["status"] = "Pendente"
+        payload["status_auditoria"] = "Pendente_Secretario"
+        payload["nivel"] = "0"
+    elif context.user_data.get("cadastro_readonly_loja"):
+        payload["status"] = "Pendente"
+        payload["nivel"] = "0"
+    elif context.user_data.get("cadastro_voucher"):
         payload["status"] = "Ativo"
         
     if context.user_data.get("cadastro_loja_manual"):
@@ -945,7 +952,10 @@ async def _finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE
         return CONFIRMAR
 
     # --- NOTIFICAR RESPONSÁVEL PELA VALIDAÇÃO (CÂMARA DE REFLEXÃO) ---
-    await notificar_validacao_pendente(context, dados_membro, mudanca_loja=False)
+    if context.user_data.get("token_cadastro_secretario"):
+        await notificar_secretario_pendente_adm(context, dados_membro)
+    else:
+        await notificar_validacao_pendente(context, dados_membro, mudanca_loja=False)
 
     # Preserva pos_cadastro
     pos = context.user_data.get("pos_cadastro")
@@ -1290,3 +1300,49 @@ async def notificar_validacao_pendente(
                         
     except Exception as e_sec:
         logger.warning("Erro crítico durante ciclo de notificacao de governanca: %s", e_sec)
+
+
+async def notificar_secretario_pendente_adm(context_or_app, dados_membro: dict):
+    """Envia um alerta privado para todos os Admins (Nível 3) revisarem o cadastro do Secretário."""
+    if hasattr(context_or_app, "bot"):
+        bot = context_or_app.bot
+    else:
+        bot = context_or_app.bot
+
+    from src.sheets_supabase import listar_membros
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    membros = listar_membros() or []
+    admins = [
+        int(float(m.get("Telegram ID") or m.get("telegram_id")))
+        for m in membros
+        if str(m.get("Nivel") or m.get("nivel") or "1") == "3"
+    ]
+
+    nome = dados_membro.get("nome") or dados_membro.get("Nome") or "Ir.·."
+    grau = dados_membro.get("grau") or dados_membro.get("Grau") or ""
+    loja = dados_membro.get("loja") or dados_membro.get("Loja") or ""
+    num = dados_membro.get("numero_loja") or dados_membro.get("Número da loja") or ""
+    pot = dados_membro.get("potencia") or dados_membro.get("Potência") or ""
+    tid = dados_membro.get("telegram_id") or dados_membro.get("Telegram ID")
+
+    num_fmt = f" nº {num}" if num else ""
+
+    msg = (
+        f"👑 *NOVO SECRETÁRIO AGUARDANDO PROMOÇÃO*\n\n"
+        f"O Ir.·. *{nome}* ({grau}) se cadastrou usando o link de Secretários para a Oficina:\n\n"
+        f"🏛️ *Loja:* {loja}{num_fmt}\n"
+        f"📜 *Potência:* {pot}\n\n"
+        f"Deseja outorgar o acesso de Secretário (Nível 2) e ativá-lo no sistema?"
+    )
+
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🟢 Aprovar Secretário (Nível 2)", callback_data=f"aprovar_secretario|{tid}")],
+        [InlineKeyboardButton("❌ Recusar Cadastro", callback_data=f"recusar_secretario|{tid}")]
+    ])
+
+    for adm_id in admins:
+        try:
+            await bot.send_message(chat_id=adm_id, text=msg, reply_markup=teclado, parse_mode="Markdown")
+        except Exception as e:
+            logger.warning("Falha ao notificar admin %s de secretario pendente: %s", adm_id, e)

@@ -1315,26 +1315,29 @@ def buscar_loja_por_id(loja_id: Any) -> Optional[Dict[str, Any]]:
         return None
 
 
-def buscar_loja_por_nome_numero(nome_loja: Any, numero_loja: Any) -> Optional[Dict[str, Any]]:
-    """Busca uma loja pelo par (nome, número)."""
+def buscar_loja_por_nome_numero(nome_loja: Any, numero_loja: Any, potencia: Any = None) -> Optional[Dict[str, Any]]:
+    """Busca uma loja pela chave composta (nome, número, potencia opcional)."""
     nome = _norm_text(nome_loja)
     numero = _norm_text(numero_loja)
+    pot = _norm_text(potencia) if potencia else None
     if not nome:
         return None
     try:
-        resp = (
+        query = (
             supabase.table("lojas")
             .select("*")
             .eq("nome_loja", nome)
             .eq("numero", numero)
-            .limit(1)
-            .execute()
         )
+        if pot:
+            query = query.eq("potencia", pot)
+            
+        resp = query.limit(1).execute()
         if not resp.data:
             return None
         return _row_to_sheets("lojas", resp.data[0])
     except Exception as e:
-        logger.error("Erro ao buscar loja por nome/número (%s/%s): %s", nome, numero, e)
+        logger.error("Erro ao buscar loja por nome/número/potencia (%s/%s/%s): %s", nome, numero, pot, e)
         return None
 
 

@@ -28,6 +28,14 @@ from src.messages import APENAS_ADMIN, APENAS_SECRETARIO
 from src.sheets_supabase import buscar_membro, membro_esta_ativo
 from src.permissoes import get_nivel
 
+def is_membro_pendente(telegram_id: int) -> bool:
+    membro = buscar_membro(telegram_id)
+    if membro:
+        status = str(membro.get("Status") or membro.get("status") or "").strip().lower()
+        if status == "pendente":
+            return True
+    return False
+
 # ID do grupo principal lido em tempo de execução (variável definida no main e aqui como alternativa de ambiente)
 _GRUPO_TELEGRAM_ID_STR = os.getenv("GRUPO_PRINCIPAL_ID", "")
 _GRUPO_TELEGRAM_ID: Optional[int] = (
@@ -510,9 +518,51 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info("Voucher %s ativado.", raw_arg)
         except Exception as v_err:
             logger.error("Erro voucher: %s", v_err)
+            
+    if raw_arg.upper().startswith("PRE_"):
+        import urllib.parse
+        payload_pre = raw_arg[4:]
+        try:
+            decodificado = urllib.parse.unquote(payload_pre)
+            partes = decodificado.split("_")
+            if len(partes) >= 3:
+                nome_loja = partes[0].replace("-", " ")
+                numero_loja = partes[1].replace("-", " ")
+                potencia = partes[2].replace("-", " ")
+                
+                context.user_data["cadastro_loja"] = nome_loja
+                context.user_data["cadastro_numero_loja"] = numero_loja
+                context.user_data["cadastro_potencia"] = potencia
+                context.user_data["cadastro_potencia_complemento"] = "-"
+                context.user_data["cadastro_readonly_loja"] = True
+                context.user_data["token_pre_utilizado"] = raw_arg.strip()
+                logger.info("Token PRE_ ativado: %s", decodificado)
+        except Exception as pre_err:
+            logger.error("Erro no token PRE_: %s", pre_err)
+            
+    if raw_arg.upper() == "CADASTRO_SECRETARIO":
+        context.user_data["token_cadastro_secretario"] = True
+        logger.info("Token CADASTRO_SECRETARIO ativado.")
 
     veio_do_grupo = payload_start in {"cadastro", "grupo", "start"}
     membro = buscar_membro(telegram_id)
+
+    if is_membro_pendente(telegram_id):
+        texto_trava = (
+            "⏳ *Câmara de Reflexão*\n\n"
+            "Irmão, seu cadastro está sob análise do Secretário de sua Oficina.\n\n"
+            "Assim que os seus dados forem validados e sua regularidade confirmada, você receberá uma notificação aqui e terá acesso completo às Sessões e agendas.\n\n"
+            "_Se preferir, entre em contato diretamente com o Secretário da sua Loja para agilizar a verificação._"
+        )
+        await _enviar_ou_editar_mensagem(
+            context,
+            telegram_id,
+            TIPO_RESULTADO,
+            texto_trava,
+            limpar_conteudo=True,
+            incluir_rodape_global=False
+        )
+        return
 
     if membro and membro_esta_ativo(membro):
         await _limpar_mensagens_anteriores(context, telegram_id)
@@ -701,6 +751,17 @@ async def texto_privado_router(update: Update, context: ContextTypes.DEFAULT_TYP
     if update.effective_chat and update.effective_chat.type != "private":
         return
 
+    telegram_id = update.effective_user.id
+    if is_membro_pendente(telegram_id):
+        texto_trava = (
+            "⏳ *Câmara de Reflexão*\n\n"
+            "Irmão, seu cadastro está sob análise do Secretário de sua Oficina.\n\n"
+            "Assim que os seus dados forem validados e sua regularidade confirmada, você receberá uma notificação aqui e terá acesso completo às Sessões e agendas.\n\n"
+            "_Se preferir, entre em contato diretamente com o Secretário da sua Loja para agilizar a verificação._"
+        )
+        await update.message.reply_text(texto_trava, parse_mode="Markdown")
+        return
+
     texto = (update.message.text or "").strip()
     if not texto:
         return
@@ -719,6 +780,15 @@ async def texto_privado_router(update: Update, context: ContextTypes.DEFAULT_TYP
 async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
+        return
+
+    telegram_id = update.effective_user.id
+    if is_membro_pendente(telegram_id):
+        await _responder_callback_seguro(
+            query,
+            "⏳ Seu cadastro está pendente de aprovação na Câmara de Reflexão. Por favor, aguarde a validação do seu Secretário.",
+            show_alert=True
+        )
         return
 
     data = query.data or ""

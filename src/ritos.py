@@ -13,6 +13,8 @@ RITOS_OFICIAIS = (
     "Brasileiro",
     "Adonhiramita",
     "Schröder",
+    "Escocês Retificado",
+    "MLAA",
 )
 
 
@@ -75,9 +77,24 @@ def normalizar_rito(value: Any) -> str:
         "rito adonhiramita": "Adonhiramita",
         # Schroder
         "schroder": "Schröder",
+        "schroeder": "Schröder",
         "schröder": "Schröder",
         "rito schroder": "Schröder",
+        "rito schroeder": "Schröder",
         "rito schröder": "Schröder",
+        # Escocês Retificado
+        "escoces retificado": "Escocês Retificado",
+        "escoc s retificado": "Escocês Retificado",
+        "rito escoces retificado": "Escocês Retificado",
+        "rito escoc s retificado": "Escocês Retificado",
+        "rer": "Escocês Retificado",
+        # MLAA
+        "mlaa": "MLAA",
+        "malaa": "MLAA",
+        "rito mlaa": "MLAA",
+        "macons livres antigos e aceitos": "MLAA",
+        "macons livres antigos aceitos": "MLAA",
+        "rito de macons livres antigos e aceitos": "MLAA",
     }
 
     mapped = aliases.get(slug)
@@ -85,6 +102,8 @@ def normalizar_rito(value: Any) -> str:
         return mapped
 
     # heurísticas simples
+    if "retificado" in slug:
+        return "Escocês Retificado"
     if "reaa" in slug or "escoces" in slug:
         return "REAA"
     if "york" in slug:
@@ -97,8 +116,10 @@ def normalizar_rito(value: Any) -> str:
         return "Brasileiro"
     if "moderno" in slug or "frances" in slug:
         return "Moderno"
-    if "schrod" in slug:
+    if "schrod" in slug or "schroed" in slug:
         return "Schröder"
+    if "mlaa" in slug or "malaa" in slug or "livres antigo" in slug:
+        return "MLAA"
 
     return ""
 

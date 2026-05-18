@@ -135,6 +135,8 @@ from src.admin_acoes import (
     notificacoes_ativar,
     notificacoes_desativar,
     exibir_menu_admin,
+    aprovar_secretario_callback,
+    recusar_secretario_callback,
 )
 
 # Edição do próprio perfil
@@ -160,6 +162,12 @@ from src.eventos_secretario import (
     aprovar_membro,
     confirmar_recusar_membro,
     recusar_membro,
+    cmd_convidar,
+    trolhamento_coletivo_listar,
+    trolhamento_coletivo_detalhe,
+    trolhamento_coletivo_aprovar,
+    trolhamento_coletivo_recusar_irreg,
+    trolhamento_coletivo_recusar_notfound,
 )
 
 # Gerenciamento de lojas (com exclusão)
@@ -561,6 +569,7 @@ def register_handlers(app: Application) -> None:
 
     # ===== 2. COMMAND HANDLERS =====
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("convidar", cmd_convidar))
     app.add_handler(CommandHandler(["ia", "assistente"], assistente_ia))
     app.add_handler(CommandHandler(["ia_stats", "assistente_stats"], assistente_ia_stats))
     app.add_handler(CommandHandler(["ia_relatorio", "assistente_relatorio"], assistente_ia_relatorio))
@@ -728,8 +737,29 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(
         recusar_membro, pattern=r"^recusar_membro\|"
     ))
+    app.add_handler(CallbackQueryHandler(
+        trolhamento_coletivo_listar, pattern=r"^trolhamento_coletivo_listar$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        trolhamento_coletivo_detalhe, pattern=r"^trolhamento_coletivo_detalhe\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        trolhamento_coletivo_aprovar, pattern=r"^trolhamento_coletivo_aprovar\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        trolhamento_coletivo_recusar_irreg, pattern=r"^trolhamento_coletivo_recusar_irreg\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        trolhamento_coletivo_recusar_notfound, pattern=r"^trolhamento_coletivo_recusar_notfound\|"
+    ))
 
     # ===== 9. CALLBACKS ADMINISTRATIVOS =====
+    app.add_handler(CallbackQueryHandler(
+        aprovar_secretario_callback, pattern=r"^aprovar_secretario\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        recusar_secretario_callback, pattern=r"^recusar_secretario\|"
+    ))
     app.add_handler(CallbackQueryHandler(
         ver_todos_membros, pattern=r"^admin_ver_membros$"
     ))

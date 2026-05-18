@@ -239,7 +239,7 @@ def _extrair_dados_membro(body: Dict[str, Any]) -> Dict[str, Any]:
         "grau": _norm_text(body.get("grau"))[:50],
         "mi": _norm_text(body.get("mi") or "Não")[:10],
         "vm": _norm_text(body.get("vm"))[:10],
-        "loja": _norm_text(body.get("loja"))[:200],
+        "loja": limpar_nome_loja(_norm_text(body.get("loja"))[:200]),
         "numero_loja": _norm_text(body.get("numero_loja") or "0")[:10],
         "oriente": _norm_text(body.get("oriente"))[:200],
         "potencia": _norm_text(body.get("potencia"))[:200],
@@ -265,8 +265,23 @@ def _validar_dados_membro(dados: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _payload_membro(telegram_id: int, dados: Dict[str, Any]) -> Dict[str, Any]:
+def _payload_membro(telegram_id: int, dados: Dict[str, Any], app = None) -> Dict[str, Any]:
     potencia, potencia_complemento = normalizar_potencia(dados.get("potencia"), dados.get("potencia_complemento"))
+    
+    status = "Ativo"
+    nivel = "1"
+    status_auditoria = ""
+    
+    if app:
+        user_data = app.user_data.get(telegram_id) or {}
+        if user_data.get("token_cadastro_secretario"):
+            status = "Pendente"
+            nivel = "0"
+            status_auditoria = "Pendente_Secretario"
+        elif user_data.get("cadastro_readonly_loja"):
+            status = "Pendente"
+            nivel = "0"
+            
     return {
         "Telegram ID": str(telegram_id),
         "ID da loja": dados.get("loja_id", ""),
@@ -280,8 +295,9 @@ def _payload_membro(telegram_id: int, dados: Dict[str, Any]) -> Dict[str, Any]:
         "Oriente": dados["oriente"],
         "Potência": potencia,
         "Potência complemento": potencia_complemento,
-        "Status": "Ativo",
-        "Nivel": "1",
+        "Status": status,
+        "Nivel": nivel,
+        "Status Auditoria": status_auditoria,
     }
 
 
@@ -295,7 +311,24 @@ async def api_rascunho_membro(request: Request) -> JSONResponse:
             403,
         )
     if _norm_text((body or {}).get("action")).lower() == "get":
-        return JSONResponse({"ok": True, "draft": _obter_rascunho(_RASCUNHOS_MEMBRO, telegram_id)})
+        draft = _obter_rascunho(_RASCUNHOS_MEMBRO, telegram_id)
+        app = request.app.state.telegram_app
+        user_data = app.user_data.get(telegram_id) or {}
+        
+        if user_data.get("cadastro_readonly_loja"):
+            draft["loja"] = user_data.get("cadastro_loja", "")
+            draft["numero_loja"] = user_data.get("cadastro_numero_loja", "0")
+            draft["potencia"] = user_data.get("cadastro_potencia", "")
+            draft["potencia_complemento"] = user_data.get("cadastro_potencia_complemento", "-")
+            draft["readonly_loja"] = True
+        elif user_data.get("cadastro_voucher") and not draft.get("loja"):
+            draft["loja"] = user_data.get("cadastro_loja", "")
+            draft["numero_loja"] = user_data.get("cadastro_numero_loja", "0")
+            draft["oriente"] = user_data.get("cadastro_oriente", "")
+            draft["potencia"] = user_data.get("cadastro_potencia", "")
+            draft["potencia_complemento"] = user_data.get("cadastro_potencia_complemento", "")
+            
+        return JSONResponse({"ok": True, "draft": draft})
     dados = _extrair_dados_membro(body or {})
     mensagem = _validar_dados_membro(dados)
     if mensagem:
@@ -336,13 +369,24 @@ async def draft_membro_confirmar(update: Update, context) -> None:
         if _val_diff(novo_loja, exist_loja) or _val_diff(novo_num, exist_num):
             mudou_loja = True
 
-    ok = cadastrar_membro(_payload_membro(telegram_id, dados))
+    user_data = context.application.user_data.get(telegram_id) or {}
+    is_sec = user_data.get("token_cadastro_secretario")
+
+    ok = cadastrar_membro(_payload_membro(telegram_id, dados, context.application))
     if not ok:
         await query.answer("Não consegui concluir o cadastro agora.", show_alert=True)
         return
 
     # Se alterou a Loja, notifica o Secretário responsável (Câmara de Reflexão)
-    if mudou_loja:
+    if is_sec:
+        try:
+            from src.cadastro import notificar_secretario_pendente_adm
+            membro_novo = buscar_membro(telegram_id)
+            if membro_novo:
+                await notificar_secretario_pendente_adm(context, membro_novo)
+        except Exception as e_notif:
+            logger.warning("Erro ao notificar admin de secretario pendente via Mini App: %s", e_notif)
+    elif mudou_loja:
         try:
             from src.cadastro import notificar_validacao_pendente
             membro_novo = buscar_membro(telegram_id)
@@ -353,7 +397,13 @@ async def draft_membro_confirmar(update: Update, context) -> None:
 
     _limpar_rascunho(_RASCUNHOS_MEMBRO, telegram_id)
     nome_esc = _escape_md(dados.get("nome", ""))
-    if ja_existe:
+    if is_sec:
+        texto = (
+            f"✅ *Cadastro realizado com sucesso\\!*\n\n"
+            f"Prezado Ir\\.·\\. {nome_esc}, seu cadastro de Secretário foi encaminhado para a aprovação da Administração Geral\\.\n\n"
+            f"Você será notificado aqui assim que as suas credenciais forem homologadas\\."
+        )
+    elif ja_existe:
         texto = f"✅ *Cadastro atualizado\\!*\n\nSaudações, Ir\\.·\\. {nome_esc}\\. Seus dados foram atualizados\\."
         if mudou_loja:
             texto += "\n\n⚠️ *Importante:* Seus dados de Loja foram alterados\\. Seu cadastro retornou à *análise pendente* do Secretário por segurança\\."
@@ -374,12 +424,41 @@ async def draft_membro_cancelar(update: Update, context) -> None:
     await query.edit_message_text("Tudo certo. O rascunho do cadastro foi cancelado.")
 
 
+import re
+
+def limpar_nome_loja(nome: str) -> str:
+    """
+    Remove prefixos maçônicos redundantes para manter apenas o Nome Nobre.
+    Remove: A.R.L.S., ARLS, A R L S, Augusta e Respeitável Loja Simbólica, Loj., Loja, etc.
+    """
+    if not nome:
+        return ""
+    # Padrões a remover do início da string (case-insensitive)
+    padroes = [
+        r"^A\.\s*R\.\s*L\.\s*S\.\s*",
+        r"^ARLS\s+",
+        r"^A\s+R\s+L\s+S\s+",
+        r"^Augusta\s+e\s+Respeitável\s+Loja\s+Simbólica\s+",
+        r"^Augusta\s+e\s+Respeitavel\s+Loja\s+Simbolica\s+",
+        r"^Loja\s+Simbólica\s+",
+        r"^Loja\s+Simbolica\s+",
+        r"^Loj\.\s*",
+        r"^Loja\s+",
+    ]
+    limpo = nome.strip()
+    for padrao in padroes:
+        limpo = re.sub(padrao, "", limpo, flags=re.IGNORECASE)
+    
+    # Se o usuário digitou apenas "ARLS" e ficou vazio, retorna o original (fallback)
+    return limpo.strip() or nome.strip()
+
 def _extrair_dados_loja(body: Dict[str, Any]) -> Dict[str, Any]:
     return _normalizar_dados_potencia({
-        "nome": _norm_text(body.get("nome"))[:200],
+        "nome": limpar_nome_loja(_norm_text(body.get("nome"))[:200]),
         "numero": _norm_text(body.get("numero") or "0")[:10],
         "oriente": _norm_text(body.get("oriente"))[:200],
         "rito": _norm_text(body.get("rito"))[:200],
+        "rito_outro": _norm_text(body.get("rito_outro"))[:200],
         "potencia": _norm_text(body.get("potencia"))[:200],
         "potencia_outra": _norm_text(body.get("potencia_outra") or body.get("potencia_complemento"))[:200],
         "endereco": _norm_text(body.get("endereco"))[:400],
@@ -390,17 +469,22 @@ def _extrair_dados_loja(body: Dict[str, Any]) -> Dict[str, Any]:
 def _validar_dados_loja(dados: Dict[str, Any]) -> Optional[str]:
     if not all([dados["nome"], dados["oriente"], dados["rito"], dados["potencia"], dados["endereco"]]):
         return "Preencha todos os campos obrigatórios."
+    if dados["rito"] not in {"REAA", "Schroeder", "Schröder", "Adonhiramita", "Brasileiro", "York", "Moderno", "Escocês Retificado", "MLAA", "Memphis-Misraim", "Outro"}:
+        return "Rito inválido."
+    if dados["rito"] == "Outro" and not dados["rito_outro"]:
+        return "Informe o rito quando selecionar 'Outro'."
     if not validar_potencia(dados["potencia"], dados.get("potencia_complemento")):
         return "Informe a potência principal e o complemento."
     return None
 
 
 def _payload_loja(dados: Dict[str, Any], executor_id: int) -> Dict[str, Any]:
+    rito = dados["rito_outro"] if dados.get("rito") == "Outro" else dados["rito"]
     return {
         "nome": dados["nome"],
         "numero": dados["numero"],
         "oriente": dados["oriente"],
-        "rito": dados["rito"],
+        "rito": rito,
         "potencia": dados["potencia"],
         "potencia_complemento": dados.get("potencia_complemento", ""),
         "endereco": dados["endereco"],
@@ -508,7 +592,11 @@ async def draft_loja_confirmar(update: Update, context) -> None:
     except Exception:
         pass
     _limpar_rascunho(_RASCUNHOS_LOJA, telegram_id)
-    loja = buscar_loja_por_nome_numero(dados.get("nome", ""), dados.get("numero", ""))
+    loja = buscar_loja_por_nome_numero(
+        dados.get("nome", ""),
+        dados.get("numero", ""),
+        dados.get("potencia", "")
+    )
     loja_id = _norm_text((loja or {}).get("ID") or (loja or {}).get("id"))
     nome_esc = _escape_md(dados.get("nome", ""))
     await query.edit_message_text(
@@ -575,7 +663,7 @@ def _validar_dados_evento(dados: Dict[str, Any]) -> Optional[str]:
         return "Traje inválido."
     if dados["traje"] == "Outro" and not dados["traje_outro"]:
         return "Informe o traje quando selecionar 'Outro'."
-    if dados["rito"] not in {"REAA", "Schroeder", "Adonhiramita", "Brasileiro", "York", "Moderno", "Escocês Retificado", "Memphis-Misraim", "Outro"}:
+    if dados["rito"] not in {"REAA", "Schroeder", "Schröder", "Adonhiramita", "Brasileiro", "York", "Moderno", "Escocês Retificado", "MLAA", "Memphis-Misraim", "Outro"}:
         return "Rito inválido."
     if dados["rito"] == "Outro" and not dados["rito_outro"]:
         return "Informe o rito quando selecionar 'Outro'."
@@ -1417,6 +1505,14 @@ if(tg && tg.MainButton){
           aplicarLojaMembro(lojasMembroCarregadas[idx]);
         }
       }
+      if(j.draft.readonly_loja){
+        document.getElementById('loja').readOnly = true;
+        document.getElementById('numero_loja').readOnly = true;
+        document.getElementById('potencia').style.pointerEvents = 'none';
+        document.getElementById('potencia').style.opacity = '0.7';
+        if(document.getElementById('potencia_outra')) document.getElementById('potencia_outra').readOnly = true;
+        if(document.getElementById('lojas_membro_card')) document.getElementById('lojas_membro_card').style.display = 'none';
+      }
       syncPotenciaOutra();
     }
   }catch(e){}
@@ -1449,8 +1545,24 @@ def html_cadastro_loja() -> str:
   </div>
   <div class="field">
     <label for="rito">Rito *</label>
-    <input id="rito" type="text" placeholder="Ex.: Brasileiro / Escocês / York">
+    <select id="rito">
+      <option value="">Selecione...</option>
+      <option value="REAA">REAA (Escocês)</option>
+      <option value="York">York</option>
+      <option value="Schröder">Schröder</option>
+      <option value="Adonhiramita">Adonhiramita</option>
+      <option value="Brasileiro">Brasileiro</option>
+      <option value="Moderno">Moderno</option>
+      <option value="Escocês Retificado">Escocês Retificado</option>
+      <option value="MLAA">MLAA (Maçons Livres Antigos e Aceitos)</option>
+      <option value="Outro">Outro</option>
+    </select>
     <div id="rito_err" class="err"></div>
+  </div>
+  <div class="field" id="rito_outro_wrap" style="display:none">
+    <label for="rito_outro">Informe o rito *</label>
+    <input id="rito_outro" type="text" placeholder="Ex.: Rito Moderno">
+    <div id="rito_outro_err" class="err"></div>
   </div>
   <div class="field">
     <label for="potencia">Potência *</label>
@@ -1476,11 +1588,41 @@ def html_cadastro_loja() -> str:
 </div>
 """
     script = """
+function syncOutro(selectId, wrapId, inputId, valorOutro){
+  const wrap=document.getElementById(wrapId);
+  if(!wrap)return;
+  const ativo=valorOutro==='' ? !!val(selectId) : val(selectId)===valorOutro;
+  wrap.style.display=ativo?'block':'none';
+  if(!ativo)clearErr(inputId);
+}
+
+function aplicarValorComOutro(selectId, inputId, wrapId, valor, valorOutro){
+  const select=document.getElementById(selectId);
+  if(!select)return;
+  const texto=(valor||'').toString().trim();
+  if(!texto){
+    select.value='';
+    if(document.getElementById(inputId))document.getElementById(inputId).value='';
+    syncOutro(selectId, wrapId, inputId, valorOutro);
+    return;
+  }
+  const existe=Array.from(select.options).some(o=>o.value===texto || o.text===texto);
+  if(existe){
+    select.value=texto;
+    if(document.getElementById(inputId))document.getElementById(inputId).value='';
+  }else{
+    select.value=valorOutro;
+    if(document.getElementById(inputId))document.getElementById(inputId).value=texto;
+  }
+  syncOutro(selectId, wrapId, inputId, valorOutro);
+}
+
 function validate(){
   let ok=true;
   ok=req('nome_loja','Nome da loja')&&ok;
   ok=req('oriente','Oriente')&&ok;
   ok=req('rito','Rito')&&ok;
+  if(val('rito')==='Outro') ok=req('rito_outro','Rito')&&ok;
   ok=req('potencia','Potência')&&ok;
   ok=req('potencia_outra','Complemento da potência')&&ok;
   ok=req('endereco','Endereço')&&ok;
@@ -1492,6 +1634,9 @@ function syncPotenciaComplemento(){
 }
 document.getElementById('potencia').addEventListener('change',syncPotenciaComplemento);
 syncPotenciaComplemento();
+document.getElementById('rito').addEventListener('change',()=>syncOutro('rito','rito_outro_wrap','rito_outro','Outro'));
+syncOutro('rito','rito_outro_wrap','rito_outro','Outro');
+
 if(tg && tg.MainButton){
 tg.MainButton.setText('Continuar para revisão');
 tg.MainButton.show();
@@ -1507,6 +1652,7 @@ tg.MainButton.onClick(async()=>{
         numero:val('numero')||'0',
         oriente:val('oriente'),
         rito:val('rito'),
+        rito_outro:val('rito_outro'),
         potencia:val('potencia'),
         potencia_outra:val('potencia_outra'),
         endereco:val('endereco')
@@ -1531,7 +1677,7 @@ tg.MainButton.onClick(async()=>{
       if(j.draft.nome)document.getElementById('nome_loja').value=j.draft.nome;
       if(j.draft.numero)document.getElementById('numero').value=j.draft.numero;
       if(j.draft.oriente)document.getElementById('oriente').value=j.draft.oriente;
-      if(j.draft.rito)document.getElementById('rito').value=j.draft.rito;
+      if(j.draft.rito)aplicarValorComOutro('rito','rito_outro','rito_outro_wrap',j.draft.rito_outro||j.draft.rito,'Outro');
       if(j.draft.potencia)document.getElementById('potencia').value=j.draft.potencia;
       if(j.draft.endereco)document.getElementById('endereco').value=j.draft.endereco;
     }
@@ -1644,14 +1790,14 @@ def html_cadastro_evento() -> str:
     <label for="rito">Rito *</label>
     <select id="rito">
       <option value="">Selecione...</option>
-      <option value="REAA">REAA</option>
-      <option value="Schroeder">Schroeder</option>
+      <option value="REAA">REAA (Escocês)</option>
+      <option value="York">York</option>
+      <option value="Schröder">Schröder</option>
       <option value="Adonhiramita">Adonhiramita</option>
       <option value="Brasileiro">Brasileiro</option>
-      <option value="York">York</option>
       <option value="Moderno">Moderno</option>
       <option value="Escocês Retificado">Escocês Retificado</option>
-      <option value="Memphis-Misraim">Memphis-Misraim</option>
+      <option value="MLAA">MLAA (Maçons Livres Antigos e Aceitos)</option>
       <option value="Outro">Outro</option>
     </select>
     <div id="rito_err" class="err"></div>
@@ -2005,6 +2151,23 @@ async def api_cadastro_membro(request: Request) -> JSONResponse:
 
     ja_existe = buscar_membro(int(telegram_id))
 
+    app = request.app.state.telegram_app
+    user_data = app.user_data.get(int(telegram_id)) or {}
+    
+    status = "Ativo"
+    nivel = "1"
+    status_auditoria = ""
+    is_sec = False
+    
+    if user_data.get("token_cadastro_secretario"):
+        status = "Pendente"
+        nivel = "0"
+        status_auditoria = "Pendente_Secretario"
+        is_sec = True
+    elif user_data.get("cadastro_readonly_loja"):
+        status = "Pendente"
+        nivel = "0"
+
     dados: Dict[str, Any] = {
         "Telegram ID":        str(telegram_id),
         "Nome":               nome,
@@ -2016,18 +2179,34 @@ async def api_cadastro_membro(request: Request) -> JSONResponse:
         "Oriente":            oriente,
         "Potência":           potencia,
         "Potência complemento": potencia_complemento,
-        "Status":             "Ativo",
-        "Nivel":              "1",
+        "Status":             status,
+        "Nivel":              nivel,
+        "Status Auditoria":   status_auditoria,
     }
 
     ok = cadastrar_membro(dados)
     if not ok:
         return JSONResponse({"ok": False, "error": "Falha ao salvar. Tente novamente."}, status_code=500)
 
+    if is_sec:
+        try:
+            from src.cadastro import notificar_secretario_pendente_adm
+            membro_novo = buscar_membro(int(telegram_id))
+            if membro_novo:
+                await notificar_secretario_pendente_adm(app, membro_novo)
+        except Exception as e_notif:
+            logger.warning("Erro ao notificar admin de secretario pendente via API: %s", e_notif)
+
     try:
         bot = request.app.state.telegram_app.bot
         nome_esc = _escape_md(nome)
-        if ja_existe:
+        if is_sec:
+            msg = (
+                f"✅ *Cadastro realizado com sucesso\\!*\n\n"
+                f"Prezado Ir\\.·\\. {nome_esc}, seu cadastro de Secretário foi encaminhado para a aprovação da Administração Geral\\.\n\n"
+                f"Você será notificado aqui assim que as suas credenciais forem homologadas\\."
+            )
+        elif ja_existe:
             msg = f"✅ *Cadastro atualizado\\!*\n\nSaudações, Ir\\.·\\. {nome_esc}\\. Seus dados foram atualizados\\."
         else:
             msg = (
@@ -2066,6 +2245,9 @@ async def api_cadastro_loja(request: Request) -> JSONResponse:
     numero   = (body.get("numero")   or "0").strip()[:10]
     oriente  = (body.get("oriente")  or "").strip()[:200]
     rito_raw = (body.get("rito")     or "").strip()[:200]
+    rito_outro = (body.get("rito_outro") or "").strip()[:200]
+    if rito_raw == "Outro" and rito_outro:
+        rito_raw = rito_outro
     rito = normalizar_rito(rito_raw) or rito_raw
     potencia, potencia_complemento = normalizar_potencia(
         (body.get("potencia") or "").strip()[:200],
@@ -2147,6 +2329,9 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
     numero_loja = (body.get("numero_loja")or "0").strip()[:10]
     oriente     = (body.get("oriente")    or "").strip()[:200]
     rito_raw    = (body.get("rito")       or "").strip()[:200]
+    rito_outro  = (body.get("rito_outro") or "").strip()[:200]
+    if rito_raw == "Outro" and rito_outro:
+        rito_raw = rito_outro
     rito        = normalizar_rito(rito_raw) or rito_raw
     potencia, potencia_complemento = normalizar_potencia(
         (body.get("potencia") or "").strip()[:200],

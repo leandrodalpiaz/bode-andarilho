@@ -1955,3 +1955,94 @@ async def recusar_outorga_admin(update: Update, context: ContextTypes.DEFAULT_TY
         await context.bot.send_message(chat_id=obreiro_id, text=msg_obreiro, parse_mode="Markdown")
     except Exception as e:
         logger.warning("Erro ao notificar obreiro de recusa de fundacao: %s", e)
+
+
+async def aprovar_secretario_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Aprova o cadastro do secretário, promove para Nível 2 e ativa."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    if get_nivel(user_id) != "3":
+        await query.answer("⛔ Apenas Administradores podem realizar esta ação.", show_alert=True)
+        return
+
+    try:
+        await query.answer("Promovendo Secretário...")
+    except Exception:
+        pass
+
+    _, tid_str = query.data.split("|")
+    tid = int(float(tid_str))
+
+    from src.sheets_supabase import atualizar_membro, buscar_membro
+    membro = buscar_membro(tid)
+    if not membro:
+        await query.message.reply_text("❌ Secretário não localizado no banco.")
+        return
+
+    nome = membro.get("Nome") or membro.get("nome") or "Ir."
+    
+    # Atualiza para Nível 2 e Status Ativo
+    sucesso = atualizar_membro(tid, {
+        "nivel": "2",
+        "status": "Ativo",
+        "status_auditoria": "Aprovado"
+    }, preservar_nivel=False)
+
+    if sucesso:
+        await query.message.edit_text(
+            f"✅ *CADASTRO APROVADO COM SUCESSO!*\n\nO Ir.·. *{nome}* foi promovido a Secretário (Nível 2) e ativado no sistema!",
+            reply_markup=None, parse_mode="Markdown"
+        )
+        try:
+            msg_obreiro = (
+                f"🎉🏛️ *PROMOÇÃO CONCLUÍDA!*\n\n"
+                f"Saudações Ir.·. *Secretário {nome}*!\n"
+                f"Seu cadastro e solicitação de acesso foram *APROVADOS* pela Administração Geral.\n\n"
+                f"Suas ferramentas de gestão de Nível 2 estão totalmente liberadas!\n\n"
+                f"Envie /start para acessar seu painel e emitir vouchers dinâmicos. 🔨🤝🐐"
+            )
+            await context.bot.send_message(chat_id=tid, text=msg_obreiro, parse_mode="Markdown")
+        except Exception as e_not:
+            logger.warning("Falha ao notificar secretário %s de aprovação: %s", tid, e_not)
+    else:
+        await query.message.reply_text("❌ Falha no banco de dados ao aprovar secretário.")
+
+
+async def recusar_secretario_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Recusa e deleta o cadastro do secretário temporário."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    if get_nivel(user_id) != "3":
+        await query.answer("⛔ Apenas Administradores podem realizar esta ação.", show_alert=True)
+        return
+
+    try:
+        await query.answer("Processando recusa...")
+    except Exception:
+        pass
+
+    _, tid_str = query.data.split("|")
+    tid = int(float(tid_str))
+
+    from src.sheets_supabase import excluir_membro, buscar_membro
+    membro = buscar_membro(tid)
+    nome = membro.get("Nome") or membro.get("nome") or "Ir."
+
+    sucesso = excluir_membro(tid)
+
+    if sucesso:
+        await query.message.edit_text(
+            f"❌ *CADASTRO RECUSADO E EXCLUÍDO!*\n\nO pedido do Ir.·. {nome} foi recusado e limpo do banco.",
+            reply_markup=None, parse_mode="Markdown"
+        )
+        try:
+            msg_obreiro = (
+                f"⚠️ *Informativo da Administração*\n\n"
+                f"Prezado Ir.·. {nome}, seu cadastro como Secretário foi *RECUSADO* após análise administrativa.\n\n"
+                f"Caso acredite ser um erro, entre em contato diretamente com o Administrador Geral."
+            )
+            await context.bot.send_message(chat_id=tid, text=msg_obreiro, parse_mode="Markdown")
+        except Exception as e:
+            logger.warning("Erro ao notificar secretário de recusa: %s", e)
+    else:
+        await query.message.reply_text("❌ Falha no banco de dados ao recusar secretário.")
