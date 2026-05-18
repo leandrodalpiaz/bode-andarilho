@@ -11,6 +11,9 @@ logger = logging.getLogger(__name__)
 # No futuro, pode ser puxada via supabase supabase.table("patrocinios")
 PATROCINADORES = [
     {"nome": "Sind Ofícios", "link": "https://sindoficios.com.br", "tipo": "institucional"},
+    {"nome": "📢 Sua Marca Aqui! Apoie o Bode", "link": "https://t.me/BodeAndarilhoBot?start=apoiar", "tipo": "campanha"},
+    {"nome": "🤝 Divulgue seu negócio para a Irmandade!", "link": "https://t.me/BodeAndarilhoBot?start=apoiar", "tipo": "campanha"},
+    {"nome": "🐐 Fortaleça nosso Templo Digital! Seja Apoiador", "link": "https://t.me/BodeAndarilhoBot?start=apoiar", "tipo": "campanha"},
 ]
 
 def obter_texto_patrocinio() -> str:

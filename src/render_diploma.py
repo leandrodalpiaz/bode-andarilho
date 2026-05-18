@@ -338,9 +338,9 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str], pr
             py = 1800
             p2.alpha_composite(sp_img, (px, py))
         except:
-            _draw_centered(draw_p2, "Apoio Institucional: Sind Ofícios - www.sindoficios.com.br", center_x, 1810, font_meta, (120, 100, 80, 200))
+            _draw_centered(draw_p2, "Apoio: Sind Ofícios | Divulgue sua marca no Bode! Envie /apoiar", center_x, 1810, font_meta, (120, 100, 80, 200))
     else:
-        _draw_centered(draw_p2, "Apoio Institucional: Sind Ofícios - www.sindoficios.com.br", center_x, 1815, font_meta, (120, 100, 80, 200))
+        _draw_centered(draw_p2, "Apoio: Sind Ofícios | Divulgue sua marca no Bode! Envie /apoiar", center_x, 1815, font_meta, (120, 100, 80, 200))
         
     # Salva arquivos temporários isolados
     temp_dir = tempfile.gettempdir()
