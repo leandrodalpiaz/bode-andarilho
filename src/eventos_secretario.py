@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import urllib.parse
+from src.apoio import obter_texto_patrocinio
 from datetime import datetime
 from typing import Optional
 
@@ -589,6 +590,8 @@ async def resumo_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE)
             resumo += f"\n... e mais {len(lista_detalhada) - 15} irmãos"
     else:
         resumo += "Nenhuma confirmação até o momento."
+        
+    resumo += obter_texto_patrocinio()
 
     teclado = InlineKeyboardMarkup([
         [InlineKeyboardButton("👥 Ver lista completa", callback_data=f"ver_confirmados|{_encode_cb(id_evento)}")],
@@ -709,6 +712,7 @@ async def copiar_lista_confirmados(update: Update, context: ContextTypes.DEFAULT
     linhas.append("📎 Clique no texto acima, selecione 'Copiar' e cole onde desejar.")
 
     texto_final = "\n".join(linhas)
+    texto_final += obter_texto_patrocinio()
 
     # Envia como mensagem separada (não no sistema de navegação)
     await context.bot.send_message(

@@ -142,6 +142,7 @@ from src.admin_acoes import (
 
 # Edição do próprio perfil
 from src.editar_perfil import editar_perfil_handler, alerta_cadastro_bloqueado
+from src.apoio import registrar_handlers_apoio
 
 # Área do secretário
 from src.eventos_secretario import (
@@ -799,6 +800,9 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(
         menu_lembretes_membro, pattern=r"^menu_lembretes$"
     ))
+    
+    # Registro dos comandos de patrocínio
+    registrar_handlers_apoio(app)
     app.add_handler(CallbackQueryHandler(
         lembretes_membro_ativar, pattern=r"^lembretes_membro_ativar$"
     ))

@@ -180,12 +180,17 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         
         from src.render_diploma import renderizar_diploma
+        from src.conquistas import calcular_progresso_conquistas
+        import asyncio
+        from telegram import InputMediaPhoto
         
-        # Passa os dados estruturados do membro e as conquistas reais
-        caminho_diploma = renderizar_diploma(membro, slugs_obtidos)
+        # 1. Calcula progresso das conquistas (nova engine)
+        progressos = await calcular_progresso_conquistas(user_id)
         
-        if caminho_diploma and os.path.exists(caminho_diploma):
-            # Se disparado via clique em botão, apagamos o menu anterior para evitar poluição
+        # 2. Gera o Álbum (Lista de caminhos de imagens PNG 9:16)
+        caminhos_diploma = await asyncio.to_thread(renderizar_diploma, membro, slugs_obtidos, progressos)
+        
+        if caminhos_diploma and all(os.path.exists(p) for p in caminhos_diploma):
             query = update.callback_query
             if query:
                 try:
@@ -193,32 +198,47 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception:
                     pass
             
-            # Envia o pergaminho visual
-            with open(caminho_diploma, "rb") as photo:
-                msg_diploma = await context.bot.send_photo(
-                    chat_id=user_id,
-                    photo=photo,
-                    caption="📜 *Diploma do Andarilho - Jornada do Obreiro*\n\n"
-                            "Suas medalhas, dados e visto oficial da Chancelaria.",
-                    parse_mode="Markdown",
-                    reply_markup=teclado
-                )
+            # 3. Monta o Media Group
+            media_group = []
+            for idx, p in enumerate(caminhos_diploma):
+                media = InputMediaPhoto(open(p, "rb"))
+                if idx == 0:
+                    media.caption = (
+                        "📜 *Jornada do Andarilho*\n\n"
+                        "Deslize para o lado para ver o seu progresso e conquistas! ➡️"
+                    )
+                    media.parse_mode = "Markdown"
+                media_group.append(media)
                 
-            # Registra o ID da mensagem no rastreador global de navegação para limpeza futura automática
+            # 4. Envia o Álbum
+            msg_media = await context.bot.send_media_group(
+                chat_id=user_id,
+                media=media_group
+            )
+            
+            # 5. Envia o teclado inline (Media Groups não aceitam botões em anexo)
+            msg_teclado = await context.bot.send_message(
+                chat_id=user_id,
+                text="Acesse as opções de edição do seu Perfil abaixo:",
+                reply_markup=teclado
+            )
+            
+            # 6. Registra no rastreador para autolimpeza
             from src.bot import estado_mensagens
             if user_id not in estado_mensagens:
                 estado_mensagens[user_id] = {}
             
             estado_mensagens[user_id][TIPO_RESULTADO] = {
-                "message_id": msg_diploma.message_id,
-                "content_hash": None  # Evita colisão de hash e força renderização
+                "message_id": msg_teclado.message_id,
+                "content_hash": None 
             }
             
-            # Remove arquivo temporário de forma segura após envio
-            try:
-                os.remove(caminho_diploma)
-            except Exception:
-                pass
+            # 7. Remove arquivos temporários da memória
+            for p in caminhos_diploma:
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
                 
             return
             

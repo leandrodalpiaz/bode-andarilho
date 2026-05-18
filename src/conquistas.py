@@ -68,6 +68,16 @@ CONQUISTAS_INFO = {
         "descricao": "Outorgado pela passagem bem-sucedida de Bastão ao sucessor.",
         "emoji": "🤝",
     },
+    "bv": {
+        "titulo": "Bode Verificador",
+        "descricao": "Guarda do Templo Digital. Concedida a Secretários que realizam Trolhamentos Solidários.",
+        "emoji": "🛡️",
+    },
+    "ap": {
+        "titulo": "Andarilho de Plantão",
+        "descricao": "Selo de assiduidade contínua no ecossistema maçônico.",
+        "emoji": "🔥",
+    },
 }
 
 CONQUISTAS = CONQUISTAS_INFO
@@ -495,6 +505,148 @@ async def verificar_novas_conquistas(user_id: int, bot: Any) -> None:
     except Exception as e:
         logger.error("Erro em verificar_novas_conquistas para %s: %s", user_id, e)
 
+async def calcular_progresso_conquistas(user_id: int) -> Dict[str, int]:
+    """
+    Retorna o percentual de progresso (0 a 100) para cada conquista da gamificação, 
+    alimentando a barra visual e transparência no Diploma Digital.
+    """
+    progresso = {k: 0 for k in CONQUISTAS_INFO.keys()}
+    try:
+        from src.sheets_supabase import (
+            buscar_membro,
+            buscar_confirmacoes_membro,
+            supabase,
+            _row_to_sheets,
+            listar_conquistas_obtidas
+        )
+        
+        uid = int(float(user_id))
+        membro = buscar_membro(uid)
+        if not membro:
+            return progresso
+            
+        confirmacoes = await buscar_confirmacoes_membro(uid) or []
+        ids_eventos = list({c.get("ID Evento") or c.get("id_evento") for c in confirmacoes if c.get("ID Evento") or c.get("id_evento")})
+        
+        eventos = []
+        if ids_eventos:
+            def _fetch_evs():
+                resp = supabase.table("eventos").select("*").in_("id_evento", ids_eventos).execute()
+                return [_row_to_sheets("eventos", r) for r in (resp.data or [])]
+            eventos = await asyncio.to_thread(_fetch_evs)
+            
+        ids_lojas = list({str(ev.get("ID da loja") or ev.get("loja_id")) for ev in eventos if ev.get("ID da loja") or ev.get("loja_id")})
+        lojas_visitadas_db = []
+        if ids_lojas:
+            def _fetch_lojas():
+                resp = supabase.table("lojas").select("*").in_("id", ids_lojas).execute()
+                return [_row_to_sheets("lojas", r) for r in (resp.data or [])]
+            lojas_visitadas_db = await asyncio.to_thread(_fetch_lojas)
+            
+        loja_sede = None
+        loja_sede_id = membro.get("loja_id") or membro.get("ID da loja")
+        if loja_sede_id:
+            def _fetch_sede():
+                resp = supabase.table("lojas").select("*").eq("id", loja_sede_id).execute()
+                if resp.data: return _row_to_sheets("lojas", resp.data[0])
+                return None
+            loja_sede = await asyncio.to_thread(_fetch_sede)
+            
+        # Agregação de dados
+        contagem_agape = sum(1 for c in confirmacoes if "sim" in str(c.get("Ágape") or c.get("agape") or "").lower())
+        
+        lojas_visitadas_set = set()
+        for ev in eventos:
+            lid = str(ev.get("ID da loja") or ev.get("loja_id") or "").strip()
+            if lid: lojas_visitadas_set.add(lid)
+            else:
+                nl = str(ev.get("Nome da loja") or ev.get("nome_loja") or "").strip().lower()
+                if nl: lojas_visitadas_set.add(nl)
+                
+        cidades_visitadas = set()
+        for ev in eventos:
+            ori = str(ev.get("Oriente") or ev.get("oriente") or "").strip()
+            cid = ori.split("-")[0].split("/")[0].strip().title()
+            if cid and cid not in ("Nao Informado", "Não Informado", ""):
+                cidades_visitadas.add(cid)
+                
+        ufs_visitados = set()
+        ritos_visitados = set()
+        potencias_visitadas = set()
+        
+        for lj in lojas_visitadas_db:
+            uf = str(lj.get("Estado UF") or lj.get("estado_uf") or "").strip().upper()
+            if uf: ufs_visitados.add(uf)
+            rit = str(lj.get("Rito") or lj.get("rito") or "").strip().upper()
+            if rit: ritos_visitados.add(rit)
+            pot = str(lj.get("Potência") or lj.get("potencia") or "").strip().upper()
+            if pot: potencias_visitadas.add(pot)
+            
+        for ev in eventos:
+            ori = str(ev.get("Oriente") or ev.get("oriente") or "").strip().upper()
+            m_uf = re.search(r"[-\/]\s*([A-Z]{2})$", ori)
+            if m_uf: ufs_visitados.add(m_uf.group(1))
+            rit = str(ev.get("Rito") or ev.get("rito") or "").strip().upper()
+            if rit: ritos_visitados.add(rit)
+            pot = str(ev.get("Potência") or ev.get("potencia") or "").strip().upper()
+            if pot: potencias_visitadas.add(pot)
+
+        tem_gob = any("GOB" in p for p in potencias_visitadas)
+        tem_cmsb = any("CMSB" in p or "GL" in p for p in potencias_visitadas)
+        tem_comab = any("COMAB" in p or "GOP" in p for p in potencias_visitadas)
+        rs_count = sum([1 for p in [tem_gob, tem_cmsb, tem_comab] if p])
+        
+        dias_cad = 0
+        data_cad_str = membro.get("Data de cadastro") or membro.get("data_cadastro")
+        if data_cad_str:
+            for fmt in ("%d/%m/%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+                try:
+                    dt = datetime.strptime(str(data_cad_str)[:19].strip(), fmt)
+                    dias_cad = (datetime.now() - dt).days
+                    break
+                except: pass
+
+        def calc(val, meta): return min(100, int((val / meta) * 100)) if meta > 0 else 0
+        
+        progresso["ic"] = calc(contagem_agape, 1)
+        progresso["og"] = calc(contagem_agape, 15)
+        progresso["mp"] = calc(len(lojas_visitadas_set), 5)
+        progresso["e9"] = calc(len(cidades_visitadas), 9)
+        progresso["ce"] = calc(len(ufs_visitados), 3)
+        progresso["rc"] = calc(len(ritos_visitados), 3)
+        progresso["rs"] = calc(rs_count, 3)
+        progresso["na"] = calc(dias_cad, 365)
+        
+        progresso["pj"] = 0
+        if loja_sede:
+            sede_uf = str(loja_sede.get("Estado UF") or loja_sede.get("estado_uf") or "").strip().upper()
+            if sede_uf:
+                for v_uf in ufs_visitados:
+                    if v_uf and v_uf != sede_uf:
+                        progresso["pj"] = 100
+                        break
+                        
+        progresso["io"] = 0
+        nivel = str(membro.get("Nivel") or membro.get("nivel") or "1").strip()
+        if nivel in ("2", "2.5", "3") and loja_sede:
+            end = str(loja_sede.get("Endereço") or loja_sede.get("endereco") or "").strip()
+            cep = str(loja_sede.get("CEP") or loja_sede.get("cep") or "").strip()
+            cid = str(loja_sede.get("Cidade") or loja_sede.get("cidade") or "").strip()
+            uf = str(loja_sede.get("Estado UF") or loja_sede.get("estado_uf") or "").strip()
+            rit = str(loja_sede.get("Rito") or loja_sede.get("rito") or "").strip()
+            pot = str(loja_sede.get("Potência") or loja_sede.get("potencia") or "").strip()
+            preenchidos = sum([1 for f in [end, cep, cid, uf, rit, pot] if f])
+            progresso["io"] = calc(preenchidos, 6)
+            
+        obtidas = listar_conquistas_obtidas(uid)
+        for slug in obtidas:
+            if slug in progresso:
+                progresso[slug] = 100
+
+        return progresso
+    except Exception as e:
+        logger.error("Erro em calcular_progresso_conquistas para %s: %s", user_id, e)
+        return progresso
 
 # ============================================
 # INTERFACE DE COMANDOS DO BOT
