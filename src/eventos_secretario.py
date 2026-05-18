@@ -1794,6 +1794,7 @@ async def _exibir_menu_secretario_seguro(update: Update, context: ContextTypes.D
     opcoes = [
         [_botao_cadastrar_evento()],
         [InlineKeyboardButton("✅ Validar Novos Irmãos", callback_data="listar_membros_pendentes")],
+        [InlineKeyboardButton("👥 Incorporar Obreiros", callback_data="admin_incorporar_obreiros")],
     ]
     if trolhamentos_count > 0:
         opcoes.append([InlineKeyboardButton(f"📋 Trolhamento Solidário ({trolhamentos_count})", callback_data="trolhamento_coletivo_listar")])
@@ -2716,3 +2717,239 @@ async def trolhamento_coletivo_recusar_notfound(update: Update, context: Context
         f"🔍 Registro de *{membro.get('Nome') or membro.get('nome') or 'Obreiro'}* recusado por dados não localizados e excluído com sucesso.",
         InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="trolhamento_coletivo_listar")]])
     )
+
+
+def obreiro_corresponde_a_loja(membro, loja_oficial) -> bool:
+    """
+    Função de correspondência aproximada. Retorna True se o número da loja
+    for idêntico ou se o nome da loja digitado tiver termos nobres em comum.
+    """
+    num_membro = str(membro.get("Número da loja") or membro.get("numero_loja") or "").strip()
+    num_oficial = str(loja_oficial.get("Número da loja") or loja_oficial.get("numero") or "").strip()
+    
+    if num_oficial and num_membro == num_oficial:
+        return True
+        
+    nome_membro = str(membro.get("Loja") or membro.get("loja") or "").lower().strip()
+    nome_oficial = str(loja_oficial.get("Nome da loja") or loja_oficial.get("nome") or "").lower().strip()
+    
+    if not nome_membro or not nome_oficial:
+        return False
+        
+    termos_comuns = {"arls", "ls", "loja", "simbólica", "augusta", "respeitável", "nº", "no", "número", "maciça", "forte"}
+    palavras_membro = [p for p in nome_membro.split() if p not in termos_comuns and len(p) > 2]
+    palavras_oficial = [p for p in nome_oficial.split() if p not in termos_comuns and len(p) > 2]
+    
+    for p in palavras_membro:
+        if p in palavras_oficial:
+            return True
+            
+    return False
+
+
+async def admin_incorporar_obreiros(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Lista todos os obreiros pendentes com nomes de lojas semelhantes ou mesmo número
+    para que o secretário os incorpore com dados higienizados e oficiais.
+    """
+    query = update.callback_query
+    if query:
+        await query.answer()
+        
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    
+    if nivel not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⛔ Você não tem permissão para acessar esta área."
+        )
+        return
+        
+    from src.sheets_supabase import get_loja_por_secretario, listar_membros
+    
+    loja_vinculada = get_loja_por_secretario(user_id)
+    if not loja_vinculada:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⚠️ *Loja não vinculada*\n\nVocê precisa ter uma Loja vinculada ao seu cadastro para poder incorporar obreiros.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("🏛️ Cadastrar Minha Loja", callback_data="cadastrar_loja_inicio"), InlineKeyboardButton("🔙 Voltar", callback_data="menu_secretario")]])
+        )
+        return
+        
+    todos = listar_membros(include_inativos=True) or []
+    pendentes = [m for m in todos if str(m.get("Status") or "").lower() == "pendente"]
+    
+    correspondentes = []
+    for m in pendentes:
+        if obreiro_corresponde_a_loja(m, loja_vinculada):
+            correspondentes.append(m)
+            
+    botoes = []
+    
+    if not correspondentes:
+        texto_tela = (
+            "👥 *Incorporar Obreiros Independentes*\n\n"
+            "Não encontramos nenhum obreiro com cadastro pendente com dados semelhantes aos da sua Loja no momento.\n\n"
+            "Seus obreiros podem realizar o cadastro independente e digitar o número da Loja para aparecerem aqui!"
+        )
+    else:
+        texto_tela = (
+            "👥 *Incorporar Obreiros Independentes*\n\n"
+            "Os seguintes cadastros pendentes foram detectados com grafia aproximada ou mesmo número de loja que a sua Oficina oficial.\n\n"
+            "Selecione um obreiro para conferir e *[✅ Incorporar]* com seus dados oficiais higienizados:"
+        )
+        for m in correspondentes:
+            nome = m.get("Nome") or "Obreiro"
+            grau = m.get("Grau") or "Aprendiz"
+            loja_digitada = m.get("Loja") or ""
+            num_digitado = m.get("Número da loja") or ""
+            tid = m.get("Telegram ID") or m.get("telegram_id")
+            
+            texto_botao = f"👤 {nome} ({grau}) - {loja_digitada} nº {num_digitado}"
+            botoes.append([InlineKeyboardButton(texto_botao, callback_data=f"admin_confirmar_incorporacao|{tid}")])
+            
+    botoes.append([InlineKeyboardButton("🔙 Voltar à Área do Secretário", callback_data="menu_secretario")])
+    
+    await navegar_para(
+        update, context,
+        "Secretário > Incorporar",
+        texto_tela,
+        InlineKeyboardMarkup(botoes)
+    )
+
+
+async def admin_confirmar_incorporacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Exibe a comparação detalhada dos dados informados pelo obreiro e os oficiais da Loja do secretário.
+    """
+    query = update.callback_query
+    if not query:
+        return
+        
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    
+    if nivel not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "⛔ Acesso negado.")
+        return
+        
+    await query.answer()
+    
+    _, tid_str = query.data.split("|", 1)
+    tid = int(float(tid_str))
+    
+    from src.sheets_supabase import get_loja_por_secretario, buscar_membro
+    
+    loja_vinculada = get_loja_por_secretario(user_id)
+    membro = buscar_membro(tid)
+    
+    if not loja_vinculada or not membro:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "❌ Membro ou Loja não localizado no banco de dados.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="admin_incorporar_obreiros")]])
+        )
+        return
+        
+    texto_confirmacao = (
+        f"👥 *Confirmar Incorporação Cadastral*\n\n"
+        f"Deseja incorporar o Ir.·. *{membro.get('Nome')}* à sua Oficina?\n\n"
+        f"📋 *Dados digitados pelo Obreiro:*\n"
+        f"• Loja: {membro.get('Loja')} nº {membro.get('Número da loja')}\n"
+        f"• Potência: {membro.get('Potência')} ({membro.get('Potência complemento')})\n"
+        f"• Oriente: {membro.get('Oriente')}\n\n"
+        f"🏛️ *Dados Oficiais que serão aplicados:*\n"
+        f"• Loja: {loja_vinculada.get('Nome da loja')} nº {loja_vinculada.get('Número da loja')}\n"
+        f"• Potência: {loja_vinculada.get('Potência')} ({loja_vinculada.get('Potência complemento')})\n"
+        f"• Oriente: {loja_vinculada.get('Oriente')}\n\n"
+        f"Ao confirmar, o cadastro do obreiro será atualizado para *Ativo (Nível 1)* e travado para edição externa."
+    )
+    
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Sim, Incorporar", callback_data=f"admin_executar_incorporacao|{tid}")],
+        [InlineKeyboardButton("❌ Recusar e Deletar", callback_data=f"recusar_membro|{tid}")],
+        [InlineKeyboardButton("🔙 Cancelar", callback_data="admin_incorporar_obreiros")]
+    ])
+    
+    await navegar_para(
+        update, context,
+        "Secretário > Confirmar Incorporação",
+        texto_confirmacao,
+        teclado
+    )
+
+
+async def admin_executar_incorporacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Executa a atualização com os dados padronizados higienizados, define readonly e envia a notificação fraternal.
+    """
+    query = update.callback_query
+    user_id = update.effective_user.id
+    nivel = get_nivel(user_id)
+    
+    if nivel not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "⛔ Acesso negado.")
+        return
+        
+    if query:
+        await query.answer("Incorporando obreiro...")
+        
+    _, tid_str = query.data.split("|", 1)
+    tid = int(float(tid_str))
+    
+    from src.sheets_supabase import get_loja_por_secretario, buscar_membro, atualizar_membro
+    
+    loja_vinculada = get_loja_por_secretario(user_id)
+    membro = buscar_membro(tid)
+    
+    if not loja_vinculada or not membro:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "❌ Erro ao incorporar: Loja ou Obreiro não localizados."
+        )
+        return
+        
+    dados_atualizacao = {
+        "Loja": str(loja_vinculada.get("Nome da loja") or loja_vinculada.get("nome") or "").strip(),
+        "Número da loja": str(loja_vinculada.get("Número da loja") or loja_vinculada.get("numero") or "").strip(),
+        "Potência": str(loja_vinculada.get("Potência") or loja_vinculada.get("potencia") or "").strip(),
+        "Potência complemento": str(loja_vinculada.get("Potência complemento") or loja_vinculada.get("potencia_complemento") or "").strip(),
+        "Oriente": str(loja_vinculada.get("Oriente") or loja_vinculada.get("oriente") or "").strip(),
+        "ID da loja": str(loja_vinculada.get("ID da loja") or loja_vinculada.get("id") or "").strip(),
+        "Status": "Ativo",
+        "Nivel": "1",
+        "cadastro_readonly_loja": True
+    }
+    
+    sucesso = atualizar_membro(tid, dados_atualizacao, preservar_nivel=False)
+    
+    if sucesso:
+        try:
+            nome_loja = dados_atualizacao["Loja"]
+            await context.bot.send_message(
+                chat_id=tid,
+                text=(
+                    f"🎉 *Cadastro Incorporado e Regularizado!*\n\n"
+                    f"Saudações Fraternais, meu Irmão!\n"
+                    f"Seu cadastro foi oficialmente incorporado e regularizado pelo Secretário da Loja *{nome_loja}*.\n\n"
+                    f"Seu acesso completo ao *Bode Andarilho* está liberado! Goze das funcionalidades de ver sessões, chancelaria e muito mais. 🐐\n\n"
+                    f"Use /start para acessar seu Painel do Obreiro."
+                ),
+                parse_mode="Markdown"
+            )
+        except Exception as e_notif:
+            logger.warning("Falha ao enviar mensagem de boas-vindas ao obreiro incorporado %s: %s", tid, e_notif)
+            
+        await navegar_para(
+            update, context,
+            "Secretário > Incorporado",
+            f"✅ Obreiro *{membro.get('Nome')}* foi incorporado com sucesso!\n\n"
+            f"Seus dados de Loja foram padronizados de acordo com os registros oficiais da sua Oficina e o acesso dele foi liberado.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="admin_incorporar_obreiros")]])
+        )
+    else:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "❌ Falha ao salvar dados de incorporação no banco de dados. Tente novamente."
+        )

@@ -950,10 +950,10 @@ async def selecionar_campo_membro(update: Update, context: ContextTypes.DEFAULT_
         return ConversationHandler.END
 
     if data.startswith("excluir_membro|"):
-        if get_nivel(update.effective_user.id) != "3":
+        if get_nivel(update.effective_user.id) not in ("2", "3"):
             await _enviar_ou_editar_mensagem(
                 context, update.effective_user.id, TIPO_RESULTADO,
-                "⛔ Apenas administradores podem excluir membros."
+                "⛔ Apenas secretários ou administradores podem inativar obreiros."
             )
             return ConversationHandler.END
 
@@ -1016,9 +1016,9 @@ async def selecionar_campo_membro(update: Update, context: ContextTypes.DEFAULT_
                 callback_data=f"editar_campo_membro|{campo_id}"
             )])
 
-        if nivel_usuario == "3" and telegram_id:
+        if int(nivel_usuario) >= 2 and telegram_id:
             botoes.append([InlineKeyboardButton(
-                "🗑️ Excluir membro",
+                "🗑️ Inativar / Remover Obreiro",
                 callback_data=f"excluir_membro|{telegram_id}"
             )])
 
@@ -1033,10 +1033,10 @@ async def selecionar_campo_membro(update: Update, context: ContextTypes.DEFAULT_
         return SELECIONAR_CAMPO
 
     if data.startswith("confirmar_excluir_membro|"):
-        if get_nivel(update.effective_user.id) != "3":
+        if get_nivel(update.effective_user.id) not in ("2", "3"):
             await _enviar_ou_editar_mensagem(
                 context, update.effective_user.id, TIPO_RESULTADO,
-                "⛔ Apenas administradores podem excluir membros."
+                "⛔ Apenas secretários ou administradores podem inativar obreiros."
             )
             return ConversationHandler.END
 
@@ -1123,6 +1123,7 @@ async def selecionar_campo_membro(update: Update, context: ContextTypes.DEFAULT_
             [InlineKeyboardButton("Ativo", callback_data="editar_valor_membro|status|Ativo")],
             [InlineKeyboardButton("Inativo", callback_data="editar_valor_membro|status|Inativo")],
             [InlineKeyboardButton("Pendente", callback_data="editar_valor_membro|status|Pendente")],
+            [InlineKeyboardButton("Suspenso ⚠️", callback_data="editar_valor_membro|status|Suspenso")],
             [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_edicao")],
         ])
         await navegar_para(update, context, "Admin > Editar > Status", "Selecione o Status do Obreiro:", teclado_status)

@@ -90,16 +90,29 @@ def _teclado_inicio_edicao(membro: dict) -> InlineKeyboardMarkup:
         "oriente",
         "potencia",
     ]
+    
+    is_locked = bool(membro.get("cadastro_readonly_loja") or membro.get("cadastro_readonly_loja") == "true")
+    
     linhas = []
     for campo_id in campos_principais:
         campo_info = CAMPOS_EDITAVEIS_PERFIL[campo_id]
         valor = _valor_campo(membro, campo_id, campo_info)
-        linhas.append([
-            InlineKeyboardButton(
-                f"🛠 {campo_info['nome']}: {valor[:24]}",
-                callback_data=f"editar_campo_perfil|{campo_id}",
-            )
-        ])
+        
+        if is_locked and campo_id in ("loja", "numero_loja", "potencia"):
+            linhas.append([
+                InlineKeyboardButton(
+                    f"🔒 {campo_info['nome']}: {valor[:24]} (Verificado)",
+                    callback_data="alerta_cadastro_bloqueado",
+                )
+            ])
+        else:
+            linhas.append([
+                InlineKeyboardButton(
+                    f"🛠 {campo_info['nome']}: {valor[:24]}",
+                    callback_data=f"editar_campo_perfil|{campo_id}",
+                )
+            ])
+            
     if WEBAPP_URL_MEMBRO:
         linhas.append([
             InlineKeyboardButton(
@@ -422,8 +435,13 @@ async def receber_novo_valor_perfil(update: Update, context: ContextTypes.DEFAUL
         sucesso = atualizar_membro(update.effective_user.id, {campo_info["chave"]: novo_valor}, preservar_nivel=True)
 
     if sucesso:
-        # GOVERNANÇA: Se alterou Loja ou Número da Loja, dispara a notificação de análise pendente
+        # GOVERNANÇA: Se alterou Loja ou Número da Loja, executa demotamento preventivo para a Câmara de Reflexão
         if campo_id in {"loja", "numero_loja"}:
+            atualizar_membro(
+                update.effective_user.id,
+                {"Status": "Pendente", "Nivel": "0"},
+                preservar_nivel=False
+            )
             try:
                 from src.cadastro import notificar_validacao_pendente
                 membro_novo = buscar_membro(update.effective_user.id)
@@ -495,3 +513,16 @@ editar_perfil_handler = ConversationHandler(
         CallbackQueryHandler(cancelar_edicao_perfil, pattern="^cancelar$"),
     ],
 )
+
+
+async def alerta_cadastro_bloqueado(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Exibe um alerta pop-up informando ao usuário que os campos de Loja
+    foram validados e travados pelo Secretário para manter a integridade cadastral.
+    """
+    query = update.callback_query
+    if query:
+        await query.answer(
+            "🔒 Campo Oficial Verificado!\n\nEste campo foi validado e oficializado pelo seu Secretário e não pode ser editado pelo aplicativo por motivos de governança.\n\nCaso precise alterar, entre em contato com o Secretário da sua Loja.",
+            show_alert=True
+        )

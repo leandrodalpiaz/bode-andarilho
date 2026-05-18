@@ -290,3 +290,49 @@ def filtrar_locais_por_raio(
     resultado.sort(key=lambda x: x["distancia_km"])
     return resultado
 
+
+def filtrar_locais_por_coordenadas(
+    lat1: float,
+    lon1: float,
+    destinos: List[Dict[str, str]],
+    raio_km: float = 100.0
+) -> List[Dict[str, Any]]:
+    """
+    Calcula a proximidade a partir de coordenadas exatas de GPS e filtra destinos.
+    """
+    resultado = []
+    
+    # Agrupar cidades únicas de destino para otimizar chamadas à API/Cache e evitar throttling
+    cidades_unicas = {}
+    for d in destinos:
+        c = str(d.get("cidade", "")).strip()
+        u = str(d.get("uf", "")).strip().upper()
+        if c and u:
+            cidades_unicas[(c, u)] = None
+
+    # Mapeia as distâncias
+    import time
+    for (c, u) in cidades_unicas.keys():
+        coords = obter_coordenadas_cidade(c, u)
+        if coords:
+            dist = calcular_distancia_haversine(lat1, lon1, coords[0], coords[1])
+            cidades_unicas[(c, u)] = dist
+            # Pequeno delay se for necessário consultar a API real
+            if (f"{c.lower()}-{u.upper()}" not in _cache_coords):
+                time.sleep(1.1) 
+
+    # Filtra e monta a resposta com a distância computada
+    for d in destinos:
+        c = str(d.get("cidade", "")).strip()
+        u = str(d.get("uf", "")).strip().upper()
+        dist = cidades_unicas.get((c, u))
+        
+        if dist is not None and dist <= raio_km:
+            item = dict(d)
+            item["distancia_km"] = dist
+            resultado.append(item)
+            
+    # Ordena da menor distância para a maior
+    resultado.sort(key=lambda x: x["distancia_km"])
+    return resultado
+

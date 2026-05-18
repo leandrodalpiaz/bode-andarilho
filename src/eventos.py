@@ -1251,68 +1251,108 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
     if token_or_data.startswith(TOKEN_GEO_RAIO_MENU):
         import re
         from src.sheets_supabase import buscar_membro, buscar_loja_por_id, buscar_loja_por_nome_numero
-        from src.location_service import filtrar_locais_por_raio
+        from src.location_service import filtrar_locais_por_raio, filtrar_locais_por_coordenadas
         
-        # Determina o raio solicitado (padrão: 100km)
         partes_geo = token_or_data.split("|")
-        raio_km = 100.0
-        if len(partes_geo) > 1:
-            try:
-                raio_km = float(partes_geo[1])
-            except:
-                raio_km = 100.0
-                
-        membro = buscar_membro(update.effective_user.id)
-        if not membro:
-            await _enviar_ou_editar_mensagem(
-                context, update.effective_user.id, TIPO_RESULTADO,
-                "❌ *Perfil não encontrado*\n\nVocê precisa possuir um registro regular para utilizar a busca geográfica.",
-                InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
+        # partes_geo pode ser:
+        # 1. ["geo_raio_menu"] -> Mostrar menu de escolha
+        # 2. ["geo_raio_menu", "oriente", raio] -> Calcular por Oriente
+        # 3. ["geo_raio_menu", "gps", raio] -> Calcular por GPS
+        
+        if len(partes_geo) == 1:
+            teclado = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🏠 Meu Oriente Cadastrado", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|oriente|100")],
+                [InlineKeyboardButton("📍 Posição Atual (GPS)", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|gps|100")],
+                [InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")],
+            ])
+            await navegar_para(
+                update, context,
+                "Ver Sessões > Localização",
+                "📍 *Busca Geográfica de Sessões*\n\nComo deseja determinar a sua localização de origem?",
+                teclado
             )
             return
-            
-        oriente_raw = str(membro.get("Oriente") or membro.get("oriente") or "").strip()
-        if not oriente_raw or oriente_raw.lower() in ("não informado", "nao informado"):
-             await _enviar_ou_editar_mensagem(
-                context, update.effective_user.id, TIPO_RESULTADO,
-                "⚠️ *Oriente não configurado*\n\nSeu perfil não possui um Oriente (Cidade) cadastrado. Edite seus dados para usar esta função.",
-                InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
-            )
-             return
-             
-        # 1. Extração e limpeza do Oriente de Origem (cidade sem o estado no nome)
-        cidade_origem = re.split(r"[-/]", oriente_raw)[0].strip()
+
+        modo = partes_geo[1]
+        raio_km = 100.0
+        if len(partes_geo) > 2:
+            try:
+                raio_km = float(partes_geo[2])
+            except:
+                raio_km = 100.0
+
+        lat1, lon1 = None, None
+        cidade_origem, uf_origem = "", ""
         
-        # 2. Descoberta da UF do membro (via Loja ou extração textual)
-        uf_origem = ""
-        loja_id = membro.get("ID da loja") or membro.get("loja_id")
-        loja = buscar_loja_por_id(loja_id) if loja_id else None
-        if not loja:
-            l_nome = membro.get("Loja") or membro.get("loja")
-            l_num = membro.get("Número da loja") or membro.get("numero_loja")
-            if l_nome:
-                loja = buscar_loja_por_nome_numero(l_nome, l_num)
-        if loja:
-            uf_origem = str(loja.get("Estado UF") or loja.get("estado_uf") or "").strip().upper()
-            
-        if not uf_origem:
-            # Fallback: tentar achar match de UF na string do Oriente original (ex: "Torres-RS")
-            match = re.search(r"[-/]\s*([A-Za-z]{2})\b", oriente_raw)
-            if match:
-                uf_origem = match.group(1).upper()
+        if modo == "gps":
+            lat1 = context.user_data.get("gps_lat")
+            lon1 = context.user_data.get("gps_lon")
+            if lat1 is None or lon1 is None:
+                from telegram import KeyboardButton, ReplyKeyboardMarkup
                 
-        if not uf_origem:
-             # Fallback final: Se não tem UF de jeito nenhum, pedimos para validar o cadastro
-             await _enviar_ou_editar_mensagem(
-                context, update.effective_user.id, TIPO_RESULTADO,
-                "⚠️ *Estado (UF) ausente*\n\nNão conseguimos identificar a UF de sua Loja para o cálculo preciso. Atualize seu registro.",
-                InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
-            )
-             return
-             
+                context.user_data["aguardando_gps_busca"] = True
+                context.user_data["gps_busca_raio"] = raio_km
+                
+                botoes_reply = [[KeyboardButton("Compartilhar Localização 📍", request_location=True)]]
+                teclado_reply = ReplyKeyboardMarkup(botoes_reply, one_time_keyboard=True, resize_keyboard=True)
+                
+                await context.bot.send_message(
+                    chat_id=update.effective_user.id,
+                    text="Por favor, toque no botão abaixo para compartilhar sua localização de GPS atual (ou envie pelo anexo):",
+                    reply_markup=teclado_reply
+                )
+                await query.answer()
+                return
+            cidade_origem = "GPS Temporário"
+            uf_origem = "GPS"
+        else:
+            # Modo Oriente
+            membro = buscar_membro(update.effective_user.id)
+            if not membro:
+                await _enviar_ou_editar_mensagem(
+                    context, update.effective_user.id, TIPO_RESULTADO,
+                    "❌ *Perfil não encontrado*\n\nVocê precisa possuir um registro regular para utilizar a busca geográfica.",
+                    InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
+                )
+                return
+                
+            oriente_raw = str(membro.get("Oriente") or membro.get("oriente") or "").strip()
+            if not oriente_raw or oriente_raw.lower() in ("não informado", "nao informado"):
+                await _enviar_ou_editar_mensagem(
+                    context, update.effective_user.id, TIPO_RESULTADO,
+                    "⚠️ *Oriente não configurado*\n\nSeu perfil não possui um Oriente (Cidade) cadastrado. Edite seus dados para usar esta função.",
+                    InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
+                )
+                return
+                
+            cidade_origem = re.split(r"[-/]", oriente_raw)[0].strip()
+            
+            uf_origem = ""
+            loja_id = membro.get("ID da loja") or membro.get("loja_id")
+            loja = buscar_loja_por_id(loja_id) if loja_id else None
+            if not loja:
+                l_nome = membro.get("Loja") or membro.get("loja")
+                l_num = membro.get("Número da loja") or membro.get("numero_loja")
+                if l_nome:
+                    loja = buscar_loja_por_nome_numero(l_nome, l_num)
+            if loja:
+                uf_origem = str(loja.get("Estado UF") or loja.get("estado_uf") or "").strip().upper()
+                
+            if not uf_origem:
+                match = re.search(r"[-/]\s*([A-Za-z]{2})\b", oriente_raw)
+                if match:
+                    uf_origem = match.group(1).upper()
+                    
+            if not uf_origem:
+                await _enviar_ou_editar_mensagem(
+                    context, update.effective_user.id, TIPO_RESULTADO,
+                    "⚠️ *Estado (UF) ausente*\n\nNão conseguimos identificar a UF de sua Loja para o cálculo preciso. Atualize seu registro.",
+                    InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
+                )
+                return
+
         await query.answer(f"Calculando raio de {int(raio_km)}km...", show_alert=False)
-             
-        # 3. Coletar destinos únicos de eventos futuros
+                 
         eventos = listar_eventos() or []
         agora = datetime.now()
         eventos_futuros = []
@@ -1323,11 +1363,9 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         for ev in eventos:
             dt = _data_hora_evento(ev)
             if dt and dt >= agora and _status_evento_normalizado(ev) != "cancelado":
-                # Resolve cidade e UF da loja do evento
                 l_id = ev.get("ID da loja") or ev.get("loja_id")
                 loja_ev = lojas_map.get(l_id) if l_id else None
                 
-                # Oriente do evento
                 ori_ev_raw = str(ev.get("Oriente") or "").strip()
                 cid_ev = re.split(r"[-/]", ori_ev_raw)[0].strip()
                 
@@ -1350,41 +1388,42 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
                     })
                     
         if not cidades_com_eventos:
-             await _enviar_ou_editar_mensagem(
+            await _enviar_ou_editar_mensagem(
                 context, update.effective_user.id, TIPO_RESULTADO,
                 "📍 *Sem sessões agendadas*\n\nNão encontramos nenhuma sessão futura com coordenadas válidas para busca.",
-                InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
+                InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]]),
+                limpar_conteudo=True
             )
-             return
-             
-        # 4. Aplicar Filtro de Raio Geográfico
-        cidades_filtradas = filtrar_locais_por_raio(cidade_origem, uf_origem, cidades_com_eventos, raio_km=raio_km)
-        
+            return
+            
+        if modo == "gps":
+            cidades_filtradas = filtrar_locais_por_coordenadas(lat1, lon1, cidades_com_eventos, raio_km=raio_km)
+        else:
+            cidades_filtradas = filtrar_locais_por_raio(cidade_origem, uf_origem, cidades_com_eventos, raio_km=raio_km)
+            
+        teclado_botoes = [
+            [
+                InlineKeyboardButton("🎯 25km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|{modo}|25"),
+                InlineKeyboardButton("🎯 50km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|{modo}|50"),
+            ],
+            [
+                InlineKeyboardButton("🎯 100km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|{modo}|100"),
+                InlineKeyboardButton("🎯 200km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|{modo}|200"),
+            ],
+            [InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]
+        ]
+
         if not cidades_filtradas:
-             # Constrói teclado mesmo vazio para permitir alterar raio
-             teclado_botoes = [
-                 [
-                     InlineKeyboardButton("🎯 25km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|25"),
-                     InlineKeyboardButton("🎯 50km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|50"),
-                 ],
-                 [
-                     InlineKeyboardButton("🎯 100km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|100"),
-                     InlineKeyboardButton("🎯 200km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|200"),
-                 ],
-                 [InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]
-             ]
-             
-             await _enviar_ou_editar_mensagem(
+            origem_txt = "seu GPS atual" if modo == "gps" else f"*{cidade_origem}-{uf_origem}*"
+            await _enviar_ou_editar_mensagem(
                 context, update.effective_user.id, TIPO_RESULTADO,
-                f"📍 *Nenhuma sessão próxima*\n\nNão encontramos sessões num raio de *{int(raio_km)}km* a partir de *{cidade_origem}-{uf_origem}*.\n\nTente expandir o raio de busca nos botões abaixo:",
+                f"📍 *Nenhuma sessão próxima*\n\nNão encontramos sessões num raio de *{int(raio_km)}km* a partir de {origem_txt}.\n\nTente expandir o raio de busca nos botões abaixo:",
                 InlineKeyboardMarkup(teclado_botoes)
             )
-             return
-             
-        # Map das menores distâncias por cidade para exibição
+            return
+            
         mapa_distancias = {f"{c['cidade'].lower()}-{c['uf'].upper()}": c["distancia_km"] for c in cidades_filtradas}
         
-        # 5. Cruzar resultados e montar botões
         botoes_resultado = []
         eventos_filtrados_com_dist = []
         for item_fut in eventos_futuros:
@@ -1394,21 +1433,14 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
                 ev_dist["distancia"] = mapa_distancias[chave]
                 eventos_filtrados_com_dist.append(ev_dist)
                 
-        # Ordena por proximidade geográfica e secundariamente cronológico
         eventos_filtrados_com_dist.sort(key=lambda x: (x["distancia"], _data_hora_evento(x["evento"]) or agora))
-        
-        # Limita quantidade
         eventos_filtrados_com_dist = eventos_filtrados_com_dist[:MAX_EVENTOS_LISTA]
         
-        # Agrupa e cria os botões adicionando distância ao texto
         for item in eventos_filtrados_com_dist:
             ev = item["evento"]
             dist = item["distancia"]
             dist_txt = f"{dist:.0f}km" if dist >= 1 else "próximo"
-            
-            # Linha de texto padrão do evento
             texto_base = _linha_botao_evento(ev)
-            # Adiciona a distância no final para o usuário saber quão perto é
             texto_completo = f"{texto_base} ({dist_txt})"
             
             id_evento = normalizar_id_evento(ev)
@@ -1417,23 +1449,19 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
                 callback_data=f"evento|{_encode_cb(id_evento)}"
             )])
             
-        # 6. Adicionar Seletor Rápido de Raio no rodapé
-        botoes_resultado.append([
-            InlineKeyboardButton("🎯 25km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|25"),
-            InlineKeyboardButton("🎯 50km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|50")
-        ])
-        botoes_resultado.append([
-            InlineKeyboardButton("🎯 100km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|100"),
-            InlineKeyboardButton("🎯 200km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|200")
-        ])
-        botoes_resultado.append([InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")])
+        botoes_resultado.extend(teclado_botoes)
         
-        registrar_log_busca(uf=uf_origem, cidade=cidade_origem, encontrou_resultados=True)
-        
+        if modo == "gps":
+            texto_origem = "seu GPS atual"
+            registrar_log_busca(uf="GPS", cidade="GPS", encontrou_resultados=True)
+        else:
+            texto_origem = f"*{cidade_origem}-{uf_origem}*"
+            registrar_log_busca(uf=uf_origem, cidade=cidade_origem, encontrou_resultados=True)
+            
         await navegar_para(
             update, context,
             f"Ver Sessões > Proximidade ({int(raio_km)}km)",
-            f"📍 *Sessões próximas ({int(raio_km)}km):*\nCalculado a partir de *{cidade_origem}-{uf_origem}*.\n\nSelecione uma abaixo ou altere o raio:",
+            f"📍 *Sessões próximas ({int(raio_km)}km):*\nCalculado a partir de {texto_origem}.\n\nSelecione uma abaixo ou altere o raio:",
             InlineKeyboardMarkup(botoes_resultado)
         )
         return
@@ -2992,3 +3020,136 @@ async def ver_localizacao_evento(update: Update, context: ContextTypes.DEFAULT_T
             text=f"📍 Endereço da Sessão:\n\n{endereco[:150]}",
             show_alert=True
         )
+
+
+async def receber_gps_busca_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Callback executado quando o usuário envia uma localização GPS nativa no chat privado
+    após ter clicado em '📍 Posição Atual (GPS)' na busca geolocalizada.
+    """
+    if not context.user_data.get("aguardando_gps_busca") or not update.message or not update.message.location:
+        return
+        
+    location = update.message.location
+    lat1 = location.latitude
+    lon1 = location.longitude
+    
+    # Salva na sessão do usuário para permitir trocar de raio sem reenviar localização
+    context.user_data["gps_lat"] = lat1
+    context.user_data["gps_lon"] = lon1
+    
+    raio_km = context.user_data.get("gps_busca_raio", 100.0)
+    context.user_data.pop("aguardando_gps_busca", None)
+    
+    from telegram import ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
+    from src.location_service import filtrar_locais_por_coordenadas
+    import re
+    from datetime import datetime
+    
+    # Remove teclado nativo de reply keyboard
+    await update.message.reply_text("📍 Localização de GPS recebida. Calculando sessões próximas...", reply_markup=ReplyKeyboardRemove())
+    
+    # 1. Coletar destinos únicos de eventos futuros
+    eventos = listar_eventos() or []
+    agora = datetime.now()
+    eventos_futuros = []
+    cidades_com_eventos = []
+    
+    lojas_map = _lojas_map_cache()
+    
+    for ev in eventos:
+        dt = _data_hora_evento(ev)
+        if dt and dt >= agora and _status_evento_normalizado(ev) != "cancelado":
+            l_id = ev.get("ID da loja") or ev.get("loja_id")
+            loja_ev = lojas_map.get(l_id) if l_id else None
+            
+            ori_ev_raw = str(ev.get("Oriente") or "").strip()
+            cid_ev = re.split(r"[-/]", ori_ev_raw)[0].strip()
+            
+            uf_ev = ""
+            if loja_ev:
+                uf_ev = str(loja_ev.get("Estado UF") or loja_ev.get("estado_uf") or "").strip().upper()
+            if not uf_ev:
+                m_uf = re.search(r"[-/]\s*([A-Za-z]{2})\b", ori_ev_raw)
+                uf_ev = m_uf.group(1).upper() if m_uf else ""
+                
+            if cid_ev and uf_ev:
+                eventos_futuros.append({
+                    "evento": ev,
+                    "cidade": cid_ev,
+                    "uf": uf_ev
+                })
+                cidades_com_eventos.append({
+                    "cidade": cid_ev,
+                    "uf": uf_ev
+                })
+                
+    if not cidades_com_eventos:
+        await context.bot.send_message(
+            chat_id=update.effective_user.id,
+            text="📍 *Sem sessões agendadas*\n\nNão encontramos nenhuma sessão futura com coordenadas válidas para busca.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]]),
+            parse_mode="Markdown"
+        )
+        return
+        
+    # 2. Filtrar por Coordenadas do GPS do usuário
+    cidades_filtradas = filtrar_locais_por_coordenadas(lat1, lon1, cidades_com_eventos, raio_km=raio_km)
+    
+    teclado_botoes = [
+        [
+            InlineKeyboardButton("🎯 25km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|gps|25"),
+            InlineKeyboardButton("🎯 50km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|gps|50"),
+        ],
+        [
+            InlineKeyboardButton("🎯 100km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|gps|100"),
+            InlineKeyboardButton("🎯 200km", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}|gps|200"),
+        ],
+        [InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]
+    ]
+    
+    if not cidades_filtradas:
+        await context.bot.send_message(
+            chat_id=update.effective_user.id,
+            text=f"📍 *Nenhuma sessão próxima*\n\nNão encontramos sessões num raio de *{int(raio_km)}km* a partir do seu GPS atual.\n\nTente expandir o raio de busca nos botões abaixo:",
+            reply_markup=InlineKeyboardMarkup(teclado_botoes),
+            parse_mode="Markdown"
+        )
+        return
+        
+    mapa_distancias = {f"{c['cidade'].lower()}-{c['uf'].upper()}": c["distancia_km"] for c in cidades_filtradas}
+    
+    botoes_resultado = []
+    eventos_filtrados_com_dist = []
+    for item_fut in eventos_futuros:
+        chave = f"{item_fut['cidade'].lower()}-{item_fut['uf'].upper()}"
+        if chave in mapa_distancias:
+            ev_dist = dict(item_fut)
+            ev_dist["distancia"] = mapa_distancias[chave]
+            eventos_filtrados_com_dist.append(ev_dist)
+            
+    eventos_filtrados_com_dist.sort(key=lambda x: (x["distancia"], _data_hora_evento(x["evento"]) or agora))
+    eventos_filtrados_com_dist = eventos_filtrados_com_dist[:MAX_EVENTOS_LISTA]
+    
+    for item in eventos_filtrados_com_dist:
+        ev = item["evento"]
+        dist = item["distancia"]
+        dist_txt = f"{dist:.0f}km" if dist >= 1 else "próximo"
+        texto_base = _linha_botao_evento(ev)
+        texto_completo = f"{texto_base} ({dist_txt})"
+        id_evento = normalizar_id_evento(ev)
+        botoes_resultado.append([InlineKeyboardButton(
+            texto_completo,
+            callback_data=f"evento|{_encode_cb(id_evento)}"
+        )])
+        
+    botoes_resultado.extend(teclado_botoes)
+    
+    registrar_log_busca(uf="GPS", cidade="GPS", encontrou_resultados=True)
+    
+    await context.bot.send_message(
+        chat_id=update.effective_user.id,
+        text=f"📍 *Sessões próximas ao seu GPS* ({int(raio_km)}km):\n\nSelecione um evento abaixo para detalhes ou altere o raio de busca:",
+        reply_markup=InlineKeyboardMarkup(botoes_resultado),
+        parse_mode="Markdown"
+    )

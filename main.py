@@ -110,6 +110,7 @@ from src.eventos import (
     mostrar_eventos_por_uf,
     mostrar_eventos_por_cidade,
     mostrar_eventos_por_potencia_filtro,
+    receber_gps_busca_callback,
 )
 
 # Cadastro de eventos (com integração com lojas)
@@ -140,7 +141,7 @@ from src.admin_acoes import (
 )
 
 # Edição do próprio perfil
-from src.editar_perfil import editar_perfil_handler
+from src.editar_perfil import editar_perfil_handler, alerta_cadastro_bloqueado
 
 # Área do secretário
 from src.eventos_secretario import (
@@ -168,6 +169,9 @@ from src.eventos_secretario import (
     trolhamento_coletivo_aprovar,
     trolhamento_coletivo_recusar_irreg,
     trolhamento_coletivo_recusar_notfound,
+    admin_incorporar_obreiros,
+    admin_confirmar_incorporacao,
+    admin_executar_incorporacao,
 )
 
 # Gerenciamento de lojas (com exclusão)
@@ -752,6 +756,18 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(
         trolhamento_coletivo_recusar_notfound, pattern=r"^trolhamento_coletivo_recusar_notfound\|"
     ))
+    app.add_handler(CallbackQueryHandler(
+        admin_incorporar_obreiros, pattern=r"^admin_incorporar_obreiros$"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        admin_confirmar_incorporacao, pattern=r"^admin_confirmar_incorporacao\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        admin_executar_incorporacao, pattern=r"^admin_executar_incorporacao\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        alerta_cadastro_bloqueado, pattern=r"^alerta_cadastro_bloqueado$"
+    ))
 
     # ===== 9. CALLBACKS ADMINISTRATIVOS =====
     app.add_handler(CallbackQueryHandler(
@@ -837,6 +853,12 @@ def register_handlers(app: Application) -> None:
 
     # ===== 13. HANDLER GENÉRICO DE BOTÕES (CATCH-ALL) =====
     app.add_handler(CallbackQueryHandler(botao_handler))
+
+    # ===== 13.4 LOCALIZAÇÃO (GPS) NO PRIVADO =====
+    app.add_handler(MessageHandler(
+        filters.ChatType.PRIVATE & filters.LOCATION,
+        receber_gps_busca_callback
+    ))
 
     # ===== 13.5 TEXTO LIVRE NO PRIVADO =====
     app.add_handler(MessageHandler(
