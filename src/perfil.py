@@ -170,12 +170,20 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     botoes_perfil.append([InlineKeyboardButton("🔙 Voltar ao Menu", callback_data="menu_principal")])
     teclado = InlineKeyboardMarkup(botoes_perfil)
 
+    await navegar_para(
+        update,
+        context,
+        "Meu Perfil",
+        texto + "\n\n_Processando seu diploma digital. A imagem esta sendo preparada e sera enviada em instantes._",
+        teclado,
+    )
+
     # Geração do Diploma Digital Heráldico (Coluna 4)
     try:
         query = update.callback_query
         if query:
             try:
-                await query.answer("Preparando Diploma... 📜", show_alert=False)
+                await query.answer("Processando diploma...", show_alert=False)
             except Exception:
                 pass
         

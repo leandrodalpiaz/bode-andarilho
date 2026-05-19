@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import asyncio
 
 logger = logging.getLogger(__name__)
 import re
@@ -64,6 +65,7 @@ async def _verificar_membro_no_grupo(context, user_id: int) -> bool:
 
 
 estado_mensagens: Dict[int, dict] = {}
+_diplomas_capa_em_processamento: Set[int] = set()
 
 TIPO_MENU = "menu"
 TIPO_CONTEXTO = "contexto"
@@ -411,18 +413,25 @@ async def criar_estrutura_inicial(context, user_id: int, membro: dict) -> bool:
         )
         return False
 
-    await _enviar_diploma_capa_inicial(context, user_id, membro)
-    return await _mostrar_painel_principal(context, user_id, membro)
+    painel_enviado = await _mostrar_painel_principal(context, user_id, membro)
+    if painel_enviado:
+        asyncio.create_task(_enviar_diploma_capa_inicial(context, user_id, membro))
+    return painel_enviado
 
 
 async def _enviar_diploma_capa_inicial(context, user_id: int, membro: dict) -> bool:
     """Envia o diploma como capa visual do /start para membros ativos."""
     caminhos_diploma = []
     try:
+        if user_id in _diplomas_capa_em_processamento:
+            logger.info("Diploma inicial ja esta em processamento para %s; ignorando novo disparo.", user_id)
+            return False
+
+        _diplomas_capa_em_processamento.add(user_id)
+
         from src.ajuda.conquistas import calcular_conquistas_membro
         from src.conquistas import calcular_progresso_conquistas
         from src.render_diploma import renderizar_diploma
-        import asyncio
 
         if user_id not in estado_mensagens:
             estado_mensagens[user_id] = {}
@@ -477,6 +486,7 @@ async def _enviar_diploma_capa_inicial(context, user_id: int, membro: dict) -> b
                 os.remove(caminho)
             except Exception:
                 pass
+        _diplomas_capa_em_processamento.discard(user_id)
 
 
 async def _mostrar_painel_principal(
