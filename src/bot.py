@@ -22,7 +22,7 @@ import re
 import unicodedata
 from typing import Dict, Optional, Set
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
@@ -68,6 +68,7 @@ estado_mensagens: Dict[int, dict] = {}
 TIPO_MENU = "menu"
 TIPO_CONTEXTO = "contexto"
 TIPO_RESULTADO = "resultado"
+TIPO_DIPLOMA_CAPA = "diploma_capa"
 
 ATALHOS_TEXTO_PRIVADO = {
     # Teclado Persistente (Acessibilidade)
@@ -351,10 +352,18 @@ async def _limpar_mensagens_anteriores(context, user_id: int, tipos: list = None
     for tipo in tipos:
         if tipo in estado_mensagens[user_id]:
             try:
-                await context.bot.delete_message(
-                    chat_id=user_id,
-                    message_id=estado_mensagens[user_id][tipo]["message_id"]
-                )
+                dados = estado_mensagens[user_id][tipo]
+                message_ids = dados.get("message_ids") or [dados.get("message_id")]
+                for message_id in message_ids:
+                    if not message_id:
+                        continue
+                    try:
+                        await context.bot.delete_message(
+                            chat_id=user_id,
+                            message_id=message_id
+                        )
+                    except Exception:
+                        pass
             except Exception:
                 pass
             estado_mensagens[user_id].pop(tipo, None)
@@ -401,7 +410,72 @@ async def criar_estrutura_inicial(context, user_id: int, membro: dict) -> bool:
         )
         return False
 
+    await _enviar_diploma_capa_inicial(context, user_id, membro)
     return await _mostrar_painel_principal(context, user_id, membro)
+
+
+async def _enviar_diploma_capa_inicial(context, user_id: int, membro: dict) -> bool:
+    """Envia o diploma como capa visual do /start para membros ativos."""
+    caminhos_diploma = []
+    try:
+        from src.ajuda.conquistas import calcular_conquistas_membro
+        from src.conquistas import calcular_progresso_conquistas
+        from src.render_diploma import renderizar_diploma
+        import asyncio
+
+        if user_id not in estado_mensagens:
+            estado_mensagens[user_id] = {}
+
+        await _limpar_mensagens_anteriores(context, user_id, [TIPO_DIPLOMA_CAPA])
+
+        slugs_obtidos = calcular_conquistas_membro(membro)
+        progressos = await calcular_progresso_conquistas(user_id)
+        caminhos_diploma = await asyncio.to_thread(renderizar_diploma, membro, slugs_obtidos, progressos)
+
+        if not caminhos_diploma or not all(os.path.exists(p) for p in caminhos_diploma):
+            return False
+
+        media_group = []
+        arquivos_media = []
+        for idx, caminho in enumerate(caminhos_diploma):
+            arquivo = open(caminho, "rb")
+            arquivos_media.append(arquivo)
+            if idx == 0:
+                media = InputMediaPhoto(
+                    arquivo,
+                    caption="📜 *Jornada do Andarilho*",
+                    parse_mode="Markdown",
+                )
+            else:
+                media = InputMediaPhoto(arquivo)
+            media_group.append(media)
+
+        try:
+            mensagens = await context.bot.send_media_group(chat_id=user_id, media=media_group)
+        finally:
+            for arquivo in arquivos_media:
+                try:
+                    arquivo.close()
+                except Exception:
+                    pass
+
+        if mensagens:
+            estado_mensagens[user_id][TIPO_DIPLOMA_CAPA] = {
+                "message_id": mensagens[-1].message_id,
+                "message_ids": [msg.message_id for msg in mensagens],
+                "content_hash": None,
+            }
+
+        return True
+    except Exception as exc:
+        logger.warning("Falha ao enviar diploma inicial para %s: %s", user_id, exc)
+        return False
+    finally:
+        for caminho in caminhos_diploma:
+            try:
+                os.remove(caminho)
+            except Exception:
+                pass
 
 
 async def _mostrar_painel_principal(
