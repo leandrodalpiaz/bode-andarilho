@@ -242,7 +242,10 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg_teclado = await context.bot.send_message(
                 chat_id=user_id,
                 text="Acesse as opções de edição do seu Perfil abaixo:",
-                reply_markup=teclado
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("Fechar diploma", callback_data="fechar_diploma_capa")],
+                    *teclado.inline_keyboard,
+                ])
             )
             
             # 6. Registra no rastreador para autolimpeza

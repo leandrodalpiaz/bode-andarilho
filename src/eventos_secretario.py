@@ -1768,7 +1768,7 @@ async def _exibir_menu_secretario_seguro(update: Update, context: ContextTypes.D
                 "⚠️ *OFICINA NÃO CONFIGURADA*\n\n"
                 "Prezado Ir.·., identificamos que seu cadastro possui perfil de Secretário (Nível 2), "
                 "mas ainda não há nenhuma Loja vinculada à sua gestão administrativa.\n\n"
-                "Para liberar o acesso às ferramentas de gestão (Eventos, Vouchers e Validações), "
+                "Para liberar o acesso às ferramentas de gestão (Eventos, Convites e Validações), "
                 "por favor realize o registro da sua Oficina tocando no botão abaixo:"
             )
             teclado_trava = InlineKeyboardMarkup([
@@ -1779,7 +1779,7 @@ async def _exibir_menu_secretario_seguro(update: Update, context: ContextTypes.D
             return
 
     # Se for Admin ou passar da trava, exibe o menu completo!
-    voucher_str = "🎫 Gerar Voucher Coletivo"
+    voucher_str = "🎫 Gerar Convite Coletivo"
     if not loja_vinculada and nivel == "3":
         from src.sheets_supabase import get_loja_por_secretario
         loja_vinculada = get_loja_por_secretario(user_id)
@@ -1792,7 +1792,7 @@ async def _exibir_menu_secretario_seguro(update: Update, context: ContextTypes.D
             if v_ativo:
                 usos = v_ativo.get("usos_atuais") or 0
                 limite = v_ativo.get("limite_usos") or 100
-                voucher_str = f"🎫 Voucher: {usos}/{limite} Usos"
+                voucher_str = f"🎫 Convite: {usos}/{limite} Usos"
         except Exception:
             pass
 
@@ -1889,14 +1889,14 @@ async def gerar_voucher_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
         lim = v_ativo.get("limite_usos") or 100
         link = f"https://t.me/{context.bot.username}?start={token_at}"
         texto_ativo = (
-            f"🎫 *Voucher Ativo Atual:*\n"
+        f"🎫 *Convite Ativo Atual:*\n"
             f"📊 Usos: `{usos}/{lim}`\n"
             f"🔗 Link: `{link}`\n\n"
-            f"⚠️ _Atenção: Gerar um novo voucher irá invalidar o link ativo acima._\n\n"
+            f"⚠️ _Atenção: Gerar um novo convite irá invalidar o link ativo acima._\n\n"
         )
 
     texto = (
-        f"🎫 *GERAR VOUCHER COLETIVO*\n\n"
+        f"🎫 *GERAR CONVITE COLETIVO*\n\n"
         f"{texto_ativo}"
         f"Escolha o limite máximo de utilizações para o novo link de convite:"
     )
@@ -1913,7 +1913,7 @@ async def gerar_voucher_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
         [InlineKeyboardButton("🔙 Voltar ao painel", callback_data="menu_secretario")]
     ])
     
-    await navegar_para(update, context, "Gerar Voucher", texto, teclado)
+    await navegar_para(update, context, "Gerar Convite", texto, teclado)
     return VOUCHER_LIMITE
 
 
@@ -1928,7 +1928,7 @@ async def gerar_voucher_processar(update: Update, context: ContextTypes.DEFAULT_
         await navegar_para(
             update, context,
             "Gerar Voucher",
-            "⌨ *DIGITE O LIMITE*\n\nPor favor, envie uma mensagem apenas com o número desejado (ex: `15`):",
+            "⌨ *DIGITE O LIMITE*\n\nPor favor, envie uma mensagem apenas com o numero desejado (ex: `15`):",
             InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancelar", callback_data="gerar_voucher_inicio")]])
         )
         return VOUCHER_LIMITE
@@ -1983,7 +1983,7 @@ async def _finalizar_criacao_voucher(update: Update, context: ContextTypes.DEFAU
     nome_loja = loja.get("Nome da Loja") or loja.get("nome") or "Sua Loja"
     
     texto_sucesso = (
-        f"✅ *VOUCHER COLETIVO CRIADO!*\n\n"
+        f"✅ *CONVITE COLETIVO CRIADO!*\n\n"
         f"O link abaixo está ativo e pré-configurado para a oficina *{nome_loja}*.\n\n"
         f"📊 *Limite de usos:* `{limite} cadastros`.\n\n"
         f"🔗 *Link de Convite:* (Toque para copiar)\n"
@@ -2167,14 +2167,14 @@ async def bastao_executar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def ajuda_voucher_boasvindas(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Popup explicando o que é um voucher para o novo secretário."""
+    """Popup explicando o que é um convite para o novo secretário."""
     query = update.callback_query
     await query.answer()
     
     texto = (
-        "💡 *AJUDA RÁPIDA: VOUCHER COLETIVO*\n\n"
-        "O *Voucher Coletivo* é a forma mais segura e rápida de trazer Irmãos da sua Loja para o bot.\n\n"
-        "1️⃣ Acesse a *Área do Secretário > Gerar Voucher*.\n"
+        "💡 *AJUDA RÁPIDA: CONVITE COLETIVO*\n\n"
+        "O *Convite Coletivo* é a forma mais segura e rápida de trazer Irmãos da sua Loja para o bot.\n\n"
+        "1️⃣ Acesse a *Área do Secretário > Gerar Convite*.\n"
         "2️⃣ Escolha a quantidade máxima de utilizações.\n"
         "3️⃣ O bot gerará um link único exclusivo da sua oficina.\n"
         "4️⃣ Copie o link e envie no grupo de WhatsApp/Telegram da sua Loja.\n\n"
@@ -2183,7 +2183,7 @@ async def ajuda_voucher_boasvindas(update: Update, context: ContextTypes.DEFAULT
     )
     
     await navegar_para(
-        update, context, "Ajuda Voucher", texto,
+        update, context, "Ajuda Convite", texto,
         InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar à Área do Secretário", callback_data="menu_secretario")]])
     )
 

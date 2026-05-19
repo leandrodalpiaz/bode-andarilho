@@ -128,6 +128,7 @@ from src.admin_acoes import (
     rebaixar_handler,
     editar_membro_handler,
     broadcast_handler,
+    convite_n2_handler,
     admin_toggle_comunicacao,
     ver_todos_membros,
     membros_pagina_anterior,
@@ -568,6 +569,7 @@ def register_handlers(app: Application) -> None:
     app.add_handler(rebaixar_handler)
     app.add_handler(editar_membro_handler)
     app.add_handler(broadcast_handler)
+    app.add_handler(convite_n2_handler)
     app.add_handler(editar_perfil_handler)
     app.add_handler(editar_evento_secretario_handler)
     app.add_handler(cadastro_loja_handler)

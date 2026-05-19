@@ -605,6 +605,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.info("Voucher %s ativado.", raw_arg)
         except Exception as v_err:
             logger.error("Erro voucher: %s", v_err)
+
+    if raw_arg.upper().startswith("SEC2_"):
+        from src.sheets_supabase import verificar_convite_secretario_n2
+        try:
+            convite = verificar_convite_secretario_n2(raw_arg)
+            if convite:
+                destino = str(convite.get("telegram_id_destino") or "").strip()
+                if destino and destino == str(telegram_id):
+                    context.user_data["convite_secretario_n2"] = raw_arg.strip().upper()
+                    context.user_data["token_cadastro_secretario"] = True
+                    logger.info("Convite N2 %s ativado para %s.", raw_arg, telegram_id)
+                else:
+                    logger.warning("Convite N2 rejeitado por divergencia de Telegram ID. token=%s destino=%s executor=%s", raw_arg, destino, telegram_id)
+            else:
+                logger.info("Convite N2 invalido/expirado/revogado: %s", raw_arg)
+        except Exception as sec2_err:
+            logger.error("Erro convite N2: %s", sec2_err)
             
     if raw_arg.upper().startswith("PRE_"):
         import urllib.parse
@@ -932,6 +949,10 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await _responder_callback_seguro(query)
 
+    if data == "fechar_diploma_capa":
+        await _limpar_mensagens_anteriores(context, telegram_id, [TIPO_DIPLOMA_CAPA])
+        return
+
     # Solicitação de promoção para secretário existente
     if data == "solicitar_promo_sec_existente":
         from src.sheets_supabase import buscar_membro, atualizar_membro
@@ -993,6 +1014,22 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             limpar_conteudo=True
         )
         return
+
+    # Auto-oculta diploma ao navegar para evitar poluição visual.
+    if data in {
+        "menu_principal",
+        "ver_eventos",
+        "minhas_confirmacoes",
+        "meu_cadastro",
+        "area_admin",
+        "area_secretario",
+        "admin_ver_membros",
+        "admin_editar_membro",
+        "admin_broadcast_inicio",
+        "menu_notificacoes",
+        "editar_perfil",
+    }:
+        await _limpar_mensagens_anteriores(context, telegram_id, [TIPO_DIPLOMA_CAPA])
 
     # Roteamento de Chamadas
     if data == "menu_principal":

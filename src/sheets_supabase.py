@@ -1979,6 +1979,109 @@ def consumir_voucher(token: str) -> bool:
         return False
 
 
+# =========================
+# Convite direto N2
+# =========================
+
+def criar_convite_secretario_n2(telegram_id_destino: Any, criado_por: Any, ttl_horas: int = 24) -> Optional[str]:
+    """Cria convite one-time para cadastro direto N2 vinculado a um Telegram ID."""
+    import uuid
+    from datetime import timedelta
+
+    tid_dest = _norm_intlike(telegram_id_destino)
+    criador = _norm_intlike(criado_por)
+    if not tid_dest or not criador:
+        return None
+
+    token = f"SEC2_{uuid.uuid4().hex[:12].upper()}"
+    agora = datetime.now()
+    expira = agora + timedelta(hours=max(1, int(ttl_horas or 24)))
+
+    try:
+        row = {
+            "token": token,
+            "telegram_id_destino": int(float(tid_dest)),
+            "nivel_alvo": "2",
+            "status": "ativo",
+            "criado_por": int(float(criador)),
+            "created_at": agora.isoformat(timespec="seconds"),
+            "expires_at": expira.isoformat(timespec="seconds"),
+            "used_at": None,
+        }
+        supabase.table("convites_secretario_n2").insert(row).execute()
+        return token
+    except Exception as e:
+        logger.error("Erro ao criar convite N2 para %s: %s", tid_dest, e)
+        return None
+
+
+def verificar_convite_secretario_n2(token: str) -> Optional[Dict[str, Any]]:
+    if not token:
+        return None
+    try:
+        resp = (
+            supabase.table("convites_secretario_n2")
+            .select("*")
+            .eq("token", token.strip().upper())
+            .limit(1)
+            .execute()
+        )
+        if not resp.data:
+            return None
+        item = resp.data[0] or {}
+        status = str(item.get("status") or "").strip().lower()
+        if status != "ativo":
+            return None
+
+        exp_raw = str(item.get("expires_at") or "").strip()
+        if exp_raw:
+            try:
+                exp = datetime.fromisoformat(exp_raw.replace("Z", "+00:00").replace("+00:00", ""))
+                if exp < datetime.now():
+                    try:
+                        supabase.table("convites_secretario_n2").update({"status": "expirado"}).eq("id", item.get("id")).execute()
+                    except Exception:
+                        pass
+                    return None
+            except Exception:
+                pass
+        return item
+    except Exception as e:
+        logger.error("Erro ao verificar convite N2 %s: %s", token, e)
+        return None
+
+
+def consumir_convite_secretario_n2(token: str, telegram_id_executor: Any) -> bool:
+    try:
+        convite = verificar_convite_secretario_n2(token)
+        if not convite:
+            return False
+        tid_exec = _norm_intlike(telegram_id_executor)
+        tid_dest = _norm_intlike(convite.get("telegram_id_destino"))
+        if not tid_exec or tid_exec != tid_dest:
+            logger.warning("Tentativa invalida de uso de convite N2. token=%s destino=%s executor=%s", token, tid_dest, tid_exec)
+            return False
+        supabase.table("convites_secretario_n2").update(
+            {
+                "status": "usado",
+                "used_at": datetime.now().isoformat(timespec="seconds"),
+            }
+        ).eq("id", convite.get("id")).execute()
+        return True
+    except Exception as e:
+        logger.error("Erro ao consumir convite N2 %s: %s", token, e)
+        return False
+
+
+def revogar_convite_secretario_n2(token: str) -> bool:
+    try:
+        supabase.table("convites_secretario_n2").update({"status": "revogado"}).eq("token", token.strip().upper()).execute()
+        return True
+    except Exception as e:
+        logger.error("Erro ao revogar convite N2 %s: %s", token, e)
+        return False
+
+
 def transferir_secretaria(id_antigo: Any, id_novo: Any, loja_id: Any) -> bool:
     """Realiza a transmissão do bastão da secretaria de forma atômica."""
     old_tid = _norm_intlike(id_antigo)

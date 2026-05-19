@@ -311,7 +311,8 @@ async def exibir_menu_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")],
         [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
         [InlineKeyboardButton("📢 Publicidade/Apoiadores", callback_data="admin_publicidade")],
-        [InlineKeyboardButton("📢 Broadcast Segmentado", callback_data="admin_broadcast_inicio")],
+        [InlineKeyboardButton("📢 Comunicado para Secretários", callback_data="admin_broadcast_inicio")],
+        [InlineKeyboardButton("🔐 Convite Direto N2", callback_data="admin_convite_n2_inicio")],
         [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
     ])
 
@@ -1396,6 +1397,7 @@ editar_membro_handler = ConversationHandler(
 
 
 BROADCAST_UF, BROADCAST_CIDADE, BROADCAST_RITO, BROADCAST_MENSAGEM, BROADCAST_CONFIRMAR = range(100, 105)
+CONVITE_N2_RECEBER_ID, CONVITE_N2_REVOGAR_TOKEN = range(200, 202)
 
 
 # ============================================
@@ -1410,7 +1412,7 @@ async def broadcast_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Coletar UFs ativas das lojas
     from src.sheets_supabase import listar_lojas
-    lojas = listar_lojas() or []
+    lojas = listar_lojas(0, include_todas=True) or []
     ufs = sorted(list(set(str(l.get("estado_uf", "")).upper().strip() for l in lojas if l.get("estado_uf"))))
 
     botoes = [[InlineKeyboardButton("🌎 Todas as UFs", callback_data="br_uf|TODAS")]]
@@ -1420,8 +1422,8 @@ async def broadcast_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await navegar_para(
         update, context,
-        "Broadcast > UF",
-        "📢 *Broadcast Segmentado*\n\nSelecione o Estado (UF) dos Secretários que deseja filtrar:",
+        "Comunicado > Estado",
+        "📢 *Comunicado para Secretários*\n\nSelecione o Estado (UF) dos Secretários que deseja filtrar:",
         InlineKeyboardMarkup(botoes)
     )
     return BROADCAST_UF
@@ -1439,7 +1441,7 @@ async def broadcast_escolher_uf(update: Update, context: ContextTypes.DEFAULT_TY
 
     # Coletar cidades ativas
     from src.sheets_supabase import listar_lojas
-    lojas = listar_lojas() or []
+    lojas = listar_lojas(0, include_todas=True) or []
     cidades = set()
     for l in lojas:
         if not l.get("cidade"):
@@ -1456,8 +1458,8 @@ async def broadcast_escolher_uf(update: Update, context: ContextTypes.DEFAULT_TY
 
     await navegar_para(
         update, context,
-        f"Broadcast > Cidade ({uf})",
-        "📢 *Broadcast Segmentado*\n\nSelecione a Cidade alvo:",
+        f"Comunicado > Cidade ({uf})",
+        "📢 *Comunicado para Secretários*\n\nSelecione a cidade alvo:",
         InlineKeyboardMarkup(botoes)
     )
     return BROADCAST_CIDADE
@@ -1475,7 +1477,7 @@ async def broadcast_escolher_cidade(update: Update, context: ContextTypes.DEFAUL
 
     # Ritos disponíveis
     from src.sheets_supabase import listar_lojas
-    lojas = listar_lojas() or []
+    lojas = listar_lojas(0, include_todas=True) or []
     ritos = set()
     for l in lojas:
         if not l.get("rito"):
@@ -1494,8 +1496,8 @@ async def broadcast_escolher_cidade(update: Update, context: ContextTypes.DEFAUL
 
     await navegar_para(
         update, context,
-        f"Broadcast > Rito ({cidade})",
-        "📢 *Broadcast Segmentado*\n\nSelecione o Rito alvo:",
+        f"Comunicado > Rito ({cidade})",
+        "📢 *Comunicado para Secretários*\n\nSelecione o rito alvo:",
         InlineKeyboardMarkup(botoes)
     )
     return BROADCAST_RITO
@@ -1521,7 +1523,7 @@ async def broadcast_escolher_rito(update: Update, context: ContextTypes.DEFAULT_
     botoes = [[InlineKeyboardButton("❌ Cancelar", callback_data="br_cancelar")]]
 
     texto = (
-        f"📢 *Broadcast Segmentado*\n\n"
+        f"📢 *Comunicado para Secretários*\n\n"
         f"*Filtros Atuais:*\n"
         f"- UF: {uf}\n"
         f"- Cidade: {cidade}\n"
@@ -1532,7 +1534,7 @@ async def broadcast_escolher_rito(update: Update, context: ContextTypes.DEFAULT_
 
     await navegar_para(
         update, context,
-        "Broadcast > Digitar Mensagem",
+        "Comunicado > Digitar Mensagem",
         texto,
         InlineKeyboardMarkup(botoes)
     )
@@ -1592,7 +1594,7 @@ async def broadcast_confirmar_disparo(update: Update, context: ContextTypes.DEFA
         )
         await navegar_para(
             update, context,
-            "Broadcast > Bloqueado",
+            "Comunicado > Bloqueado",
             "⚠️ *Aviso: Trava de Prudência*\n\n"
             "Painel de Comunicação calibrado, mas em modo de escuta. "
             "As mensagens para os Secretários estão desabilitadas durante a fase de maturação dos dados.\n\n"
@@ -1618,7 +1620,7 @@ async def broadcast_confirmar_disparo(update: Update, context: ContextTypes.DEFA
 
     await navegar_para(
         update, context,
-        "Broadcast > Concluído",
+        "Comunicado > Concluído",
         f"✅ *Disparo Finalizado*\n\n"
         f"Mensagem enviada com sucesso para {sucessos} de {len(destinatarios)} Secretários.",
         InlineKeyboardMarkup([[InlineKeyboardButton("Menu principal", callback_data="area_admin")]])
@@ -1663,6 +1665,73 @@ broadcast_handler = ConversationHandler(
     fallbacks=[CommandHandler("cancelar", broadcast_inicio)],
     name="broadcast_handler",
     persistent=False
+)
+
+
+async def convite_n2_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if get_nivel(user_id) != "3":
+        return ConversationHandler.END
+    await navegar_para(
+        update,
+        context,
+        "Admin > Convite N2",
+        "Envie o Telegram ID do destinatário para gerar convite direto de Secretário N2.\n\n"
+        "Formato esperado: apenas números.\n\n"
+        "Opcional: envie `revogar TOKEN` para revogar um convite existente.",
+        InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="menu_principal")]]),
+    )
+    return CONVITE_N2_RECEBER_ID
+
+
+async def convite_n2_receber(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if get_nivel(user_id) != "3":
+        return ConversationHandler.END
+    texto = str((update.message.text if update.message else "") or "").strip()
+    if not texto:
+        return CONVITE_N2_RECEBER_ID
+
+    from src.sheets_supabase import criar_convite_secretario_n2, revogar_convite_secretario_n2
+
+    lower = texto.lower()
+    if lower.startswith("revogar "):
+        token = texto.split(" ", 1)[1].strip().upper()
+        ok = revogar_convite_secretario_n2(token)
+        msg = "Convite revogado com sucesso." if ok else "Falha ao revogar convite."
+        await navegar_para(update, context, "Admin > Convite N2", msg, InlineKeyboardMarkup([[InlineKeyboardButton("Voltar", callback_data="area_admin")]]))
+        return ConversationHandler.END
+
+    tid = "".join(ch for ch in texto if ch.isdigit())
+    if not tid:
+        await navegar_para(update, context, "Admin > Convite N2", "Telegram ID inválido. Envie apenas números.", InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="menu_principal")]]))
+        return CONVITE_N2_RECEBER_ID
+
+    token = criar_convite_secretario_n2(tid, user_id, ttl_horas=24)
+    if not token:
+        await navegar_para(update, context, "Admin > Convite N2", "Falha ao criar convite N2. Verifique a tabela `convites_secretario_n2` no Supabase.", InlineKeyboardMarkup([[InlineKeyboardButton("Voltar", callback_data="area_admin")]]))
+        return ConversationHandler.END
+
+    bot_username = (getattr(context.bot, "username", None) or "").lstrip("@")
+    link = f"https://t.me/{bot_username}?start={token}" if bot_username else token
+    texto_saida = (
+        f"Convite N2 criado para Telegram ID `{tid}`.\n\n"
+        f"Token: `{token}`\n"
+        f"Link direto: {link}\n\n"
+        "Este convite é one-time, expira em 24h e só funciona para o Telegram ID informado."
+    )
+    await navegar_para(update, context, "Admin > Convite N2", texto_saida, InlineKeyboardMarkup([[InlineKeyboardButton("Voltar", callback_data="area_admin")]]))
+    return ConversationHandler.END
+
+
+convite_n2_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(convite_n2_inicio, pattern="^admin_convite_n2_inicio$")],
+    states={
+        CONVITE_N2_RECEBER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, convite_n2_receber)],
+    },
+    fallbacks=[CommandHandler("cancelar", cancelar_operacao), CallbackQueryHandler(cancelar_operacao, pattern="^menu_principal$")],
+    name="convite_n2_handler",
+    persistent=False,
 )
 
 # ============================================
@@ -1846,7 +1915,7 @@ async def confirmar_pedido_fundacao_usuario(update: Update, context: ContextType
 
 
 async def outorgar_malhete_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin aprova pedido: cria loja oficial, promove membro e gera voucher."""
+    """Admin aprova pedido: cria loja oficial, promove membro e gera convite."""
     query = update.callback_query
     user_id = update.effective_user.id
     if get_nivel(user_id) != "3":
@@ -1914,7 +1983,7 @@ async def outorgar_malhete_admin(update: Update, context: ContextTypes.DEFAULT_T
             f"Seu pedido de fundacao foi *AUTORIZADO* pela Chancelaria Geral.\n\n"
             f"A Oficina *{loja_man}* foi erguida e vinculada ao seu encargo administrativo. "
             f"Suas ferramentas de Nivel 2 estao liberadas!\n\n"
-            f"🎟️ *Voucher Inicial de Convites:* `{token}`\n"
+            f"🎟️ *Convite Inicial da Oficina:* `{token}`\n"
             f"Compartilhe este token com seus obreiros para que entrem direto na sua Oficina!\n\n"
             f"Envie /start e toque em 'Area do Secretario' para ver suas colunas! 🔨🤝🌟🐐"
         )
@@ -2026,7 +2095,7 @@ async def aprovar_secretario_callback(update: Update, context: ContextTypes.DEFA
                 f"Saudações Ir.·. *Secretário {nome}*!\n"
                 f"Seu cadastro e solicitação de acesso foram *APROVADOS* pela Administração Geral.\n\n"
                 f"Suas ferramentas de gestão de Nível 2 estão totalmente liberadas!\n\n"
-                f"Envie /start para acessar seu painel e emitir vouchers dinâmicos. 🔨🤝🐐"
+                f"Envie /start para acessar seu painel e emitir convites dinâmicos. 🔨🤝🐐"
             )
             await context.bot.send_message(chat_id=tid, text=msg_obreiro, parse_mode="Markdown")
         except Exception as e_not:

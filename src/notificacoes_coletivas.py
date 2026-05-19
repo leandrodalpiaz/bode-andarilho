@@ -199,7 +199,7 @@ async def realizar_abertura_historica(bot: Any) -> None:
         logger.info("--- INICIANDO RITO DE ABERTURA HISTÓRICA DA CHANCELARIA ---")
         
         # 1. Puxar todas as Lojas existentes
-        lojas = listar_lojas()
+        lojas = listar_lojas(0, include_todas=True)
         
         ufs_encontradas = set()
         potencias_encontradas = set()

@@ -943,6 +943,10 @@ def _dados_para_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Di
     elif context.user_data.get("cadastro_voucher"):
         payload["status"] = "Ativo"
         payload["nivel"] = "1"
+    if context.user_data.get("convite_secretario_n2"):
+        payload["status"] = "Ativo"
+        payload["nivel"] = "2"
+        payload["status_auditoria"] = ""
         
     if context.user_data.get("cadastro_loja_manual"):
         payload["loja_manual"] = context.user_data.get("cadastro_loja", "")
@@ -972,6 +976,15 @@ async def _finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE
     dados_membro = _dados_para_salvar(update, context)
     salvo = cadastrar_membro(dados_membro)
     if salvo:
+        token_sec2 = context.user_data.get("convite_secretario_n2")
+        if token_sec2:
+            try:
+                from src.sheets_supabase import consumir_convite_secretario_n2
+                ok_sec2 = consumir_convite_secretario_n2(token_sec2, update.effective_user.id)
+                if not ok_sec2:
+                    logger.warning("Falha ao consumir convite N2 %s para usuário %s", token_sec2, update.effective_user.id)
+            except Exception as e_sec2:
+                logger.warning("Erro ao consumir convite N2 %s: %s", token_sec2, e_sec2)
         v_token = context.user_data.get("cadastro_voucher")
         if v_token:
             try:
@@ -993,7 +1006,7 @@ async def _finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE
         return CONFIRMAR
 
     # --- NOTIFICAR RESPONSÁVEL PELA VALIDAÇÃO (CÂMARA DE REFLEXÃO) ---
-    if context.user_data.get("token_cadastro_secretario"):
+    if context.user_data.get("token_cadastro_secretario") and not context.user_data.get("convite_secretario_n2"):
         await notificar_secretario_pendente_adm(context, dados_membro)
     else:
         await notificar_validacao_pendente(context, dados_membro, mudanca_loja=False)
