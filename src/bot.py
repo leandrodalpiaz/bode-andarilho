@@ -429,7 +429,7 @@ async def _enviar_diploma_capa_inicial(context, user_id: int, membro: dict) -> b
 
         await _limpar_mensagens_anteriores(context, user_id, [TIPO_DIPLOMA_CAPA])
 
-        slugs_obtidos = calcular_conquistas_membro(membro)
+        slugs_obtidos = await calcular_conquistas_membro(user_id)
         progressos = await calcular_progresso_conquistas(user_id)
         caminhos_diploma = await asyncio.to_thread(renderizar_diploma, membro, slugs_obtidos, progressos)
 

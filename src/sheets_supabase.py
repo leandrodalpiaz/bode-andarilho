@@ -36,6 +36,8 @@ _cache_eventos: Dict[bool, tuple] = {}   # include_inativos -> (dados, timestamp
 _ttl_eventos = 30                        # 30 segundos
 _cache_lojas: Dict[int, tuple] = {}      # telegram_id -> (dados, timestamp)
 _ttl_lojas = 300                         # 5 minutos
+_membro_conquistas_tabela_indisponivel = False
+_membro_conquistas_alertado = False
 
 # Alternativa para notificações pendentes do secretário quando a tabela
 # dedicada ainda não foi criada no Supabase.
@@ -56,6 +58,28 @@ if not _SUPABASE_URL or not _SUPABASE_KEY:
 supabase: Client = create_client(_SUPABASE_URL, _SUPABASE_KEY)
 
 logger = logging.getLogger(__name__)
+
+
+def _erro_tabela_membro_conquistas(exc: Exception) -> bool:
+    msg = str(exc or "")
+    return (
+        "membro_conquistas" in msg
+        and ("PGRST205" in msg or "Could not find the table" in msg)
+    )
+
+
+def _marcar_tabela_membro_conquistas_indisponivel(exc: Exception) -> None:
+    global _membro_conquistas_tabela_indisponivel
+    global _membro_conquistas_alertado
+
+    _membro_conquistas_tabela_indisponivel = True
+    if not _membro_conquistas_alertado:
+        logger.warning(
+            "Tabela 'membro_conquistas' indisponível no Supabase. "
+            "Pulando consultas de conquistas para reduzir latência. Erro original: %s",
+            exc,
+        )
+        _membro_conquistas_alertado = True
 
 
 def _erro_tabela_notif_secretario_pendentes(exc: Exception) -> bool:
@@ -2205,6 +2229,9 @@ def registrar_conquista(user_id: int, conquista_slug: str) -> bool:
     Ignora silenciosamente se já possuir (unique key constraint).
     """
     try:
+        if _membro_conquistas_tabela_indisponivel:
+            return False
+
         uid = _norm_intlike(user_id)
         if not uid:
             return False
@@ -2218,6 +2245,9 @@ def registrar_conquista(user_id: int, conquista_slug: str) -> bool:
         logger.info("Nova conquista registrada: %s para user %s", conquista_slug, uid)
         return True
     except Exception as e:
+        if _erro_tabela_membro_conquistas(e):
+            _marcar_tabela_membro_conquistas_indisponivel(e)
+            return False
         # Pode ser conflito de PK/Unique, tratamos como sucesso funcional (já gravado)
         logger.debug("Ignorando tentativa de duplicar conquista %s para %s: %s", conquista_slug, user_id, e)
         return True
@@ -2226,6 +2256,9 @@ def registrar_conquista(user_id: int, conquista_slug: str) -> bool:
 def listar_conquistas_obtidas(user_id: int) -> List[str]:
     """Retorna a lista de slugs de conquistas já obtidas pelo obreiro."""
     try:
+        if _membro_conquistas_tabela_indisponivel:
+            return []
+
         uid = _norm_intlike(user_id)
         if not uid:
             return []
@@ -2240,6 +2273,9 @@ def listar_conquistas_obtidas(user_id: int) -> List[str]:
             
         return [str(item.get("conquista_slug", "")) for item in resp.data]
     except Exception as e:
+        if _erro_tabela_membro_conquistas(e):
+            _marcar_tabela_membro_conquistas_indisponivel(e)
+            return []
         logger.error("Erro ao listar conquistas de %s: %s", user_id, e)
         return []
 
