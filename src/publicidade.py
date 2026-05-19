@@ -13,12 +13,12 @@ def obter_publicidade_diploma() -> dict:
     if logo_path.exists():
         return {
             "nome": "Apoio Institucional",
-            "mensagem": "Sind Ofícios apoia a jornada fraterna do Bode Andarilho.",
+            "mensagem": "O Sind Ofícios apoia o desenvolvimento e a manutenção do Bode Andarilho.",
             "imagem": str(logo_path),
         }
 
     return {
-        "nome": "Sua imagem aqui",
-        "mensagem": "Você pode apoiar o Bode Andarilho deixando sua marca neste espaço.",
+        "nome": "Divulgue sua marca",
+        "mensagem": "Apoie o Bode Andarilho e exiba sua marca neste espaço.",
         "imagem": None,
     }

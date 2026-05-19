@@ -436,7 +436,7 @@ CONFIRMACAO_COM_AGAPE_TMPL = (
     "Ir.·., agradecemos sua visita! Presença CONFIRMADA (Com Ágape) para a sessão: {pauta} na Loja {loja}{numero_fmt}.\n\n"
     "📅 {data} às {horario}\n\n"
     "⚠️ Pedimos que cancelamentos sejam feitos com 24h de antecedência para nossa melhor organização.\n\n"
-    "⚠️ A confirmação via bot não garante o ingresso no templo, ficam permanecidas às verificações habituais. 🐐"
+    "⚠️ A confirmação via bot não garante o ingresso no templo, permanecendo necessárias as verificações habituais. 🐐"
 )
 
 # [CONTEXTO] Confirmação de presença para membro sem ágape;
@@ -445,7 +445,7 @@ CONFIRMACAO_COM_AGAPE_TMPL = (
 CONFIRMACAO_SEM_AGAPE_TMPL = (
     "Ir.·., agradecemos sua visita! Presença CONFIRMADA (Sem Ágape) para a sessão: {pauta} na Loja {loja}{numero_fmt}.\n\n"
     "📅 {data} às {horario}\n\n"
-    "⚠️ A confirmação via bot não garante o ingresso no templo, ficam permanecidas às verificações habituais. 🐐"
+    "⚠️ A confirmação via bot não garante o ingresso no templo, permanecendo necessárias as verificações habituais. 🐐"
 )
 
 # [CONTEXTO] Mensagem sobre importância da confirmação de ágape (incluída na confirmação)

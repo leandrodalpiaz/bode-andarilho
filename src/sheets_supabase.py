@@ -621,25 +621,7 @@ def cadastrar_membro(dados: dict) -> bool:
             "status_auditoria": _norm_text(dados.get("Status Auditoria") or dados.get("status_auditoria")),
         }
 
-        try:
-            supabase.table("membros").insert(row).execute()
-        except Exception as e_ins:
-            if _coluna_ausente(e_ins, "status"):
-                logger.warning(
-                    "Coluna 'status' ausente em 'membros' — INSERT sem ela. "
-                    "Adicione-a: ALTER TABLE membros ADD COLUMN status TEXT DEFAULT 'Ativo';"
-                )
-                row.pop("status", None)
-                supabase.table("membros").insert(row).execute()
-            elif _coluna_ausente(e_ins, "potencia_complemento"):
-                logger.warning(
-                    "Coluna 'potencia_complemento' ausente em 'membros' — INSERT sem ela. "
-                    "Adicione-a: ALTER TABLE membros ADD COLUMN potencia_complemento TEXT DEFAULT '';"
-                )
-                row.pop("potencia_complemento", None)
-                supabase.table("membros").insert(row).execute()
-            else:
-                raise
+        _insert_com_fallback_colunas("membros", row)
 
         # Invalida o cache
         _cache_membros.pop(int(float(telegram_id)), None)
@@ -731,27 +713,7 @@ def atualizar_membro(telegram_id: int, dados_atualizados: dict, preservar_nivel:
         if preservar_nivel:
             update["nivel"] = nivel_atual
 
-        try:
-            supabase.table("membros").update(update).eq("telegram_id", tid).execute()
-        except Exception as e_upd:
-            if _coluna_ausente(e_upd, "status"):
-                logger.warning(
-                    "Coluna 'status' ausente em 'membros' — UPDATE sem ela. "
-                    "Adicione-a: ALTER TABLE membros ADD COLUMN status TEXT DEFAULT 'Ativo';"
-                )
-                update.pop("status", None)
-                if update:  # só executa se ainda houver outros campos
-                    supabase.table("membros").update(update).eq("telegram_id", tid).execute()
-            elif _coluna_ausente(e_upd, "potencia_complemento"):
-                logger.warning(
-                    "Coluna 'potencia_complemento' ausente em 'membros' — UPDATE sem ela. "
-                    "Adicione-a: ALTER TABLE membros ADD COLUMN potencia_complemento TEXT DEFAULT '';"
-                )
-                update.pop("potencia_complemento", None)
-                if update:
-                    supabase.table("membros").update(update).eq("telegram_id", tid).execute()
-            else:
-                raise
+        _update_com_fallback_colunas("membros", "telegram_id", tid, update)
 
         # Invalida o cache
         _cache_membros.pop(telegram_id, None)

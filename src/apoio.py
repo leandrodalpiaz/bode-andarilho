@@ -189,7 +189,7 @@ def selecionar_apoiador_para_card() -> Optional[Dict]:
         return {
             "apoiador_id": "placeholder",
             "contrato_id": "",
-            "nome": "Cota institucional disponivel",
+            "nome": "Espaço de apoio disponível",
             "logo_path": str(pick),
         }
     escolhido = _weighted_pick(elegiveis, 1)[0]
@@ -205,14 +205,14 @@ def selecionar_apoiadores_para_confirmados(limite: int = 2) -> List[Dict]:
         {
             "apoiador_id": "placeholder",
             "contrato_id": "",
-            "nome": "Sua marca pode apoiar esta jornada",
-            "texto_curto": "Seu Instagram aqui, seu link aqui, seu contato aqui: uma presenca sobria para quem caminha junto da comunidade.",
+            "nome": "Divulgue sua marca ou projeto",
+            "texto_curto": "Exiba seu Instagram, link ou contato neste espaço. Uma presença sutil e amigável para toda a nossa comunidade.",
         },
         {
             "apoiador_id": "placeholder2",
             "contrato_id": "",
-            "nome": "Apoie a manutencao do Bode Andarilho",
-            "texto_curto": "Sua marca pode ajudar na hospedagem, suporte e melhorias do bot com uma mensagem amigavel e bem posicionada.",
+            "nome": "Apoie a manutenção do Bode Andarilho",
+            "texto_curto": "Colabore com a hospedagem, suporte técnico e melhorias do aplicativo por meio de uma inserção discreta.",
         },
     ][:limite]
 
@@ -226,8 +226,8 @@ def selecionar_apoiadores_para_ia(limite: int = 2) -> List[Dict]:
         {
             "apoiador_id": "placeholder",
             "contrato_id": "",
-            "nome": "Sua marca aqui",
-            "texto_curto": "seu Instagram, seu site ou seu contato em uma presenca institucional discreta.",
+            "nome": "Divulgue sua marca aqui",
+            "texto_curto": "exiba seu Instagram, site ou contato por meio de uma inserção institucional discreta.",
         }
     ][:limite]
 
@@ -320,12 +320,12 @@ async def mostrar_apoiadores(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not ativos:
         texto = (
             "🤝 *Apoiadores do Bode Andarilho*\n\n"
-            "Este espaco esta aberto para marcas e profissionais que queiram apoiar a continuidade do projeto.\n\n"
-            "📌 *Cota institucional disponivel*\n"
-            "Seu Instagram aqui, seu link aqui, seu contato aqui. Uma presenca discreta em telas consultadas com frequencia, como listas de confirmados, cards de eventos e respostas elegiveis da IA.\n\n"
+            "Este espaço está aberto a marcas e profissionais que queiram apoiar a continuidade do projeto.\n\n"
+            "📌 *Espaço de apoio disponível*\n"
+            "Exiba seu Instagram, site ou contato. Uma presença discreta e elegante em telas de grande visualização, como listas de confirmados, cards de eventos e respostas da inteligência artificial.\n\n"
             "📌 *Apoie o Bode Andarilho*\n"
-            "A contribuicao ajuda a manter hospedagem, suporte tecnico e melhorias visuais para a comunidade.\n\n"
-            "Quer ocupar uma cota? Toque em *Falar com admin* e a administracao recebe seu interesse por aqui."
+            "Sua contribuição ajuda a cobrir custos de hospedagem, manutenção técnica e melhorias para a nossa comunidade.\n\n"
+            "Deseja apoiar este projeto? Toque em *Falar com admin* e a administração receberá seu interesse."
         )
     else:
         texto = (
@@ -363,10 +363,10 @@ async def cmd_apoiar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
     texto = (
         "🤝 *Apoio Institucional*\n\n"
-        "O Bode Andarilho reserva cotas institucionais para marcas e profissionais que desejam apoiar a comunidade com sobriedade.\n\n"
-        "Apoiar o projeto ajuda a manter hospedagem, manutencao tecnica e melhorias continuas, com exposicao discreta em pontos de alta visibilidade.\n\n"
-        "Exemplos de chamada: seu Instagram aqui, seu link aqui, seu contato aqui. A ideia e aproximar apoiadores da comunidade sem transformar o bot em vitrine agressiva.\n\n"
-        "Faixas iniciais sugeridas: Amigo, Institucional, Destaque e Master."
+        "O Bode Andarilho oferece espaços de apoio para marcas e profissionais que desejam colaborar com a comunidade de forma sutil.\n\n"
+        "Apoiar o projeto ajuda a manter custos de hospedagem, manutenção técnica e melhorias contínuas, com divulgação discreta em pontos estratégicos do aplicativo.\n\n"
+        "Exemplos de inserção: seu Instagram, site ou contato. O objetivo é integrar parceiros à comunidade sem comprometer a experiência de uso.\n\n"
+        "Faixas sugeridas: Amigo, Institucional, Destaque e Master."
     )
     await navegar_para(
         update,
@@ -386,7 +386,7 @@ async def falar_com_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     if q:
         try:
-            await q.answer("Vamos avisar a administracao sobre seu interesse.", show_alert=False)
+            await q.answer("A administração será notificada sobre o seu interesse.", show_alert=False)
         except Exception:
             pass
 
@@ -397,13 +397,13 @@ async def falar_com_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         nome = " ".join([p for p in [user.first_name, user.last_name] if p]) or user.username or str(user.id)
 
     texto_usuario = (
-        "💬 *Interesse registrado*\n\n"
-        "A administracao do projeto sera avisada por aqui.\n\n"
-        "Enquanto isso, voce pode preparar:\n"
-        "• nome da marca ou projeto;\n"
-        "• Instagram, site ou contato publico;\n"
-        "• uma frase curta e amigavel para exibicao;\n"
-        "• faixa de apoio desejada."
+        "💬 *Interesse registrado!*\n\n"
+        "A administração do projeto foi notificada e entrará em contato em breve.\n\n"
+        "Para agilizar o processo, você pode preparar:\n"
+        "• O nome da sua marca, empresa ou projeto;\n"
+        "• Seu link de preferência (Instagram, site ou outro contato);\n"
+        "• Uma frase curta de apresentação (amigável e discreta);\n"
+        "• A faixa de apoio de seu interesse."
     )
     await navegar_para(
         update,
@@ -418,7 +418,7 @@ async def falar_com_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if admin_id.isdigit() and user:
         try:
-            username = f"@{user.username}" if user.username else "sem username publico"
+            username = f"@{user.username}" if user.username else "sem username público"
             await context.bot.send_message(
                 chat_id=int(admin_id),
                 text=(
@@ -426,7 +426,7 @@ async def falar_com_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"Nome: {nome}\n"
                     f"Telegram ID: {user.id}\n"
                     f"Username: {username}\n\n"
-                    "Sugestao: responder pelo privado e solicitar marca, link, contato e faixa desejada."
+                    "Sugestão: responder no privado para solicitar a marca, link, contato e faixa de apoio desejada."
                 ),
             )
         except Exception as exc:
@@ -445,8 +445,8 @@ async def mostrar_doacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await navegar_para(
             update,
             context,
-            "Apoio Institucional > Doacao",
-            "💝 *Doacao ao projeto*\n\nEsta opcao ainda nao esta aberta nesta fase inicial.\n\nSe voce quiser apoiar como parceiro institucional, toque em *Falar com admin*.",
+            "Apoio Institucional > Doação",
+            "💝 *Doação ao projeto*\n\nEsta opção ainda não está ativa nesta fase.\n\nSe você deseja apoiar o projeto como parceiro institucional, toque em *Falar com admin*.",
             InlineKeyboardMarkup([
                 [InlineKeyboardButton("💬 Falar com admin", callback_data="apoio_contato_admin")],
                 [InlineKeyboardButton("🔙 Voltar", callback_data="apoiar_menu")],
@@ -456,11 +456,11 @@ async def mostrar_doacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     qr_path = BRANDING_DIR / "pix_doacao_bode_andarilho.png"
     texto = (
-        "💝 *Doacao ao projeto*\n\n"
-        "Qualquer valor ajuda a manter o Bode Andarilho no ar: hospedagem, banco de dados, manutencao tecnica e melhorias continuas.\n\n"
+        "💝 *Doação ao projeto*\n\n"
+        "Qualquer valor contribui diretamente para a manutenção do Bode Andarilho: custos de hospedagem, banco de dados, suporte técnico e melhorias contínuas.\n\n"
         f"*{PIX_TIPO_PADRAO}:* `{PIX_CHAVE_PADRAO}`\n"
-        f"*Banco:* {PIX_BANCO_PADRAO or 'informe no app bancario'}\n\n"
-        "Voce pode usar a chave acima ou o QR de doacao enviado nesta conversa."
+        f"*Banco:* {PIX_BANCO_PADRAO or 'confira no seu aplicativo bancário'}\n\n"
+        "Você pode realizar a transferência pela chave acima ou escanear o QR Code enviado a esta conversa."
     )
     if qr_path.exists() and update.effective_chat:
         try:
@@ -468,15 +468,15 @@ async def mostrar_doacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_photo(
                     chat_id=update.effective_chat.id,
                     photo=photo,
-                    caption="QR de doacao ao Bode Andarilho",
+                    caption="QR Code de doação ao Bode Andarilho",
                 )
         except Exception as exc:
-            logger.warning("Falha ao enviar QR de doacao: %s", exc)
+            logger.warning("Falha ao enviar QR de doação: %s", exc)
 
     await navegar_para(
         update,
         context,
-        "Apoio Institucional > Doacao",
+        "Apoio Institucional > Doação",
         texto,
         InlineKeyboardMarkup([
             [InlineKeyboardButton("💬 Falar com admin", callback_data="apoio_contato_admin")],
@@ -495,7 +495,7 @@ async def mostrar_publicidade_admin(update: Update, context: ContextTypes.DEFAUL
         "🤝 *Gestão de Apoios*\n\n"
         "Esta área concentra a governança do programa institucional.\n"
         "Os dados financeiros e de exibição são baseados em registros reais de exposição.\n\n"
-        "Meta operacional sugerida: composição de cotas para ~R$ 1.000/mês sem aumentar intrusão visual."
+        "Meta operacional sugerida: composição de parcerias para ~R$ 1.000/mês sem aumentar intrusão visual."
     )
     await navegar_para(update, context, "Gestão de Apoios", txt, InlineKeyboardMarkup([[InlineKeyboardButton("🤝 Ver apoiadores", callback_data="apoio_ver_apoiadores")], [InlineKeyboardButton("🔙 Voltar ao admin", callback_data="area_admin")]]))
 
@@ -510,4 +510,4 @@ def registrar_handlers_apoio(application):
 
 
 def obter_texto_patrocinio() -> str:
-    return "\n\n_Apoio institucional: sua marca pode ajudar a manter o Bode Andarilho no ar._"
+    return "\n\n_Apoio institucional: sua marca pode apoiar a manutenção do Bode Andarilho._"

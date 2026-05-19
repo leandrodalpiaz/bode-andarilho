@@ -100,7 +100,29 @@ def _botao_editar_webapp(texto: str, url: str) -> InlineKeyboardButton:
     return InlineKeyboardButton(texto, web_app=WebAppInfo(url=url))
 
 
+def _limpar_rascunhos_antigos(bucket: Dict[int, Dict[str, Any]], max_age_seconds: int = 3600) -> None:
+    now = datetime.now()
+    to_remove = []
+    for tid, payload in list(bucket.items()):
+        saved_at_str = payload.get("_saved_at")
+        if saved_at_str:
+            try:
+                saved_at = datetime.fromisoformat(saved_at_str)
+                if (now - saved_at).total_seconds() > max_age_seconds:
+                    to_remove.append(tid)
+            except Exception:
+                to_remove.append(tid)
+        else:
+            to_remove.append(tid)
+    for tid in to_remove:
+        bucket.pop(tid, None)
+
+
 def _salvar_rascunho(bucket: Dict[int, Dict[str, Any]], telegram_id: int, dados: Dict[str, Any]) -> None:
+    try:
+        _limpar_rascunhos_antigos(bucket, max_age_seconds=3600)
+    except Exception:
+        pass
     payload = dict(dados)
     payload["_saved_at"] = datetime.now().isoformat(timespec="seconds")
     bucket[int(telegram_id)] = payload

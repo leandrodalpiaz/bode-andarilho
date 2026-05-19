@@ -372,6 +372,13 @@ async def meus_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
 
+    if str(nivel) not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⛔ Você não tem permissão para acessar esta área."
+        )
+        return
+
     eventos = listar_eventos() or []
     
     if nivel == "3":
@@ -1011,6 +1018,13 @@ async def ver_confirmados_secretario(update: Update, context: ContextTypes.DEFAU
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
 
+    if str(nivel) not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⛔ Você não tem permissão para acessar esta área."
+        )
+        return
+
     # Lista eventos visíveis ao perfil.
     eventos = listar_eventos() or []
     if nivel == "3":
@@ -1211,6 +1225,13 @@ async def listar_eventos_cancelados(update: Update, context: ContextTypes.DEFAUL
     """Lista os eventos cancelados do secretário para possível reabertura."""
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
+
+    if str(nivel) not in ["2", "3"]:
+        await _enviar_ou_editar_mensagem(
+            context, user_id, TIPO_RESULTADO,
+            "⛔ Você não tem permissão para acessar esta área."
+        )
+        return
 
     eventos = listar_eventos() or []
     

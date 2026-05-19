@@ -180,8 +180,8 @@ def _draw_ad_slot(image: Image.Image, draw: ImageDraw.ImageDraw) -> None:
             logger.warning("Falha ao inserir imagem de publicidade: %s", exc)
             image_path = None
 
-    title = ad.get("nome") or "Sua imagem aqui"
-    message = ad.get("mensagem") or "Voce pode apoiar o Bode Andarilho deixando sua marca neste espaco."
+    title = ad.get("nome") or "Divulgue sua marca"
+    message = ad.get("mensagem") or "Você pode apoiar o Bode Andarilho exibindo sua marca neste espaço."
     title_font = _load_font("Cinzel-Regular.ttf", 22)
     msg_font = _load_font("CormorantGaramond-SemiBold.ttf", 22)
 
@@ -242,7 +242,7 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str], pr
     title_font = _load_font("Cinzel-Regular.ttf", 42)
     subtitle_font = _load_font("CormorantGaramond-SemiBold.ttf", 27)
     _draw_center(draw_p2, "QUADRO DE CONQUISTAS", center_x, 250, title_font, TEXT_DARK)
-    _draw_center(draw_p2, "Sua jornada cresce a cada presenca, visita e marco registrado.", center_x, 298, subtitle_font, TEXT_MUTED)
+    _draw_center(draw_p2, "Sua jornada cresce a cada presença, visita e marco registrado.", center_x, 298, subtitle_font, TEXT_MUTED)
 
     try:
         from src.conquistas import CONQUISTAS_INFO

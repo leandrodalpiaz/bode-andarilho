@@ -1848,6 +1848,12 @@ async def confirmar_pedido_fundacao_usuario(update: Update, context: ContextType
 async def outorgar_malhete_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Admin aprova pedido: cria loja oficial, promove membro e gera voucher."""
     query = update.callback_query
+    user_id = update.effective_user.id
+    if get_nivel(user_id) != "3":
+        if query:
+            await query.answer("⛔ Apenas Administradores podem realizar esta ação.", show_alert=True)
+        return
+
     try:
         await query.answer("Processando Outorga...")
     except Exception:
@@ -1931,6 +1937,12 @@ async def outorgar_malhete_admin(update: Update, context: ContextTypes.DEFAULT_T
 async def recusar_outorga_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Recusa o pedido de fundacao."""
     query = update.callback_query
+    user_id = update.effective_user.id
+    if get_nivel(user_id) != "3":
+        if query:
+            await query.answer("⛔ Apenas Administradores podem realizar esta ação.", show_alert=True)
+        return
+
     try:
         await query.answer("Registrando recusa...")
     except Exception:
