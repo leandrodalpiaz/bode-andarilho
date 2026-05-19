@@ -13,6 +13,7 @@ from telegram import InputMediaPhoto
 from telegram.ext import ContextTypes
 
 from src.render_cards import render_event_card
+from src.apoio import selecionar_apoiador_para_card, registrar_exibicao_apoio
 from src.sheets_supabase import (
     atualizar_evento,
     buscar_loja_por_id,
@@ -82,8 +83,15 @@ def preparar_midia_evento(evento: Dict[str, Any]) -> MidiaEvento:
 
     loja = obter_loja_evento(evento) or {}
     try:
-        rendered = render_event_card(evento, loja)
+        apoio_card = None
+        try:
+            apoio_card = selecionar_apoiador_para_card()
+        except Exception:
+            apoio_card = None
+        rendered = render_event_card(evento, loja, apoio_card=apoio_card)
         modo_render = "template_loja" if loja else "template_padrao"
+        if apoio_card:
+            evento["_apoio_card"] = apoio_card
         return MidiaEvento(modo=modo_render, path=rendered.path)
     except Exception as e:
         logger.warning("Falha ao renderizar card do evento %s: %s", evento.get("ID Evento"), e)
@@ -137,6 +145,15 @@ async def publicar_evento_no_grupo(
             if file_id:
                 sync["Card file_id Telegram"] = file_id
             atualizar_evento(0, sync)
+            apoio_card = evento.get("_apoio_card") if isinstance(evento, dict) else None
+            if apoio_card:
+                registrar_exibicao_apoio(
+                    apoio_card.get("apoiador_id", ""),
+                    apoio_card.get("contrato_id", ""),
+                    "card_logo",
+                    contexto="publicacao_evento_grupo",
+                    evento_id=str(evento.get("ID Evento") or evento.get("id_evento") or ""),
+                )
             return msg, "photo"
         except Exception as e:
             logger.warning("Falha ao enviar card visual; usando texto fallback: %s", e)

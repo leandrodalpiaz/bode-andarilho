@@ -14,6 +14,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppI
 from telegram.ext import ContextTypes
 
 from src.bot import navegar_para
+from src.apoio import montar_rodape_ia, registrar_exibicao_apoio, resposta_ia_elegivel_para_apoio
 from src.permissoes import get_nivel
 from src.ia_multinivel import (
 	IAResult,
@@ -679,7 +680,31 @@ async def _executar_assistente_ia(update: Update, context: ContextTypes.DEFAULT_
 			action_value=item.acao_valor if item.acao_tipo == "callback" else "informacao",
 			topic_hint=_extrair_topic_hint(texto_entrada),
 		)
-		await navegar_para(update, context, "Assistente IA", item.resposta_oficial, teclado)
+		resposta_final = item.resposta_oficial
+		apoio_items = []
+		try:
+			if resposta_ia_elegivel_para_apoio(resposta_final):
+				rodape, apoio_btn, apoio_items = montar_rodape_ia(user_id, context)
+				if rodape:
+					resposta_final += rodape
+					if apoio_btn:
+						linhas = list(teclado.inline_keyboard if teclado else [])
+						linhas.extend(apoio_btn.inline_keyboard)
+						teclado = InlineKeyboardMarkup(linhas)
+		except Exception as e:
+			logger.warning("Falha ao montar apoio na IA: %s", e)
+		await navegar_para(update, context, "Assistente IA", resposta_final, teclado)
+		try:
+			for p in apoio_items:
+				registrar_exibicao_apoio(
+					p.get("apoiador_id", ""),
+					p.get("contrato_id", ""),
+					"ia_resposta_texto",
+					contexto="assistente_ia",
+					usuario_id=user_id,
+				)
+		except Exception as e:
+			logger.warning("Falha ao registrar exibicao de apoio na IA: %s", e)
 		return
 
 	# ── 4) Sem match → fallback original ──────────────────────────────

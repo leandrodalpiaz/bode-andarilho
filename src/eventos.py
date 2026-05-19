@@ -80,6 +80,7 @@ from src.bot import (
 )
 from src.potencias import formatar_potencia, potencia_de_dados
 from src.evento_midia import editar_ou_republicar_evento_visual, publicar_evento_no_grupo
+from src.apoio import montar_rodape_confirmados, registrar_exibicao_apoio
 
 logger = logging.getLogger(__name__)
 
@@ -2531,6 +2532,14 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     corpo = "Nenhuma presença confirmada até o momento." if not linhas else "\n".join(linhas)
     texto = f"*{titulo}*\n{data_evento}\n\n{corpo}"
+    apoio_pick: List[Dict] = []
+    botao_apoio = None
+    try:
+        rodape, botao_apoio, apoio_pick = montar_rodape_confirmados()
+        if rodape:
+            texto += rodape
+    except Exception as exc:
+        logger.warning("Falha ao montar apoio em confirmados: %s", exc)
 
     user_id = update.effective_user.id
     ja_confirmou = buscar_confirmacao_em_eventos(ids_aliases, user_id)
@@ -2542,6 +2551,11 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
         agape_evento = str((evento or {}).get("Ágape", "") or "")
         botoes.extend(_teclado_confirmacao_evento(id_evento, agape_evento))
 
+    try:
+        if botao_apoio:
+            botoes.extend(botao_apoio.inline_keyboard)
+    except Exception:
+        pass
     botoes.append([InlineKeyboardButton("🔒 Fechar", callback_data="fechar_mensagem")])
 
     reply_markup = InlineKeyboardMarkup(botoes)
@@ -2574,6 +2588,18 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     delay=15,
                 )
             )
+    try:
+        for p in apoio_pick:
+            registrar_exibicao_apoio(
+                p.get("apoiador_id", ""),
+                p.get("contrato_id", ""),
+                "confirmados_premium_texto",
+                contexto="ver_confirmados",
+                evento_id=id_evento,
+                usuario_id=update.effective_user.id if update.effective_user else None,
+            )
+    except Exception as exc:
+        logger.warning("Falha ao registrar exibicao de apoio em confirmados: %s", exc)
 
 
 # ============================================

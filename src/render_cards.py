@@ -636,11 +636,46 @@ def _apply_watermark(image: Image.Image) -> None:
         logger.warning("Falha ao aplicar marca d'agua do Bode Andarilho: %s", exc)
 
 
+def _apply_apoio_logo(image: Image.Image, apoio_card: Optional[Dict[str, Any]]) -> bool:
+    if not apoio_card:
+        return False
+    logo = str((apoio_card or {}).get("logo_url") or (apoio_card or {}).get("logo_path") or "").strip()
+    if not logo:
+        return False
+    try:
+        marca = _open_image(logo).convert("RGBA")
+        width, height = image.size
+        safe_h = int(height * 0.12)
+        max_w = int(width * 0.28)
+        if safe_h < 28 or max_w < 100:
+            return False
+
+        ratio = min(max_w / max(1, marca.size[0]), safe_h / max(1, marca.size[1]))
+        if ratio <= 0:
+            return False
+        new_size = (max(1, int(marca.size[0] * ratio)), max(1, int(marca.size[1] * ratio)))
+        marca = marca.resize(new_size, Image.Resampling.LANCZOS)
+        alpha = marca.getchannel("A").point(lambda p: int(p * 0.78))
+        marca.putalpha(alpha)
+
+        margin = int(width * 0.03)
+        x = width - marca.size[0] - margin
+        y = height - marca.size[1] - margin
+        if y < int(height * 0.84):
+            return False
+        image.alpha_composite(marca, (x, y))
+        return True
+    except Exception as exc:
+        logger.warning("Falha ao aplicar logo de apoio no card: %s", exc)
+        return False
+
+
 def _render_default_template_card(
     image: Image.Image,
     evento: Dict[str, Any],
     loja: Dict[str, Any],
     output_dir: Optional[str],
+    apoio_card: Optional[Dict[str, Any]] = None,
 ) -> RenderResult:
     draw = ImageDraw.Draw(image)
     width, height = image.size
@@ -744,6 +779,7 @@ def _render_default_template_card(
         _hex_to_rgba("#5a3616", 205),
         anchor="ma",
     )
+    _apply_apoio_logo(image, apoio_card)
 
     out_dir = output_dir or tempfile.gettempdir()
     os.makedirs(out_dir, exist_ok=True)
@@ -753,7 +789,7 @@ def _render_default_template_card(
     return RenderResult(path=out_path, warnings=warnings)
 
 
-def render_event_card(evento: Dict[str, Any], loja: Dict[str, Any], output_dir: Optional[str] = None) -> RenderResult:
+def render_event_card(evento: Dict[str, Any], loja: Dict[str, Any], output_dir: Optional[str] = None, apoio_card: Optional[Dict[str, Any]] = None) -> RenderResult:
     template = _norm(loja.get("Template sessão URL") or loja.get("template_sessao_url"))
     if not template:
         if DEFAULT_TEMPLATE_PATH.exists():
@@ -763,7 +799,7 @@ def render_event_card(evento: Dict[str, Any], loja: Dict[str, Any], output_dir: 
 
     image = ImageOps.exif_transpose(_open_image(template)).convert("RGBA")
     if _is_default_template_source(template, loja):
-        return _render_default_template_card(image, evento, loja, output_dir)
+        return _render_default_template_card(image, evento, loja, output_dir, apoio_card=apoio_card)
 
     draw = ImageDraw.Draw(image)
     width, height = image.size
@@ -838,6 +874,7 @@ def render_event_card(evento: Dict[str, Any], loja: Dict[str, Any], output_dir: 
             tx = x + max(24, (w - tw) // 2)
         draw.text((tx, ty), line, font=final_font, fill=text_color)
         ty += line_h
+    _apply_apoio_logo(image, apoio_card)
 
     out_dir = output_dir or tempfile.gettempdir()
     os.makedirs(out_dir, exist_ok=True)

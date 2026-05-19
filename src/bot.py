@@ -173,6 +173,7 @@ def menu_principal_teclado(nivel: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton("🔔 Lembretes", callback_data="menu_lembretes"),
             InlineKeyboardButton("🧹 Organizar", callback_data="limpar_historico"),
         ],
+        [InlineKeyboardButton("🤝 Apoiadores", callback_data="apoio_ver_apoiadores")],
     ]
 
     # Secretários (Nível 2) e Admins (Nível 3)
