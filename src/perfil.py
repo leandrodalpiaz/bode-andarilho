@@ -200,21 +200,35 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # 3. Monta o Media Group
             media_group = []
+            arquivos_media = []
             for idx, p in enumerate(caminhos_diploma):
-                media = InputMediaPhoto(open(p, "rb"))
+                arquivo = open(p, "rb")
+                arquivos_media.append(arquivo)
                 if idx == 0:
-                    media.caption = (
-                        "📜 *Jornada do Andarilho*\n\n"
-                        "Deslize para o lado para ver o seu progresso e conquistas! ➡️"
+                    media = InputMediaPhoto(
+                        arquivo,
+                        caption=(
+                            "📜 *Jornada do Andarilho*\n\n"
+                            "Deslize para o lado para ver o seu progresso e conquistas! ➡️"
+                        ),
+                        parse_mode="Markdown",
                     )
-                    media.parse_mode = "Markdown"
+                else:
+                    media = InputMediaPhoto(arquivo)
                 media_group.append(media)
                 
             # 4. Envia o Álbum
-            msg_media = await context.bot.send_media_group(
-                chat_id=user_id,
-                media=media_group
-            )
+            try:
+                msg_media = await context.bot.send_media_group(
+                    chat_id=user_id,
+                    media=media_group
+                )
+            finally:
+                for arquivo in arquivos_media:
+                    try:
+                        arquivo.close()
+                    except Exception:
+                        pass
             
             # 5. Envia o teclado inline (Media Groups não aceitam botões em anexo)
             msg_teclado = await context.bot.send_message(

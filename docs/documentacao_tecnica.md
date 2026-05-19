@@ -1,7 +1,7 @@
 # Documentação Técnica - Bode Andarilho Bot
 
-**Versão:** 2.2 (Supabase + Mini App + Cards Visuais)
-**Última atualização:** 13/05/2026
+**Versão:** 2.3 (Supabase + Mini App + Cards Visuais + Diploma)
+**Última atualização:** 19/05/2026
 **Runtime:** Python 3.12
 
 ## 1. Visão Geral
@@ -42,6 +42,8 @@ docs/
 src/
   miniapp.py
   render_cards.py        # renderizador de cards com Pillow
+  render_diploma.py      # renderizador do diploma vertical em 2 paginas
+  publicidade.py         # helper visual de publicidade do diploma
   evento_midia.py        # decisão: card especial / template / texto fallback
   sheets_supabase.py
   potencias.py
@@ -125,7 +127,65 @@ Formato recomendado:
 - estilo gravura/traço;
 - sem textos que concorram com os dados da sessão.
 
-## 7. Como editar no futuro
+## 7. Diploma digital
+
+Entrada do usuario:
+
+- Menu principal -> `Meu Perfil / Diploma`
+- comando `/perfil`
+- callback interno `meu_cadastro`
+
+Fluxo:
+
+1. `src.perfil.mostrar_perfil` busca o cadastro do membro.
+2. `src.render_diploma.renderizar_diploma` gera duas imagens PNG 9:16.
+3. O Telegram envia as imagens como `send_media_group`.
+4. Os botoes de perfil seguem em mensagem separada, pois album do Telegram nao aceita teclado inline anexado.
+5. Se a imagem falhar, o perfil textual antigo continua como fallback.
+
+Arquivos base:
+
+```text
+assets/branding/diploma_vertical_p1.png
+assets/branding/diploma_vertical_p2.png
+```
+
+Pagina 1:
+
+- usa a capa oficial;
+- renderiza nome, grau, oficina/loja e oriente;
+- nao inclui blocos de cadastro, assinaturas artificiais ou publicidade.
+
+Pagina 2:
+
+- renderiza o quadro de conquistas a partir de `CONQUISTAS_INFO`;
+- progresso 0 fica quase invisivel, apenas como silhueta;
+- progresso parcial aumenta a opacidade de forma proporcional;
+- progresso 100 aparece nitido;
+- se a base nao tiver dados de conquistas, a imagem ainda renderiza com progresso 0.
+
+## 8. Publicidade e apoiadores
+
+Publicidade textual:
+
+- `src.apoio.PATROCINADORES` segue como lista estatica/temporaria.
+- `src.apoio.obter_texto_patrocinio()` injeta apoio institucional em textos longos.
+
+Publicidade visual do diploma:
+
+- `src.publicidade.obter_publicidade_diploma()` centraliza a configuracao visual.
+- Se existir `assets/branding/sponsor_sindoficios.png`, a imagem e usada no rodape da pagina 2.
+- Se nao existir, o diploma usa a peca de exemplo: `Sua imagem aqui`.
+
+Gestao administrativa atual:
+
+- Menu principal -> Administracao -> Publicidade/Apoiadores.
+- Callback: `admin_publicidade`.
+- Acesso restrito a nivel 3.
+- A tela mostra a peca ativa, status da imagem e a mensagem usada no diploma.
+- Este ciclo nao possui upload/CRUD completo por bot; a troca visual e feita substituindo o asset aprovado.
+
+## 9. Como editar no futuro
 
 Para trocar apenas o fundo, substitua:
 
@@ -145,10 +205,18 @@ assets/potencias/comab.png
 assets/branding/bode_andarilho_watermark.png
 ```
 
+Para trocar a publicidade visual do diploma, adicione/substitua:
+
+```text
+assets/branding/sponsor_sindoficios.png
+```
+
 Para ajustar hierarquia, espaçamentos, fontes, opacidade ou posições, editar
 somente o bloco do template padrão em `src/render_cards.py`.
 
-## 8. Potências
+Para ajustar o diploma, editar `src/render_diploma.py`.
+
+## 10. Potências
 
 Padrão oficial:
 
@@ -163,7 +231,7 @@ Exemplos de complemento:
 - `GOSC`
 - `GOP`
 
-## 9. Supabase
+## 11. Supabase
 
 Scripts SQL em `docs/`:
 
@@ -182,13 +250,16 @@ Estrutura lógica:
 - `eventos/{id_evento}/render.png`
 - `eventos/{id_evento}/especial.*`
 
-## 10. Verificação rápida
+## 12. Verificação rápida
 
 ```bash
 python -m compileall main.py src
 ```
 
-## 11. Referências
+Para validar o diploma, gerar preview local em `tmp/diploma_preview_p1.png` e
+`tmp/diploma_preview_p2.png` usando `src.render_diploma.renderizar_diploma`.
+
+## 13. Referências
 
 - Fluxos atualizados: `docs/fluxos_atualizados_2026_04.md`
 - Ajuda/FAQ: `src/ajuda/faq.py`

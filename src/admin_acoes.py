@@ -310,6 +310,7 @@ async def exibir_menu_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
         [InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")],
         [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
+        [InlineKeyboardButton("📢 Publicidade/Apoiadores", callback_data="admin_publicidade")],
         [InlineKeyboardButton("📢 Broadcast Segmentado", callback_data="admin_broadcast_inicio")],
         [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
     ])

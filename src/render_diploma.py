@@ -4,391 +4,292 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
-import re
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFont
 
 logger = logging.getLogger(__name__)
 
-# Diretórios de assets
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 FONTS_DIR = ASSETS_DIR / "fonts"
 BRANDING_DIR = ASSETS_DIR / "branding"
 
-DEFAULT_TEXT_COLOR = (58, 36, 16, 255)  # Castanho envelhecido elegante
-GOLD_TEXT_COLOR = (235, 195, 100, 230)   # Dourado queimado para relevos
-GRAY_TEXT_COLOR = (120, 120, 120, 255)
+WIDTH = 1080
+HEIGHT = 1920
+TEXT_DARK = (57, 35, 16, 255)
+TEXT_MUTED = (92, 69, 45, 230)
+GOLD = (202, 151, 52, 255)
+GOLD_SOFT = (210, 174, 88, 180)
+PARCHMENT = (239, 220, 176, 188)
+PARCHMENT_SOFT = (247, 232, 191, 120)
+LINE = (126, 82, 35, 165)
 
-def _load_custom_font(name: str, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    """Tenta carregar fonte do diretório assets, senão usa fallback."""
+
+def _load_font(name: str, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     path = FONTS_DIR / name
     if path.exists():
         try:
             return ImageFont.truetype(str(path), size=size)
-        except Exception:
-            pass
-    # Fallbacks de sistema padrão
-    fallbacks = ["georgia.ttf", "Georgia.ttf", "times.ttf", "Times New Roman.ttf"]
-    for f in fallbacks:
+        except Exception as exc:
+            logger.warning("Falha ao carregar fonte %s: %s", name, exc)
+
+    for fallback in (
+        "C:/Windows/Fonts/seguiemj.ttf",
+        "C:/Windows/Fonts/seguisym.ttf",
+        "Georgia.ttf",
+        "georgia.ttf",
+        "Times New Roman.ttf",
+        "times.ttf",
+    ):
         try:
-            return ImageFont.truetype(f, size=size)
+            return ImageFont.truetype(fallback, size=size)
         except Exception:
             continue
     return ImageFont.load_default()
 
-def _measure_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> Tuple[int, int]:
+
+def _text_size(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> Tuple[int, int]:
     box = draw.textbbox((0, 0), text, font=font)
     return box[2] - box[0], box[3] - box[1]
 
-def _draw_centered(draw: ImageDraw.ImageDraw, text: str, center_x: int, y: int, font: ImageFont.ImageFont, fill: Tuple[int, int, int, int]) -> int:
-    draw.text((center_x, y), text, font=font, fill=fill, anchor="ma")
-    _, h = _measure_text(draw, "Ag", font)
-    return y + h
 
-def _wrap_and_draw_centered(draw: ImageDraw.ImageDraw, text: str, center_x: int, y: int, font: ImageFont.ImageFont, fill: Tuple[int, int, int, int], max_width: int, line_gap: int = 5) -> int:
+def _fit_font(name: str, text: str, max_width: int, start_size: int, min_size: int = 20) -> ImageFont.ImageFont:
+    probe = Image.new("RGBA", (10, 10))
+    draw = ImageDraw.Draw(probe)
+    for size in range(start_size, min_size - 1, -2):
+        font = _load_font(name, size)
+        if _text_size(draw, text, font)[0] <= max_width:
+            return font
+    return _load_font(name, min_size)
+
+
+def _value(membro: Dict[str, Any], *keys: str, default: str = "") -> str:
+    for key in keys:
+        raw = membro.get(key)
+        if raw is not None and str(raw).strip():
+            return str(raw).strip()
+    return default
+
+
+def _draw_center(draw: ImageDraw.ImageDraw, text: str, x: int, y: int, font: ImageFont.ImageFont, fill=TEXT_DARK) -> None:
+    draw.text((x, y), text, font=font, fill=fill, anchor="mm")
+
+
+def _wrap_lines(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_width: int) -> List[str]:
     words = str(text).split()
-    lines = []
-    current = []
-    for w in words:
-        candidate = " ".join(current + [w])
-        tw, _ = _measure_text(draw, candidate, font)
-        if tw <= max_width:
-            current.append(w)
-        else:
-            lines.append(" ".join(current))
-            current = [w]
+    lines: List[str] = []
+    current: List[str] = []
+    for word in words:
+        candidate = " ".join(current + [word])
+        if not current or _text_size(draw, candidate, font)[0] <= max_width:
+            current.append(word)
+            continue
+        lines.append(" ".join(current))
+        current = [word]
     if current:
         lines.append(" ".join(current))
-        
-    cy = y
-    for line in lines:
-        cy = _draw_centered(draw, line, center_x, cy, font, fill) + line_gap
-    return cy
+    return lines
 
-def _criar_fallback_pergaminho_vertical(width: int, height: int, bg_path: Path) -> Image.Image:
-    """
-    Se o template vertical personalizado não existir, criamos um pergaminho vertical
-    9:16 fazendo o recorte central inteligente do original diploma_pergaminho_bg.png.
-    """
-    if bg_path.exists():
+
+def _load_template(path: Path) -> Image.Image:
+    if path.exists():
+        return Image.open(path).convert("RGBA").resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+
+    logger.warning("Template %s nao encontrado. Usando fundo simples.", path)
+    image = Image.new("RGBA", (WIDTH, HEIGHT), (241, 222, 181, 255))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle([42, 42, WIDTH - 42, HEIGHT - 42], radius=24, outline=LINE, width=6)
+    return image
+
+
+def _draw_badge_card(
+    image: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    box: Tuple[int, int, int, int],
+    icon: str,
+    title: str,
+    description: str,
+    percent: int,
+) -> None:
+    x1, y1, x2, y2 = box
+    percent = max(0, min(100, int(percent or 0)))
+    alpha = 3 if percent <= 0 else min(255, 18 + int(percent * 2.37))
+    complete = percent >= 100
+
+    card_fill = (248, 232, 190, max(1, min(145, alpha - 12)))
+    card_line = (128, 86, 39, max(2, min(165, alpha)))
+    draw.rounded_rectangle([x1, y1, x2, y2], radius=18, fill=card_fill, outline=card_line, width=2)
+
+    icon_layer = Image.new("RGBA", image.size, (255, 255, 255, 0))
+    icon_draw = ImageDraw.Draw(icon_layer)
+    icon_font = _load_font("C:/Windows/Fonts/seguiemj.ttf", 34)
+    icon_box = [x1 + 16, y1 + 20, x1 + 76, y1 + 80]
+    icon_draw.ellipse(icon_box, fill=(251, 239, 201, max(1, alpha)), outline=(156, 112, 45, alpha))
+    glyph_box = icon_draw.textbbox((0, 0), icon, font=icon_font)
+    glyph_w = glyph_box[2] - glyph_box[0]
+    glyph_h = glyph_box[3] - glyph_box[1]
+    glyph_x = x1 + 46 - glyph_w / 2 - glyph_box[0]
+    glyph_y = y1 + 50 - glyph_h / 2 - glyph_box[1]
+    icon_draw.text((glyph_x, glyph_y), icon, font=icon_font, fill=(61, 44, 25, alpha))
+    image.alpha_composite(icon_layer)
+
+    title_font = _fit_font("Cinzel-Regular.ttf", title, x2 - x1 - 110, 19, 14)
+    desc_font = _load_font("CormorantGaramond-SemiBold.ttf", 19)
+    pct_font = _load_font("Cinzel-Regular.ttf", 15)
+
+    title_color = (58, 36, 16, alpha)
+    desc_color = (88, 65, 42, max(2, alpha - 18))
+    draw.text((x1 + 92, y1 + 20), title, font=title_font, fill=title_color)
+
+    for idx, line in enumerate(_wrap_lines(draw, description, desc_font, x2 - x1 - 112)[:2]):
+        draw.text((x1 + 92, y1 + 48 + idx * 22), line, font=desc_font, fill=desc_color)
+
+    bar_x = x1 + 92
+    bar_y = y2 - 30
+    bar_w = x2 - bar_x - 18
+    draw.rounded_rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + 8], radius=4, fill=(130, 98, 55, max(1, min(84, alpha))))
+    if percent:
+        fill = GOLD if complete else (164, 122, 47, max(80, alpha))
+        draw.rounded_rectangle([bar_x, bar_y, bar_x + int(bar_w * percent / 100), bar_y + 8], radius=4, fill=fill)
+
+    label = "Conquista liberada" if complete else f"{percent}%"
+    draw.text((bar_x + bar_w, bar_y - 18), label, font=pct_font, fill=(72, 48, 24, max(2, alpha)), anchor="ra")
+
+
+def _draw_ad_slot(image: Image.Image, draw: ImageDraw.ImageDraw) -> None:
+    try:
+        from src.publicidade import obter_publicidade_diploma
+
+        ad = obter_publicidade_diploma()
+    except Exception as exc:
+        logger.warning("Falha ao obter publicidade do diploma: %s", exc)
+        ad = {}
+
+    x1, y1, x2, y2 = 170, 1668, 910, 1778
+    draw.rounded_rectangle([x1, y1, x2, y2], radius=24, fill=(246, 231, 190, 116), outline=(139, 96, 42, 115), width=2)
+
+    image_path = ad.get("imagem")
+    if image_path and Path(str(image_path)).exists():
         try:
-            bg_original = Image.open(bg_path).convert("RGBA")
-            orig_w, orig_h = bg_original.size
-            # Calcula recorte de largura proporcional a 9:16 com base na altura original
-            target_w = int(orig_h * (9/16))
-            left = (orig_w - target_w) // 2
-            cropped = bg_original.crop((left, 0, left + target_w, orig_h))
-            return cropped.resize((width, height), Image.Resampling.LANCZOS)
-        except Exception as e:
-            logger.warning("Falha ao recortar pergaminho horizontal: %s", e)
-            
-    # Fallback total sólido de cor pergaminho com bordas simuladas
-    fallback = Image.new("RGBA", (width, height), (242, 230, 205, 255))
-    draw = ImageDraw.Draw(fallback)
-    draw.rectangle([20, 20, width-20, height-20], outline=(184, 134, 11, 255), width=8)
-    draw.rectangle([28, 28, width-28, height-28], outline=(101, 67, 33, 255), width=2)
-    return fallback
+            logo = Image.open(str(image_path)).convert("RGBA")
+            logo.thumbnail((170, 78), Image.Resampling.LANCZOS)
+            image.alpha_composite(logo, (x1 + 24, y1 + (y2 - y1 - logo.height) // 2))
+        except Exception as exc:
+            logger.warning("Falha ao inserir imagem de publicidade: %s", exc)
+            image_path = None
+
+    title = ad.get("nome") or "Sua imagem aqui"
+    message = ad.get("mensagem") or "Voce pode apoiar o Bode Andarilho deixando sua marca neste espaco."
+    title_font = _load_font("Cinzel-Regular.ttf", 22)
+    msg_font = _load_font("CormorantGaramond-SemiBold.ttf", 22)
+
+    if image_path:
+        text_x = x1 + 220
+        max_w = x2 - text_x - 28
+        anchor = "la"
+    else:
+        text_x = x1 + 214
+        max_w = x2 - text_x - 28
+        anchor = "la"
+        draw.rounded_rectangle([x1 + 30, y1 + 25, x1 + 168, y2 - 25], radius=16, outline=(151, 107, 45, 105), width=2)
+        mini_font = _load_font("Cinzel-Regular.ttf", 16)
+        for line_idx, line in enumerate(("SUA", "IMAGEM", "AQUI")):
+            _draw_center(draw, line, x1 + 99, y1 + 35 + line_idx * 19, mini_font, (83, 58, 31, 128))
+
+    draw.text((text_x, y1 + 26), title, font=title_font, fill=(69, 47, 23, 190), anchor=anchor)
+    y = y1 + 58
+    for line in _wrap_lines(draw, message, msg_font, max_w)[:2]:
+        draw.text((text_x, y), line, font=msg_font, fill=(88, 65, 40, 178), anchor=anchor)
+        y += 24
+
 
 def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str], progressos: Dict[str, int]) -> List[str]:
-    """
-    Gera duas páginas independentes em proporção 9:16 (1080x1920) e as salva na pasta temp.
-    Retorna uma lista contendo os caminhos absolutos dos arquivos [p1_path, p2_path].
-    """
-    width, height = 1080, 1920
-    bg_horizontal_path = BRANDING_DIR / "diploma_pergaminho_bg.png"
-    p1_template_path = BRANDING_DIR / "diploma_vertical_p1.png" # Arte espetacular enviada pelo usuário
-    
-    # ============================================
-    # PÁGINA 1: DIPLOMA OFICIAL (CAPA SOLENE)
-    # ============================================
-    if p1_template_path.exists():
-        p1 = Image.open(p1_template_path).convert("RGBA")
-        p1 = p1.resize((width, height), Image.Resampling.LANCZOS)
-    else:
-        logger.warning(f"Capa personalizada {p1_template_path} não encontrada. Usando fallback recortado.")
-        p1 = _criar_fallback_pergaminho_vertical(width, height, bg_horizontal_path)
-        
-    draw_p1 = ImageDraw.Draw(p1)
-    center_x = width // 2
-    
-    # Fontes Premium
-    font_sub_top = _load_custom_font("Cinzel-Regular.ttf", 24)
-    font_titulo_cinzel = _load_custom_font("Cinzel-Regular.ttf", 44)
-    font_nome = _load_custom_font("CormorantGaramond-SemiBold.ttf", 58)
-    font_corpo = _load_custom_font("CormorantGaramond-SemiBold.ttf", 26)
-    font_assinatura = _load_custom_font("CormorantGaramond-SemiBold.ttf", 30)
-    font_meta = _load_custom_font("CormorantGaramond-SemiBold.ttf", 22)
-    
-    # Nome do Obreiro (Posicionado no espaço central dourado do template)
-    y_draw = 660
-    
-    y_draw = _draw_centered(draw_p1, "Certificamos que o Irmão:", center_x, y_draw, font_corpo, (110, 85, 60, 220)) + 30
-    
-    nome_membro = str(membro.get("Nome", membro.get("nome", "Ir.·. Obreiro"))).strip().upper()
-    y_draw = _draw_centered(draw_p1, nome_membro, center_x, y_draw, font_nome, DEFAULT_TEXT_COLOR) + 40
-    
-    # Grau e Oficina
-    grau = str(membro.get("Grau", membro.get("grau", "Aprendiz"))).strip()
-    loja = str(membro.get("Loja", membro.get("loja", "Loja não informada"))).strip()
-    num_loja = str(membro.get("Número da loja", membro.get("numero_loja", ""))).strip()
-    loja_texto = f"{loja}, nº {num_loja}" if num_loja and num_loja != "0" else loja
-    
-    y_draw = _draw_centered(draw_p1, f"{grau}  |  Oficina: {loja_texto}", center_x, y_draw, font_corpo, DEFAULT_TEXT_COLOR) + 40
-    
-    # Texto poético
-    y_draw = _draw_centered(
-        draw_p1,
-        "registrou sua caminhada fraterna nesta Egrégora.",
-        center_x,
-        y_draw,
-        font_corpo,
-        (110, 95, 80, 200)
-    ) + 10
-    
-    y_draw = _draw_centered(
-        draw_p1,
-        "Novas marcas adornam seus trabalhos.",
-        center_x,
-        y_draw,
-        font_corpo,
-        (110, 95, 80, 200)
-    )
-    
-    # 6. Rodapé Oficial e Assinaturas (y = 1580)
-    y_base = 1580
-    _draw_centered(draw_p1, "Bode Andarilho :.", center_x - 260, y_base, font_assinatura, (60, 45, 30, 220))
-    
-    # Injeta a magnífica chancela de cera vermelha centralizada no rodapé
-    seal_bode_path = BRANDING_DIR / "selo_bode_cera.png"
-    if seal_bode_path.exists():
-        try:
-            seal_img = Image.open(seal_bode_path).convert("RGBA")
-            # Aplica máscara circular para acabamento premium impecável
-            mask = Image.new("L", seal_img.size, 0)
-            draw_mask = ImageDraw.Draw(mask)
-            sw, sh = seal_img.size
-            diameter = int(min(sw, sh) * 0.92)
-            left = (sw - diameter) // 2
-            top = (sh - diameter) // 2
-            draw_mask.ellipse([left, top, left + diameter, top + diameter], fill=255)
-            seal_img.putalpha(mask)
-            
-            seal_size = 140
-            seal_img = seal_img.resize((seal_size, seal_size), Image.Resampling.LANCZOS)
-            p1.alpha_composite(seal_img, (center_x - seal_size // 2, y_base - 70))
-        except Exception as e_seal:
-            logger.warning("Falha ao inserir chancela oficial na Capa: %s", e_seal)
-            
-    oriente = str(membro.get("Oriente", membro.get("oriente", "Torres/RS"))).strip()
-    _draw_centered(draw_p1, f"Oriente de {oriente} - 2026", center_x + 260, y_base, font_meta, (60, 45, 30, 220))
-    
-    # Marca d'água de pendência estética
-    status_aud = str(membro.get("status_auditoria") or membro.get("Status Auditoria") or "").strip()
-    if status_aud == "Pendente_Identidade":
-        stamp_layer = Image.new("RGBA", p1.size, (255, 255, 255, 0))
-        draw_stamp = ImageDraw.Draw(stamp_layer)
-        stamp_text = "AGUARDANDO VALIDAÇÃO"
-        font_stamp = _load_custom_font("Cinzel-Regular.ttf", 60)
-        draw_stamp.text((width//2, height//2), stamp_text, font=font_stamp, fill=(180, 40, 40, 75), anchor="mm")
-        rotated_stamp = stamp_layer.rotate(30, resample=Image.Resampling.BICUBIC, center=(width//2, height//2))
-        p1.alpha_composite(rotated_stamp)
+    p1 = _load_template(BRANDING_DIR / "diploma_vertical_p1.png")
+    p2 = _load_template(BRANDING_DIR / "diploma_vertical_p2.png")
 
-    # ============================================
-    # PÁGINA 2: QUADRO DE CONQUISTAS E MEDALHAS
-    # ============================================
-    p2_template_path = BRANDING_DIR / "diploma_vertical_p2.png"
-    if p2_template_path.exists():
-        p2 = Image.open(p2_template_path).convert("RGBA")
-        p2 = p2.resize((width, height), Image.Resampling.LANCZOS)
-    else:
-        logger.warning(f"Quadro personalizado {p2_template_path} não encontrado. Usando fallback recortado.")
-        p2 = _criar_fallback_pergaminho_vertical(width, height, bg_horizontal_path)
+    draw_p1 = ImageDraw.Draw(p1)
     draw_p2 = ImageDraw.Draw(p2)
-    
-    font_titulo_p2 = _load_custom_font("Cinzel-Regular.ttf", 44)
-    font_sub_p2 = _load_custom_font("Cinzel-Regular.ttf", 26)
-    font_corpo_p2 = _load_custom_font("CormorantGaramond-SemiBold.ttf", 28)
-    font_conquista_titulo = _load_custom_font("Cinzel-Regular.ttf", 21)
-    font_conquista_desc = _load_custom_font("CormorantGaramond-SemiBold.ttf", 18)
-    
-    # 1. Títulos
-    y_cursor = 80
-    y_cursor = _draw_centered(draw_p2, "Bode Andarilho", center_x, y_cursor, font_sub_p2, (110, 80, 50, 210)) + 5
-    y_cursor = _draw_centered(draw_p2, "QUADRO DE HONRA E CONQUISTAS", center_x, y_cursor, font_titulo_p2, DEFAULT_TEXT_COLOR) + 40
-    
-    # 2. Bloco Central: Perfil de Cadastro (Mantém P1 limpa)
-    box_left = 80
-    box_top = y_cursor
-    box_width = width - 160
-    box_height = 240
-    
-    draw_p2.rounded_rectangle(
-        [box_left, box_top, box_left+box_width, box_top+box_height], 
-        radius=15, 
-        fill=(235, 222, 192, 180), 
-        outline=(139, 90, 43, 200), 
-        width=2
-    )
-    
-    _draw_centered(draw_p2, "PERFIL DE CADASTRO DO OBREIRO", center_x, box_top + 15, font_sub_p2, DEFAULT_TEXT_COLOR)
-    
-    col1_x = box_left + 40
-    col2_x = box_left + box_width // 2 + 20
-    text_y = box_top + 60
-    
-    potencia = str(membro.get("Potência", membro.get("potencia", "Não informado"))).strip()
-    cpf = str(membro.get("CPF", membro.get("cpf", "Não informado"))).strip()
-    email = str(membro.get("E-mail", membro.get("email", "Não informado"))).strip()
-    rito = str(membro.get("Rito", membro.get("rito", "Não informado"))).strip()
-    telefone = str(membro.get("Telefone", membro.get("telefone", "Não informado"))).strip()
-    
-    if len(cpf) > 10:
-        cpf = f"{cpf[:3]}.***.***-{cpf[-2:]}"
-    if "@" in email:
-        parts = email.split("@")
-        email = f"{parts[0][:3]}***@{parts[1]}"
-        
-    draw_p2.text((col1_x, text_y), f"Loja: {loja_texto}", font=font_corpo_p2, fill=DEFAULT_TEXT_COLOR)
-    draw_p2.text((col1_x, text_y + 40), f"Potência: {potencia}", font=font_corpo_p2, fill=DEFAULT_TEXT_COLOR)
-    draw_p2.text((col1_x, text_y + 80), f"CPF: {cpf}", font=font_corpo_p2, fill=DEFAULT_TEXT_COLOR)
-    draw_p2.text((col1_x, text_y + 120), f"E-mail: {email}", font=font_corpo_p2, fill=DEFAULT_TEXT_COLOR)
-    
-    draw_p2.text((col2_x, text_y), f"Rito: {rito}", font=font_corpo_p2, fill=DEFAULT_TEXT_COLOR)
-    draw_p2.text((col2_x, text_y + 40), f"Telefone: {telefone}", font=font_corpo_p2, fill=DEFAULT_TEXT_COLOR)
-    draw_p2.text((col2_x, text_y + 80), f"Grau: {grau}", font=font_corpo_p2, fill=DEFAULT_TEXT_COLOR)
-    draw_p2.text((col2_x, text_y + 120), f"Cidade: {oriente}", font=font_corpo_p2, fill=DEFAULT_TEXT_COLOR)
-    
-    y_cursor += box_height + 45
-    
-    # 3. Grade Dinâmica de Conquistas (2 colunas x 6 linhas)
-    from src.conquistas import CONQUISTAS_INFO
-    grid_items = list(CONQUISTAS_INFO.items())
-    
-    start_grid_y = y_cursor
-    item_w = 420
-    item_h = 135
-    h_gap = 70
-    v_gap = 25
-    
-    for idx, (slug, info) in enumerate(grid_items):
+    center_x = WIDTH // 2
+
+    nome = _value(membro, "Nome", "nome", default="Ir.·. Obreiro").upper()
+    grau = _value(membro, "Grau", "grau", default="Aprendiz")
+    loja = _value(membro, "Loja", "loja", default="Oficina nao informada")
+    numero = _value(membro, "Número da loja", "Numero da loja", "numero_loja")
+    oriente = _value(membro, "Oriente", "oriente", "Cidade", "cidade", default="Oriente nao informado")
+    loja_texto = f"{loja}, nº {numero}" if numero and numero != "0" else loja
+
+    # A capa real ja traz a identidade visual. Os dados entram no espaco livre inferior.
+    name_font = _fit_font("CormorantGaramond-SemiBold.ttf", nome, 760, 62, 34)
+    meta_font = _fit_font("CormorantGaramond-SemiBold.ttf", f"{grau} | {loja_texto}", 770, 30, 22)
+    ori_font = _load_font("Cinzel-Regular.ttf", 22)
+
+    panel = Image.new("RGBA", p1.size, (255, 255, 255, 0))
+    panel_draw = ImageDraw.Draw(panel)
+    panel_draw.rounded_rectangle([146, 720, 934, 908], radius=32, fill=(244, 224, 182, 78), outline=(121, 82, 34, 72), width=2)
+    p1.alpha_composite(panel)
+    _draw_center(draw_p1, nome, center_x, 770, name_font, TEXT_DARK)
+    _draw_center(draw_p1, f"{grau} | {loja_texto}", center_x, 832, meta_font, TEXT_MUTED)
+    _draw_center(draw_p1, f"Oriente de {oriente} - {datetime.now().year}", center_x, 880, ori_font, (73, 51, 28, 205))
+
+    if _value(membro, "status_auditoria", "Status Auditoria") == "Pendente_Identidade":
+        stamp = Image.new("RGBA", p1.size, (255, 255, 255, 0))
+        stamp_draw = ImageDraw.Draw(stamp)
+        stamp_draw.text((center_x, 1030), "AGUARDANDO VALIDACAO", font=_load_font("Cinzel-Regular.ttf", 56), fill=(160, 38, 36, 64), anchor="mm")
+        p1.alpha_composite(stamp.rotate(28, resample=Image.Resampling.BICUBIC, center=(center_x, 1030)))
+
+    title_font = _load_font("Cinzel-Regular.ttf", 42)
+    subtitle_font = _load_font("CormorantGaramond-SemiBold.ttf", 27)
+    _draw_center(draw_p2, "QUADRO DE CONQUISTAS", center_x, 250, title_font, TEXT_DARK)
+    _draw_center(draw_p2, "Sua jornada cresce a cada presenca, visita e marco registrado.", center_x, 298, subtitle_font, TEXT_MUTED)
+
+    try:
+        from src.conquistas import CONQUISTAS_INFO
+    except Exception as exc:
+        logger.warning("Falha ao importar CONQUISTAS_INFO: %s", exc)
+        CONQUISTAS_INFO = {}
+
+    obtained = {str(slug).strip().lower() for slug in (conquistas_obtidas or [])}
+    items = list(CONQUISTAS_INFO.items())[:12]
+    start_x = 110
+    start_y = 375
+    card_w = 405
+    card_h = 128
+    gap_x = 50
+    gap_y = 26
+
+    for idx, (slug, info) in enumerate(items):
         row = idx // 2
         col = idx % 2
-        
-        ix = box_left + col * (item_w + h_gap)
-        iy = start_grid_y + row * (item_h + v_gap)
-        
-        # Lógica de Progresso e Opacidade
-        pct = progressos.get(slug, 0)
-        adquirida = pct >= 100
-        alpha = int(35 + (pct * 2.2))  # Opacidade dinâmica
-        
-        emoji = info.get("emoji", "🏅")
-        titulo = info.get("titulo", "")
-        desc = info.get("descricao", "")
-        
-        if len(titulo) > 22:
-            titulo = f"{titulo[:20]}..."
-            
-        # Desenha ícone/emoji
-        font_emoji = _load_custom_font("georgia.ttf", 36)
-        draw_p2.text((ix, iy), emoji, font=font_emoji, fill=(0, 0, 0, alpha))
-        
-        # Título da conquista
-        title_color = DEFAULT_TEXT_COLOR if adquirida else (110, 95, 75, alpha)
-        draw_p2.text((ix + 55, iy + 4), titulo, font=font_conquista_titulo, fill=title_color)
-        
-        # Descrição wrapped
-        desc_color = (80, 60, 40, alpha) if adquirida else (140, 125, 110, alpha)
-        words = desc.split()
-        lines = []
-        curr = []
-        for w in words:
-            candidate = " ".join(curr + [w])
-            tw, _ = _measure_text(draw_p2, candidate, font_conquista_desc)
-            if tw < (item_w - 60):
-                curr.append(w)
-            else:
-                lines.append(" ".join(curr))
-                curr = [w]
-        if curr:
-            lines.append(" ".join(curr))
-            
-        dy = iy + 35
-        for line in lines[:2]:
-            draw_p2.text((ix + 55, dy), line, font=font_conquista_desc, fill=desc_color)
-            dy += 22
-            
-        # Barra gráfica de progresso
-        bar_x = ix + 55
-        bar_y = iy + 90
-        bar_w = item_w - 55
-        bar_h = 6
-        
-        # Fundo da barra
-        draw_p2.rectangle([bar_x, bar_y, bar_x + bar_w, bar_y + bar_h], fill=(215, 205, 190, 255))
-        # Preenchimento dinâmico
-        fill_w = int(bar_w * (pct / 100))
-        if fill_w > 0:
-            bar_color = (205, 149, 12, 255) if adquirida else (139, 115, 85, 200)
-            draw_p2.rectangle([bar_x, bar_y, bar_x + fill_w, bar_y + bar_h], fill=bar_color)
-            
-        # Rótulo de porcentagem
-        txt_pct = f"{pct}%" if pct < 100 else "Concluído!"
-        draw_p2.text((bar_x + bar_w - 5, bar_y + 10), txt_pct, font=font_conquista_desc, fill=desc_color, anchor="ra")
-        
-    y_cursor += 6 * (item_h + v_gap)
-    
-    # 4. Medalhões de Mascotes na base (Circular Layout)
-    medallion_y = 1710
-    medallion_size = 80
-    medallions = ["char_barney.png", "char_burns.png", "selo_bode_cera.png", "char_bart.png", "trowel.png"]
-    m_start_x = center_x - ((medallion_size + 25) * len(medallions)) // 2
-    
-    for m_idx, m_file in enumerate(medallions):
-        mx = m_start_x + m_idx * (medallion_size + 25)
-        my = medallion_y
-        
-        # Desenha egrégora circular
-        draw_p2.ellipse([mx, my, mx+medallion_size, my+medallion_size], fill=(235, 222, 192, 180), outline=(139, 90, 43, 200), width=2)
-        
-        m_path = BRANDING_DIR / m_file
-        if m_path.exists():
-            try:
-                m_img = Image.open(m_path).convert("RGBA")
-                m_img = m_img.resize((medallion_size-10, medallion_size-10), Image.Resampling.LANCZOS)
-                p2.alpha_composite(m_img, (mx+5, my+5))
-            except:
-                pass
-                
-    # 5. Publicidade Discreta / Patrocinadores (1 logo horizontal ou texto)
-    sponsor_logo_path = BRANDING_DIR / "sponsor_sindoficios.png"
-    if sponsor_logo_path.exists():
-        try:
-            sp_img = Image.open(sponsor_logo_path).convert("RGBA")
-            sp_w = 260
-            sp_ratio = sp_w / sp_img.size[0]
-            sp_h = int(sp_img.size[1] * sp_ratio)
-            sp_img = sp_img.resize((sp_w, sp_h), Image.Resampling.LANCZOS)
-            
-            px = center_x - sp_w // 2
-            py = 1630
-            p2.alpha_composite(sp_img, (px, py))
-        except:
-            _draw_centered(draw_p2, "Apoio: Sind Ofícios | Divulgue sua marca no Bode! Envie /apoiar", center_x, 1635, font_meta, (120, 100, 80, 200))
-    else:
-        _draw_centered(draw_p2, "Apoio: Sind Ofícios | Divulgue sua marca no Bode! Envie /apoiar", center_x, 1635, font_meta, (120, 100, 80, 200))
-        
-    # Salva arquivos temporários isolados
+        x1 = start_x + col * (card_w + gap_x)
+        y1 = start_y + row * (card_h + gap_y)
+        percent = int(progressos.get(slug, 0) or 0)
+        if slug in obtained:
+            percent = max(percent, 100)
+        icon = str(info.get("emoji") or "★")
+        icon = {
+            "ce": "↗",
+            "bv": "◆",
+        }.get(slug, icon)
+        _draw_badge_card(
+            p2,
+            draw_p2,
+            (x1, y1, x1 + card_w, y1 + card_h),
+            icon,
+            str(info.get("titulo") or slug).strip(),
+            str(info.get("descricao") or "").strip(),
+            percent,
+        )
+
+    _draw_ad_slot(p2, draw_p2)
+
     temp_dir = tempfile.gettempdir()
-    uid = membro.get("telegram_id", membro.get("Telegram ID", "anon"))
-    
+    uid = _value(membro, "telegram_id", "Telegram ID", default="anon")
     out_p1 = os.path.join(temp_dir, f"bode_diploma_{uid}_p1.png")
     out_p2 = os.path.join(temp_dir, f"bode_diploma_{uid}_p2.png")
-    
     p1.convert("RGB").save(out_p1, "PNG", optimize=True)
     p2.convert("RGB").save(out_p2, "PNG", optimize=True)
-    
-    logger.info("Diploma carrossel 2 páginas renderizado com sucesso.")
+
+    logger.info("Diploma carrossel 2 paginas renderizado com sucesso.")
     return [out_p1, out_p2]

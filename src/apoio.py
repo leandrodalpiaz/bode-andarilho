@@ -4,6 +4,7 @@ import random
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 from src.bot import navegar_para
+from src.publicidade import obter_publicidade_diploma
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,45 @@ def obter_texto_patrocinio() -> str:
         return ""
     p = random.choice(PATROCINADORES)
     return f"\n\n_Apoio Institucional: [{p['nome']}]({p['link']})_"
+
+async def mostrar_publicidade_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Tela administrativa simples para visualizar a publicidade configurada."""
+    query = update.callback_query
+    if query:
+        try:
+            await query.answer()
+        except Exception:
+            pass
+
+    from src.permissoes import get_nivel
+
+    user_id = update.effective_user.id
+    if get_nivel(user_id) != "3":
+        await navegar_para(
+            update,
+            context,
+            "Publicidade/Apoiadores",
+            "⛔ Esta área é exclusiva para administradores.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="menu_principal")]]),
+        )
+        return
+
+    publicidade = obter_publicidade_diploma()
+    status_imagem = "Configurada" if publicidade.get("imagem") else "Usando peça de exemplo"
+    texto = (
+        "📢 *Publicidade/Apoiadores*\n\n"
+        "A publicidade visual do diploma usa um espaço discreto no rodapé da página de conquistas.\n\n"
+        f"*Peça atual:* {publicidade['nome']}\n"
+        f"*Status da imagem:* {status_imagem}\n"
+        f"*Mensagem:* {publicidade['mensagem']}\n\n"
+        "Para substituir a peça de exemplo neste ciclo, inclua uma imagem aprovada em "
+        "`assets/branding/sponsor_sindoficios.png`."
+    )
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🤝 Ver apoio institucional", callback_data="apoiar_menu")],
+        [InlineKeyboardButton("🔙 Voltar ao admin", callback_data="area_admin")],
+    ])
+    await navegar_para(update, context, "Publicidade/Apoiadores", texto, teclado)
 
 
 async def cmd_apoiar(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -83,5 +123,6 @@ async def mostrar_lojinha(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def registrar_handlers_apoio(application):
     application.add_handler(CommandHandler("apoiar", cmd_apoiar))
     application.add_handler(CallbackQueryHandler(cmd_apoiar, pattern="^apoiar_menu$"))
+    application.add_handler(CallbackQueryHandler(mostrar_publicidade_admin, pattern="^admin_publicidade$"))
     application.add_handler(CallbackQueryHandler(mostrar_pix, pattern="^mostrar_pix$"))
     application.add_handler(CallbackQueryHandler(mostrar_lojinha, pattern="^mostrar_lojinha$"))
