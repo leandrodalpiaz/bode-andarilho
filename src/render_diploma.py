@@ -121,20 +121,15 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str], pr
     font_assinatura = _load_custom_font("CormorantGaramond-SemiBold.ttf", 30)
     font_meta = _load_custom_font("CormorantGaramond-SemiBold.ttf", 22)
     
-    # 1. Subtítulo topo
-    y_draw = 200
-    y_draw = _draw_centered(draw_p1, "EGREGORA DO BODE ANDARILHO", center_x, y_draw, font_sub_top, (110, 85, 60, 220)) + 30
+    # Nome do Obreiro (Posicionado no espaço central dourado do template)
+    y_draw = 660
     
-    # 2. Título Principal
-    y_draw = _draw_centered(draw_p1, "DIPLOMA DE ANDARILHO", center_x, y_draw, font_titulo_cinzel, DEFAULT_TEXT_COLOR) + 60
-    
-    # 3. Nome do Obreiro (Posicionado cirurgicamente no espaço central dourado)
-    y_draw = _draw_centered(draw_p1, "Certificamos que o Irmão:", center_x, y_draw, font_corpo, (90, 65, 40, 200)) + 30
+    y_draw = _draw_centered(draw_p1, "Certificamos que o Irmão:", center_x, y_draw, font_corpo, (110, 85, 60, 220)) + 30
     
     nome_membro = str(membro.get("Nome", membro.get("nome", "Ir.·. Obreiro"))).strip().upper()
-    y_draw = _draw_centered(draw_p1, nome_membro, center_x, y_draw, font_nome, DEFAULT_TEXT_COLOR) + 30
+    y_draw = _draw_centered(draw_p1, nome_membro, center_x, y_draw, font_nome, DEFAULT_TEXT_COLOR) + 40
     
-    # 4. Grau e Oficina
+    # Grau e Oficina
     grau = str(membro.get("Grau", membro.get("grau", "Aprendiz"))).strip()
     loja = str(membro.get("Loja", membro.get("loja", "Loja não informada"))).strip()
     num_loja = str(membro.get("Número da loja", membro.get("numero_loja", ""))).strip()
@@ -142,10 +137,19 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str], pr
     
     y_draw = _draw_centered(draw_p1, f"{grau}  |  Oficina: {loja_texto}", center_x, y_draw, font_corpo, DEFAULT_TEXT_COLOR) + 40
     
-    # 5. Texto poético
+    # Texto poético
     y_draw = _draw_centered(
         draw_p1,
-        "registrou sua caminhada fraterna. Novas marcas adornam sua egrégora.",
+        "registrou sua caminhada fraterna nesta Egrégora.",
+        center_x,
+        y_draw,
+        font_corpo,
+        (110, 95, 80, 200)
+    ) + 10
+    
+    y_draw = _draw_centered(
+        draw_p1,
+        "Novas marcas adornam seus trabalhos.",
         center_x,
         y_draw,
         font_corpo,
@@ -194,7 +198,13 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str], pr
     # ============================================
     # PÁGINA 2: QUADRO DE CONQUISTAS E MEDALHAS
     # ============================================
-    p2 = _criar_fallback_pergaminho_vertical(width, height, bg_horizontal_path)
+    p2_template_path = BRANDING_DIR / "diploma_vertical_p2.png"
+    if p2_template_path.exists():
+        p2 = Image.open(p2_template_path).convert("RGBA")
+        p2 = p2.resize((width, height), Image.Resampling.LANCZOS)
+    else:
+        logger.warning(f"Quadro personalizado {p2_template_path} não encontrado. Usando fallback recortado.")
+        p2 = _criar_fallback_pergaminho_vertical(width, height, bg_horizontal_path)
     draw_p2 = ImageDraw.Draw(p2)
     
     font_titulo_p2 = _load_custom_font("Cinzel-Regular.ttf", 44)
@@ -363,12 +373,12 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str], pr
             sp_img = sp_img.resize((sp_w, sp_h), Image.Resampling.LANCZOS)
             
             px = center_x - sp_w // 2
-            py = 1800
+            py = 1630
             p2.alpha_composite(sp_img, (px, py))
         except:
-            _draw_centered(draw_p2, "Apoio: Sind Ofícios | Divulgue sua marca no Bode! Envie /apoiar", center_x, 1810, font_meta, (120, 100, 80, 200))
+            _draw_centered(draw_p2, "Apoio: Sind Ofícios | Divulgue sua marca no Bode! Envie /apoiar", center_x, 1635, font_meta, (120, 100, 80, 200))
     else:
-        _draw_centered(draw_p2, "Apoio: Sind Ofícios | Divulgue sua marca no Bode! Envie /apoiar", center_x, 1815, font_meta, (120, 100, 80, 200))
+        _draw_centered(draw_p2, "Apoio: Sind Ofícios | Divulgue sua marca no Bode! Envie /apoiar", center_x, 1635, font_meta, (120, 100, 80, 200))
         
     # Salva arquivos temporários isolados
     temp_dir = tempfile.gettempdir()
