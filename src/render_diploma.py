@@ -114,43 +114,71 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str], pr
     center_x = width // 2
     
     # Fontes Premium
-    font_nome = _load_custom_font("CormorantGaramond-SemiBold.ttf", 62)
-    font_grau = _load_custom_font("CormorantGaramond-Italic.ttf", 36)
-    font_assinatura = _load_custom_font("CormorantGaramond-Italic.ttf", 40)
-    font_meta = _load_custom_font("CormorantGaramond-SemiBold.ttf", 28)
+    font_sub_top = _load_custom_font("Cinzel-Regular.ttf", 24)
+    font_titulo_cinzel = _load_custom_font("Cinzel-Regular.ttf", 44)
+    font_nome = _load_custom_font("CormorantGaramond-SemiBold.ttf", 58)
+    font_corpo = _load_custom_font("CormorantGaramond-SemiBold.ttf", 26)
+    font_assinatura = _load_custom_font("CormorantGaramond-SemiBold.ttf", 30)
+    font_meta = _load_custom_font("CormorantGaramond-SemiBold.ttf", 22)
     
-    # 1. Nome do Obreiro (Posicionado cirurgicamente no espaço central dourado)
+    # 1. Subtítulo topo
+    y_draw = 200
+    y_draw = _draw_centered(draw_p1, "EGREGORA DO BODE ANDARILHO", center_x, y_draw, font_sub_top, (110, 85, 60, 220)) + 30
+    
+    # 2. Título Principal
+    y_draw = _draw_centered(draw_p1, "DIPLOMA DE ANDARILHO", center_x, y_draw, font_titulo_cinzel, DEFAULT_TEXT_COLOR) + 60
+    
+    # 3. Nome do Obreiro (Posicionado cirurgicamente no espaço central dourado)
+    y_draw = _draw_centered(draw_p1, "Certificamos que o Irmão:", center_x, y_draw, font_corpo, (90, 65, 40, 200)) + 30
+    
     nome_membro = str(membro.get("Nome", membro.get("nome", "Ir.·. Obreiro"))).strip().upper()
-    y_nome = 880
-    _draw_centered(draw_p1, nome_membro, center_x, y_nome, font_nome, DEFAULT_TEXT_COLOR)
+    y_draw = _draw_centered(draw_p1, nome_membro, center_x, y_draw, font_nome, DEFAULT_TEXT_COLOR) + 30
     
-    # 2. Grau e Oficina
+    # 4. Grau e Oficina
     grau = str(membro.get("Grau", membro.get("grau", "Aprendiz"))).strip()
     loja = str(membro.get("Loja", membro.get("loja", "Loja não informada"))).strip()
     num_loja = str(membro.get("Número da loja", membro.get("numero_loja", ""))).strip()
     loja_texto = f"{loja}, nº {num_loja}" if num_loja and num_loja != "0" else loja
     
-    y_grau = y_nome + 75
-    _draw_centered(draw_p1, f"Grau: {grau}  |  Oficina: {loja_texto}", center_x, y_grau, font_grau, (90, 65, 40, 230))
+    y_draw = _draw_centered(draw_p1, f"{grau}  |  Oficina: {loja_texto}", center_x, y_draw, font_corpo, DEFAULT_TEXT_COLOR) + 40
     
-    # 3. Rodapé Oficial
-    y_base = 1760
-    _draw_centered(draw_p1, "Bode Andarilho :.", center_x - 280, y_base, font_assinatura, (60, 45, 30, 220))
+    # 5. Texto poético
+    y_draw = _draw_centered(
+        draw_p1,
+        "registrou sua caminhada fraterna. Novas marcas adornam sua egrégora.",
+        center_x,
+        y_draw,
+        font_corpo,
+        (110, 95, 80, 200)
+    )
+    
+    # 6. Rodapé Oficial e Assinaturas (y = 1580)
+    y_base = 1580
+    _draw_centered(draw_p1, "Bode Andarilho :.", center_x - 260, y_base, font_assinatura, (60, 45, 30, 220))
     
     # Injeta a magnífica chancela de cera vermelha centralizada no rodapé
     seal_bode_path = BRANDING_DIR / "selo_bode_cera.png"
     if seal_bode_path.exists():
         try:
             seal_img = Image.open(seal_bode_path).convert("RGBA")
-            seal_size = 200
+            # Aplica máscara circular para acabamento premium impecável
+            mask = Image.new("L", seal_img.size, 0)
+            draw_mask = ImageDraw.Draw(mask)
+            sw, sh = seal_img.size
+            diameter = int(min(sw, sh) * 0.92)
+            left = (sw - diameter) // 2
+            top = (sh - diameter) // 2
+            draw_mask.ellipse([left, top, left + diameter, top + diameter], fill=255)
+            seal_img.putalpha(mask)
+            
+            seal_size = 140
             seal_img = seal_img.resize((seal_size, seal_size), Image.Resampling.LANCZOS)
-            # Centralizado no meio exato entre as assinaturas
-            p1.alpha_composite(seal_img, (center_x - seal_size // 2, y_base - 100))
+            p1.alpha_composite(seal_img, (center_x - seal_size // 2, y_base - 70))
         except Exception as e_seal:
             logger.warning("Falha ao inserir chancela oficial na Capa: %s", e_seal)
             
     oriente = str(membro.get("Oriente", membro.get("oriente", "Torres/RS"))).strip()
-    _draw_centered(draw_p1, f"Oriente de {oriente} - 2026", center_x + 280, y_base, font_meta, (60, 45, 30, 220))
+    _draw_centered(draw_p1, f"Oriente de {oriente} - 2026", center_x + 260, y_base, font_meta, (60, 45, 30, 220))
     
     # Marca d'água de pendência estética
     status_aud = str(membro.get("status_auditoria") or membro.get("Status Auditoria") or "").strip()
