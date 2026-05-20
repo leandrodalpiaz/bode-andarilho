@@ -502,15 +502,42 @@ def _teclado_confirmacao(tem_duplicado: bool) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(linhas)
 
 
-def _teclado_previa_visual(tem_duplicado: bool) -> InlineKeyboardMarkup:
+def _modo_visual_atual(context: ContextTypes.DEFAULT_TYPE) -> str:
+    return _norm_text(context.user_data.get("novo_evento_modo_visual") or "template_loja")
+
+
+def _rotulo_modo_visual_evento(modo: str) -> str:
+    return {
+        "template_padrao": "Arte sugerida pelo sistema",
+        "template_loja": "Template da loja",
+        "card_especial": "Arte pronta da sessão",
+    }.get(_norm_text(modo), "Template da loja")
+
+
+def _botao_modo_visual(rotulo: str, modo: str, atual: str) -> InlineKeyboardButton:
+    prefixo = "Selecionado: " if _norm_text(modo) == _norm_text(atual) else "Escolher: "
+    return InlineKeyboardButton(prefixo + rotulo, callback_data=f"modo_visual_evento|{modo}")
+
+
+def _teclado_previa_visual(context: ContextTypes.DEFAULT_TYPE, tem_duplicado: bool) -> InlineKeyboardMarkup:
     linhas = []
-    if tem_duplicado:
-        linhas.append([InlineKeyboardButton("⚠️ Publicar mesmo assim", callback_data="confirmar_publicacao_forcar")])
+    atual = _modo_visual_atual(context)
+    nivel = str(get_nivel(context.user_data.get("novo_evento_criado_por_id") or 0))
+
+    linhas.append([InlineKeyboardButton(f"Visual atual: {_rotulo_modo_visual_evento(atual)}", callback_data="modo_visual_info")])
+    if nivel == "3":
+        linhas.append([_botao_modo_visual("Arte sugerida pelo sistema", "template_padrao", atual)])
     else:
-        linhas.append([InlineKeyboardButton("✅ Publicar no grupo", callback_data="confirmar_publicacao")])
-    linhas.append([InlineKeyboardButton("✏️ Editar dados", callback_data="refazer_cadastro")])
-    linhas.append([InlineKeyboardButton("🎨 Enviar Arte Própria (Card Pronto)", callback_data="trocar_card_evento")])
-    linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_publicacao")])
+        linhas.append([_botao_modo_visual("Arte sugerida pelo sistema", "template_padrao", atual)])
+        linhas.append([_botao_modo_visual("Template da loja", "template_loja", atual)])
+    linhas.append([InlineKeyboardButton("Arte pronta da sessão", callback_data="trocar_card_evento")])
+
+    if tem_duplicado:
+        linhas.append([InlineKeyboardButton("Publicar mesmo assim", callback_data="confirmar_publicacao_forcar")])
+    else:
+        linhas.append([InlineKeyboardButton("Publicar no grupo", callback_data="confirmar_publicacao")])
+    linhas.append([InlineKeyboardButton("Editar dados", callback_data="refazer_cadastro")])
+    linhas.append([InlineKeyboardButton("Cancelar", callback_data="cancelar_publicacao")])
     return InlineKeyboardMarkup(linhas)
 
 
@@ -519,9 +546,37 @@ async def _enviar_previa_publicacao(update: Update, context: ContextTypes.DEFAUL
         context,
         update.effective_user.id,
         evento,
-        _teclado_previa_visual(tem_duplicado=dup is not None),
+        _teclado_previa_visual(context, tem_duplicado=dup is not None),
         _montar_resumo_evento_md(evento, duplicado=dup),
     )
+
+
+async def escolher_modo_visual_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query:
+        await query.answer()
+    modo = (query.data or "").split("|", 1)[1] if query and "|" in (query.data or "") else ""
+    if modo not in {"template_padrao", "template_loja"}:
+        if query:
+            await query.answer("Op??o visual inv?lida.", show_alert=True)
+        return CONFIRMAR
+    context.user_data["novo_evento_modo_visual"] = modo
+    context.user_data.pop("novo_evento_card_especial_url", None)
+    evento = _montar_evento_dict(context)
+    eventos_existentes = listar_eventos() or []
+    dup = _encontrar_duplicado(evento, eventos_existentes)
+    await _enviar_previa_publicacao(update, context, evento, dup)
+    return CONFIRMAR
+
+
+async def explicar_modo_visual_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query:
+        await query.answer(
+            "Escolha como a sessão ser? apresentada no grupo antes de publicar.",
+            show_alert=True,
+        )
+    return CONFIRMAR
 
 
 async def trocar_card_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -532,8 +587,10 @@ async def trocar_card_evento(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context,
         update.effective_user.id,
         TIPO_RESULTADO,
-        "🎨 *Modo Autonomia Visual (Card Pronto)*\n\nEnvie agora a imagem oficial do seu convite (card já editado) como foto ou documento no formato vertical ou quadrado:",
-        InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancelar", callback_data="cancelar_publicacao")]]),
+        "*Arte pronta da sessão*\n\n"
+        "Envie agora a imagem oficial da sessão, j? finalizada, como foto ou documento PNG/JPG/WEBP. "
+        "O bot publicar? a arte no grupo e adicionar? apenas os bot?es de confirma??o e gerenciamento.",
+        InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="cancelar_publicacao")]]),
         limpar_conteudo=True,
     )
     return TROCAR_CARD
@@ -651,6 +708,7 @@ Por favor, registre sua Loja tocando no botão abaixo:"""
     # Trilha de auditoria: quem está operando o cadastro
     context.user_data["novo_evento_criado_por_id"] = str(user_id)
     context.user_data["novo_evento_criado_por_nome"] = _norm_text(update.effective_user.full_name or "")
+    context.user_data["novo_evento_modo_visual"] = "template_padrao" if str(nivel) == "3" else "template_loja"
 
     # Por padrão, o responsável do evento é o próprio operador.
     _definir_secretario_responsavel(context, str(user_id), _norm_text(update.effective_user.full_name or ""))
@@ -1974,6 +2032,8 @@ cadastro_evento_handler = ConversationHandler(
         CONFIRMAR: [
             CallbackQueryHandler(confirmar_publicacao, pattern=r"^confirmar_publicacao$"),
             CallbackQueryHandler(confirmar_publicacao_forcar, pattern=r"^confirmar_publicacao_forcar$"),
+            CallbackQueryHandler(escolher_modo_visual_evento, pattern=r"^modo_visual_evento\|"),
+            CallbackQueryHandler(explicar_modo_visual_evento, pattern=r"^modo_visual_info$"),
             CallbackQueryHandler(trocar_card_evento, pattern=r"^trocar_card_evento$"),
             CallbackQueryHandler(refazer_cadastro, pattern=r"^refazer_cadastro$"),
             CallbackQueryHandler(cancelar_publicacao, pattern=r"^cancelar_publicacao$"),

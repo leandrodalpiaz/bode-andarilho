@@ -73,15 +73,15 @@ def _baixar_url_para_temp(url: str, prefix: str = "bode_event_card_") -> Optiona
 
 
 def preparar_midia_evento(evento: Dict[str, Any]) -> MidiaEvento:
-    modo = _norm(evento.get("Modo visual") or evento.get("modo_visual"))
+    modo = _norm(evento.get("Modo visual") or evento.get("modo_visual") or "template_loja")
     card_especial = _norm(evento.get("Card especial URL") or evento.get("card_especial_url"))
     if modo == "card_especial" and card_especial:
         path = _baixar_url_para_temp(card_especial, "bode_event_special_")
         if path:
             return MidiaEvento(modo="card_especial", path=path, url=card_especial)
-        return MidiaEvento(modo="texto_fallback", erro="Card especial indisponível.")
+        return MidiaEvento(modo="texto_fallback", erro="Card especial indispon?vel.")
 
-    loja = obter_loja_evento(evento) or {}
+    loja = {} if modo == "template_padrao" else (obter_loja_evento(evento) or {})
     try:
         apoio_card = None
         try:
@@ -89,14 +89,13 @@ def preparar_midia_evento(evento: Dict[str, Any]) -> MidiaEvento:
         except Exception:
             apoio_card = None
         rendered = render_event_card(evento, loja, apoio_card=apoio_card)
-        modo_render = "template_loja" if loja else "template_padrao"
+        modo_render = "template_padrao" if modo == "template_padrao" else ("template_loja" if loja else "template_padrao")
         if apoio_card:
             evento["_apoio_card"] = apoio_card
         return MidiaEvento(modo=modo_render, path=rendered.path)
     except Exception as e:
         logger.warning("Falha ao renderizar card do evento %s: %s", evento.get("ID Evento"), e)
         return MidiaEvento(modo="texto_fallback", erro=str(e))
-
 
 
 def salvar_render_no_storage(evento: Dict[str, Any], path: str) -> str:
@@ -134,7 +133,7 @@ async def publicar_evento_no_grupo(
                 "Modo visual": midia.modo,
                 "Telegram tipo mensagem grupo": "photo",
             }
-            if midia.modo in ("template_loja", "card_especial"):
+            if midia.modo in ("template_loja", "template_padrao", "card_especial"):
                 url = salvar_render_no_storage(evento, midia.path)
                 if url:
                     sync["Card renderizado URL"] = url

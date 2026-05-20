@@ -28,8 +28,10 @@ import hashlib
 import hmac
 import json
 import logging
+import mimetypes
 import os
 import time
+from io import BytesIO
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qsl, unquote
@@ -38,6 +40,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, Update
+from PIL import Image
 
 from src.sheets_supabase import (
     buscar_membro,
@@ -48,9 +51,10 @@ from src.sheets_supabase import (
     listar_lojas,
     buscar_loja_por_nome_numero,
     listar_secretarios_ativos,
+    upload_storage_publico,
 )
 from src.permissoes import get_nivel
-from src.evento_midia import publicar_evento_no_grupo as publicar_midia_evento_no_grupo
+from src.evento_midia import BUCKET_EVENT_CARDS, publicar_evento_no_grupo as publicar_midia_evento_no_grupo
 from src.eventos import (
     montar_texto_publicacao_evento,
     montar_teclado_publicacao_evento,
@@ -719,8 +723,8 @@ def _payload_evento(dados: Dict[str, Any], secretario_id: str) -> Dict[str, Any]
         "Telegram ID do secretário": secretario_id,
         "Status": "Ativo",
         "Endereço da sessão": dados["endereco"],
-        "Modo visual": "template_loja",
-        "Card especial URL": "",
+        "Modo visual": dados.get("modo_visual") or "template_loja",
+        "Card especial URL": dados.get("card_especial_url", ""),
         "Card renderizado URL": "",
         "Card file_id Telegram": "",
         "Telegram tipo mensagem grupo": "",
@@ -851,6 +855,150 @@ async def draft_evento_set_secretario_cancelar(update: Update, context) -> None:
         text=_resumo_evento_md(dados),
         parse_mode="MarkdownV2",
         reply_markup=_teclado_rascunho_evento(dados, nivel, lojas_existentes),
+    )
+
+
+def _rotulo_modo_visual_evento(modo: str) -> str:
+    return {
+        "template_padrao": "Arte sugerida pelo sistema",
+        "template_loja": "Template da loja",
+        "card_especial": "Arte pronta da sessão",
+    }.get(_norm_text(modo), "Template da loja")
+
+
+def _teclado_visual_rascunho_evento(nivel: str, salvar_loja: bool) -> InlineKeyboardMarkup:
+    sufixo = "com_loja" if salvar_loja else "sem_loja"
+    linhas: List[List[InlineKeyboardButton]] = []
+    linhas.append([InlineKeyboardButton("Arte sugerida pelo sistema", callback_data=f"draft_evento_visual|template_padrao|{sufixo}")])
+    if str(nivel) != "3":
+        linhas.append([InlineKeyboardButton("Template da loja", callback_data=f"draft_evento_visual|template_loja|{sufixo}")])
+    linhas.append([InlineKeyboardButton("Arte pronta da sessão", callback_data=f"draft_evento_visual|card_especial|{sufixo}")])
+    linhas.append([InlineKeyboardButton("Voltar ao resumo", callback_data="draft_evento_visual_voltar")])
+    linhas.append([InlineKeyboardButton("Cancelar", callback_data="draft_evento_cancelar")])
+    return InlineKeyboardMarkup(linhas)
+
+
+async def draft_evento_escolher_visual(update: Update, context, salvar_loja: bool) -> None:
+    query = update.callback_query
+    await query.answer()
+    telegram_id = int(update.effective_user.id)
+    dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
+    if not dados:
+        await query.answer("N?o encontrei um rascunho de evento.", show_alert=True)
+        return
+    nivel = str(get_nivel(telegram_id))
+    if nivel == "3" and not _norm_text(dados.get("secretario_responsavel_id")):
+        await query.answer("Defina primeiro o secret?rio respons?vel.", show_alert=True)
+        return
+    await query.edit_message_text(
+        "Escolha como a sessão ser? publicada no grupo:",
+        reply_markup=_teclado_visual_rascunho_evento(nivel, salvar_loja),
+    )
+
+
+async def draft_evento_escolher_visual_com_loja(update: Update, context) -> None:
+    await draft_evento_escolher_visual(update, context, salvar_loja=True)
+
+
+async def draft_evento_escolher_visual_sem_loja(update: Update, context) -> None:
+    await draft_evento_escolher_visual(update, context, salvar_loja=False)
+
+
+async def draft_evento_visual_voltar(update: Update, context) -> None:
+    query = update.callback_query
+    await query.answer()
+    telegram_id = int(update.effective_user.id)
+    dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
+    if not dados:
+        await query.edit_message_text("Tudo certo. N?o encontrei um rascunho ativo.")
+        return
+    nivel = str(get_nivel(telegram_id))
+    lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
+    await query.edit_message_text(
+        text=_resumo_evento_md(dados),
+        parse_mode="MarkdownV2",
+        reply_markup=_teclado_rascunho_evento(dados, nivel, lojas_existentes),
+    )
+
+
+async def draft_evento_definir_visual(update: Update, context) -> None:
+    query = update.callback_query
+    await query.answer("Processando...")
+    telegram_id = int(update.effective_user.id)
+    dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
+    if not dados:
+        await query.answer("N?o encontrei um rascunho de evento.", show_alert=True)
+        return
+    partes = (query.data or "").split("|")
+    if len(partes) != 3:
+        await query.answer("Op??o visual inv?lida.", show_alert=True)
+        return
+    _, modo_visual, origem = partes
+    nivel = str(get_nivel(telegram_id))
+    if modo_visual == "template_loja" and nivel == "3":
+        await query.answer("No fluxo administrativo, use o padr?o do sistema ou uma arte pronta da sessão.", show_alert=True)
+        return
+    if modo_visual not in {"template_loja", "template_padrao", "card_especial"}:
+        await query.answer("Op??o visual inv?lida.", show_alert=True)
+        return
+    dados["modo_visual"] = modo_visual
+    if modo_visual != "card_especial":
+        dados.pop("card_especial_url", None)
+    _salvar_rascunho(_RASCUNHOS_EVENTO, telegram_id, dados)
+    if modo_visual == "card_especial" and not _norm_text(dados.get("card_especial_url")):
+        context.user_data["draft_evento_arte_pronta_origem"] = origem
+        await query.edit_message_text(
+            "Envie agora a arte pronta da sessão como foto ou documento de imagem. O bot publicar? a imagem no grupo e adicionar? apenas os bot?es de confirma??o e gerenciamento.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="draft_evento_cancelar")]]),
+        )
+        return
+    await _confirmar_evento(update, context, salvar_loja=(origem == "com_loja"))
+
+
+async def receber_arte_pronta_evento(update: Update, context) -> None:
+    msg = update.message
+    origem = context.user_data.get("draft_evento_arte_pronta_origem")
+    if not msg or not origem:
+        return
+    telegram_id = int(update.effective_user.id)
+    dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
+    if not dados:
+        context.user_data.pop("draft_evento_arte_pronta_origem", None)
+        await msg.reply_text("N?o encontrei um rascunho de sessão ativo.")
+        return
+    tg_file = None
+    filename = "arte_evento.jpg"
+    content_type = "image/jpeg"
+    if msg.photo:
+        tg_file = await msg.photo[-1].get_file()
+    elif msg.document and (msg.document.mime_type or "").startswith("image/"):
+        tg_file = await msg.document.get_file()
+        filename = msg.document.file_name or filename
+        content_type = msg.document.mime_type or mimetypes.guess_type(filename)[0] or "image/jpeg"
+    if not tg_file:
+        await msg.reply_text("Envie uma imagem v?lida como foto ou documento.")
+        return
+    raw = await tg_file.download_as_bytearray()
+    try:
+        Image.open(BytesIO(raw)).verify()
+    except Exception:
+        await msg.reply_text("N?o consegui validar essa imagem. Envie PNG, JPG ou WEBP.")
+        return
+    ext = os.path.splitext(filename)[1].lower() or ".jpg"
+    if ext not in (".jpg", ".jpeg", ".png", ".webp"):
+        ext = ".jpg"
+    path = f"eventos/drafts/{telegram_id}/arte_pronta{ext}"
+    url = upload_storage_publico(BUCKET_EVENT_CARDS, path, bytes(raw), content_type)
+    if not url:
+        await msg.reply_text("N?o consegui salvar a arte no Storage. Tente novamente.")
+        return
+    dados["modo_visual"] = "card_especial"
+    dados["card_especial_url"] = url
+    _salvar_rascunho(_RASCUNHOS_EVENTO, telegram_id, dados)
+    context.user_data.pop("draft_evento_arte_pronta_origem", None)
+    await msg.reply_text(
+        "Arte pronta da sessão recebida. Publique quando estiver pronto.",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Publicar com arte pronta", callback_data=f"draft_evento_visual|card_especial|{origem}")]]),
     )
 
 
@@ -1002,10 +1150,10 @@ def _teclado_rascunho_evento(dados: Dict[str, Any], nivel: str, lojas_existentes
         linhas.append([InlineKeyboardButton("👤 Definir secretário responsável", callback_data="draft_evento_escolher_secretario")])
     else:
         if _evento_tem_loja_nova(dados, lojas_existentes):
-            linhas.append([InlineKeyboardButton("✅ Publicar e salvar loja", callback_data="draft_evento_confirmar_com_loja")])
-            linhas.append([InlineKeyboardButton("✅ Publicar sem salvar loja", callback_data="draft_evento_confirmar_sem_loja")])
+            linhas.append([InlineKeyboardButton("✅ Publicar e salvar loja", callback_data="draft_evento_escolher_visual_com_loja")])
+            linhas.append([InlineKeyboardButton("✅ Publicar sem salvar loja", callback_data="draft_evento_escolher_visual_sem_loja")])
         else:
-            linhas.append([InlineKeyboardButton("✅ Publicar no grupo", callback_data="draft_evento_confirmar_sem_loja")])
+            linhas.append([InlineKeyboardButton("✅ Publicar no grupo", callback_data="draft_evento_escolher_visual_sem_loja")])
     linhas.append([_botao_editar_webapp("✏️ Editar formulário", WEBAPP_URL_EVENTO)])
     linhas.append([InlineKeyboardButton("❌ Cancelar", callback_data="draft_evento_cancelar")])
     return InlineKeyboardMarkup(linhas)

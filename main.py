@@ -57,6 +57,11 @@ from src.miniapp import (
     draft_evento_escolher_secretario,
     draft_evento_set_secretario,
     draft_evento_set_secretario_cancelar,
+    draft_evento_escolher_visual_com_loja,
+    draft_evento_escolher_visual_sem_loja,
+    draft_evento_visual_voltar,
+    draft_evento_definir_visual,
+    receber_arte_pronta_evento,
     draft_evento_confirmar_com_loja,
     draft_evento_confirmar_sem_loja,
     draft_evento_cancelar,
@@ -860,9 +865,14 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(draft_evento_escolher_secretario, pattern=r"^draft_evento_escolher_secretario$"))
     app.add_handler(CallbackQueryHandler(draft_evento_set_secretario, pattern=r"^draft_evento_set_secretario\|"))
     app.add_handler(CallbackQueryHandler(draft_evento_set_secretario_cancelar, pattern=r"^draft_evento_set_secretario_cancelar$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_escolher_visual_com_loja, pattern=r"^draft_evento_escolher_visual_com_loja$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_escolher_visual_sem_loja, pattern=r"^draft_evento_escolher_visual_sem_loja$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_visual_voltar, pattern=r"^draft_evento_visual_voltar$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_definir_visual, pattern=r"^draft_evento_visual\|"))
     app.add_handler(CallbackQueryHandler(draft_evento_confirmar_com_loja, pattern=r"^draft_evento_confirmar_com_loja$"))
     app.add_handler(CallbackQueryHandler(draft_evento_confirmar_sem_loja, pattern=r"^draft_evento_confirmar_sem_loja$"))
     app.add_handler(CallbackQueryHandler(draft_evento_cancelar, pattern=r"^draft_evento_cancelar$"))
+    app.add_handler(MessageHandler(filters.ChatType.PRIVATE & (filters.PHOTO | filters.Document.IMAGE), receber_arte_pronta_evento))
 
     # ===== 11. HANDLER PARA NOVOS MEMBROS NO GRUPO =====
     app.add_handler(ChatMemberHandler(novo_membro_grupo_handler))
