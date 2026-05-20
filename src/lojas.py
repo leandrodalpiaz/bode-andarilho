@@ -654,11 +654,11 @@ async def cadastrar_loja_inicio(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data["nova_loja_operador_id"] = str(user_id)
     context.user_data["nova_loja_nivel"] = str(nivel)
 
-    # Mini App: secretários podem usar webform; admin segue fluxo guiado para escolher responsável.
-    if WEBAPP_URL_LOJA and nivel != "3":
+    # Mini App: secretários e administradores usam o webform; admin define o responsável na revisão do chat.
+    if WEBAPP_URL_LOJA:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "🏙️ *Cadastrar nova loja*\n\nToque no botão abaixo para preencher o formulário:",
+            "🏙️ *Cadastrar nova loja*\n\nToque no botão abaixo para preencher o formulário. Depois, confirme o resumo aqui no chat:",
             InlineKeyboardMarkup(
                 [[InlineKeyboardButton("📋 Abrir formulário", web_app=WebAppInfo(url=WEBAPP_URL_LOJA))]]
             ),

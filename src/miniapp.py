@@ -168,7 +168,7 @@ def _resumo_membro_md(dados: Dict[str, Any]) -> str:
         f"*Venerável Mestre:* {_escape_md(dados.get('vm', ''))}\n"
         f"*Loja:* {_escape_md(dados.get('loja', ''))}{numero_fmt}\n"
         f"*Oriente:* {_escape_md(dados.get('oriente', ''))}\n"
-        f"*Potência:* {_escape_md(potencia or '')}\n"
+        f"*Potência local:* {_escape_md(potencia or '')}\n"
     )
 
 
@@ -191,7 +191,7 @@ def _resumo_loja_md(dados: Dict[str, Any]) -> str:
         f"*Número:* {_escape_md(dados.get('numero', '0'))}\n"
         f"*Oriente:* {_escape_md(dados.get('oriente', ''))}\n"
         f"*Rito:* {_escape_md(dados.get('rito', ''))}\n"
-        f"*Potência:* {_escape_md(_potencia_resumo(dados))}\n"
+        f"*Potência local:* {_escape_md(_potencia_resumo(dados))}\n"
         f"*Endereço:* {_escape_md(dados.get('endereco', ''))}\n"
         f"{linha_responsavel}"
     )
@@ -284,7 +284,7 @@ def _validar_dados_membro(dados: Dict[str, Any]) -> Optional[str]:
     if dados["vm"] not in {"Sim", "Não"}:
         return "Informe se o irmão é Venerável Mestre."
     if not validar_potencia(dados["potencia"], dados.get("potencia_complemento")):
-        return "Informe a potência principal e o complemento."
+        return "Informe a potência principal e a potência local."
     return None
 
 
@@ -495,7 +495,7 @@ def _validar_dados_loja(dados: Dict[str, Any]) -> Optional[str]:
     if dados["rito"] == "Outro" and not dados["rito_outro"]:
         return "Informe o rito quando selecionar 'Outro'."
     if not validar_potencia(dados["potencia"], dados.get("potencia_complemento")):
-        return "Informe a potência principal e o complemento."
+        return "Informe a potência principal e a potência local."
     return None
 
 
@@ -689,7 +689,7 @@ def _validar_dados_evento(dados: Dict[str, Any]) -> Optional[str]:
     if dados["rito"] == "Outro" and not dados["rito_outro"]:
         return "Informe o rito quando selecionar 'Outro'."
     if not validar_potencia(dados["potencia"], dados.get("potencia_complemento")):
-        return "Informe a potência principal e o complemento."
+        return "Informe a potência principal e a potência local."
     return None
 
 
@@ -989,7 +989,7 @@ def _resumo_evento_md(dados: Dict[str, Any]) -> str:
         f"*Loja:* {_escape_md(dados.get('nome_loja', ''))}{numero_fmt}\n"
         f"*Oriente:* {_escape_md(dados.get('oriente', ''))}\n"
         f"*Rito:* {_escape_md(rito or '')}\n"
-        f"*Potência:* {_escape_md(potencia or '')}\n"
+        f"*Potência local:* {_escape_md(potencia or '')}\n"
         f"*Endereço:* {_escape_md(dados.get('endereco', ''))}\n"
         f"{linha_resp}"
     )
@@ -1390,7 +1390,7 @@ def html_cadastro_membro() -> str:
     <div id="potencia_err" class="err"></div>
   </div>
   <div class="field" id="potencia_outra_wrap" style="display:none">
-    <label for="potencia_outra">Complemento da potência *</label>
+    <label for="potencia_outra">Potência local *</label>
     <input id="potencia_outra" type="text" placeholder="Ex.: GOB-RS, GLMERGS, GORGS">
     <div id="potencia_outra_err" class="err"></div>
   </div>
@@ -1441,8 +1441,8 @@ function validate(){
   ok=req('vm','Venerável Mestre')&&ok;
   ok=req('loja','Nome da loja')&&ok;
   ok=req('oriente','Oriente')&&ok;
-  ok=req('potencia','Potência')&&ok;
-  ok=req('potencia_outra','Complemento da potência')&&ok;
+  ok=req('potencia','Potência principal')&&ok;
+  ok=req('potencia_outra','Potência local')&&ok;
   return ok;
 }
 document.getElementById('potencia').addEventListener('change',syncPotenciaOutra);
@@ -1607,7 +1607,7 @@ def html_cadastro_loja() -> str:
     <div id="potencia_err" class="err"></div>
   </div>
   <div class="field" id="potencia_outra_wrap" style="display:none">
-    <label for="potencia_outra">Complemento da potência *</label>
+    <label for="potencia_outra">Potência local *</label>
     <input id="potencia_outra" type="text" placeholder="Ex.: GOB-RS, GLMERGS, GORGS">
     <div id="potencia_outra_err" class="err"></div>
   </div>
@@ -1655,8 +1655,8 @@ function validate(){
   ok=req('oriente','Oriente')&&ok;
   ok=req('rito','Rito')&&ok;
   if(val('rito')==='Outro') ok=req('rito_outro','Rito')&&ok;
-  ok=req('potencia','Potência')&&ok;
-  ok=req('potencia_outra','Complemento da potência')&&ok;
+  ok=req('potencia','Potência principal')&&ok;
+  ok=req('potencia_outra','Potência local')&&ok;
   ok=req('endereco','Endereço')&&ok;
   return ok;
 }
@@ -1850,7 +1850,7 @@ def html_cadastro_evento() -> str:
     <div id="potencia_err" class="err"></div>
   </div>
   <div class="field" id="potencia_outra_wrap" style="display:none">
-    <label for="potencia_outra">Complemento da potência *</label>
+    <label for="potencia_outra">Potência local *</label>
     <input id="potencia_outra" type="text" placeholder="Ex.: GOB-RS, GLMERGS, GORGS">
     <div id="potencia_outra_err" class="err"></div>
   </div>
@@ -2007,8 +2007,8 @@ function validate(){
   ok=req('oriente','Oriente')&&ok;
   ok=req('rito','Rito')&&ok;
   if(val('rito')==='Outro') ok=req('rito_outro','Rito')&&ok;
-  ok=req('potencia','Potência')&&ok;
-  ok=req('potencia_outra','Complemento da potência')&&ok;
+  ok=req('potencia','Potência principal')&&ok;
+  ok=req('potencia_outra','Potência local')&&ok;
   ok=req('endereco','Endereço')&&ok;
   return ok;
 }
@@ -2170,7 +2170,7 @@ async def api_cadastro_membro(request: Request) -> JSONResponse:
     if not all([nome, data_nasc, grau, vm, loja, oriente, potencia]):
         return JSONResponse({"ok": False, "error": "Preencha todos os campos obrigatórios."}, status_code=400)
     if not validar_potencia(potencia, potencia_complemento):
-        return JSONResponse({"ok": False, "error": "Informe a potência principal e o complemento."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "Informe a potência principal e a potência local."}, status_code=400)
 
     try:
         datetime.strptime(data_nasc, "%d/%m/%Y")
@@ -2288,7 +2288,7 @@ async def api_cadastro_loja(request: Request) -> JSONResponse:
     if not all([nome, oriente, rito, potencia, endereco]):
         return JSONResponse({"ok": False, "error": "Preencha todos os campos obrigatórios."}, status_code=400)
     if not validar_potencia(potencia, potencia_complemento):
-        return JSONResponse({"ok": False, "error": "Informe a potência principal e o complemento."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "Informe a potência principal e a potência local."}, status_code=400)
 
     dados_loja: Dict[str, Any] = {
         "nome":     nome,
@@ -2372,7 +2372,7 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
     if not all([data_str, horario, grau, tipo_sessao, traje, agape, nome_loja, oriente, rito, potencia, endereco]):
         return JSONResponse({"ok": False, "error": "Preencha todos os campos obrigatórios."}, status_code=400)
     if not validar_potencia(potencia, potencia_complemento):
-        return JSONResponse({"ok": False, "error": "Informe a potência principal e o complemento."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "Informe a potência principal e a potência local."}, status_code=400)
 
     dt = _parse_data_ddmmyyyy(data_str)
     if not dt:
