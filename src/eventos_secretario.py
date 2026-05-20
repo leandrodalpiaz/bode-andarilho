@@ -1983,13 +1983,14 @@ async def _finalizar_criacao_voucher(update: Update, context: ContextTypes.DEFAU
     nome_loja = loja.get("Nome da Loja") or loja.get("nome") or "Sua Loja"
     
     texto_sucesso = (
-        f"✅ *CONVITE COLETIVO CRIADO!*\n\n"
-        f"O link abaixo está ativo e pré-configurado para a oficina *{nome_loja}*.\n\n"
+        f"✅ *Convite Coletivo criado com sucesso!*\n\n"
+        f"Que alegria ver a Oficina *{nome_loja}* abrindo caminhos para mais Irmãos. 🤝\n\n"
         f"📊 *Limite de usos:* `{limite} cadastros`.\n\n"
-        f"🔗 *Link de Convite:* (Toque para copiar)\n"
+        f"🔗 *Link de Convite:* (toque para copiar)\n"
         f"`{link_completo}`\n\n"
-        f"💡 *Como funciona:* Ao clicar no link, o novo Irmão iniciará o cadastro com todos os dados de Loja/Oriente pré-preenchidos, "
-        f"sendo ativado *imediatamente* sem precisar aguardar aprovação na Câmara de Reflexão."
+        f"💡 *Como funciona:* ao clicar no link, o novo Irmão inicia o cadastro com os dados da Oficina pré-preenchidos "
+        f"e, ao concluir, é ativado *imediatamente* (sem aguardar validação prévia).\n\n"
+        f"Bode Andarilho — estreitando laços fraternos."
     )
     
     teclado = InlineKeyboardMarkup([

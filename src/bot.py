@@ -391,7 +391,7 @@ async def _executar_limpeza_historico(context, user_id: int, referencia_message_
 # ============================================
 
 async def criar_estrutura_inicial(context, user_id: int, membro: dict) -> bool:
-    """Inicia a egrégora do bot enviando o menu permanente e contexto inicial.
+    """Inicia as interações do bot enviando o menu permanente e contexto inicial.
 
     Antes de exibir qualquer menu, verifica se o membro ainda está presente
     no grupo configurado (GRUPO_TELEGRAM_ID). Se não estiver, nega o acesso
@@ -413,10 +413,8 @@ async def criar_estrutura_inicial(context, user_id: int, membro: dict) -> bool:
         )
         return False
 
-    painel_enviado = await _mostrar_painel_principal(context, user_id, membro)
-    if painel_enviado:
-        asyncio.create_task(_enviar_diploma_capa_inicial(context, user_id, membro))
-    return painel_enviado
+    # Diploma não deve mais carregar automaticamente no /start para evitar poluição.
+    return await _mostrar_painel_principal(context, user_id, membro)
 
 
 async def _enviar_diploma_capa_inicial(context, user_id: int, membro: dict) -> bool:
@@ -684,7 +682,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Saudações fraternas, Ir.·. *{nome_ir}*!\n\n"
                 f"Identificamos que você utilizou o link de acesso de *Secretário (Nível 2)*.\n\n"
                 f"Como você já possui um cadastro ativo de Membro no bot, não é necessário preencher uma nova ficha cadastral.\n\n"
-                f"Deseja encaminhar o seu pedido de promoção e outorga de Malhete para aprovação da Chancelaria Geral?"
+                f"Deseja encaminhar o seu pedido de promoção para aprovação da Administração Geral?"
             )
             await _enviar_ou_editar_mensagem(
                 context,

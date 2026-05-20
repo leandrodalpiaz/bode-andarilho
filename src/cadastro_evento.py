@@ -1649,6 +1649,13 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
         # 2. Escriturário do Sistema (Sem erros/pendências de IA)
         if not context.user_data.get("ia_dados_faltantes", False):
             asyncio.create_task(checar_e_conceder(user_id, "escriturario_sistema", context.bot))
+
+        # 3. Conquistas Coletivas do Evento (Lojas, Ritos, Graus, Potências)
+        try:
+            from src.conquistas_coletivas import processar_conquistas_coletivas_evento
+            asyncio.create_task(processar_conquistas_coletivas_evento(context.bot, evento))
+        except Exception as e_col:
+            logger.warning("Falha silenciosa ao processar conquistas coletivas do evento: %s", e_col)
     except Exception:
         pass
 

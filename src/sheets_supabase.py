@@ -38,6 +38,8 @@ _cache_lojas: Dict[int, tuple] = {}      # telegram_id -> (dados, timestamp)
 _ttl_lojas = 300                         # 5 minutos
 _membro_conquistas_tabela_indisponivel = False
 _membro_conquistas_alertado = False
+_marcos_coletivos_tabela_indisponivel = False
+_marcos_coletivos_alertado = False
 
 # Alternativa para notificações pendentes do secretário quando a tabela
 # dedicada ainda não foi criada no Supabase.
@@ -80,6 +82,27 @@ def _marcar_tabela_membro_conquistas_indisponivel(exc: Exception) -> None:
             exc,
         )
         _membro_conquistas_alertado = True
+
+
+def _erro_tabela_marcos_coletivos(exc: Exception) -> bool:
+    msg = str(exc or "")
+    return (
+        "marcos_coletivos" in msg
+        and ("PGRST205" in msg or "Could not find the table" in msg)
+    )
+
+
+def _marcar_tabela_marcos_coletivos_indisponivel(exc: Exception) -> None:
+    global _marcos_coletivos_tabela_indisponivel
+    global _marcos_coletivos_alertado
+    _marcos_coletivos_tabela_indisponivel = True
+    if not _marcos_coletivos_alertado:
+        logger.warning(
+            "Tabela 'marcos_coletivos' indisponivel no Supabase. "
+            "Disparos coletivos automaticos serao suprimidos para evitar repeticao no grupo. Erro original: %s",
+            exc,
+        )
+        _marcos_coletivos_alertado = True
 
 
 def _erro_tabela_notif_secretario_pendentes(exc: Exception) -> bool:
@@ -2386,6 +2409,8 @@ def listar_conquistas_obtidas(user_id: int) -> List[str]:
 def registrar_marco_coletivo(marco_slug: str, categoria: str) -> bool:
     """Registra a ocorrência de um marco sistêmico de crescimento."""
     try:
+        if _marcos_coletivos_tabela_indisponivel:
+            return False
         payload = {
             "marco_slug": marco_slug.strip().lower(),
             "categoria": categoria.strip()
@@ -2393,6 +2418,9 @@ def registrar_marco_coletivo(marco_slug: str, categoria: str) -> bool:
         supabase.table("marcos_coletivos").insert(payload).execute()
         return True
     except Exception as e:
+        if _erro_tabela_marcos_coletivos(e):
+            _marcar_tabela_marcos_coletivos_indisponivel(e)
+            return False
         logger.debug("Marco coletivo já registrado ou erro: %s", e)
         return True
 
@@ -2400,6 +2428,8 @@ def registrar_marco_coletivo(marco_slug: str, categoria: str) -> bool:
 def checar_marco_coletivo_existente(marco_slug: str) -> bool:
     """Verifica se um determinado marco de crescimento já ocorreu antes."""
     try:
+        if _marcos_coletivos_tabela_indisponivel:
+            return True
         slug = marco_slug.strip().lower()
         resp = supabase.table("marcos_coletivos") \
             .select("marco_slug") \
@@ -2409,6 +2439,9 @@ def checar_marco_coletivo_existente(marco_slug: str) -> bool:
             
         return len(resp.data or []) > 0
     except Exception as e:
+        if _erro_tabela_marcos_coletivos(e):
+            _marcar_tabela_marcos_coletivos_indisponivel(e)
+            return True
         logger.error("Erro ao checar marco coletivo: %s", e)
         return False
 

@@ -598,6 +598,34 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("ping", ping))
     app.add_handler(CommandHandler("vigor", vigor_painel))
 
+    async def cmd_realizar_abertura_historica(update: Update, context):
+        user_id = update.effective_user.id
+        from src.bot import get_nivel
+        if get_nivel(user_id) != "3":
+            if update.message:
+                await update.message.reply_text("⛔ Apenas Administradores Gerais podem executar este comando.")
+            return
+            
+        if update.message:
+            await update.message.reply_text("🔄 Iniciando o Rito de Abertura Histórica...")
+            
+        try:
+            from src.notificacoes_coletivas import realizar_abertura_historica
+            # Removemos a trava de supressão para garantir a execução
+            from src import sheets_supabase
+            sheets_supabase._marcos_coletivos_tabela_indisponivel = False
+            
+            await realizar_abertura_historica(context.bot)
+            
+            if update.message:
+                await update.message.reply_text("✅ Rito de Abertura Histórica concluído com sucesso.")
+        except Exception as e:
+            logger.error("Erro ao executar rito de abertura manual: %s", e)
+            if update.message:
+                await update.message.reply_text(f"❌ Falha ao executar o rito: {e}")
+
+    app.add_handler(CommandHandler("realizar_abertura_historica", cmd_realizar_abertura_historica))
+
     # ===== 3. CALLBACKS DA CENTRAL DE AJUDA =====
     for handler in ajuda_handlers:
         app.add_handler(handler)

@@ -244,7 +244,7 @@ def renderizar_relatorio_vigor(dados_vigor: Dict[str, Any]) -> str:
             # Label
             _wrap_text_centered(draw, m["lbl"], mcx, mcy + 20, font_lbl, DARK_TEXT, 160)
 
-        # 4. Outorga de Selos de Conquista Laterais (Dinâmicos)
+        # 4. Concessão de Selos de Conquista Laterais (Dinâmicos)
         selo_path = BRANDING_DIR / "selo_cera_base.png"
         
         def _desenhar_selo_recompensa(sx: int, sy: int, sigla: str, legenda: str):

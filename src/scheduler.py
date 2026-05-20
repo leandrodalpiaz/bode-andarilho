@@ -152,6 +152,73 @@ async def job_mobilizacao_coletiva(app: Application):
         logger.error("Erro no job horario de mobilizacao coletiva: %s", e)
 
 
+async def job_informativo_semanal(app: Application):
+    """
+    Informativo semanal com resumo das sessões disponíveis e quantidade acumulada de confirmações.
+    Roda toda segunda-feira às 08:00.
+    """
+    logger.info("--- INICIANDO INFORMATIVO SEMANAL ---")
+    try:
+        from src.sheets_supabase import listar_eventos, get_total_confirmacoes
+        from src.conquistas_coletivas import enviar_mensagem_coletiva
+        from datetime import date
+        
+        eventos = listar_eventos(include_inativos=False) or []
+        hoje = date.today()
+        
+        # Filtra sessões futuras ou hoje
+        sessoes_disponiveis = []
+        for ev in eventos:
+            dt_str = ev.get("Data do evento") or ev.get("data_evento")
+            if not dt_str:
+                continue
+            # Tenta converter
+            from src.eventos import parse_data_evento
+            dt = parse_data_evento(dt_str)
+            if dt and dt.date() >= hoje:
+                sessoes_disponiveis.append(ev)
+                
+        total_sessoes = len(sessoes_disponiveis)
+        total_confirmacoes = get_total_confirmacoes()
+        
+        if total_sessoes == 0:
+            texto = (
+                "📰 *BODE INFORMATIVO SEMANAL* 🐐\n\n"
+                "Saudações, Obreiros!\n\n"
+                "Iniciamos mais uma semana de trabalhos. No momento, não temos novas sessões agendadas no painel.\n\n"
+                "Secretários, não deixem de publicar os convites das suas Oficinas! 🏛️\n\n"
+                f"🔥 Já somamos *{total_confirmacoes:,} presenças confirmadas* no ecossistema! Vamos continuar fortalecendo nossas colunas! 🤝"
+            )
+            await enviar_mensagem_coletiva(app.bot, texto)
+            return
+            
+        # Agrupar por rito
+        ritos_count = {}
+        for ev in sessoes_disponiveis:
+            rito = str(ev.get("Rito") or ev.get("rito") or "Não Informado").strip()
+            rito_nome = " ".join(w.capitalize() for w in rito.split())
+            ritos_count[rito_nome] = ritos_count.get(rito_nome, 0) + 1
+            
+        ritos_texto = ""
+        for rito, count in sorted(ritos_count.items(), key=lambda x: x[1], reverse=True):
+            ritos_texto += f"• *{rito}:* {count} sessão(ões)\n"
+            
+        texto = (
+            "📰 *BODE INFORMATIVO SEMANAL* 🐐\n\n"
+            "Saudações, Obreiros! Aqui está o resumo do vigor e engajamento da nossa caminhada coletiva para esta semana:\n\n"
+            f"🏛️ *Sessões Disponíveis para Visitação:* {total_sessoes} oficinas com portas abertas!\n\n"
+            f"{ritos_texto}\n"
+            f"🔥 *Engajamento e Vigor Geral:*\n"
+            f"Já somamos o marco incrível de **{total_confirmacoes:,} confirmações de presença** no ecossistema Bode Andarilho!\n\n"
+            "Não deixe de praticar a verdadeira fraternidade e estreitar os laços. Visite uma Oficina esta semana e utilize o aplicativo para confirmar sua presença! 🚜💼🌾"
+        )
+        
+        await enviar_mensagem_coletiva(app.bot, texto)
+        logger.info("Informativo semanal enviado com sucesso.")
+    except Exception as e:
+        logger.error("Erro ao rodar job_informativo_semanal: %s", e)
+
+
 async def job_mensal_fechamento_vigor(app: Application):
     """
     Job mensal que processa o Vigor Administrativo das Lojas referente ao mes anterior,
@@ -324,15 +391,21 @@ async def iniciar_scheduler(app: Application):
         replace_existing=True,
     )
 
+    # --- JOB HERALDO: INFORMATIVO SEMANAL ---
+    scheduler.add_job(
+        job_informativo_semanal,
+        "cron",
+        day_of_week="mon",
+        hour=8,
+        minute=0,
+        args=[app],
+        id="job_informativo_semanal",
+        replace_existing=True,
+    )
+
     scheduler.start()
     _scheduler = scheduler
     logger.info(
-        "Scheduler iniciado com jobs de lembretes, celebração mensal, flush e faxina semanal."
+        "Scheduler iniciado com jobs de lembretes, celebração mensal, flush, faxina, mobilização e informativo semanal."
     )
 
-    # --- RITO DE ABERTURA HISTÓRICA (Retroatividade Unificada) ---
-    try:
-        from src.notificacoes_coletivas import realizar_abertura_historica
-        asyncio.create_task(realizar_abertura_historica(app.bot))
-    except Exception as boot_err:
-        logger.warning("Falha silenciosa ao registrar o rito de abertura historica no boot: %s", boot_err)

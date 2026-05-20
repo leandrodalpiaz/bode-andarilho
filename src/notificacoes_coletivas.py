@@ -176,7 +176,7 @@ async def checar_marcos_mobilizacao(bot: Any) -> None:
                     msg = (
                         f"🔥 *Vigor em Movimento!*\n\n"
                         f"Alcançamos o marco épico de **{meta:,} presenças confirmadas** no ecossistema Bode Andarilho!\n\n"
-                        f"Atualmente somamos **{total:,} confirmações** ativas. A egrégora agradece o empenho de cada Irmão que fortalece nossas colunas na estrada! 🤝🐐🚜🔥"
+                        f"Atualmente somamos **{total:,} confirmações** ativas. Essa marca é fruto da sinergia e do esforço conjunto de cada Irmão que visita e fortalece nossas Oficinas! 🤝🐐🚜🔥"
                     )
                     await _enviar_card_telegram(bot, card_path, msg)
                     break # Apenas um marco por rodada
@@ -266,7 +266,7 @@ async def realizar_abertura_historica(bot: Any) -> None:
                 tipo_marco="Abertura de Chancelaria",
                 titulo=f"{total:,} Presenças",
                 subtitulo="Vigor Histórico Consolidado!",
-                detalhes=f"Malha ativa inaugurada em produção!\\nA egrégora em movimento.",
+                detalhes=f"Malha ativa inaugurada em produção!\\nSinergia e colaboração gerando resultados.",
                 potencia="gob",
                 monograma_selo="MO"
             )

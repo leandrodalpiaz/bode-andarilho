@@ -1837,13 +1837,13 @@ async def processar_pedido_fundacao_usuario(update: Update, context: ContextType
     texto = (
         f"🏛️ *RITO DE FUNDACAO DE OFICINA*\n\n"
         f"Prezado Ir.·., voce solicitou fundar e edificar oficialmente a Oficina *'{loja_man}'* no ecossistema do Bode Andarilho.\n\n"
-        f"Ao prosseguir, seu nome sera enviado a Chancelaria Geral para outorga do encargo de *Secretario (Nivel 2)*.\n\n"
+        f"Ao prosseguir, seu nome sera enviado a Chancelaria Geral para aprovação do encargo de *Secretario (Nivel 2)*.\n\n"
         f"Deseja confirmar o envio do pedido de fundacao?"
     )
     
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Sim, Solicitar Outorga", callback_data="fundacao_confirmar_envio")],
+        [InlineKeyboardButton("✅ Sim, Solicitar Aprovação", callback_data="fundacao_confirmar_envio")],
         [InlineKeyboardButton("❌ Cancelar", callback_data="menu_principal")]
     ])
     
@@ -1883,7 +1883,7 @@ async def confirmar_pedido_fundacao_usuario(update: Update, context: ContextType
     
     if sucesso:
         await query.message.edit_text(
-            "📜 *Pedido Enviado!*\n\nSeu pedido de outorga de Malhete foi transmitido a Chancelaria Geral. Aguarde a notificacao de aprovacao no seu privado.",
+            "📜 *Pedido Enviado!*\n\nSeu pedido de aprovação para Secretário foi transmitido a Chancelaria Geral. Aguarde a notificacao de aprovacao no seu privado.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Menu Principal", callback_data="menu_principal")]]),
             parse_mode="Markdown"
         )
@@ -1897,11 +1897,11 @@ async def confirmar_pedido_fundacao_usuario(update: Update, context: ContextType
             f"🏛️ *Loja:* {loja_man}\n"
             f"📜 *Potencia:* {pot} {pot_comp}\n"
             f"📍 *Oriente:* {ori}\n\n"
-            f"Deseja outorgar o Malhete, promovendo-o a Nivel 2 e edificando oficialmente esta Oficina?"
+            f"Deseja aprovar o cadastro, promovendo-o a Nivel 2 e edificando oficialmente esta Oficina?"
         )
         
         teclado_admin = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🟢 Outorgar Malhete e Fundar", callback_data=f"fundacao_outorgar|{membro_id}")],
+            [InlineKeyboardButton("🟢 Aprovar Secretário e Fundar", callback_data=f"fundacao_outorgar|{membro_id}")],
             [InlineKeyboardButton("❌ Recusar Pedido", callback_data=f"fundacao_recusar|{membro_id}")]
         ])
         
@@ -1924,7 +1924,7 @@ async def outorgar_malhete_admin(update: Update, context: ContextTypes.DEFAULT_T
         return
 
     try:
-        await query.answer("Processando Outorga...")
+        await query.answer("Processando Aprovação...")
     except Exception:
         pass
     
@@ -1973,19 +1973,20 @@ async def outorgar_malhete_admin(update: Update, context: ContextTypes.DEFAULT_T
         token = criar_voucher(nova_loja_id, obreiro_id)
         
         await query.message.edit_text(
-            f"✅ *OUTORGA DE MALHETE CONCLUIDA!*\n\nO Ir.·. *{nome}* foi promovido a Secretario (Nivel 2) e a Loja *'{loja_man}'* (ID: {nova_loja_id}) esta oficialmente erguida!",
+            f"✅ *APROVAÇÃO CONCLUÍDA!*\n\nO Ir.·. *{nome}* foi promovido a Secretario (Nivel 2) e a Loja *'{loja_man}'* (ID: {nova_loja_id}) esta oficialmente erguida!",
             reply_markup=None, parse_mode="Markdown"
         )
         
         msg_sec = (
-            f"🎉🏛️ *O MALHETE DA OUTORGA ESTA EM SUAS MAOS!*\n\n"
-            f"Saudacoes Ir.·. *Secretario {nome}*!\n"
-            f"Seu pedido de fundacao foi *AUTORIZADO* pela Chancelaria Geral.\n\n"
-            f"A Oficina *{loja_man}* foi erguida e vinculada ao seu encargo administrativo. "
-            f"Suas ferramentas de Nivel 2 estao liberadas!\n\n"
-            f"🎟️ *Convite Inicial da Oficina:* `{token}`\n"
-            f"Compartilhe este token com seus obreiros para que entrem direto na sua Oficina!\n\n"
-            f"Envie /start e toque em 'Area do Secretario' para ver suas colunas! 🔨🤝🌟🐐"
+            f"🎉🏛️ *Tudo pronto para começar!*\n\n"
+            f"Saudações, *{nome}*!\n\n"
+            f"A Oficina *{loja_man}* já está cadastrada e vinculada ao seu perfil.\n"
+            f"Seu acesso de *Secretário (Nível 2)* está ativo.\n\n"
+            f"🎟️ *Convite inicial da Oficina:* `{token}`\n"
+            f"Compartilhe este token com os membros da sua Oficina para que entrem no bot já vinculados a ela.\n\n"
+            f"Daqui em diante, a ideia é simples: construir, compartilhar e caminhar juntos. 🤝\n\n"
+            f"Bode Andarilho — estreitando laços fraternos.\n\n"
+            f"Envie /start e toque em 'Área do Secretário' para acessar seu painel. 🔨🐐"
         )
         await context.bot.send_message(chat_id=obreiro_id, text=msg_sec, parse_mode="Markdown")
         
@@ -2000,7 +2001,7 @@ async def outorgar_malhete_admin(update: Update, context: ContextTypes.DEFAULT_T
             
     except Exception as e:
         logger.error("Erro na outorga de malhete: %s", e)
-        await query.message.reply_text(f"❌ Ocorreu um erro no banco de dados durante a outorga: {e}")
+        await query.message.reply_text(f"❌ Ocorreu um erro no banco de dados durante a aprovação: {e}")
 
 
 async def recusar_outorga_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2091,11 +2092,12 @@ async def aprovar_secretario_callback(update: Update, context: ContextTypes.DEFA
         )
         try:
             msg_obreiro = (
-                f"🎉🏛️ *PROMOÇÃO CONCLUÍDA!*\n\n"
-                f"Saudações Ir.·. *Secretário {nome}*!\n"
-                f"Seu cadastro e solicitação de acesso foram *APROVADOS* pela Administração Geral.\n\n"
-                f"Suas ferramentas de gestão de Nível 2 estão totalmente liberadas!\n\n"
-                f"Envie /start para acessar seu painel e emitir convites dinâmicos. 🔨🤝🐐"
+                f"🎉🏛️ *Acesso ativado!*\n\n"
+                f"Saudações, *{nome}*!\n\n"
+                f"Seu cadastro e solicitação de acesso foram *APROVADOS*.\n\n"
+                f"Suas ferramentas de Secretário (Nível 2) já estão liberadas.\n\n"
+                f"Bode Andarilho — estreitando laços fraternos.\n\n"
+                f"Envie /start para acessar seu painel e emitir convites. 🔨🐐"
             )
             await context.bot.send_message(chat_id=tid, text=msg_obreiro, parse_mode="Markdown")
         except Exception as e_not:

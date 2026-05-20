@@ -65,7 +65,7 @@ CONQUISTAS_INFO = {
     },
     "pm": {
         "titulo": "Mestre Passado Digital",
-        "descricao": "Outorgado pela passagem bem-sucedida de Bastão ao sucessor.",
+        "descricao": "Concedido pela passagem bem-sucedida de Bastão ao sucessor.",
         "emoji": "🤝",
     },
     "bv": {
@@ -328,7 +328,7 @@ async def checar_aniversarios_cadastro(bot: Any) -> None:
 async def verificar_novas_conquistas(user_id: int, bot: Any) -> None:
     """
     Executa a varredura agregada de estatisticas de presencas,
-    cidades, UFs e prazos para outorgar automaticamente novas medalhas.
+    cidades, UFs e prazos para conceder automaticamente novas medalhas.
     Invocado transparente e assincronamente antes da abertura de Perfil.
     """
     try:

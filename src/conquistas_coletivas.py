@@ -1,0 +1,241 @@
+# src/conquistas_coletivas.py
+from __future__ import annotations
+
+import logging
+import os
+import re
+import unicodedata
+from datetime import date, datetime
+from typing import Any, Dict, Optional
+
+from telegram import Bot
+
+from src.sheets_supabase import (
+    checar_marco_coletivo_existente,
+    listar_eventos,
+    registrar_marco_coletivo,
+    supabase,
+    _marcos_coletivos_tabela_indisponivel,
+)
+from src.potencias import formatar_potencia
+
+logger = logging.getLogger(__name__)
+
+
+def _slugify(texto: Any) -> str:
+    """Gera um slug simples, removendo acentos e caracteres especiais."""
+    if not texto:
+        return ""
+    normalized = unicodedata.normalize("NFKD", str(texto).strip().lower())
+    ascii_text = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]+", "_", ascii_text).strip("_")
+
+
+def _obter_grupo_central() -> Optional[int]:
+    """Retorna o ID do grupo de expansão/central configurado."""
+    val = os.getenv("TELEGRAM_GRUPO_EXPANSAO_ID") or os.getenv("GRUPO_PRINCIPAL_ID") or "-1003721338228"
+    if not val:
+        return None
+    try:
+        return int(float(val))
+    except Exception:
+        return None
+
+
+async def enviar_mensagem_coletiva(bot: Bot, texto: str):
+    """Envia uma mensagem de texto formatada para o grupo central."""
+    grupo_id = _obter_grupo_central()
+    if not grupo_id:
+        logger.warning("Grupo central não configurado. Ignorando mensagem coletiva.")
+        return
+    try:
+        await bot.send_message(
+            chat_id=grupo_id,
+            text=texto,
+            parse_mode="Markdown",
+        )
+    except Exception as e:
+        logger.error("Erro ao enviar mensagem coletiva para o grupo %s: %s", grupo_id, e)
+
+
+def obter_max_record_marco_coletivo(prefixo: str) -> int:
+    """Varre os slugs cadastrados na tabela e retorna o maior valor de recorde atual."""
+    try:
+        if _marcos_coletivos_tabela_indisponivel:
+            return 0
+        resp = (
+            supabase.table("marcos_coletivos")
+            .select("marco_slug")
+            .like("marco_slug", f"{prefixo}%")
+            .execute()
+        )
+        records = []
+        for row in resp.data or []:
+            slug = row.get("marco_slug", "")
+            partes = slug.split("|")
+            if len(partes) >= 3:
+                try:
+                    records.append(int(partes[-1]))
+                except ValueError:
+                    pass
+        return max(records) if records else 0
+    except Exception as e:
+        logger.error("Erro ao obter max record para %s: %s", prefixo, e)
+        return 0
+
+
+def _parse_data(valor: Any) -> Optional[date]:
+    """Converte valor para objeto date."""
+    if not valor:
+        return None
+    if isinstance(valor, (datetime, date)):
+        return valor if isinstance(valor, date) else valor.date()
+    # Tenta usar parse_data_evento de eventos
+    from src.eventos import parse_data_evento
+    dt = parse_data_evento(valor)
+    return dt.date() if dt else None
+
+
+async def processar_conquistas_coletivas_evento(bot: Bot, evento: Dict[str, Any]) -> None:
+    """
+    Avalia a publicação de uma nova sessão e dispara comemorações de conquistas coletivas
+    (ineditismo e novos recordes de sessões disponíveis).
+    """
+    try:
+        # 1. Extração e Normalização de Campos
+        loja_id = str(evento.get("loja_id") or evento.get("ID da loja") or "").strip()
+        nome_loja = str(evento.get("nome_loja") or evento.get("Nome da loja") or "").strip()
+        rito = str(evento.get("rito") or evento.get("Rito") or "").strip()
+        grau = str(evento.get("grau") or evento.get("Grau") or "").strip()
+        potencia = str(evento.get("potencia") or evento.get("Potência") or "").strip()
+        potencia_comp = str(evento.get("potencia_complemento") or evento.get("Potência complemento") or "").strip()
+
+        if not loja_id or not nome_loja:
+            logger.warning("Evento sem loja_id ou nome_loja. Pulando processamento de conquistas coletivas.")
+            return
+
+        # 2. Primeira vez que a Oficina publica (Loja Pioneira)
+        slug_loja = f"primeira_sessao_loja|{_slugify(loja_id)}"
+        if not checar_marco_coletivo_existente(slug_loja):
+            msg = (
+                f"🏛️ *Nova Oficina Ativa!*\n\n"
+                f"A Oficina *{nome_loja}* acaba de publicar seu primeiro convite para sessão no ecossistema Bode Andarilho!\n\n"
+                f"Que a sinergia entre os Irmãos gere excelentes frutos e impulsione os trabalhos desta nova Oficina! 🤝🐐"
+            )
+            await enviar_mensagem_coletiva(bot, msg)
+            registrar_marco_coletivo(slug_loja, "loja")
+
+        # Obter todos os eventos ativos para cálculo de recordes de sessões simultâneas disponíveis
+        eventos_ativos = listar_eventos(include_inativos=False) or []
+        hoje = date.today()
+
+        # Filtrar apenas sessões com datas futuras ou hoje (disponíveis para visita)
+        sessoes_futuras = []
+        for ev in eventos_ativos:
+            dt_ev = _parse_data(ev.get("Data do evento") or ev.get("data_evento"))
+            if dt_ev and dt_ev >= hoje:
+                sessoes_futuras.append(ev)
+
+        # 3. Rito (Ineditismo e Recorde de Disponibilidade)
+        if rito:
+            rito_slug = _slugify(rito)
+            # Contar quantas sessões ativas futuras existem deste rito
+            count_rito = sum(
+                1 for ev in sessoes_futuras
+                if _slugify(ev.get("Rito") or ev.get("rito")) == rito_slug
+            )
+
+            slug_rito_primeira = f"primeira_sessao_rito|{rito_slug}"
+            if not checar_marco_coletivo_existente(slug_rito_primeira):
+                msg = (
+                    f"📜 *Rito Pioneiro!*\n\n"
+                    f"Foi publicado o primeiro convite para sessão do *{rito}* no nosso ecossistema!\n\n"
+                    f"Um marco histórico para os Irmãos que trabalham sob este rito! 🏛️✨"
+                )
+                await enviar_mensagem_coletiva(bot, msg)
+                registrar_marco_coletivo(slug_rito_primeira, "rito")
+                registrar_marco_coletivo(f"recorde_sessao_rito|{rito_slug}|1", "rito")
+            else:
+                # Checar recorde
+                prefix_recorde = f"recorde_sessao_rito|{rito_slug}|"
+                max_rec = obter_max_record_marco_coletivo(prefix_recorde)
+                if count_rito > max_rec:
+                    msg = (
+                        f"📈 *Novo Recorde do {rito}!*\n\n"
+                        f"Alcançamos a marca histórica de *{count_rito} sessões simultâneas disponíveis* "
+                        f"para visitação sob o *{rito}* no ecossistema!\n\n"
+                        f"A união e o dinamismo de nossas colunas continuam a crescer! 🤝🐐"
+                    )
+                    await enviar_mensagem_coletiva(bot, msg)
+                    registrar_marco_coletivo(f"{prefix_recorde}{count_rito}", "rito")
+
+        # 4. Grau (Ineditismo e Recorde de Disponibilidade)
+        if grau:
+            grau_slug = _slugify(grau)
+            count_grau = sum(
+                1 for ev in sessoes_futuras
+                if _slugify(ev.get("Grau") or ev.get("grau")) == grau_slug
+            )
+
+            slug_grau_primeira = f"primeira_sessao_grau|{grau_slug}"
+            if not checar_marco_coletivo_existente(slug_grau_primeira):
+                msg = (
+                    f"🌟 *Novo Grau em Loja!*\n\n"
+                    f"Foi publicado o primeiro convite para sessão no grau de *{grau}* no ecossistema!\n\n"
+                    f"Mais uma oportunidade de instrução e aperfeiçoamento para nossos Obreiros! 🔨"
+                )
+                await enviar_mensagem_coletiva(bot, msg)
+                registrar_marco_coletivo(slug_grau_primeira, "grau")
+                registrar_marco_coletivo(f"recorde_sessao_grau|{grau_slug}|1", "grau")
+            else:
+                prefix_recorde = f"recorde_sessao_grau|{grau_slug}|"
+                max_rec = obter_max_record_marco_coletivo(prefix_recorde)
+                if count_grau > max_rec:
+                    msg = (
+                        f"📈 *Novo Recorde para o Grau {grau}!*\n\n"
+                        f"Estabelecemos um novo recorde de *{count_grau} sessões simultâneas disponíveis* "
+                        f"no grau de *{grau}*!\n\n"
+                        f"O fortalecimento do ensino e da presença dos Irmãos neste grau é notável! 🔨🌟"
+                    )
+                    await enviar_mensagem_coletiva(bot, msg)
+                    registrar_marco_coletivo(f"{prefix_recorde}{count_grau}", "grau")
+
+        # 5. Potência (Ineditismo e Recorde de Disponibilidade)
+        if potencia:
+            pot_nome = formatar_potencia(potencia, potencia_comp)
+            pot_slug = _slugify(pot_nome)
+            
+            # Contar sessões da potência
+            count_pot = 0
+            for ev in sessoes_futuras:
+                ev_pot = str(ev.get("Potência") or ev.get("potencia") or "").strip()
+                ev_comp = str(ev.get("Potência complemento") or ev.get("potencia_complemento") or "").strip()
+                ev_pot_nome = formatar_potencia(ev_pot, ev_comp)
+                if _slugify(ev_pot_nome) == pot_slug:
+                    count_pot += 1
+
+            slug_pot_primeira = f"primeira_sessao_potencia|{pot_slug}"
+            if not checar_marco_coletivo_existente(slug_pot_primeira):
+                msg = (
+                    f"👑 *Potência Pioneira!*\n\n"
+                    f"A Potência *{pot_nome}* tem sua primeira sessão publicada no ecossistema!\n\n"
+                    f"Fortalecendo a integração e o respeito mútuo em nossas estradas! 🤝"
+                )
+                await enviar_mensagem_coletiva(bot, msg)
+                registrar_marco_coletivo(slug_pot_primeira, "potencia")
+                registrar_marco_coletivo(f"recorde_sessao_potencia|{pot_slug}|1", "potencia")
+            else:
+                prefix_recorde = f"recorde_sessao_potencia|{pot_slug}|"
+                max_rec = obter_max_record_marco_coletivo(prefix_recorde)
+                if count_pot > max_rec:
+                    msg = (
+                        f"📈 *Novo Recorde da Potência {pot_nome}!*\n\n"
+                        f"Alcançamos a marca inédita de *{count_pot} sessões simultâneas disponíveis* "
+                        f"da Potência *{pot_nome}* no ecossistema!\n\n"
+                        f"A maçonaria unida e caminhando junta! 🐐✨"
+                    )
+                    await enviar_mensagem_coletiva(bot, msg)
+                    registrar_marco_coletivo(f"{prefix_recorde}{count_pot}", "potencia")
+
+    except Exception as e:
+        logger.error("Erro ao processar conquistas coletivas do evento: %s", e)

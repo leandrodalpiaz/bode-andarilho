@@ -901,6 +901,14 @@ async def _confirmar_evento(update: Update, context, salvar_loja: bool) -> None:
     if not id_evento:
         await query.answer("Não consegui registrar a sessão agora.", show_alert=True)
         return
+
+    # Hook Conquistas Coletivas do Evento (Lojas, Ritos, Graus, Potências)
+    try:
+        from src.conquistas_coletivas import processar_conquistas_coletivas_evento
+        import asyncio
+        asyncio.create_task(processar_conquistas_coletivas_evento(context.bot, evento))
+    except Exception as e_col:
+        logger.warning("Falha silenciosa ao processar conquistas coletivas do evento no miniapp: %s", e_col)
     try:
         await _publicar_evento_no_grupo(context, id_evento, evento)
     except Exception as e:

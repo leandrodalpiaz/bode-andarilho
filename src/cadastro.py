@@ -1399,7 +1399,7 @@ async def notificar_secretario_pendente_adm(context_or_app, dados_membro: dict):
         f"O Ir.·. *{nome}* ({grau}) se cadastrou usando o link de Secretários para a Oficina:\n\n"
         f"🏛️ *Loja:* {loja}{num_fmt}\n"
         f"📜 *Potência:* {pot}\n\n"
-        f"Deseja outorgar o acesso de Secretário (Nível 2) e ativá-lo no sistema?"
+        f"Deseja aprovar o acesso de Secretário (Nível 2) e ativá-lo no sistema?"
     )
 
     teclado = InlineKeyboardMarkup([
