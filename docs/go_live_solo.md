@@ -6,7 +6,7 @@ Roteiro enxuto para validar release sozinho em 20-30 minutos.
 
 - Operação: 1 pessoa (você).
 - Ambiente: testes controlados (não produção aberta).
-- Foco da rodada: Assistente IA + seguranca + navegacao principal + diploma.
+- Foco da rodada: Assistente IA + segurança + navegação principal + diploma.
 - Data de referencia: 2026-05-19.
 - Observabilidade IA: em memória (zera em restart/deploy), aceitável nesta fase.
 
@@ -61,12 +61,12 @@ Bloqueador:
 
 ## 2.1) Diploma e publicidade (3-5 min)
 
-- Abrir `Meu Perfil / Diploma` no privado.
-- Confirmar album com 2 imagens:
-  - pagina 1 com capa e dados do membro;
-  - pagina 2 com conquistas, transparencia proporcional e publicidade no rodape.
-- Confirmar que conquistas com 0% aparecem quase invisiveis.
-- Confirmar que os botoes de perfil aparecem em mensagem separada apos o album.
+- Abrir `Meu Diploma` no privado.
+- Confirmar álbum com 2 imagens:
+  - página 1 com capa e dados do membro;
+  - página 2 com conquistas, transparência proporcional e publicidade no rodapé.
+- Confirmar que conquistas com 0% aparecem quase invisíveis.
+- Confirmar que os botões do diploma aparecem em mensagem separada após o álbum.
 - Como admin, abrir `Administracao` -> `Publicidade/Apoiadores`.
 - Confirmar que a tela mostra a peca ativa e orienta o asset `assets/branding/sponsor_sindoficios.png`.
 

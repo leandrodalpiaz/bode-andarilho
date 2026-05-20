@@ -12,8 +12,8 @@ async def guia_nivel1(update, context):
 	texto += "   Nos detalhes da sessão, use '✅ Confirmar presença' ou selecione a opção com ágape quando ela estiver disponível.\n\n"
 	texto += "*3. Minhas Presenças:*\n"
 	texto += "   Em '✅ Minhas Presenças', você vê suas próximas confirmações e também o histórico das sessões já realizadas.\n\n"
-	texto += "*4. Meu Perfil:*\n"
-	texto += "   Em '👤 Meu Perfil', você consulta seus dados, vê seu nível de acesso, confere conquistas e pode editar o próprio cadastro.\n\n"
+	texto += "*4. Meu Diploma:*\n"
+	texto += "   Em '📜 Meu Diploma', você consulta seus dados, vê seu nível de acesso, confere conquistas e pode editar o próprio cadastro.\n\n"
 	texto += "*5. Meus Lembretes:*\n"
 	texto += "   Em '🔔 Meus Lembretes', você ativa ou desativa os avisos privados que o bot envia antes das sessões confirmadas."
 

@@ -26,7 +26,10 @@ from src.ajuda.conquistas import calcular_conquistas_membro
 from src.bot import (
     navegar_para,
     _enviar_ou_editar_mensagem,
-    TIPO_RESULTADO
+    _limpar_mensagens_anteriores,
+    TIPO_RESULTADO,
+    TIPO_DIPLOMA_CAPA,
+    estado_mensagens,
 )
 
 logger = logging.getLogger(__name__)
@@ -170,13 +173,8 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     botoes_perfil.append([InlineKeyboardButton("🔙 Voltar ao Menu", callback_data="menu_principal")])
     teclado = InlineKeyboardMarkup(botoes_perfil)
 
-    await navegar_para(
-        update,
-        context,
-        "Meu Perfil",
-        texto + "\n\n_Processando seu diploma digital. A imagem esta sendo preparada e sera enviada em instantes._",
-        teclado,
-    )
+    # O diploma passa a ser a tela principal do perfil.
+    await _limpar_mensagens_anteriores(context, user_id, [TIPO_RESULTADO, TIPO_DIPLOMA_CAPA])
 
     # Geração do Diploma Digital Heráldico (Coluna 4)
     try:
@@ -216,8 +214,8 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     media = InputMediaPhoto(
                         arquivo,
                         caption=(
-                            "📜 *Jornada do Andarilho*\n\n"
-                            "Deslize para o lado para ver o seu progresso e conquistas! ➡️"
+                            "📜 *Meu Diploma*\n\n"
+                            "Seus dados cadastrais e conquistas em um só lugar."
                         ),
                         parse_mode="Markdown",
                     )
@@ -241,20 +239,20 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 5. Envia o teclado inline (Media Groups não aceitam botões em anexo)
             msg_teclado = await context.bot.send_message(
                 chat_id=user_id,
-                text="Acesse as opções de edição do seu Perfil abaixo:",
+                text="Acesse as opções do seu diploma abaixo:",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("Fechar diploma", callback_data="fechar_diploma_capa")],
                     *teclado.inline_keyboard,
+                    [InlineKeyboardButton("Fechar diploma", callback_data="fechar_diploma_capa")],
                 ])
             )
             
             # 6. Registra no rastreador para autolimpeza
-            from src.bot import estado_mensagens
             if user_id not in estado_mensagens:
                 estado_mensagens[user_id] = {}
             
-            estado_mensagens[user_id][TIPO_RESULTADO] = {
+            estado_mensagens[user_id][TIPO_DIPLOMA_CAPA] = {
                 "message_id": msg_teclado.message_id,
+                "message_ids": [msg.message_id for msg in msg_media] + [msg_teclado.message_id],
                 "content_hash": None 
             }
             
@@ -273,7 +271,7 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Fallback seguro: Envia a tela puramente textual se houver qualquer erro na imagem
     await navegar_para(
         update, context,
-        "Meu Perfil",
+        "Meu Diploma",
         texto,
         teclado
     )

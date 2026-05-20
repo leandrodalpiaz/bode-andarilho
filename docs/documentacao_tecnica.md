@@ -1,7 +1,7 @@
 # Documentação Técnica - Bode Andarilho Bot
 
 **Versão:** 2.3 (Supabase + Mini App + Cards Visuais + Diploma)
-**Última atualização:** 19/05/2026
+**Última atualização:** 20/05/2026
 **Runtime:** Python 3.12
 
 ## 1. Visão Geral
@@ -131,7 +131,7 @@ Formato recomendado:
 
 Entrada do usuario:
 
-- Menu principal -> `Meu Perfil / Diploma`
+- Menu principal -> `Meu Diploma`
 - comando `/perfil`
 - callback interno `meu_cadastro`
 
@@ -150,19 +150,61 @@ assets/branding/diploma_vertical_p1.png
 assets/branding/diploma_vertical_p2.png
 ```
 
-Pagina 1:
+Página 1:
 
 - usa a capa oficial;
-- renderiza nome, grau, oficina/loja e oriente;
-- nao inclui blocos de cadastro, assinaturas artificiais ou publicidade.
+- renderiza os dados do perfil (nome, nascimento, grau, loja/número, oriente, potência, VM/MI e nível);
+- não inclui blocos de cadastro nem publicidade (a capa é “perfil visual”).
 
-Pagina 2:
+Página 2:
 
 - renderiza o quadro de conquistas a partir de `CONQUISTAS_INFO`;
-- progresso 0 fica quase invisivel, apenas como silhueta;
+- progresso 0 fica quase invisível, apenas como silhueta;
 - progresso parcial aumenta a opacidade de forma proporcional;
-- progresso 100 aparece nitido;
-- se a base nao tiver dados de conquistas, a imagem ainda renderiza com progresso 0.
+- progresso 100 aparece nítido;
+- se a base não tiver dados de conquistas, a imagem ainda renderiza com progresso 0.
+
+### Botões relevantes (painel e grupo)
+
+Painel do obreiro (nível 1):
+
+- `Buscar Sessões`: abre a navegação de sessões e filtros (data/grau/rito/localidade/potência).
+- `Minhas Presenças`: lista futuras e histórico; permite cancelar presença no privado.
+- `Meu Diploma`: envia carrossel do diploma (2 páginas) e mostra botões de ação (editar/fechar/voltar).
+- `Editar Dados`: abre o fluxo de edição do cadastro do próprio usuário.
+- `Lembretes`: configura lembretes privados.
+- `Organizar`: limpa mensagens antigas do chat privado.
+- `Apoiadores`: abre a tela de apoiadores.
+
+Botões do card de evento no grupo:
+
+- `Confirmar presença` (`confirmar|...`): registra presença para o evento.
+- `Cancelar presença` (`cancelar_card|...`): remove presença do evento.
+- `Ver confirmados` (`ver_confirmados|...`): mostra a lista (temporária no grupo; completa no privado).
+
+Resumo restrito ao secretário:
+
+- `📊 Ver resumo` (`resumo_evento|...`): aparece em telas/DMs do secretário (e admin) e exibe total de confirmados e recortes úteis para ágape/compras. Não deve ser exposto no card público do grupo.
+
+Painel do secretário (nível 2) e fluxos dependentes:
+
+- `Cadastrar evento`: preferencialmente via Mini App; publica o card no grupo e registra os dados no Supabase.
+- `Meus eventos`: lista eventos do secretário; permite editar e cancelar.
+- `Ver confirmados por evento`: lista confirmados por sessão; consome a tabela `confirmacoes` (com compatibilidade por IDs legados).
+- `Gerar Convite Coletivo`: gera token `VOUCHER_...` e link `t.me/.../start=VOUCHER_...` para entrada direta.
+- `Configurar notificações`: ativa/desativa alertas privados (ex.: confirmação de presença em evento do secretário).
+- `Ver eventos cancelados`: lista sessões canceladas e permite refazer quando previsto.
+
+Painel do administrador (nível 3):
+
+- `Gerenciar todas as sessões`: reaproveita o fluxo de “meus eventos” com visão ampliada.
+- `Quadro de Obreiros`: listagem paginada de membros.
+- `Atualizar Obreiro`: edição de campos de membros.
+- `Promover/Rebaixar secretário`: ajuste de nível e status.
+- `Gerenciar lojas`: listagem e operações administrativas sobre lojas.
+- `Publicidade/Apoiadores`: governança do programa institucional.
+- `Comunicado para Secretários`: envio segmentado (mensagem administrativa) aos secretários.
+- `Convite Direto N2`: gera `SEC2_...` vinculado a um `telegram_id` específico (one-time / TTL).
 
 ## 8. Publicidade e apoiadores
 

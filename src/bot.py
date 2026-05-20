@@ -77,6 +77,7 @@ ATALHOS_TEXTO_PRIVADO = {
     "🏠 menu principal": "menu_principal",
     "📍 buscar sessões": "ver_eventos",
     "👤 meu perfil": "meu_cadastro",
+    "📜 meu diploma": "meu_cadastro",
 
     # Saudações Básicas
     "oi": "menu_principal",
@@ -136,6 +137,8 @@ ATALHOS_TEXTO_PRIVADO = {
     # Perfil
     "meu perfil": "meu_cadastro",
     "perfil": "meu_cadastro",
+    "meu diploma": "meu_cadastro",
+    "diploma": "meu_cadastro",
     "cadastro": "meu_cadastro",
     
     # Lembretes
@@ -168,7 +171,7 @@ def menu_principal_teclado(nivel: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton("📅 Minhas Presenças", callback_data="minhas_confirmacoes"),
         ],
         [
-            InlineKeyboardButton("📜 Meu Perfil / Diploma", callback_data="meu_cadastro"),
+            InlineKeyboardButton("📜 Meu Diploma", callback_data="meu_cadastro"),
             InlineKeyboardButton("⚙️ Editar Dados", callback_data="editar_perfil"),
         ],
         [
@@ -699,7 +702,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from telegram import ReplyKeyboardMarkup, KeyboardButton
         teclado_fixo = ReplyKeyboardMarkup([
             [KeyboardButton("🏠 Menu Principal")],
-            [KeyboardButton("📍 Buscar Sessões"), KeyboardButton("👤 Meu Perfil")]
+            [KeyboardButton("📍 Buscar Sessões"), KeyboardButton("📜 Meu Diploma")]
         ], resize_keyboard=True, is_persistent=True)
         
         try:

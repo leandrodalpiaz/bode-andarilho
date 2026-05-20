@@ -93,6 +93,35 @@ def _wrap_lines(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont,
     return lines
 
 
+def _formatar_data_nasc(data_str: str) -> str:
+    if not data_str:
+        return "Nao informada"
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(str(data_str).strip(), fmt).strftime("%d/%m/%Y")
+        except Exception:
+            continue
+    return str(data_str).strip()
+
+
+def _draw_profile_line(
+    draw: ImageDraw.ImageDraw,
+    label: str,
+    value: str,
+    x: int,
+    y: int,
+    label_font: ImageFont.ImageFont,
+    value_font: ImageFont.ImageFont,
+    max_width: int,
+) -> None:
+    label_text = f"{label}:"
+    draw.text((x, y), label_text, font=label_font, fill=(78, 55, 31, 210), anchor="la")
+    label_w = _text_size(draw, label_text, label_font)[0]
+    val = str(value or "Nao informado").strip()
+    val_font = _fit_font("CormorantGaramond-SemiBold.ttf", val, max_width - label_w - 12, 23, 17)
+    draw.text((x + label_w + 12, y), val, font=val_font, fill=(57, 35, 16, 230), anchor="la")
+
+
 def _load_template(path: Path) -> Image.Image:
     if path.exists():
         return Image.open(path).convert("RGBA").resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
@@ -218,20 +247,41 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str], pr
     loja = _value(membro, "Loja", "loja", default="Oficina nao informada")
     numero = _value(membro, "Número da loja", "Numero da loja", "numero_loja")
     oriente = _value(membro, "Oriente", "oriente", "Cidade", "cidade", default="Oriente nao informado")
+    potencia = _value(membro, "Potência", "potencia", default="Nao informada")
+    data_nasc = _formatar_data_nasc(_value(membro, "Data de nascimento", "data_nasc"))
+    vm = _value(membro, "Venerável Mestre", "veneravel_mestre", "vm", default="Nao")
+    mi = _value(membro, "Mestre Instalado", "mestre_instalado", "mi", default="Nao")
+    nivel = str(_value(membro, "Nivel", "nivel", default="1"))
+    nivel_texto = {"1": "Obreiro", "2": "Secretário", "3": "Administrador"}.get(nivel, "Obreiro")
     loja_texto = f"{loja}, nº {numero}" if numero and numero != "0" else loja
 
     # A capa real ja traz a identidade visual. Os dados entram no espaco livre inferior.
     name_font = _fit_font("CormorantGaramond-SemiBold.ttf", nome, 760, 62, 34)
     meta_font = _fit_font("CormorantGaramond-SemiBold.ttf", f"{grau} | {loja_texto}", 770, 30, 22)
     ori_font = _load_font("Cinzel-Regular.ttf", 22)
+    label_font = _load_font("Cinzel-Regular.ttf", 18)
+    value_font = _load_font("CormorantGaramond-SemiBold.ttf", 22)
 
     panel = Image.new("RGBA", p1.size, (255, 255, 255, 0))
     panel_draw = ImageDraw.Draw(panel)
-    panel_draw.rounded_rectangle([146, 720, 934, 908], radius=32, fill=(244, 224, 182, 78), outline=(121, 82, 34, 72), width=2)
+    panel_draw.rounded_rectangle([126, 690, 954, 1088], radius=32, fill=(244, 224, 182, 86), outline=(121, 82, 34, 78), width=2)
     p1.alpha_composite(panel)
-    _draw_center(draw_p1, nome, center_x, 770, name_font, TEXT_DARK)
-    _draw_center(draw_p1, f"{grau} | {loja_texto}", center_x, 832, meta_font, TEXT_MUTED)
-    _draw_center(draw_p1, f"Oriente de {oriente} - {datetime.now().year}", center_x, 880, ori_font, (73, 51, 28, 205))
+    _draw_center(draw_p1, nome, center_x, 740, name_font, TEXT_DARK)
+    _draw_center(draw_p1, f"{grau} | {loja_texto}", center_x, 796, meta_font, TEXT_MUTED)
+    _draw_center(draw_p1, f"Oriente de {oriente} - {datetime.now().year}", center_x, 838, ori_font, (73, 51, 28, 205))
+
+    perfil_linhas = [
+        ("Nascimento", data_nasc),
+        ("Grau", grau),
+        ("Loja", loja_texto),
+        ("Oriente", oriente),
+        ("Potência", potencia),
+        ("Venerável Mestre", vm),
+        ("Mestre Instalado", mi),
+        ("Nível de acesso", nivel_texto),
+    ]
+    for idx, (label, value) in enumerate(perfil_linhas):
+        _draw_profile_line(draw_p1, label, value, 180, 872 + idx * 27, label_font, value_font, 720)
 
     if _value(membro, "status_auditoria", "Status Auditoria") == "Pendente_Identidade":
         stamp = Image.new("RGBA", p1.size, (255, 255, 255, 0))
