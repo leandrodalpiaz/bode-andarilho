@@ -176,6 +176,23 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # O diploma passa a ser a tela principal do perfil.
     await _limpar_mensagens_anteriores(context, user_id, [TIPO_RESULTADO, TIPO_DIPLOMA_CAPA])
 
+    mensagem_processamento = (
+        "📜 *Preparando seu diploma digital...*\n\n"
+        "Estou gerando e enviando as páginas do seu diploma. "
+        "Isso pode levar alguns segundos."
+    )
+    await _enviar_ou_editar_mensagem(
+        context,
+        user_id,
+        TIPO_RESULTADO,
+        mensagem_processamento,
+        InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar ao Menu", callback_data="menu_principal")]]),
+        limpar_conteudo=True,
+        incluir_rodape_global=False,
+    )
+
+    caminhos_diploma = []
+
     # Geração do Diploma Digital Heráldico (Coluna 4)
     try:
         query = update.callback_query
@@ -184,26 +201,19 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.answer("Processando diploma...", show_alert=False)
             except Exception:
                 pass
-        
+
         from src.render_diploma import renderizar_diploma
         from src.conquistas import calcular_progresso_conquistas
         import asyncio
         from telegram import InputMediaPhoto
-        
+
         # 1. Calcula progresso das conquistas (nova engine)
         progressos = await calcular_progresso_conquistas(user_id)
-        
+
         # 2. Gera o Álbum (Lista de caminhos de imagens PNG 9:16)
         caminhos_diploma = await asyncio.to_thread(renderizar_diploma, membro, slugs_obtidos, progressos)
-        
+
         if caminhos_diploma and all(os.path.exists(p) for p in caminhos_diploma):
-            query = update.callback_query
-            if query:
-                try:
-                    await query.message.delete()
-                except Exception:
-                    pass
-            
             # 3. Monta o Media Group
             media_group = []
             arquivos_media = []
@@ -222,12 +232,16 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     media = InputMediaPhoto(arquivo)
                 media_group.append(media)
-                
-            # 4. Envia o Álbum
+
+            # 4. Envia o Álbum. O upload das duas páginas pode passar do timeout padrão.
             try:
                 msg_media = await context.bot.send_media_group(
                     chat_id=user_id,
-                    media=media_group
+                    media=media_group,
+                    read_timeout=90,
+                    write_timeout=90,
+                    connect_timeout=20,
+                    pool_timeout=20,
                 )
             finally:
                 for arquivo in arquivos_media:
@@ -235,7 +249,7 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         arquivo.close()
                     except Exception:
                         pass
-            
+
             # 5. Envia o teclado inline (Media Groups não aceitam botões em anexo)
             msg_teclado = await context.bot.send_message(
                 chat_id=user_id,
@@ -243,35 +257,49 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=InlineKeyboardMarkup([
                     *teclado.inline_keyboard,
                     [InlineKeyboardButton("Fechar diploma", callback_data="fechar_diploma_capa")],
-                ])
+                ]),
             )
-            
+
             # 6. Registra no rastreador para autolimpeza
             if user_id not in estado_mensagens:
                 estado_mensagens[user_id] = {}
-            
+
             estado_mensagens[user_id][TIPO_DIPLOMA_CAPA] = {
                 "message_id": msg_teclado.message_id,
                 "message_ids": [msg.message_id for msg in msg_media] + [msg_teclado.message_id],
-                "content_hash": None 
+                "content_hash": None,
             }
-            
-            # 7. Remove arquivos temporários da memória
-            for p in caminhos_diploma:
-                try:
-                    os.remove(p)
-                except Exception:
-                    pass
-                
-            return
-            
-    except Exception as err:
-        logger.error("Falha ao gerar ou enviar diploma digital: %s. Usando fallback textual.", err)
 
-    # Fallback seguro: Envia a tela puramente textual se houver qualquer erro na imagem
-    await navegar_para(
-        update, context,
-        "Meu Diploma",
-        texto,
-        teclado
-    )
+            await _limpar_mensagens_anteriores(context, user_id, [TIPO_RESULTADO])
+            return
+
+        raise RuntimeError("renderizador do diploma não retornou arquivos válidos")
+
+    except Exception as err:
+        logger.error("Falha ao gerar ou enviar diploma digital: %s", err)
+        texto_erro = (
+            "📜 *Não consegui exibir seu diploma agora.*\n\n"
+            "O diploma foi solicitado, mas o envio das imagens pelo Telegram demorou mais que o esperado.\n\n"
+            "Toque em *Meu Diploma* novamente em instantes. Se o problema continuar, revise sua conexão ou tente mais tarde."
+        )
+        await _enviar_ou_editar_mensagem(
+            context,
+            user_id,
+            TIPO_RESULTADO,
+            texto_erro,
+            InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔁 Tentar novamente", callback_data="meu_perfil")],
+                [InlineKeyboardButton("✏️ Editar Perfil", callback_data="editar_perfil")],
+                [InlineKeyboardButton("🔙 Voltar ao Menu", callback_data="menu_principal")],
+            ]),
+            limpar_conteudo=True,
+            incluir_rodape_global=False,
+        )
+
+    finally:
+        for p in caminhos_diploma:
+            try:
+                os.remove(p)
+            except Exception:
+                pass
+
