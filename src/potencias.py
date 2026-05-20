@@ -77,13 +77,24 @@ def validar_potencia(potencia: Any, complemento: Any = "") -> bool:
     return not potencia_requer_complemento(principal) or bool(comp)
 
 
-def formatar_potencia(potencia: Any, complemento: Any = "") -> str:
+def formatar_potencia_exibicao(potencia: Any, complemento: Any = "", modo: str = "local") -> str:
+    """Formata potência para exibição priorizando a potência local.
+
+    Campos técnicos continuam separados como potência principal e complemento,
+    mas telas e relatórios devem mostrar a potência local sempre que existir.
+    """
     principal, comp = normalizar_potencia(potencia, complemento)
-    if comp and principal in POTENCIAS_COM_COMPLEMENTO:
-        return f"{principal} - {comp}"
-    if comp and principal == "GOB":
-        return f"{principal} - {comp}"
+    principal = principal.strip().upper()
+    comp = comp.strip().upper()
+    if comp and comp not in {"-", "N/A", "NA", "NÃO SE APLICA", "NAO SE APLICA"}:
+        if modo == "completo" and principal and principal != comp:
+            return f"{principal} / {comp}"
+        return comp
     return principal
+
+
+def formatar_potencia(potencia: Any, complemento: Any = "") -> str:
+    return formatar_potencia_exibicao(potencia, complemento, modo="local")
 
 
 def potencia_de_dados(dados: Dict[str, Any]) -> Tuple[str, str]:

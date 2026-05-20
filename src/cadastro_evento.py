@@ -460,7 +460,7 @@ def _montar_resumo_evento_md(evento: Dict[str, Any], duplicado: Optional[Dict[st
         f"🔺 *Grau da sessão:* {grau}",
         f"🕯 *Tipo de sessão:* {tipo}",
         f"📜 *Rito:* {rito}",
-        f"⚜️ *Potência:* {potencia}",
+        f"⚜️ *Potência local:* {potencia}",
         f"🎩 *Traje:* {traje}",
         f"🍽 *Ágape:* {agape}",
         f"🗺 *Endereço:* {end}",
@@ -865,7 +865,7 @@ async def escolher_loja_callback(update: Update, context: ContextTypes.DEFAULT_T
                     f"🏛 *{loja.get('Nome da Loja')}* {loja.get('Número', '')}\n"
                     f"📍 Oriente: {loja.get('Oriente da Loja', loja.get('Oriente', ''))}\n"
                     f"📜 Rito: {loja.get('Rito')}\n"
-                    f"⚜️ Potência: {loja.get('Potência')}\n"
+                    f"⚜️ Potência local: {formatar_potencia(loja.get('Potência') or loja.get('potencia'), loja.get('Potência complemento') or loja.get('potencia_complemento'))}\n"
                     f"📍 Endereço: {loja.get('Endereço')}\n"
                     f"👤 Secretário responsável: {sname or sid or 'Não definido'}\n\n"
                     f"Deseja usar esta loja?"
@@ -1322,7 +1322,7 @@ async def receber_rito(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await navegar_para(
             update, context,
             "Cadastro de Evento",
-            "⚜️ *Potência* (texto livre)",
+            "⚜️ *Potência local* (texto livre)",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
@@ -1784,7 +1784,7 @@ async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif estado == POTENCIA:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "⚜️ *Potência* (texto livre)",
+            "⚜️ *Potência local* (texto livre)",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )

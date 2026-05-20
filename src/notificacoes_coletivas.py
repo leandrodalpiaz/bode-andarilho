@@ -4,6 +4,7 @@ import logging
 import asyncio
 from typing import Any, Dict, List, Optional
 from telegram import Bot, InputMediaPhoto
+from src.potencias import formatar_potencia_exibicao
 from src.sheets_supabase import (
     supabase,
     _row_to_sheets,
@@ -70,9 +71,7 @@ async def processar_alerta_fundacao(dados_loja: Dict[str, Any], bot: Any) -> Non
         if not nome: return
         
         cidade = str(dados_loja.get("cidade") or dados_loja.get("Cidade") or "").strip().title()
-        sigla_pot = pot
-        if comp:
-            sigla_pot = f"{pot} - {comp}"
+        sigla_pot = formatar_potencia_exibicao(pot, comp)
             
         # 1. CHECAR CRUZ VERMELHA TERRITORIAL (INEDITISMO UF)
         if uf and len(uf) == 2:
@@ -220,7 +219,7 @@ async def realizar_abertura_historica(bot: Any) -> None:
                 slug_pot = f"arco_integracao|{chave_pot}"
                 registrar_marco_coletivo(slug_pot, "arco_integracao")
                 
-                nome_p = f"{pot} - {comp}" if comp else pot
+                nome_p = formatar_potencia_exibicao(pot, comp)
                 potencias_encontradas.add(nome_p)
                 
         # 2. Registrar marcos de mobilizacao retroativos

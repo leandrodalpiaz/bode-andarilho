@@ -44,7 +44,7 @@ from src.sheets_supabase import (
 )
 from src.permissoes import get_nivel
 from src.miniapp import WEBAPP_URL_EVENTO
-from src.potencias import normalizar_potencia, potencia_requer_complemento, sugestao_complemento, validar_potencia
+from src.potencias import formatar_potencia_exibicao, normalizar_potencia, potencia_requer_complemento, sugestao_complemento, validar_potencia
 
 from src.bot import (
     navegar_para,
@@ -77,7 +77,7 @@ CAMPOS_EDITAVEIS = {
     "oriente": {"nome": "Oriente", "chave": "Oriente", "nivel_minimo": "2"},
     "potencia": {"nome": "Potência", "chave": "Potência", "nivel_minimo": "2"},
     # Não expor como opção separada no menu; é usado internamente após selecionar a Potência principal.
-    "potencia_complemento": {"nome": "Potência complemento", "chave": "Potência complemento", "nivel_minimo": "2"},
+    "potencia_complemento": {"nome": "Potência local", "chave": "Potência complemento", "nivel_minimo": "2"},
     "data_nasc": {"nome": "Data de nascimento", "chave": "Data de nascimento", "nivel_minimo": "2"},
     "numero_loja": {"nome": "Número da loja", "chave": "Número da loja", "nivel_minimo": "2"},
     "cargo": {"nome": "Cargo", "chave": "Cargo", "nivel_minimo": "2"},
@@ -151,7 +151,7 @@ async def aplicar_valor_inline_membro(update: Update, context: ContextTypes.DEFA
             await navegar_para(
                 update,
                 context,
-                "Admin > Editar > Potência (Complemento)",
+                "Admin > Editar > Potência local",
                 "Selecione o complemento abaixo ou escolha 'Outra (texto livre)'.",
                 _teclado_inline_complemento_potencia_admin(principal),
             )
@@ -189,8 +189,8 @@ async def aplicar_valor_inline_membro(update: Update, context: ContextTypes.DEFA
             await navegar_para(
                 update,
                 context,
-                "Admin > Editar > Potência (Complemento)",
-                f"Informe o complemento da potência. {sugestao_complemento(principal_pendente)}:",
+                "Admin > Editar > Potência local",
+                f"Informe a potência local. {sugestao_complemento(principal_pendente)}:",
                 None,
             )
             return NOVO_VALOR
@@ -1895,7 +1895,7 @@ async def confirmar_pedido_fundacao_usuario(update: Update, context: ContextType
             f"👑 *NOVO PEDIDO DE FUNDACAO DE OFICINA*\n\n"
             f"O Ir.·. *{nome}* ({grau}) reivindicou o Malhete de Secretario para a Oficina:\n\n"
             f"🏛️ *Loja:* {loja_man}\n"
-            f"📜 *Potencia:* {pot} {pot_comp}\n"
+            f"📜 *Potência local:* {formatar_potencia_exibicao(pot, pot_comp)}\n"
             f"📍 *Oriente:* {ori}\n\n"
             f"Deseja aprovar o cadastro, promovendo-o a Nivel 2 e edificando oficialmente esta Oficina?"
         )

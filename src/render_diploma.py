@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Tuple
 
 from PIL import Image, ImageDraw, ImageFont
 
+from src.potencias import formatar_potencia_exibicao
+
 logger = logging.getLogger(__name__)
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
@@ -120,6 +122,30 @@ def _draw_profile_line(
     val = str(value or "Nao informado").strip()
     val_font = _fit_font("CormorantGaramond-SemiBold.ttf", val, max_width - label_w - 12, 23, 17)
     draw.text((x + label_w + 12, y), val, font=val_font, fill=(57, 35, 16, 230), anchor="la")
+
+
+def _draw_profile_field(
+    draw: ImageDraw.ImageDraw,
+    box: Tuple[int, int, int, int],
+    label: str,
+    value: str,
+    label_font: ImageFont.ImageFont,
+    value_font_name: str = "CormorantGaramond-SemiBold.ttf",
+) -> None:
+    x1, y1, x2, y2 = box
+    draw.rounded_rectangle(
+        [x1, y1, x2, y2],
+        radius=16,
+        fill=(250, 237, 203, 128),
+        outline=(139, 96, 42, 118),
+        width=1,
+    )
+    draw.rounded_rectangle([x1 + 10, y1 + 12, x1 + 16, y2 - 12], radius=3, fill=(191, 137, 38, 220))
+    draw.text((x1 + 28, y1 + 10), str(label).upper(), font=label_font, fill=(44, 66, 78, 235), anchor="la")
+
+    val = str(value or "N\u00e3o informado").strip()
+    value_font = _fit_font(value_font_name, val, x2 - x1 - 54, 28, 20)
+    draw.text((x1 + 28, y1 + 34), val, font=value_font, fill=(44, 27, 12, 255), anchor="la")
 
 
 def _load_template(path: Path) -> Image.Image:
@@ -248,6 +274,8 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str], pr
     numero = _value(membro, "Número da loja", "Numero da loja", "numero_loja")
     oriente = _value(membro, "Oriente", "oriente", "Cidade", "cidade", default="Oriente nao informado")
     potencia = _value(membro, "Potência", "potencia", default="Nao informada")
+    potencia_comp = _value(membro, "Potência complemento", "potencia_complemento", "potencia_outra")
+    potencia_display = formatar_potencia_exibicao(potencia, potencia_comp)
     data_nasc = _formatar_data_nasc(_value(membro, "Data de nascimento", "data_nasc"))
     vm = _value(membro, "Venerável Mestre", "veneravel_mestre", "vm", default="Nao")
     mi = _value(membro, "Mestre Instalado", "mestre_instalado", "mi", default="Nao")
@@ -256,32 +284,43 @@ def renderizar_diploma(membro: Dict[str, Any], conquistas_obtidas: List[str], pr
     loja_texto = f"{loja}, nº {numero}" if numero and numero != "0" else loja
 
     # A capa real ja traz a identidade visual. Os dados entram no espaco livre inferior.
-    name_font = _fit_font("CormorantGaramond-SemiBold.ttf", nome, 760, 62, 34)
-    meta_font = _fit_font("CormorantGaramond-SemiBold.ttf", f"{grau} | {loja_texto}", 770, 30, 22)
-    ori_font = _load_font("Cinzel-Regular.ttf", 22)
-    label_font = _load_font("Cinzel-Regular.ttf", 18)
-    value_font = _load_font("CormorantGaramond-SemiBold.ttf", 22)
+    name_font = _fit_font("CormorantGaramond-SemiBold.ttf", nome, 820, 72, 42)
+    meta_font = _fit_font("CormorantGaramond-SemiBold.ttf", f"{grau} | {loja_texto}", 800, 35, 25)
+    ori_font = _load_font("Cinzel-Regular.ttf", 25)
+    label_font = _load_font("Cinzel-Regular.ttf", 17)
 
     panel = Image.new("RGBA", p1.size, (255, 255, 255, 0))
     panel_draw = ImageDraw.Draw(panel)
-    panel_draw.rounded_rectangle([126, 690, 954, 1088], radius=32, fill=(244, 224, 182, 86), outline=(121, 82, 34, 78), width=2)
+    panel_draw.rounded_rectangle([88, 610, 992, 1128], radius=38, fill=(248, 229, 187, 150), outline=(105, 69, 25, 126), width=3)
+    panel_draw.rounded_rectangle([114, 790, 966, 792], radius=1, fill=(178, 122, 35, 150))
     p1.alpha_composite(panel)
-    _draw_center(draw_p1, nome, center_x, 740, name_font, TEXT_DARK)
-    _draw_center(draw_p1, f"{grau} | {loja_texto}", center_x, 796, meta_font, TEXT_MUTED)
-    _draw_center(draw_p1, f"Oriente de {oriente} - {datetime.now().year}", center_x, 838, ori_font, (73, 51, 28, 205))
+
+    _draw_center(draw_p1, nome, center_x, 682, name_font, (45, 27, 12, 255))
+    _draw_center(draw_p1, f"{grau} | {loja_texto}", center_x, 743, meta_font, (69, 47, 23, 248))
+    _draw_center(draw_p1, f"Oriente de {oriente} - {datetime.now().year}", center_x, 780, ori_font, (42, 64, 76, 238))
 
     perfil_linhas = [
         ("Nascimento", data_nasc),
         ("Grau", grau),
         ("Loja", loja_texto),
         ("Oriente", oriente),
-        ("Potência", potencia),
-        ("Venerável Mestre", vm),
+        ("Pot\u00eancia local", potencia_display),
+        ("Vener\u00e1vel Mestre", vm),
         ("Mestre Instalado", mi),
-        ("Nível de acesso", nivel_texto),
+        ("N\u00edvel de acesso", nivel_texto),
     ]
+    card_w = 402
+    card_h = 72
+    gap_x = 28
+    gap_y = 10
+    start_x = 124
+    start_y = 812
     for idx, (label, value) in enumerate(perfil_linhas):
-        _draw_profile_line(draw_p1, label, value, 180, 872 + idx * 27, label_font, value_font, 720)
+        col = idx % 2
+        row = idx // 2
+        x1 = start_x + col * (card_w + gap_x)
+        y1 = start_y + row * (card_h + gap_y)
+        _draw_profile_field(draw_p1, (x1, y1, x1 + card_w, y1 + card_h), label, value, label_font)
 
     if _value(membro, "status_auditoria", "Status Auditoria") == "Pendente_Identidade":
         stamp = Image.new("RGBA", p1.size, (255, 255, 255, 0))

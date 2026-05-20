@@ -23,6 +23,7 @@ from telegram.ext import ContextTypes
 
 from src.sheets_supabase import buscar_membro
 from src.ajuda.conquistas import calcular_conquistas_membro
+from src.potencias import formatar_potencia_exibicao
 from src.bot import (
     navegar_para,
     _enviar_ou_editar_mensagem,

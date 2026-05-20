@@ -169,7 +169,7 @@ def _texto_etapa(estado: int, retomada: bool = False) -> str:
         NUMERO_LOJA: "🧭 *Passo 6/9*\nInforme o *número da sua loja* (somente números).\nEx.: 12 ou 0",
         ORIENTE: "🧭 *Passo 7/9*\nInforme seu *Oriente*.",
         POTENCIA: "🧭 *Passo 8/9*\nInforme sua *Potência principal* (GOB, CMSB ou COMAB).",
-        POTENCIA_COMPLEMENTO: "🧭 *Passo 9/9*\nInforme o *complemento da Potência*.",
+        POTENCIA_COMPLEMENTO: "🧭 *Passo 9/9*\nInforme sua *Potência local*.",
         FOTO_CIM: "🛡️ *COMPROVAÇÃO VISUAL REQUERIDA*\n\nComo camada de segurança extra contra goteiras e irregulares, precisamos de um registro de verificação.\n\nPor favor, **envie uma foto** de sua Credencial Maçônica (CIM) ou Patente ativa.\n\n_🔒 A imagem será armazenada em ambiente seguro para auditoria exclusiva de sua Potência Regional._",
     }
     return f"{prefixo}{textos.get(estado, 'Envie a informação solicitada:')}"
@@ -417,7 +417,7 @@ def _resumo_cadastro(context: ContextTypes.DEFAULT_TYPE) -> str:
         f"🔨 *Venerável Mestre:* {vm}\n"
         f"🏛 *Loja:* {loja}{numero_fmt}\n"
         f"📍 *Oriente:* {oriente}\n"
-        f"⚜️ *Potência:* {formatar_potencia(potencia, potencia_comp)}\n\n"
+        f"⚜️ *Potência local:* {formatar_potencia(potencia, potencia_comp)}\n\n"
         "_Seus dados serão mantidos em absoluto sigilo._"
     )
 
@@ -1390,6 +1390,8 @@ async def notificar_secretario_pendente_adm(context_or_app, dados_membro: dict):
     loja = dados_membro.get("loja") or dados_membro.get("Loja") or ""
     num = dados_membro.get("numero_loja") or dados_membro.get("Número da loja") or ""
     pot = dados_membro.get("potencia") or dados_membro.get("Potência") or ""
+    pot_comp = dados_membro.get("potencia_complemento") or dados_membro.get("Potência complemento") or dados_membro.get("potencia_outra") or ""
+    pot_display = formatar_potencia(pot, pot_comp)
     tid = dados_membro.get("telegram_id") or dados_membro.get("Telegram ID")
 
     num_fmt = f" nº {num}" if num else ""
@@ -1398,7 +1400,7 @@ async def notificar_secretario_pendente_adm(context_or_app, dados_membro: dict):
         f"👑 *NOVO SECRETÁRIO AGUARDANDO PROMOÇÃO*\n\n"
         f"O Ir.·. *{nome}* ({grau}) se cadastrou usando o link de Secretários para a Oficina:\n\n"
         f"🏛️ *Loja:* {loja}{num_fmt}\n"
-        f"📜 *Potência:* {pot}\n\n"
+        f"📜 *Potência local:* {pot_display}\n\n"
         f"Deseja aprovar o acesso de Secretário (Nível 2) e ativá-lo no sistema?"
     )
 

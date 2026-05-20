@@ -13,6 +13,8 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 import requests
 from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
 
+from src.potencias import formatar_potencia_exibicao
+
 logger = logging.getLogger(__name__)
 
 
@@ -498,7 +500,7 @@ def _event_visual_parts(evento: Dict[str, Any]) -> Dict[str, str]:
     uf = _norm(_get_any(evento, "UF", "uf", "Estado", "estado"))
     potencia = _norm(_get_any(evento, "Potencia", "Potência", "potencia"))
     potencia_complemento = _norm(_get_any(evento, "Potencia complemento", "Potência complemento", "potencia_complemento"))
-    potencia_display = potencia_complemento or potencia
+    potencia_display = formatar_potencia_exibicao(potencia, potencia_complemento)
     local_potencia = " - ".join([v for v in (cidade, uf, potencia_display) if v])
     data = _norm(_get_any(evento, "Data do evento", "Data", "data_evento", "data"))
     dia = _norm(_get_any(evento, "Dia da semana", "dia_semana", "dia"))
