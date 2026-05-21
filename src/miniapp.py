@@ -2138,8 +2138,9 @@ def html_cadastro_evento() -> str:
 
 <div id="acoes_publicacao" class="actions">
   <div class="actions-stack">
-    <button id="btn_publicar_evento" type="button" class="btn-primary" onclick="publicarEvento()">Continuar para revisão</button>
+    <button id="btn_publicar_evento" type="button" class="btn-primary" onclick="publicarEvento()">Salvar rascunho e continuar no Telegram</button>
     <button id="btn_cancelar_evento" type="button" class="btn-secondary" onclick="closeMiniAppSafe()">Fechar</button>
+    <button id="btn_ir_chat" type="button" class="btn-secondary" style="display:none">Voltar ao chat do bot</button>
   </div>
 </div>
 """
@@ -2437,9 +2438,19 @@ async function publicarEvento(){
     });
     const j=await r.json();
     if(j.ok){
-      closeMiniAppSafe();
-    }
-    else{
+      showToast('Rascunho salvo. Continue a confirmação no chat do Telegram.');
+      const btnIrChat=document.getElementById('btn_ir_chat');
+      if(btnIrChat)btnIrChat.style.display='inline-flex';
+      const btnPublicar=document.getElementById('btn_publicar_evento');
+      if(btnPublicar){
+        btnPublicar.disabled=true;
+        btnPublicar.textContent='Rascunho enviado para o Telegram';
+      }
+      const btnCancelar=document.getElementById('btn_cancelar_evento');
+      if(btnCancelar)btnCancelar.textContent='Fechar Mini App';
+      setPrimaryLoading(false);
+      enviandoEvento=false;
+    }else{
       showToast(j.error||'Erro. Tente novamente.');
       setPrimaryLoading(false);
       enviandoEvento=false;
@@ -2459,6 +2470,10 @@ if(btnPublicar){
 const btnCancelar=document.getElementById('btn_cancelar_evento');
 if(btnCancelar){
   btnCancelar.addEventListener('click',()=>closeMiniAppSafe());
+}
+const btnIrChat=document.getElementById('btn_ir_chat');
+if(btnIrChat){
+  btnIrChat.addEventListener('click',()=>closeMiniAppSafe());
 }
 """
     return _html_wrap("Agendamento de Sessão", body, script)
