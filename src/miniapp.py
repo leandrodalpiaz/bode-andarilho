@@ -2009,21 +2009,9 @@ def html_cadastro_evento() -> str:
 <div class="card">
   <div class="info">Preencha os dados e continue. A publicação final será confirmada no chat do bot.</div>
 </div>
-<div id="lojas_card" class="card" style="display:none">
-  <div class="card-title">Loja da sessão</div>
-  <div id="lojas_admin_info" class="info" style="display:none">Selecione uma loja cadastrada. Use cadastro manual somente se a loja ainda não existir.</div>
-  <div class="field">
-    <label for="loja_sel">Loja cadastrada</label>
-    <select id="loja_sel">
-      <option value="">Selecione...</option>
-    </select>
-    <div id="loja_sel_err" class="err"></div>
-  </div>
-  <div id="loja_resumo" class="loja-resumo hidden"></div>
-  <div id="loja_confirmada_hint" class="info hidden">Loja selecionada e confirmada para esta sessão.</div>
-  <button id="btn_confirmar_loja" type="button" class="btn-primary" style="display:none">Usar esta loja</button>
-  <button id="btn_nova_loja_manual" type="button" class="btn-secondary" style="display:none">Cadastrar loja nova manualmente</button>
 </div>
+
+<div class="card">
 
 <div class="card">
   <div class="card-title">A sessão</div>
@@ -2097,6 +2085,16 @@ def html_cadastro_evento() -> str:
 
 <div id="dados_loja_card" class="card">
   <div class="card-title">Dados da Loja</div>
+  <div id="lojas_card" style="display:none; padding-bottom: 12px; border-bottom: 1px solid var(--border); margin-bottom: 16px;">
+    <div id="lojas_admin_info" class="info" style="display:none">Selecione uma loja cadastrada, ou escolha "Cadastrar nova" para preencher manualmente.</div>
+    <div class="field">
+      <label for="loja_sel" style="font-weight:700">Loja pre-cadastrada:</label>
+      <select id="loja_sel">
+        <option value="">[ Cadastrar nova loja manualmente ]</option>
+      </select>
+      <div id="loja_sel_err" class="err"></div>
+    </div>
+  </div>
   <div class="field">
     <label for="nome_loja">Nome da loja *</label>
     <input id="nome_loja" type="text" placeholder="Ex.: Luz da Fraternidade">
@@ -2215,32 +2213,20 @@ function setLojaFieldsReadonly(readonly){
   });
 }
 
-function renderLojaResumo(loja, mostrarManual){
-  const box=document.getElementById('loja_resumo');
-  const card=document.getElementById('dados_loja_card');
-  const btnConfirmar=document.getElementById('btn_confirmar_loja');
-  const hintConfirmada=document.getElementById('loja_confirmada_hint');
-  if(!box||!card)return;
+function renderLojaResumo(loja, isInit){
   if(!loja){
-    box.classList.add('hidden');
-    box.innerHTML='';
-    card.classList.toggle('hidden', adminFlow&&!mostrarManual);
-    if(btnConfirmar)btnConfirmar.style.display='none';
-    if(hintConfirmada)hintConfirmada.classList.add('hidden');
     setLojaFieldsReadonly(false);
+    if(!isInit){
+      ['nome_loja','oriente','rito','rito_outro','potencia','potencia_outra'].forEach(id=>{
+        const el=document.getElementById(id);
+        if(el) el.value='';
+      });
+      if(document.getElementById('numero_loja')) document.getElementById('numero_loja').value='0';
+      syncOutro('rito','rito_outro_wrap','rito_outro','Outro');
+      syncOutro('potencia','potencia_outra_wrap','potencia_outra','');
+    }
     return;
   }
-  const numero=(loja.numero&&loja.numero!=='0')?' '+loja.numero:'';
-  const secretario=loja.secretario_responsavel_nome||loja.secretario_responsavel_id||'Secretário não definido';
-  box.innerHTML='<strong>'+loja.nome+numero+'</strong>'
-    +(loja.oriente?loja.oriente+'<br>':'')
-    +(loja.rito?'Rito: '+loja.rito+'<br>':'')
-    +(loja.potencia?'Potência: '+loja.potencia+(loja.potencia_complemento?' / '+loja.potencia_complemento:'')+'<br>':'')
-    +'Secretário: '+secretario;
-  box.classList.remove('hidden');
-  card.classList.add('hidden');
-  if(btnConfirmar)btnConfirmar.style.display=lojaConfirmadaViaAtalho?'none':'inline-flex';
-  if(hintConfirmada)hintConfirmada.classList.toggle('hidden', !lojaConfirmadaViaAtalho);
   setLojaFieldsReadonly(true);
 }
 
@@ -2258,8 +2244,7 @@ function renderLojaResumo(loja, mostrarManual){
     if(adminFlow){
       document.getElementById('lojas_card').style.display='block';
       if(infoAdmin)infoAdmin.style.display='block';
-      if(btnManual)btnManual.style.display='block';
-      renderLojaResumo(null,false);
+      renderLojaResumo(null,true);
     }
     if(j.ok&&j.lojas&&j.lojas.length>0){
       lojasCarregadas=j.lojas;
@@ -2319,12 +2304,12 @@ document.getElementById('loja_sel').addEventListener('change',function(){
   if(!this.value){
     lojaSelecionadaViaAtalho=false;
     lojaConfirmadaViaAtalho=false;
-    novaLojaManual=false;
+    novaLojaManual=true;
     renderLojaResumo(null,false);
     return;
   }
   lojaSelecionadaViaAtalho=true;
-  lojaConfirmadaViaAtalho=true; // Auto-confirmar a loja selecionada
+  lojaConfirmadaViaAtalho=true;
   novaLojaManual=false;
   clearErr('loja_sel');
   const o=this.options[this.selectedIndex];
@@ -2339,19 +2324,6 @@ document.getElementById('loja_sel').addEventListener('change',function(){
   renderLojaResumo(l);
 });
 
-const btnNovaLojaManual=document.getElementById('btn_nova_loja_manual');
-if(btnNovaLojaManual){
-  btnNovaLojaManual.addEventListener('click',()=>{
-    novaLojaManual=true;
-    lojaSelecionadaViaAtalho=false;
-    lojaConfirmadaViaAtalho=false;
-    document.getElementById('loja_sel').value='';
-    clearErr('loja_sel');
-    renderLojaResumo(null,true);
-    showToast('Preenchimento manual liberado somente para loja nova.');
-  });
-}
-
 document.getElementById('grau').addEventListener('change',()=>syncOutro('grau','grau_outro_wrap','grau_outro','Outro'));
 document.getElementById('traje').addEventListener('change',()=>syncOutro('traje','traje_outro_wrap','traje_outro','Outro'));
 document.getElementById('rito').addEventListener('change',()=>syncOutro('rito','rito_outro_wrap','rito_outro','Outro'));
@@ -2363,15 +2335,6 @@ syncOutro('potencia','potencia_outra_wrap','potencia_outra','');
 
 function validate(){
   let ok=true;
-  if(adminFlow&&!lojaSelecionadaViaAtalho&&!novaLojaManual){
-    setErr('loja_sel','Selecione uma loja cadastrada ou confirme que é uma loja nova.');
-    ok=false;
-  }else if(adminFlow&&lojaSelecionadaViaAtalho&&!lojaConfirmadaViaAtalho){
-    setErr('loja_sel','Confirme "Usar esta loja" para continuar.');
-    ok=false;
-  }else{
-    clearErr('loja_sel');
-  }
   const dv=val('data_ev');
   const dataEvento=parseDateBR(dv);
   if(!dataEvento){
