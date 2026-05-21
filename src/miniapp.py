@@ -630,7 +630,7 @@ async def draft_loja_confirmar(update: Update, context) -> None:
         text=(
             f"🏛️ *Loja cadastrada\\!*\n\n"
             f"✨ *{nome_esc}* foi registrada com sucesso e já pode ser usada nos próximos eventos\\.\n\n"
-            "Deseja enviar o template visual oficial desta Loja agora"
+            "Deseja enviar o template visual oficial desta Loja agora?"
         ),
         parse_mode="MarkdownV2",
         reply_markup=_teclado_template_loja_pos_cadastro(loja_id),
@@ -1487,7 +1487,7 @@ input::placeholder,textarea::placeholder{color:var(--hint)}
 """
 
 _JS_BASE = """
-const tg=(window.Telegram&&window.Telegram.WebApp)window.Telegram.WebApp:null;
+const tg=(window.Telegram&&window.Telegram.WebApp)?window.Telegram.WebApp:null;
 if(tg){
   try{tg.ready();}catch(e){}
   try{tg.expand();}catch(e){}
@@ -1496,7 +1496,7 @@ function setPrimaryLoading(isLoading){
   const btn=document.getElementById('btn_publicar_evento');
   if(btn){
     btn.disabled=!!isLoading;
-    btn.textContent=isLoading'Enviando...':'Continuar para revisão';
+    btn.textContent=isLoading?'Enviando...':'Continuar para revisão';
   }
 }
 function hideMainButtonSafe(){
@@ -1513,7 +1513,7 @@ function closeMiniAppSafe(){
   try{ window.close(); }catch(e){}
 }
 function tgInitData(){
-  return (tg && tg.initData)  tg.initData : '';
+  return (tg && tg.initData) ? tg.initData : '';
 }
 function showToast(msg,dur){
   const t=document.getElementById('toast');
@@ -1613,7 +1613,7 @@ def html_cadastro_membro() -> str:
     <div id="grau_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="mi">Mestre Instalado *</label>
+    <label for="mi">Mestre Instalado? *</label>
     <select id="mi">
       <option value="">Selecione...</option>
       <option value="Sim">Sim</option>
@@ -1622,7 +1622,7 @@ def html_cadastro_membro() -> str:
     <div id="mi_err" class="err"></div>
   </div>
   <div class="field">
-    <label for="vm">Venerável Mestre *</label>
+    <label for="vm">Venerável Mestre? *</label>
     <select id="vm">
       <option value="">Selecione...</option>
       <option value="Sim">Sim</option>
@@ -1673,7 +1673,7 @@ let lojaMembroId='';
 function syncPotenciaOutra(){
   const wrap=document.getElementById('potencia_outra_wrap');
   if(!wrap)return;
-  wrap.style.display=['GOB','CMSB','COMAB'].includes(val('potencia'))'block':'none';
+  wrap.style.display=['GOB','CMSB','COMAB'].includes(val('potencia'))?'block':'none';
   if(!['GOB','CMSB','COMAB'].includes(val('potencia')))clearErr('potencia_outra');
 }
 function definirLojaManual(){
@@ -1692,7 +1692,7 @@ function aplicarLojaMembro(loja){
   if(loja.potencia){
     const select=document.getElementById('potencia');
     const existe=Array.from(select.options).some(o=>o.value===loja.potencia);
-    select.value=existeloja.potencia:'';
+    select.value=existe?loja.potencia:'';
     document.getElementById('potencia_outra').value=loja.potencia_complemento||'';
     syncPotenciaOutra();
   }
@@ -1773,7 +1773,7 @@ if(tg && tg.MainButton){
       jLojas.lojas.forEach((l,i)=>{
         const o=document.createElement('option');
         o.value=i;
-        o.textContent=l.nome+(l.numero&&l.numero!=='0'' '+l.numero:'');
+        o.textContent=l.nome+(l.numero&&l.numero!=='0'?' '+l.numero:'');
         sel.appendChild(o);
       });
       document.getElementById('lojas_membro_card').style.display='block';
@@ -1891,8 +1891,8 @@ def html_cadastro_loja() -> str:
 function syncOutro(selectId, wrapId, inputId, valorOutro){
   const wrap=document.getElementById(wrapId);
   if(!wrap)return;
-  const ativo=valorOutro===''  !!val(selectId) : val(selectId)===valorOutro;
-  wrap.style.display=ativo'block':'none';
+  const ativo=valorOutro==='' ? !!val(selectId) : val(selectId)===valorOutro;
+  wrap.style.display=ativo?'block':'none';
   if(!ativo)clearErr(inputId);
 }
 
@@ -1930,7 +1930,7 @@ function validate(){
 }
 function syncPotenciaComplemento(){
   const wrap=document.getElementById('potencia_outra_wrap');
-  if(wrap)wrap.style.display=val('potencia')'block':'none';
+  if(wrap)wrap.style.display=val('potencia')?'block':'none';
 }
 document.getElementById('potencia').addEventListener('change',syncPotenciaComplemento);
 syncPotenciaComplemento();
@@ -2156,8 +2156,8 @@ let enviandoEvento=false;
 function syncOutro(selectId, wrapId, inputId, valorOutro){
   const wrap=document.getElementById(wrapId);
   if(!wrap)return;
-  const ativo=valorOutro===''  !!val(selectId) : val(selectId)===valorOutro;
-  wrap.style.display=ativo'block':'none';
+  const ativo=valorOutro==='' ? !!val(selectId) : val(selectId)===valorOutro;
+  wrap.style.display=ativo?'block':'none';
   if(!ativo)clearErr(inputId);
 }
 
@@ -2217,16 +2217,16 @@ function renderLojaResumo(loja, mostrarManual){
     setLojaFieldsReadonly(false);
     return;
   }
-  const numero=(loja.numero&&loja.numero!=='0')' '+loja.numero:'';
+  const numero=(loja.numero&&loja.numero!=='0')?' '+loja.numero:'';
   const secretario=loja.secretario_responsavel_nome||loja.secretario_responsavel_id||'Secretário não definido';
   box.innerHTML='<strong>'+loja.nome+numero+'</strong>'
-    +(loja.orienteloja.oriente+'<br>':'')
-    +(loja.rito'Rito: '+loja.rito+'<br>':'')
-    +(loja.potencia'Potência: '+loja.potencia+(loja.potencia_complemento' / '+loja.potencia_complemento:'')+'<br>':'')
+    +(loja.oriente?loja.oriente+'<br>':'')
+    +(loja.rito?'Rito: '+loja.rito+'<br>':'')
+    +(loja.potencia?'Potência: '+loja.potencia+(loja.potencia_complemento?' / '+loja.potencia_complemento:'')+'<br>':'')
     +'Secretário: '+secretario;
   box.classList.remove('hidden');
   card.classList.add('hidden');
-  if(btnConfirmar)btnConfirmar.style.display=lojaConfirmadaViaAtalho'none':'inline-flex';
+  if(btnConfirmar)btnConfirmar.style.display=lojaConfirmadaViaAtalho?'none':'inline-flex';
   if(hintConfirmada)hintConfirmada.classList.toggle('hidden', !lojaConfirmadaViaAtalho);
   setLojaFieldsReadonly(true);
 }
@@ -2254,7 +2254,7 @@ function renderLojaResumo(loja, mostrarManual){
       j.lojas.forEach((l,i)=>{
         const o=document.createElement('option');
         o.value=i;
-        o.textContent=l.nome+(l.numero&&l.numero!=='0'' '+l.numero:'');
+        o.textContent=l.nome+(l.numero&&l.numero!=='0'?' '+l.numero:'');
         o.dataset.loja=JSON.stringify(l);
         sel.appendChild(o);
       });
@@ -3103,10 +3103,10 @@ body {
     grid.innerHTML = '';
     dados.conquistas_individuais.forEach(b => {
       const card = document.createElement('div');
-      card.className = `badge-card ${b.desbloqueada  'unlocked' : 'locked'}`;
+      card.className = `badge-card ${b.desbloqueada ? 'unlocked' : 'locked'}`;
       card.onclick = () => {
         if (tg && tg.showAlert) {
-          tg.showAlert(`${b.titulo}\\n\\n${b.descricao}\\n\\nStatus: ${b.desbloqueada  'DESBLOQUEADA ✅' : 'BLOQUEADA 🔒'}`);
+          tg.showAlert(`${b.titulo}\\n\\n${b.descricao}\\n\\nStatus: ${b.desbloqueada ? 'DESBLOQUEADA ✅' : 'BLOQUEADA 🔒'}`);
         } else {
           alert(`${b.titulo}\\n${b.descricao}`);
         }
@@ -3188,7 +3188,7 @@ body {
         f'<!DOCTYPE html><html lang="pt-BR">'
         f'<head><meta charset="UTF-8">'
         f'<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">'
-        f'<link href="https://fonts.googleapis.com/css2family=Cinzel:wght@700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">'
+        f'<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">'
         f'<title>Sala de Troféus — Bode Andarilho</title>'
         f'<script src="https://telegram.org/js/telegram-web-app.js"></script>'
         f'<style>{styles}</style></head>'
