@@ -850,7 +850,11 @@ async def api_rascunho_evento(request: Request) -> JSONResponse:
         await _enviar_resumo_rascunho_evento(request.app.state.telegram_app.bot, telegram_id)
     except Exception as e:
         logger.warning("Falha ao enviar resumo do rascunho de evento para %s: %s", telegram_id, e)
-    return JSONResponse({"ok": True, "message": "Rascunho salvo com sucesso."})
+        return _json_error(
+            "Rascunho salvo, mas não consegui enviar a revisão no chat. Feche o Mini App e tente abrir o cadastro novamente.",
+            500,
+        )
+    return JSONResponse({"ok": True, "message": "Rascunho salvo com sucesso.", "review_sent": True})
 
 
 async def draft_evento_escolher_secretario(update: Update, context) -> None:
@@ -1212,6 +1216,36 @@ def _resumo_evento_md(dados: Dict[str, Any]) -> str:
     )
 
 
+def _resumo_evento_texto(dados: Dict[str, Any]) -> str:
+    numero_loja = _norm_text(dados.get("numero_loja") or "0")
+    numero_fmt = f" {numero_loja}" if numero_loja and numero_loja != "0" else ""
+    responsavel = _norm_text(dados.get("secretario_responsavel_nome") or dados.get("secretario_responsavel_id"))
+    obs = _norm_text(dados.get("observacoes")) or "-"
+    grau = dados.get("grau_outro") if _norm_text(dados.get("grau")) == "Outro" else dados.get("grau", "")
+    traje = dados.get("traje_outro") if _norm_text(dados.get("traje")) == "Outro" else dados.get("traje", "")
+    rito = dados.get("rito_outro") if _norm_text(dados.get("rito")) == "Outro" else dados.get("rito", "")
+    potencia = _potencia_resumo(dados)
+    linhas = [
+        "Confirme a sessão antes de publicar",
+        "",
+        f"Data: {dados.get('data', '')}",
+        f"Horário: {dados.get('horario', '')}",
+        f"Grau da sessão: {grau or ''}",
+        f"Tipo de sessão: {dados.get('tipo_sessao', '')}",
+        f"Traje: {traje or ''}",
+        f"Ágape: {dados.get('agape', '')}",
+        f"Ordem do dia / observações: {obs}",
+        f"Loja: {dados.get('nome_loja', '')}{numero_fmt}",
+        f"Oriente: {dados.get('oriente', '')}",
+        f"Rito: {rito or ''}",
+        f"Potência local: {potencia or ''}",
+        f"Endereço: {dados.get('endereco', '')}",
+    ]
+    if responsavel:
+        linhas.append(f"Secretário responsável: {responsavel}")
+    return "\n".join(linhas)
+
+
 
 def _teclado_rascunho_evento(dados: Dict[str, Any], nivel: str, lojas_existentes: List[Dict[str, Any]]) -> InlineKeyboardMarkup:
     linhas: List[List[InlineKeyboardButton]] = []
@@ -1262,12 +1296,21 @@ async def _enviar_resumo_rascunho_evento(bot, telegram_id: int) -> None:
         return
     nivel = str(get_nivel(telegram_id))
     lojas_existentes = listar_lojas(int(telegram_id), include_todas=(nivel == "3")) or []
-    await bot.send_message(
-        chat_id=telegram_id,
-        text=_resumo_evento_md(dados),
-        parse_mode="MarkdownV2",
-        reply_markup=_teclado_rascunho_evento(dados, nivel, lojas_existentes),
-    )
+    teclado = _teclado_rascunho_evento(dados, nivel, lojas_existentes)
+    try:
+        await bot.send_message(
+            chat_id=telegram_id,
+            text=_resumo_evento_md(dados),
+            parse_mode="MarkdownV2",
+            reply_markup=teclado,
+        )
+    except Exception as e:
+        logger.warning("Falha ao enviar revisão de evento com MarkdownV2 para %s: %s", telegram_id, e)
+        await bot.send_message(
+            chat_id=telegram_id,
+            text=_resumo_evento_texto(dados),
+            reply_markup=teclado,
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1422,6 +1465,10 @@ input::placeholder,textarea::placeholder{color:var(--hint)}
 }
 .toast.on{display:block}
 .info{font-size:12px;color:var(--hint);margin-top:3px}
+.hidden{display:none!important}
+.readonly-field{opacity:.72}
+.loja-resumo{font-size:14px;line-height:1.45;margin-top:8px}
+.loja-resumo strong{display:block;font-size:15px;margin-bottom:2px}
 .actions{position:sticky;bottom:0;background:linear-gradient(to top,var(--bg) 75%,rgba(255,255,255,0));padding:12px 0 20px;margin-top:8px}
 .actions-stack{display:flex;flex-direction:column;gap:10px}
 .btn-primary{
@@ -1946,15 +1993,16 @@ def html_cadastro_evento() -> str:
   <div class="info">Preencha os dados e continue. A publicação final será confirmada no chat do bot.</div>
 </div>
 <div id="lojas_card" class="card" style="display:none">
-  <div class="card-title">Atalho - Lojas registradas</div>
-  <div id="lojas_admin_info" class="info" style="display:none">Fluxo administrativo: selecione primeiro uma loja cadastrada. Use cadastro manual apenas quando a loja ainda não existir.</div>
+  <div class="card-title">Loja da sessão</div>
+  <div id="lojas_admin_info" class="info" style="display:none">Selecione uma loja cadastrada. Use cadastro manual somente se a loja ainda não existir.</div>
   <div class="field">
-    <label for="loja_sel">Selecione para auto-preencher</label>
+    <label for="loja_sel">Loja cadastrada</label>
     <select id="loja_sel">
-      <option value="">Preencher manualmente...</option>
+      <option value="">Selecione...</option>
     </select>
     <div id="loja_sel_err" class="err"></div>
   </div>
+  <div id="loja_resumo" class="loja-resumo hidden"></div>
   <button id="btn_nova_loja_manual" type="button" class="btn-secondary" style="display:none">Cadastrar loja nova manualmente</button>
 </div>
 
@@ -2022,7 +2070,7 @@ def html_cadastro_evento() -> str:
   </div>
 </div>
 
-<div class="card">
+<div id="dados_loja_card" class="card">
   <div class="card-title">Dados da Loja</div>
   <div class="field">
     <label for="nome_loja">Nome da loja *</label>
@@ -2130,6 +2178,45 @@ function norm(v){
   return (v||'').toString().trim().toLowerCase();
 }
 
+function selectedLoja(){
+  const sel=document.getElementById('loja_sel');
+  if(!sel||sel.value==='')return null;
+  return lojasCarregadas[Number(sel.value)]||null;
+}
+
+function setLojaFieldsReadonly(readonly){
+  ['nome_loja','numero_loja','oriente','rito','rito_outro','potencia','potencia_outra','endereco'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.readOnly=!!readonly;
+    if(el.tagName==='SELECT')el.disabled=!!readonly;
+    el.classList.toggle('readonly-field',!!readonly);
+  });
+}
+
+function renderLojaResumo(loja, mostrarManual){
+  const box=document.getElementById('loja_resumo');
+  const card=document.getElementById('dados_loja_card');
+  if(!box||!card)return;
+  if(!loja){
+    box.classList.add('hidden');
+    box.innerHTML='';
+    card.classList.toggle('hidden', adminFlow&&!mostrarManual);
+    setLojaFieldsReadonly(false);
+    return;
+  }
+  const numero=(loja.numero&&loja.numero!=='0')?' '+loja.numero:'';
+  const secretario=loja.secretario_responsavel_nome||loja.secretario_responsavel_id||'Secretário não definido';
+  box.innerHTML='<strong>'+loja.nome+numero+'</strong>'
+    +(loja.oriente?loja.oriente+'<br>':'')
+    +(loja.rito?'Rito: '+loja.rito+'<br>':'')
+    +(loja.potencia?'Potência: '+loja.potencia+(loja.potencia_complemento?' / '+loja.potencia_complemento:'')+'<br>':'')
+    +'Secretário: '+secretario;
+  box.classList.remove('hidden');
+  card.classList.add('hidden');
+  setLojaFieldsReadonly(true);
+}
+
 (async()=>{
   try{
     const r=await fetch('/api/lojas',{
@@ -2145,6 +2232,7 @@ function norm(v){
       document.getElementById('lojas_card').style.display='block';
       if(infoAdmin)infoAdmin.style.display='block';
       if(btnManual)btnManual.style.display='block';
+      renderLojaResumo(null,false);
     }
     if(j.ok&&j.lojas&&j.lojas.length>0){
       lojasCarregadas=j.lojas;
@@ -2183,6 +2271,18 @@ function norm(v){
       if(jDraft.draft.potencia)document.getElementById('potencia').value=jDraft.draft.potencia;
       if(jDraft.draft.potencia_complemento||jDraft.draft.potencia_outra)document.getElementById('potencia_outra').value=jDraft.draft.potencia_complemento||jDraft.draft.potencia_outra;
       if(jDraft.draft.endereco)document.getElementById('endereco').value=jDraft.draft.endereco;
+      if(jDraft.draft.loja_id&&lojasCarregadas.length){
+        const idx=lojasCarregadas.findIndex(l=>(l.id||'')===jDraft.draft.loja_id);
+        if(idx>=0){
+          document.getElementById('loja_sel').value=String(idx);
+          lojaSelecionadaViaAtalho=true;
+          novaLojaManual=false;
+          renderLojaResumo(lojasCarregadas[idx]);
+        }
+      }else if(adminFlow&&jDraft.draft.nome_loja){
+        novaLojaManual=true;
+        renderLojaResumo(null,true);
+      }
     }
   }catch(e){}
 })();
@@ -2190,6 +2290,8 @@ function norm(v){
 document.getElementById('loja_sel').addEventListener('change',function(){
   if(!this.value){
     lojaSelecionadaViaAtalho=false;
+    novaLojaManual=false;
+    renderLojaResumo(null,false);
     return;
   }
   lojaSelecionadaViaAtalho=true;
@@ -2204,6 +2306,7 @@ document.getElementById('loja_sel').addEventListener('change',function(){
   if(l.potencia)document.getElementById('potencia').value=l.potencia;
   document.getElementById('potencia_outra').value=l.potencia_complemento||'';
   if(l.endereco)document.getElementById('endereco').value=l.endereco;
+  renderLojaResumo(l);
 });
 
 const btnNovaLojaManual=document.getElementById('btn_nova_loja_manual');
@@ -2213,6 +2316,7 @@ if(btnNovaLojaManual){
     lojaSelecionadaViaAtalho=false;
     document.getElementById('loja_sel').value='';
     clearErr('loja_sel');
+    renderLojaResumo(null,true);
     showToast('Preenchimento manual liberado somente para loja nova.');
   });
 }
@@ -2292,9 +2396,9 @@ async function publicarEvento(){
         potencia:val('potencia'),
         potencia_outra:val('potencia_outra'),
         endereco:val('endereco'),
-        loja_id:(lojasCarregadas[Number(document.getElementById('loja_sel').value)]||{}).id||'',
-        secretario_responsavel_id:(lojasCarregadas[Number(document.getElementById('loja_sel').value)]||{}).secretario_responsavel_id||'',
-        secretario_responsavel_nome:(lojasCarregadas[Number(document.getElementById('loja_sel').value)]||{}).secretario_responsavel_nome||''
+        loja_id:(selectedLoja()||{}).id||'',
+        secretario_responsavel_id:(selectedLoja()||{}).secretario_responsavel_id||'',
+        secretario_responsavel_nome:(selectedLoja()||{}).secretario_responsavel_nome||''
       })
     });
     const j=await r.json();

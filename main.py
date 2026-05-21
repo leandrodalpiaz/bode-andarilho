@@ -569,6 +569,27 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(recusar_outorga_admin, pattern=r"^fundacao_recusar\|"))
     app.add_handler(CallbackQueryHandler(processar_auditoria_validar, pattern=r"^auditar_validar\|"))
     app.add_handler(CallbackQueryHandler(processar_auditoria_recusar, pattern=r"^auditar_recusar\|"))
+
+    # Callbacks vindos dos Mini Apps precisam ter prioridade sobre conversas
+    # legadas e handlers genéricos para a revisão/publicação responder sempre.
+    app.add_handler(CallbackQueryHandler(draft_membro_confirmar, pattern=r"^draft_membro_confirmar$"))
+    app.add_handler(CallbackQueryHandler(draft_membro_cancelar, pattern=r"^draft_membro_cancelar$"))
+    app.add_handler(CallbackQueryHandler(draft_loja_escolher_secretario, pattern=r"^draft_loja_escolher_secretario$"))
+    app.add_handler(CallbackQueryHandler(draft_loja_set_secretario, pattern=r"^draft_loja_set_secretario\|"))
+    app.add_handler(CallbackQueryHandler(draft_loja_set_secretario_cancelar, pattern=r"^draft_loja_set_secretario_cancelar$"))
+    app.add_handler(CallbackQueryHandler(draft_loja_confirmar, pattern=r"^draft_loja_confirmar$"))
+    app.add_handler(CallbackQueryHandler(draft_loja_cancelar, pattern=r"^draft_loja_cancelar$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_escolher_secretario, pattern=r"^draft_evento_escolher_secretario$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_set_secretario, pattern=r"^draft_evento_set_secretario\|"))
+    app.add_handler(CallbackQueryHandler(draft_evento_set_secretario_cancelar, pattern=r"^draft_evento_set_secretario_cancelar$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_escolher_visual_com_loja, pattern=r"^draft_evento_escolher_visual_com_loja$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_escolher_visual_sem_loja, pattern=r"^draft_evento_escolher_visual_sem_loja$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_visual_voltar, pattern=r"^draft_evento_visual_voltar$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_definir_visual, pattern=r"^draft_evento_visual\|"))
+    app.add_handler(CallbackQueryHandler(draft_evento_confirmar_com_loja, pattern=r"^draft_evento_confirmar_com_loja$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_confirmar_sem_loja, pattern=r"^draft_evento_confirmar_sem_loja$"))
+    app.add_handler(CallbackQueryHandler(draft_evento_cancelar, pattern=r"^draft_evento_cancelar$"))
+
     app.add_handler(cadastro_evento_handler)
     app.add_handler(promover_handler)
     app.add_handler(rebaixar_handler)
@@ -854,26 +875,6 @@ def register_handlers(app: Application) -> None:
     app.add_handler(CallbackQueryHandler(confirmar_exclusao_loja, pattern=r"^excluir_loja_\d+$"))
     app.add_handler(CallbackQueryHandler(executar_exclusao_loja, pattern=r"^excluir_loja_confirmar$"))
 
-    # ===== 10.1 CALLBACKS HÍBRIDOS DOS MINI APPS =====
-    app.add_handler(CallbackQueryHandler(draft_membro_confirmar, pattern=r"^draft_membro_confirmar$"))
-    app.add_handler(CallbackQueryHandler(draft_membro_cancelar, pattern=r"^draft_membro_cancelar$"))
-    app.add_handler(CallbackQueryHandler(draft_loja_escolher_secretario, pattern=r"^draft_loja_escolher_secretario$"))
-    app.add_handler(CallbackQueryHandler(draft_loja_set_secretario, pattern=r"^draft_loja_set_secretario\|"))
-    app.add_handler(CallbackQueryHandler(draft_loja_set_secretario_cancelar, pattern=r"^draft_loja_set_secretario_cancelar$"))
-    app.add_handler(CallbackQueryHandler(draft_loja_confirmar, pattern=r"^draft_loja_confirmar$"))
-    app.add_handler(CallbackQueryHandler(draft_loja_cancelar, pattern=r"^draft_loja_cancelar$"))
-    app.add_handler(CallbackQueryHandler(draft_evento_escolher_secretario, pattern=r"^draft_evento_escolher_secretario$"))
-    app.add_handler(CallbackQueryHandler(draft_evento_set_secretario, pattern=r"^draft_evento_set_secretario\|"))
-    app.add_handler(CallbackQueryHandler(draft_evento_set_secretario_cancelar, pattern=r"^draft_evento_set_secretario_cancelar$"))
-    app.add_handler(CallbackQueryHandler(draft_evento_escolher_visual_com_loja, pattern=r"^draft_evento_escolher_visual_com_loja$"))
-    app.add_handler(CallbackQueryHandler(draft_evento_escolher_visual_sem_loja, pattern=r"^draft_evento_escolher_visual_sem_loja$"))
-    app.add_handler(CallbackQueryHandler(draft_evento_visual_voltar, pattern=r"^draft_evento_visual_voltar$"))
-    app.add_handler(CallbackQueryHandler(draft_evento_definir_visual, pattern=r"^draft_evento_visual\|"))
-    app.add_handler(CallbackQueryHandler(draft_evento_confirmar_com_loja, pattern=r"^draft_evento_confirmar_com_loja$"))
-    app.add_handler(CallbackQueryHandler(draft_evento_confirmar_sem_loja, pattern=r"^draft_evento_confirmar_sem_loja$"))
-    app.add_handler(CallbackQueryHandler(draft_evento_cancelar, pattern=r"^draft_evento_cancelar$"))
-    app.add_handler(MessageHandler(filters.ChatType.PRIVATE & (filters.PHOTO | filters.Document.IMAGE), receber_arte_pronta_evento))
-
     # ===== 11. HANDLER PARA NOVOS MEMBROS NO GRUPO =====
     app.add_handler(ChatMemberHandler(novo_membro_grupo_handler))
 
@@ -902,6 +903,12 @@ def register_handlers(app: Application) -> None:
     app.add_handler(MessageHandler(
         filters.ChatType.PRIVATE & filters.LOCATION,
         receber_gps_busca_callback
+    ))
+
+    # Recebe arte pronta do Mini App somente depois das conversas registradas.
+    app.add_handler(MessageHandler(
+        filters.ChatType.PRIVATE & (filters.PHOTO | filters.Document.IMAGE),
+        receber_arte_pronta_evento
     ))
 
     # ===== 13.5 TEXTO LIVRE NO PRIVADO =====
