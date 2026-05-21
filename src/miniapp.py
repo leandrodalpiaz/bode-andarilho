@@ -1544,6 +1544,14 @@ function req(id,label){
   if(!v){setErr(id,label+' é obrigatório.');return false;}
   clearErr(id);return true;
 }
+function scrollToFirstError(){
+  const firstErr = Array.from(document.querySelectorAll('.err.on')).find(el => {
+    return el.offsetWidth > 0 || el.offsetHeight > 0;
+  });
+  if(firstErr){
+    firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
 function maskDate(el){
   if(!el)return;
   el.addEventListener('input',function(){
@@ -1719,9 +1727,14 @@ function validate(){
   ok=req('loja','Nome da loja')&&ok;
   ok=req('oriente','Oriente')&&ok;
   ok=req('potencia','Potência principal')&&ok;
-  ok=req('potencia_outra','Potência local')&&ok;
+  if (!document.getElementById('potencia_outra').readOnly) {
+    ok=req('potencia_outra','Potência local')&&ok;
+  }
   
-  if(!ok) showToast('Verifique os campos obrigatórios em vermelho.', 4000);
+  if(!ok) {
+    showToast('Verifique os campos obrigatórios em vermelho.', 4000);
+    setTimeout(scrollToFirstError, 100);
+  }
   return ok;
 }
 document.getElementById('potencia').addEventListener('change',syncPotenciaOutra);
@@ -1938,7 +1951,10 @@ function validate(){
   ok=req('potencia_outra','Potência local')&&ok;
   ok=req('endereco','Endereço')&&ok;
   
-  if(!ok) showToast('Verifique os campos obrigatórios em vermelho.', 4000);
+  if(!ok) {
+    showToast('Verifique os campos obrigatórios em vermelho.', 4000);
+    setTimeout(scrollToFirstError, 100);
+  }
   return ok;
 }
 function syncPotenciaComplemento(){
@@ -2210,6 +2226,7 @@ function setLojaFieldsReadonly(readonly){
     el.readOnly=!!readonly;
     if(el.tagName==='SELECT')el.disabled=!!readonly;
     el.classList.toggle('readonly-field',!!readonly);
+    if(readonly) clearErr(id);
   });
 }
 
@@ -2282,6 +2299,7 @@ function renderLojaResumo(loja, isInit){
       if(jDraft.draft.rito)aplicarValorComOutro('rito','rito_outro','rito_outro_wrap',jDraft.draft.rito_outro||jDraft.draft.rito,'Outro');
       if(jDraft.draft.potencia)document.getElementById('potencia').value=jDraft.draft.potencia;
       if(jDraft.draft.potencia_complemento||jDraft.draft.potencia_outra)document.getElementById('potencia_outra').value=jDraft.draft.potencia_complemento||jDraft.draft.potencia_outra;
+      syncOutro('potencia','potencia_outra_wrap','potencia_outra','');
       if(jDraft.draft.endereco)document.getElementById('endereco').value=jDraft.draft.endereco;
       if(jDraft.draft.loja_id&&lojasCarregadas.length){
         const idx=lojasCarregadas.findIndex(l=>(l.id||'')===jDraft.draft.loja_id);
@@ -2320,6 +2338,7 @@ document.getElementById('loja_sel').addEventListener('change',function(){
   if(l.rito)aplicarValorComOutro('rito','rito_outro','rito_outro_wrap',l.rito,'Outro');
   if(l.potencia)document.getElementById('potencia').value=l.potencia;
   document.getElementById('potencia_outra').value=l.potencia_complemento||'';
+  syncOutro('potencia','potencia_outra_wrap','potencia_outra','');
   if(l.endereco)document.getElementById('endereco').value=l.endereco;
   renderLojaResumo(l);
 });
@@ -2360,10 +2379,15 @@ function validate(){
   ok=req('rito','Rito')&&ok;
   if(val('rito')==='Outro') ok=req('rito_outro','Rito')&&ok;
   ok=req('potencia','Potência principal')&&ok;
-  ok=req('potencia_outra','Potência local')&&ok;
+  if (!document.getElementById('potencia_outra').readOnly) {
+    ok=req('potencia_outra','Potência local')&&ok;
+  }
   ok=req('endereco','Endereço')&&ok;
   
-  if(!ok) showToast('Verifique os campos obrigatórios em vermelho.', 4000);
+  if(!ok) {
+    showToast('Verifique os campos obrigatórios em vermelho.', 4000);
+    setTimeout(scrollToFirstError, 100);
+  }
   return ok;
 }
 
