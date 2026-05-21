@@ -27,13 +27,14 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import asyncio
 import logging
 import mimetypes
 import os
 import time
 from io import BytesIO
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 from urllib.parse import parse_qsl, unquote
 
 from starlette.requests import Request
@@ -98,6 +99,7 @@ _GRUPO_PRINCIPAL_ID = os.getenv("GRUPO_PRINCIPAL_ID", "")
 _RASCUNHOS_MEMBRO: Dict[int, Dict[str, Any]] = {}
 _RASCUNHOS_LOJA: Dict[int, Dict[str, Any]] = {}
 _RASCUNHOS_EVENTO: Dict[int, Dict[str, Any]] = {}
+_BACKGROUND_TASKS: Set[asyncio.Task] = set()
 
 
 def _botao_editar_webapp(texto: str, url: str) -> InlineKeyboardButton:
@@ -1079,6 +1081,46 @@ async def receber_arte_pronta_evento(update: Update, context) -> None:
     )
 
 
+async def _publicar_e_finalizar_bg(
+    context,
+    id_evento: str,
+    evento: Dict[str, Any],
+    query_chat_id: int,
+    query_message_id: int,
+    telegram_id: int,
+) -> None:
+    try:
+        # Hook Conquistas Coletivas do Evento (Lojas, Ritos, Graus, Potências)
+        try:
+            from src.conquistas_coletivas import processar_conquistas_coletivas_evento
+            await processar_conquistas_coletivas_evento(context.bot, evento)
+        except Exception as e_col:
+            logger.warning("Falha silenciosa ao processar conquistas coletivas do evento no background: %s", e_col)
+
+        # Publica no grupo
+        await _publicar_evento_no_grupo(context, id_evento, evento)
+
+        # Atualiza a mensagem original no privado indicando sucesso
+        try:
+            await context.bot.edit_message_text(
+                chat_id=query_chat_id,
+                message_id=query_message_id,
+                text="✅ Sessão publicada com sucesso no grupo."
+            )
+        except Exception as e:
+            logger.warning("Não foi possível editar a mensagem de confirmação no chat privado: %s", e)
+    except Exception as e:
+        logger.exception("Erro em _publicar_e_finalizar_bg para o evento %s: %s", id_evento, e)
+        try:
+            await context.bot.edit_message_text(
+                chat_id=query_chat_id,
+                message_id=query_message_id,
+                text="❌ A sessão foi salva, mas ocorreu um erro ao gerar a imagem e publicar no grupo."
+            )
+        except Exception as e_msg:
+            logger.warning("Não foi possível enviar mensagem de erro da publicação: %s", e_msg)
+
+
 async def _confirmar_evento(update: Update, context, salvar_loja: bool) -> None:
     query = update.callback_query
     telegram_id = int(update.effective_user.id)
@@ -1134,21 +1176,24 @@ async def _confirmar_evento(update: Update, context, salvar_loja: bool) -> None:
         await query.answer("Não consegui registrar a sessão agora.", show_alert=True)
         return
 
-    # Hook Conquistas Coletivas do Evento (Lojas, Ritos, Graus, Potências)
-    try:
-        from src.conquistas_coletivas import processar_conquistas_coletivas_evento
-        import asyncio
-        asyncio.create_task(processar_conquistas_coletivas_evento(context.bot, evento))
-    except Exception as e_col:
-        logger.warning("Falha silenciosa ao processar conquistas coletivas do evento no miniapp: %s", e_col)
-    try:
-        await _publicar_evento_no_grupo(context, id_evento, evento)
-    except Exception as e:
-        logger.warning("Falha ao publicar evento %s no grupo: %s", id_evento, e)
-        await query.answer("A sessão foi salva, mas não consegui publicar no grupo.", show_alert=True)
-        return
     _limpar_rascunho(_RASCUNHOS_EVENTO, telegram_id)
-    await query.edit_message_text("✅ Sessão publicada com sucesso no grupo.")
+    await query.edit_message_text("⏳ Publicando no grupo...")
+
+    query_chat_id = query.message.chat_id
+    query_message_id = query.message.message_id
+
+    task = asyncio.create_task(
+        _publicar_e_finalizar_bg(
+            context,
+            id_evento,
+            evento,
+            query_chat_id,
+            query_message_id,
+            telegram_id,
+        )
+    )
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
 
 
 async def draft_evento_confirmar_com_loja(update: Update, context) -> None:

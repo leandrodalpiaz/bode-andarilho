@@ -424,13 +424,42 @@ def _remove_edge_background(stamp: Image.Image) -> Image.Image:
     return stamp
 
 
+_IMAGE_FILE_CACHE: Dict[Tuple[str, str], Image.Image] = {}
+
+
+def _get_processed_image(path: Path, process_type: str) -> Optional[Image.Image]:
+    key = (str(path.resolve()), process_type)
+    if key in _IMAGE_FILE_CACHE:
+        return _IMAGE_FILE_CACHE[key].copy()
+
+    if not path.exists():
+        return None
+
+    try:
+        img = ImageOps.exif_transpose(Image.open(path)).convert("RGBA")
+        if process_type == "watermark":
+            img = _remove_edge_background(img)
+            img = _transparent_light_background(img)
+        elif process_type == "degree":
+            img = _transparent_light_background(img)
+        elif process_type == "potencia":
+            img = _remove_edge_background(img)
+
+        _IMAGE_FILE_CACHE[key] = img
+        return img.copy()
+    except Exception as exc:
+        logger.warning("Falha ao carregar/processar imagem %s (%s): %s", path, process_type, exc)
+        return None
+
+
 def _draw_degree_stamp(image: Image.Image, grau: str) -> bool:
     path = _degree_stamp_path(grau)
     if not path:
         return False
     try:
-        stamp = ImageOps.exif_transpose(Image.open(path))
-        stamp = _transparent_light_background(stamp)
+        stamp = _get_processed_image(path, "degree")
+        if not stamp:
+            return False
         width, height = image.size
         target_w = int(width * 0.205)
         ratio = target_w / max(1, stamp.size[0])
@@ -461,8 +490,9 @@ def _draw_potencia_stamp(
     if not path:
         return False
     try:
-        stamp = ImageOps.exif_transpose(Image.open(path))
-        stamp = _remove_edge_background(stamp)
+        stamp = _get_processed_image(path, "potencia")
+        if not stamp:
+            return False
         width, height = image.size
         target_w = int(width * 0.14)
         ratio = target_w / max(1, stamp.size[0])
@@ -619,11 +649,10 @@ def _draw_loja_name(
 
 def _apply_watermark(image: Image.Image) -> None:
     path = DEFAULT_BRANDING_DIR / "bode_andarilho_watermark.png"
-    if not path.exists():
-        return
     try:
-        watermark = ImageOps.exif_transpose(Image.open(path)).convert("RGBA")
-        watermark = _transparent_light_background(_remove_edge_background(watermark))
+        watermark = _get_processed_image(path, "watermark")
+        if not watermark:
+            return
         width, height = image.size
         target_w = int(width * 0.48)
         ratio = target_w / max(1, watermark.size[0])
