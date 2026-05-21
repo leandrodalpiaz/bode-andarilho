@@ -1772,7 +1772,7 @@ async def _exibir_menu_secretario_seguro(update: Update, context: ContextTypes.D
                 "por favor realize o registro da sua Oficina tocando no botão abaixo:"
             )
             teclado_trava = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🏛️ Cadastrar Minha Loja", callback_data="cadastrar_loja_inicio")],
+                [InlineKeyboardButton("🏛️ Cadastrar Minha Loja", callback_data="loja_cadastrar")],
                 [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
             ])
             await navegar_para(update, context, "Área do Secretário", texto_trava, teclado_trava)
@@ -1910,7 +1910,7 @@ async def gerar_voucher_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
             InlineKeyboardButton("👥 250 Usos", callback_data="c_voucher|250"),
             InlineKeyboardButton("⌨ Digitar limite...", callback_data="c_voucher_digitar"),
         ],
-        [InlineKeyboardButton("🔙 Voltar ao painel", callback_data="menu_secretario")]
+        [InlineKeyboardButton("🔙 Voltar ao painel", callback_data="area_secretario")]
     ])
     
     await navegar_para(update, context, "Gerar Convite", texto, teclado)
@@ -1994,7 +1994,7 @@ async def _finalizar_criacao_voucher(update: Update, context: ContextTypes.DEFAU
     )
     
     teclado = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 Voltar à Área do Secretário", callback_data="menu_secretario")]
+        [InlineKeyboardButton("🔙 Voltar à Área do Secretário", callback_data="area_secretario")]
     ])
     
     await navegar_para(update, context, "Voucher Ativo", texto_sucesso, teclado)
@@ -2044,7 +2044,7 @@ async def bastao_listar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await navegar_para(
             update, context, "Transmitir Ofício", texto,
-            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="menu_secretario")]])
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario")]])
         )
         return
 
@@ -2055,7 +2055,7 @@ async def bastao_listar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         grau = m.get("Grau") or m.get("grau") or "M.·."
         botoes.append([InlineKeyboardButton(f"🔺 {m_nome} ({grau})", callback_data=f"bastao_conf|{m_id}")])
         
-    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="menu_secretario")])
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario")])
     
     await navegar_para(update, context, "Transmitir Ofício", texto, InlineKeyboardMarkup(botoes))
 
@@ -2154,7 +2154,7 @@ async def bastao_executar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Desejamos um profícuo trabalho em sua nova jornada administrativa!"
         )
         teclado_suc = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📋 Ir para Área do Secretário", callback_data="menu_secretario")],
+            [InlineKeyboardButton("📋 Ir para Área do Secretário", callback_data="area_secretario")],
             [InlineKeyboardButton("💡 Ajuda: Gerar Primeiro Voucher", callback_data="ajuda_voucher_boasvindas")],
         ])
         await context.bot.send_message(
@@ -2185,7 +2185,7 @@ async def ajuda_voucher_boasvindas(update: Update, context: ContextTypes.DEFAULT
     
     await navegar_para(
         update, context, "Ajuda Convite", texto,
-        InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar à Área do Secretário", callback_data="menu_secretario")]])
+        InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar à Área do Secretário", callback_data="area_secretario")]])
     )
 
 
@@ -2299,7 +2299,7 @@ async def vigor_painel(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 caption=msg_caption,
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Voltar ao Painel", callback_data="menu_secretario")]
+                    [InlineKeyboardButton("🔙 Voltar ao Painel", callback_data="area_secretario")]
                 ])
             )
             
@@ -2799,7 +2799,7 @@ async def admin_incorporar_obreiros(update: Update, context: ContextTypes.DEFAUL
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             "⚠️ *Loja não vinculada*\n\nVocê precisa ter uma Loja vinculada ao seu cadastro para poder incorporar obreiros.",
-            InlineKeyboardMarkup([[InlineKeyboardButton("🏛️ Cadastrar Minha Loja", callback_data="cadastrar_loja_inicio"), InlineKeyboardButton("🔙 Voltar", callback_data="menu_secretario")]])
+            InlineKeyboardMarkup([[InlineKeyboardButton("🏛️ Cadastrar Minha Loja", callback_data="loja_cadastrar"), InlineKeyboardButton("🔙 Voltar", callback_data="area_secretario")]])
         )
         return
         
@@ -2835,7 +2835,7 @@ async def admin_incorporar_obreiros(update: Update, context: ContextTypes.DEFAUL
             texto_botao = f"👤 {nome} ({grau}) - {loja_digitada} nº {num_digitado}"
             botoes.append([InlineKeyboardButton(texto_botao, callback_data=f"admin_confirmar_incorporacao|{tid}")])
             
-    botoes.append([InlineKeyboardButton("🔙 Voltar à Área do Secretário", callback_data="menu_secretario")])
+    botoes.append([InlineKeyboardButton("🔙 Voltar à Área do Secretário", callback_data="area_secretario")])
     
     await navegar_para(
         update, context,

@@ -487,6 +487,8 @@ def _extrair_dados_loja(body: Dict[str, Any]) -> Dict[str, Any]:
         "potencia": _norm_text(body.get("potencia"))[:200],
         "potencia_outra": _norm_text(body.get("potencia_outra") or body.get("potencia_complemento"))[:200],
         "endereco": _norm_text(body.get("endereco"))[:400],
+        "secretario_responsavel_id": _norm_text(body.get("secretario_responsavel_id"))[:80],
+        "secretario_responsavel_nome": _norm_text(body.get("secretario_responsavel_nome"))[:200],
     })
 
 
@@ -663,6 +665,8 @@ def _extrair_dados_evento(body: Dict[str, Any]) -> Dict[str, Any]:
         "potencia": _norm_text(body.get("potencia"))[:200],
         "potencia_outra": _norm_text(body.get("potencia_outra") or body.get("potencia_complemento"))[:200],
         "endereco": _norm_text(body.get("endereco"))[:400],
+        "secretario_responsavel_id": _norm_text(body.get("secretario_responsavel_id"))[:80],
+        "secretario_responsavel_nome": _norm_text(body.get("secretario_responsavel_nome"))[:200],
     })
 
 
@@ -731,6 +735,51 @@ def _payload_evento(dados: Dict[str, Any], secretario_id: str) -> Dict[str, Any]
     }
 
 
+def _loja_para_payload_evento(loja: Dict[str, Any]) -> Dict[str, Any]:
+    """Normaliza uma loja cadastrada para preencher rascunhos de sessão."""
+    return {
+        "loja_id": _norm_text(loja.get("ID") or loja.get("id")),
+        "nome_loja": _norm_text(loja.get("Nome da Loja") or loja.get("nome_loja")),
+        "numero_loja": _norm_text(loja.get("Número") or loja.get("numero") or "0"),
+        "oriente": _norm_text(loja.get("Oriente da Loja") or loja.get("Oriente") or loja.get("oriente_loja")),
+        "rito": _norm_text(loja.get("Rito") or loja.get("rito")),
+        "potencia": _norm_text(loja.get("Potência") or loja.get("potencia")),
+        "potencia_complemento": _norm_text(loja.get("Potência complemento") or loja.get("potencia_complemento")),
+        "potencia_outra": _norm_text(loja.get("Potência complemento") or loja.get("potencia_complemento")),
+        "endereco": _norm_text(loja.get("Endereço") or loja.get("endereco")),
+        "secretario_responsavel_id": _norm_text(
+            loja.get("Telegram ID do secretário responsável")
+            or loja.get("secretario_responsavel_id")
+            or loja.get("Telegram ID")
+            or loja.get("telegram_id")
+        ),
+        "secretario_responsavel_nome": _norm_text(
+            loja.get("Nome do secretário responsável")
+            or loja.get("secretario_responsavel_nome")
+        ),
+    }
+
+
+def _aplicar_loja_cadastrada_ao_evento(dados: Dict[str, Any], lojas_existentes: List[Dict[str, Any]]) -> Dict[str, Any]:
+    loja_id = _norm_text(dados.get("loja_id"))
+    if not loja_id:
+        return dados
+    loja = next(
+        (
+            lj for lj in lojas_existentes
+            if _norm_text(lj.get("ID") or lj.get("id")) == loja_id
+        ),
+        None,
+    )
+    if not loja:
+        return dados
+    merged = dict(dados)
+    for key, value in _loja_para_payload_evento(loja).items():
+        if value:
+            merged[key] = value
+    return _normalizar_dados_potencia(merged)
+
+
 def _texto_publicacao_evento(dados: Dict[str, Any]) -> str:
     dt = _parse_data_ddmmyyyy(dados.get("data", ""))
     dia_semana = {
@@ -790,6 +839,9 @@ async def api_rascunho_evento(request: Request) -> JSONResponse:
     if _norm_text((body or {}).get("action")).lower() == "get":
         return JSONResponse({"ok": True, "draft": _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)})
     dados = _extrair_dados_evento(body or {})
+    nivel = str(get_nivel(telegram_id))
+    lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
+    dados = _aplicar_loja_cadastrada_ao_evento(dados, lojas_existentes)
     mensagem = _validar_dados_evento(dados)
     if mensagem:
         return _json_error(mensagem, 400)
@@ -884,14 +936,14 @@ async def draft_evento_escolher_visual(update: Update, context, salvar_loja: boo
     telegram_id = int(update.effective_user.id)
     dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
     if not dados:
-        await query.answer("N?o encontrei um rascunho de evento.", show_alert=True)
+        await query.answer("Não encontrei um rascunho de evento.", show_alert=True)
         return
     nivel = str(get_nivel(telegram_id))
     if nivel == "3" and not _norm_text(dados.get("secretario_responsavel_id")):
-        await query.answer("Defina primeiro o secret?rio respons?vel.", show_alert=True)
+        await query.answer("Defina primeiro o secretário responsável.", show_alert=True)
         return
     await query.edit_message_text(
-        "Escolha como a sessão ser? publicada no grupo:",
+        "Escolha como a sessão será publicada no grupo:",
         reply_markup=_teclado_visual_rascunho_evento(nivel, salvar_loja),
     )
 
@@ -910,7 +962,7 @@ async def draft_evento_visual_voltar(update: Update, context) -> None:
     telegram_id = int(update.effective_user.id)
     dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
     if not dados:
-        await query.edit_message_text("Tudo certo. N?o encontrei um rascunho ativo.")
+        await query.edit_message_text("Tudo certo. Não encontrei um rascunho ativo.")
         return
     nivel = str(get_nivel(telegram_id))
     lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
@@ -927,19 +979,19 @@ async def draft_evento_definir_visual(update: Update, context) -> None:
     telegram_id = int(update.effective_user.id)
     dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
     if not dados:
-        await query.answer("N?o encontrei um rascunho de evento.", show_alert=True)
+        await query.answer("Não encontrei um rascunho de evento.", show_alert=True)
         return
-    partes = (query.data or "").split("|")
+    partes = (query.data or "").split("|", 2)
     if len(partes) != 3:
-        await query.answer("Op??o visual inv?lida.", show_alert=True)
+        await query.answer("Opção visual inválida.", show_alert=True)
         return
     _, modo_visual, origem = partes
     nivel = str(get_nivel(telegram_id))
     if modo_visual == "template_loja" and nivel == "3":
-        await query.answer("No fluxo administrativo, use o padr?o do sistema ou uma arte pronta da sessão.", show_alert=True)
+        await query.answer("No fluxo administrativo, use o padrão do sistema ou uma arte pronta da sessão.", show_alert=True)
         return
     if modo_visual not in {"template_loja", "template_padrao", "card_especial"}:
-        await query.answer("Op??o visual inv?lida.", show_alert=True)
+        await query.answer("Opção visual inválida.", show_alert=True)
         return
     dados["modo_visual"] = modo_visual
     if modo_visual != "card_especial":
@@ -948,7 +1000,7 @@ async def draft_evento_definir_visual(update: Update, context) -> None:
     if modo_visual == "card_especial" and not _norm_text(dados.get("card_especial_url")):
         context.user_data["draft_evento_arte_pronta_origem"] = origem
         await query.edit_message_text(
-            "Envie agora a arte pronta da sessão como foto ou documento de imagem. O bot publicar? a imagem no grupo e adicionar? apenas os bot?es de confirma??o e gerenciamento.",
+            "Envie agora a arte pronta da sessão como foto ou documento de imagem. O bot publicará a imagem no grupo e adicionará apenas os botões de confirmação e gerenciamento.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="draft_evento_cancelar")]]),
         )
         return
@@ -964,7 +1016,7 @@ async def receber_arte_pronta_evento(update: Update, context) -> None:
     dados = _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)
     if not dados:
         context.user_data.pop("draft_evento_arte_pronta_origem", None)
-        await msg.reply_text("N?o encontrei um rascunho de sessão ativo.")
+        await msg.reply_text("Não encontrei um rascunho de sessão ativo.")
         return
     tg_file = None
     filename = "arte_evento.jpg"
@@ -976,13 +1028,13 @@ async def receber_arte_pronta_evento(update: Update, context) -> None:
         filename = msg.document.file_name or filename
         content_type = msg.document.mime_type or mimetypes.guess_type(filename)[0] or "image/jpeg"
     if not tg_file:
-        await msg.reply_text("Envie uma imagem v?lida como foto ou documento.")
+        await msg.reply_text("Envie uma imagem válida como foto ou documento.")
         return
     raw = await tg_file.download_as_bytearray()
     try:
         Image.open(BytesIO(raw)).verify()
     except Exception:
-        await msg.reply_text("N?o consegui validar essa imagem. Envie PNG, JPG ou WEBP.")
+        await msg.reply_text("Não consegui validar essa imagem. Envie PNG, JPG ou WEBP.")
         return
     ext = os.path.splitext(filename)[1].lower() or ".jpg"
     if ext not in (".jpg", ".jpeg", ".png", ".webp"):
@@ -990,7 +1042,7 @@ async def receber_arte_pronta_evento(update: Update, context) -> None:
     path = f"eventos/drafts/{telegram_id}/arte_pronta{ext}"
     url = upload_storage_publico(BUCKET_EVENT_CARDS, path, bytes(raw), content_type)
     if not url:
-        await msg.reply_text("N?o consegui salvar a arte no Storage. Tente novamente.")
+        await msg.reply_text("Não consegui salvar a arte no Storage. Tente novamente.")
         return
     dados["modo_visual"] = "card_especial"
     dados["card_especial_url"] = url
@@ -1015,6 +1067,12 @@ async def _confirmar_evento(update: Update, context, salvar_loja: bool) -> None:
         await query.answer("Defina primeiro o secretário responsável.", show_alert=True)
         return
     lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
+    dados = _aplicar_loja_cadastrada_ao_evento(dados, lojas_existentes)
+    secretario_id = _norm_text(dados.get("secretario_responsavel_id")) or secretario_id
+    loja_existente = not _evento_tem_loja_nova(dados, lojas_existentes)
+    if salvar_loja and loja_existente:
+        await query.answer("Esta loja já existe. A sessão será vinculada ao cadastro existente.", show_alert=True)
+        salvar_loja = False
     if salvar_loja and _evento_tem_loja_nova(dados, lojas_existentes):
         ok_loja = cadastrar_loja(
             telegram_id,
@@ -1099,16 +1157,27 @@ def _teclado_secretarios(prefixo: str, secretarios: List[Dict[str, Any]]) -> Inl
 
 
 def _evento_tem_loja_nova(dados: Dict[str, Any], lojas_existentes: List[Dict[str, Any]]) -> bool:
+    loja_id = _norm_text(dados.get("loja_id"))
+    if loja_id:
+        for loja in lojas_existentes:
+            if _norm_text(loja.get("ID") or loja.get("id")) == loja_id:
+                return False
     nome = _norm_text(dados.get("nome_loja"))
     numero = _norm_text(dados.get("numero_loja") or "0")
     rito = _norm_text(dados.get("rito"))
+    potencia = _norm_text(dados.get("potencia"))
+    potencia_complemento = _norm_text(dados.get("potencia_complemento") or dados.get("potencia_outra"))
     if not nome:
         return False
     for loja in lojas_existentes:
+        loja_potencia = _norm_text(loja.get("Potência") or loja.get("potencia"))
+        loja_complemento = _norm_text(loja.get("Potência complemento") or loja.get("potencia_complemento"))
         if (
             _norm_text(loja.get("Nome da Loja")) == nome
             and _norm_text(loja.get("Número") or "0") == numero
             and _norm_text(loja.get("Rito")) == rito
+            and (not potencia or loja_potencia == potencia)
+            and (not potencia_complemento or loja_complemento == potencia_complemento)
         ):
             return False
     return True
@@ -1878,12 +1947,15 @@ def html_cadastro_evento() -> str:
 </div>
 <div id="lojas_card" class="card" style="display:none">
   <div class="card-title">Atalho - Lojas registradas</div>
+  <div id="lojas_admin_info" class="info" style="display:none">Fluxo administrativo: selecione primeiro uma loja cadastrada. Use cadastro manual apenas quando a loja ainda não existir.</div>
   <div class="field">
     <label for="loja_sel">Selecione para auto-preencher</label>
     <select id="loja_sel">
       <option value="">Preencher manualmente...</option>
     </select>
+    <div id="loja_sel_err" class="err"></div>
   </div>
+  <button id="btn_nova_loja_manual" type="button" class="btn-secondary" style="display:none">Cadastrar loja nova manualmente</button>
 </div>
 
 <div class="card">
@@ -2021,6 +2093,8 @@ def html_cadastro_evento() -> str:
 maskDate(document.getElementById('data_ev'));
 let lojasCarregadas=[];
 let lojaSelecionadaViaAtalho=false;
+let adminFlow=false;
+let novaLojaManual=false;
 let enviandoEvento=false;
 
 function syncOutro(selectId, wrapId, inputId, valorOutro){
@@ -2064,6 +2138,14 @@ function norm(v){
       body:JSON.stringify({init_data:tgInitData()})
     });
     const j=await r.json();
+    adminFlow=(j.nivel||'')==='3';
+    const infoAdmin=document.getElementById('lojas_admin_info');
+    const btnManual=document.getElementById('btn_nova_loja_manual');
+    if(adminFlow){
+      document.getElementById('lojas_card').style.display='block';
+      if(infoAdmin)infoAdmin.style.display='block';
+      if(btnManual)btnManual.style.display='block';
+    }
     if(j.ok&&j.lojas&&j.lojas.length>0){
       lojasCarregadas=j.lojas;
       const sel=document.getElementById('loja_sel');
@@ -2075,6 +2157,8 @@ function norm(v){
         sel.appendChild(o);
       });
       document.getElementById('lojas_card').style.display='block';
+    }else if(adminFlow){
+      showToast('Nenhuma loja cadastrada encontrada. Use o cadastro manual apenas para loja nova.');
     }
   }catch(e){}
   try{
@@ -2109,6 +2193,8 @@ document.getElementById('loja_sel').addEventListener('change',function(){
     return;
   }
   lojaSelecionadaViaAtalho=true;
+  novaLojaManual=false;
+  clearErr('loja_sel');
   const o=this.options[this.selectedIndex];
   const l=JSON.parse(o.dataset.loja||'{}');
   if(l.nome)document.getElementById('nome_loja').value=l.nome;
@@ -2119,6 +2205,17 @@ document.getElementById('loja_sel').addEventListener('change',function(){
   document.getElementById('potencia_outra').value=l.potencia_complemento||'';
   if(l.endereco)document.getElementById('endereco').value=l.endereco;
 });
+
+const btnNovaLojaManual=document.getElementById('btn_nova_loja_manual');
+if(btnNovaLojaManual){
+  btnNovaLojaManual.addEventListener('click',()=>{
+    novaLojaManual=true;
+    lojaSelecionadaViaAtalho=false;
+    document.getElementById('loja_sel').value='';
+    clearErr('loja_sel');
+    showToast('Preenchimento manual liberado somente para loja nova.');
+  });
+}
 
 document.getElementById('grau').addEventListener('change',()=>syncOutro('grau','grau_outro_wrap','grau_outro','Outro'));
 document.getElementById('traje').addEventListener('change',()=>syncOutro('traje','traje_outro_wrap','traje_outro','Outro'));
@@ -2131,6 +2228,12 @@ syncOutro('potencia','potencia_outra_wrap','potencia_outra','');
 
 function validate(){
   let ok=true;
+  if(adminFlow&&!lojaSelecionadaViaAtalho&&!novaLojaManual){
+    setErr('loja_sel','Selecione uma loja cadastrada ou confirme que é uma loja nova.');
+    ok=false;
+  }else{
+    clearErr('loja_sel');
+  }
   const dv=val('data_ev');
   const dataEvento=parseDateBR(dv);
   if(!dataEvento){
@@ -2189,7 +2292,9 @@ async function publicarEvento(){
         potencia:val('potencia'),
         potencia_outra:val('potencia_outra'),
         endereco:val('endereco'),
-        loja_id:(lojasCarregadas[Number(document.getElementById('loja_sel').value)]||{}).id||''
+        loja_id:(lojasCarregadas[Number(document.getElementById('loja_sel').value)]||{}).id||'',
+        secretario_responsavel_id:(lojasCarregadas[Number(document.getElementById('loja_sel').value)]||{}).secretario_responsavel_id||'',
+        secretario_responsavel_nome:(lojasCarregadas[Number(document.getElementById('loja_sel').value)]||{}).secretario_responsavel_nome||''
       })
     });
     const j=await r.json();
@@ -2258,7 +2363,8 @@ async def api_listar_lojas(request: Request) -> JSONResponse:
     if not telegram_id:
         return JSONResponse({"ok": False, "lojas": []}, status_code=403)
 
-    lojas = listar_lojas(int(telegram_id)) or []
+    nivel = str(get_nivel(int(telegram_id)))
+    lojas = listar_lojas(int(telegram_id), include_todas=(nivel == "3")) or []
     result = []
     for lj in lojas:
         result.append({
@@ -2270,8 +2376,14 @@ async def api_listar_lojas(request: Request) -> JSONResponse:
             "potencia": lj.get("Potência", ""),
             "potencia_complemento": lj.get("Potência complemento", ""),
             "endereco": lj.get("Endereço", ""),
+            "secretario_responsavel_id": str(lj.get("Telegram ID do secretário responsável") or lj.get("secretario_responsavel_id") or lj.get("Telegram ID") or ""),
+            "secretario_responsavel_nome": lj.get("Nome do secretário responsável") or lj.get("secretario_responsavel_nome") or "",
+            "template_sessao_url": lj.get("Template sessão URL") or lj.get("template_sessao_url") or "",
+            "status_template": lj.get("Status template") or lj.get("status_template") or "",
+            "estado_uf": lj.get("Estado UF") or lj.get("estado_uf") or "",
+            "cidade": lj.get("Cidade") or lj.get("cidade") or "",
         })
-    return JSONResponse({"ok": True, "lojas": result})
+    return JSONResponse({"ok": True, "lojas": result, "nivel": nivel})
 
 
 # ─────────────────────────────────────────────────────────────────────────────

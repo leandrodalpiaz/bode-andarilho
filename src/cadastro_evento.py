@@ -558,7 +558,7 @@ async def escolher_modo_visual_evento(update: Update, context: ContextTypes.DEFA
     modo = (query.data or "").split("|", 1)[1] if query and "|" in (query.data or "") else ""
     if modo not in {"template_padrao", "template_loja"}:
         if query:
-            await query.answer("Op??o visual inv?lida.", show_alert=True)
+                    await query.answer("Opção visual inválida.", show_alert=True)
         return CONFIRMAR
     context.user_data["novo_evento_modo_visual"] = modo
     context.user_data.pop("novo_evento_card_especial_url", None)
@@ -589,7 +589,7 @@ async def trocar_card_evento(update: Update, context: ContextTypes.DEFAULT_TYPE)
         TIPO_RESULTADO,
         "*Arte pronta da sessão*\n\n"
         "Envie agora a imagem oficial da sessão, j? finalizada, como foto ou documento PNG/JPG/WEBP. "
-        "O bot publicar? a arte no grupo e adicionar? apenas os bot?es de confirma??o e gerenciamento.",
+        "O bot publicará a arte no grupo e adicionará apenas os botões de confirmação e gerenciamento.",
         InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="cancelar_publicacao")]]),
         limpar_conteudo=True,
     )
@@ -695,7 +695,7 @@ Para garantir a integridade dos dados e o layout correto dos convites, é necess
 Por favor, registre sua Loja tocando no botão abaixo:"""
                 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
                 teclado_trava = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🏛️ Cadastrar Minha Loja", callback_data="cadastrar_loja_inicio")],
+                    [InlineKeyboardButton("🏛️ Cadastrar Minha Loja", callback_data="loja_cadastrar")],
                     [InlineKeyboardButton("🔙 Voltar", callback_data="menu_principal")],
                 ])
                 await navegar_para(update, context, "Cadastrar Sessão > Trava", texto_trava, teclado_trava)

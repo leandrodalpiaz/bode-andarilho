@@ -888,7 +888,7 @@ Ir.·. Secretário, identificamos que você deseja criar uma nova sessão via co
 
 Por favor, realize o registro inicial de sua Loja para habilitar as publicações da IA:"""
 				teclado_trava = InlineKeyboardMarkup([
-					[InlineKeyboardButton("🏛️ Cadastrar Minha Loja", callback_data="cadastrar_loja_inicio")],
+					[InlineKeyboardButton("🏛️ Cadastrar Minha Loja", callback_data="loja_cadastrar")],
 					[InlineKeyboardButton("🔙 Voltar", callback_data="menu_principal")],
 				])
 				await navegar_para(update, context, "Assistente IA > Trava", texto_trava, teclado_trava)
@@ -908,7 +908,7 @@ Ir.·. Secretário, identificamos que você deseja criar uma nova sessão via co
 
 Por favor, realize o registro inicial de sua Loja para habilitar as publicações da IA:"""
 				teclado_trava = InlineKeyboardMarkup([
-					[InlineKeyboardButton("🏛️ Cadastrar Minha Loja", callback_data="cadastrar_loja_inicio")],
+					[InlineKeyboardButton("🏛️ Cadastrar Minha Loja", callback_data="loja_cadastrar")],
 					[InlineKeyboardButton("🔙 Voltar", callback_data="menu_principal")],
 				])
 				await navegar_para(update, context, "Assistente IA > Trava", texto_trava, teclado_trava)

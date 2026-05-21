@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes
+from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
 
 from src.bot import navegar_para
 from src.permissoes import get_nivel
@@ -28,6 +28,8 @@ TIPO_IA = "ia_resposta_texto"
 TIPO_TELA = "tela_apoiadores"
 
 _FREQ_IA_MOD = 3
+
+APOIO_NOVO_APOIADOR, APOIO_NOVO_CONTRATO, APOIO_CONFIG, APOIO_PAUSAR = range(900, 904)
 
 
 def doacoes_ativas() -> bool:
@@ -305,6 +307,255 @@ def registrar_exibicao_apoio(apoiador_id: str, contrato_id: str, tipo_exibicao: 
         logger.warning("Falha ao registrar exibicao de apoio: %s", exc)
 
 
+def _admin_apoio(user_id: int) -> bool:
+    return get_nivel(user_id) == "3"
+
+
+def _money(v) -> float:
+    try:
+        return float(str(v or "0").replace(",", "."))
+    except Exception:
+        return 0.0
+
+
+def _parse_bool_token(v: str) -> bool:
+    return str(v or "").strip().lower() in {"1", "s", "sim", "true", "on", "ativo"}
+
+
+def _apoio_stats() -> Dict[str, object]:
+    apoiadores = _fetch_rows("apoiadores")
+    contratos = _fetch_rows("apoios_contratos")
+    exibicoes = _fetch_rows("apoios_exibicoes")
+    hoje = _today_iso()
+    ativos = [a for a in apoiadores if str(a.get("status") or "").lower() == "ativo"]
+    contratos_ativos = [
+        c for c in contratos
+        if str(c.get("status") or "").lower() == "ativo"
+        and str(c.get("data_inicio") or "") <= hoje
+        and str(c.get("data_fim") or "") >= hoje
+    ]
+    pausados = [c for c in contratos if str(c.get("status") or "").lower() in {"pausado", "inadimplente"}]
+    vencidos = [c for c in contratos if str(c.get("status") or "").lower() == "vencido" or str(c.get("data_fim") or "") < hoje]
+    valor = sum(_money(c.get("valor_contribuicao")) for c in contratos_ativos)
+    por_tipo: Dict[str, int] = {}
+    for e in exibicoes:
+        tipo = str(e.get("tipo_exibicao") or "sem_tipo")
+        por_tipo[tipo] = por_tipo.get(tipo, 0) + 1
+    return {
+        "apoiadores": apoiadores,
+        "ativos": ativos,
+        "contratos": contratos,
+        "contratos_ativos": contratos_ativos,
+        "pausados": pausados,
+        "vencidos": vencidos,
+        "valor": valor,
+        "por_tipo": por_tipo,
+    }
+
+
+def _texto_gestao_apoios() -> str:
+    stats = _apoio_stats()
+    por_tipo = stats["por_tipo"] or {}
+    linhas_tipo = "\n".join(f"- {k}: {v}" for k, v in sorted(por_tipo.items())) or "- sem exibições registradas"
+    return (
+        "🤝 *Gestão de Apoios*\n\n"
+        f"Apoiadores cadastrados: *{len(stats['apoiadores'])}*\n"
+        f"Apoiadores ativos: *{len(stats['ativos'])}*\n"
+        f"Contratos ativos: *{len(stats['contratos_ativos'])}*\n"
+        f"Contratos pausados/inadimplentes: *{len(stats['pausados'])}*\n"
+        f"Contratos vencidos: *{len(stats['vencidos'])}*\n"
+        f"Receita mensal estimada: *R$ {stats['valor']:.2f}*\n\n"
+        "*Exibições registradas por tipo:*\n"
+        f"{linhas_tipo}\n\n"
+        "Use os menus abaixo para cadastrar apoiadores, contratos e regras de exibição."
+    )
+
+
+def _teclado_gestao_apoios() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📋 Listar apoiadores", callback_data="admin_apoio_listar")],
+        [InlineKeyboardButton("➕ Novo apoiador", callback_data="admin_apoio_novo")],
+        [InlineKeyboardButton("🧾 Novo contrato", callback_data="admin_apoio_contrato")],
+        [InlineKeyboardButton("⚙️ Configurar exibição", callback_data="admin_apoio_config")],
+        [InlineKeyboardButton("⏸️ Pausar/reativar apoiador", callback_data="admin_apoio_pausar")],
+        [InlineKeyboardButton("🔙 Voltar ao admin", callback_data="area_admin")],
+    ])
+
+
+async def admin_apoio_listar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id if update.effective_user else 0
+    if not _admin_apoio(user_id):
+        return
+    apoiadores = buscar_apoiadores_ativos()
+    todos = _fetch_rows("apoiadores")
+    contratos = buscar_contratos_vigentes()
+    contrato_por_apoiador = {str(c.get("apoiador_id")): c for c in contratos}
+    linhas = ["🤝 *Apoiadores cadastrados*\n"]
+    base = todos[:30]
+    if not base:
+        linhas.append("Nenhum apoiador cadastrado.")
+    for a in base:
+        c = contrato_por_apoiador.get(str(a.get("id")))
+        valor = f"R$ {_money((c or {}).get('valor_contribuicao')):.2f}" if c else "sem contrato vigente"
+        linhas.append(
+            f"• `{a.get('id')}`\n"
+            f"  *{a.get('nome','Apoiador')}* | {a.get('status','')}\n"
+            f"  {a.get('segmento') or 'sem segmento'} | {valor}"
+        )
+    linhas.append(f"\nAtivos com contrato vigente: {len(apoiadores)}")
+    await navegar_para(update, context, "Gestão de Apoios > Lista", "\n".join(linhas), _teclado_gestao_apoios())
+
+
+async def admin_apoio_novo_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id if update.effective_user else 0
+    if not _admin_apoio(user_id):
+        return ConversationHandler.END
+    await navegar_para(
+        update,
+        context,
+        "Gestão de Apoios > Novo",
+        "Envie os dados do apoiador em uma linha:\n\n`nome | responsável | telefone | email | segmento | cidade | link | texto curto`\n\nUse `-` para campos vazios.",
+        InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="admin_publicidade")]]),
+    )
+    return APOIO_NOVO_APOIADOR
+
+
+async def admin_apoio_novo_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id if update.effective_user else 0
+    if not _admin_apoio(user_id):
+        return ConversationHandler.END
+    partes = [p.strip() for p in (update.message.text or "").split("|")]
+    if len(partes) < 8 or not partes[0] or partes[0] == "-":
+        await update.message.reply_text("Formato inválido. Envie: nome | responsável | telefone | email | segmento | cidade | link | texto curto")
+        return APOIO_NOVO_APOIADOR
+    keys = ["nome", "responsavel_nome", "telefone", "email", "segmento", "cidade", "link_publico", "texto_curto"]
+    row = {k: (v if v != "-" else "") for k, v in zip(keys, partes[:8])}
+    row["status"] = "ativo"
+    try:
+        _safe_table("apoiadores").insert(row).execute()
+        await navegar_para(update, context, "Gestão de Apoios", "✅ Apoiador cadastrado.", _teclado_gestao_apoios())
+    except Exception as exc:
+        logger.warning("Falha ao cadastrar apoiador: %s", exc)
+        await navegar_para(update, context, "Gestão de Apoios", "Falha ao cadastrar apoiador. Verifique se `docs/supabase_apoios_institucionais.sql` foi aplicado.", _teclado_gestao_apoios())
+    return ConversationHandler.END
+
+
+async def admin_apoio_contrato_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id if update.effective_user else 0
+    if not _admin_apoio(user_id):
+        return ConversationHandler.END
+    await navegar_para(
+        update,
+        context,
+        "Gestão de Apoios > Contrato",
+        "Envie o contrato em uma linha:\n\n`apoiador_id | categoria | data_inicio AAAA-MM-DD | data_fim AAAA-MM-DD | valor | finalidade`\n\nCategorias: master, destaque, institucional, amigo_projeto.",
+        InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="admin_publicidade")]]),
+    )
+    return APOIO_NOVO_CONTRATO
+
+
+async def admin_apoio_contrato_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id if update.effective_user else 0
+    if not _admin_apoio(user_id):
+        return ConversationHandler.END
+    partes = [p.strip() for p in (update.message.text or "").split("|")]
+    if len(partes) < 6:
+        await update.message.reply_text("Formato inválido. Envie: apoiador_id | categoria | data_inicio | data_fim | valor | finalidade")
+        return APOIO_NOVO_CONTRATO
+    row = {
+        "apoiador_id": partes[0],
+        "categoria": partes[1],
+        "data_inicio": partes[2],
+        "data_fim": partes[3],
+        "valor_contribuicao": _money(partes[4]),
+        "finalidade": partes[5],
+        "status": "ativo",
+    }
+    try:
+        _safe_table("apoios_contratos").insert(row).execute()
+        await navegar_para(update, context, "Gestão de Apoios", "✅ Contrato cadastrado.", _teclado_gestao_apoios())
+    except Exception as exc:
+        logger.warning("Falha ao cadastrar contrato de apoio: %s", exc)
+        await navegar_para(update, context, "Gestão de Apoios", "Falha ao cadastrar contrato. Verifique apoiador_id e tabela de apoios.", _teclado_gestao_apoios())
+    return ConversationHandler.END
+
+
+async def admin_apoio_config_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id if update.effective_user else 0
+    if not _admin_apoio(user_id):
+        return ConversationHandler.END
+    await navegar_para(
+        update,
+        context,
+        "Gestão de Apoios > Exibição",
+        "Envie a configuração em uma linha:\n\n`apoiador_id | logo_card sim/não | confirmados sim/não | ia sim/não | limite_card | limite_confirmados | limite_ia | peso`",
+        InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="admin_publicidade")]]),
+    )
+    return APOIO_CONFIG
+
+
+async def admin_apoio_config_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id if update.effective_user else 0
+    if not _admin_apoio(user_id):
+        return ConversationHandler.END
+    partes = [p.strip() for p in (update.message.text or "").split("|")]
+    if len(partes) < 8:
+        await update.message.reply_text("Formato inválido. Envie: apoiador_id | logo_card | confirmados | ia | limite_card | limite_confirmados | limite_ia | peso")
+        return APOIO_CONFIG
+    row = {
+        "apoiador_id": partes[0],
+        "permite_logo_card": _parse_bool_token(partes[1]),
+        "permite_confirmados": _parse_bool_token(partes[2]),
+        "permite_ia": _parse_bool_token(partes[3]),
+        "limite_card_mes": int(_money(partes[4])),
+        "limite_confirmados_mes": int(_money(partes[5])),
+        "limite_ia_mes": int(_money(partes[6])),
+        "peso_prioridade": max(1, int(_money(partes[7]))),
+    }
+    try:
+        existente = _safe_table("apoios_config").select("id").eq("apoiador_id", partes[0]).limit(1).execute()
+        if existente.data:
+            _safe_table("apoios_config").update(row).eq("id", existente.data[0]["id"]).execute()
+        else:
+            _safe_table("apoios_config").insert(row).execute()
+        await navegar_para(update, context, "Gestão de Apoios", "✅ Configuração de exibição salva.", _teclado_gestao_apoios())
+    except Exception as exc:
+        logger.warning("Falha ao salvar config de apoio: %s", exc)
+        await navegar_para(update, context, "Gestão de Apoios", "Falha ao salvar configuração de exibição.", _teclado_gestao_apoios())
+    return ConversationHandler.END
+
+
+async def admin_apoio_pausar_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id if update.effective_user else 0
+    if not _admin_apoio(user_id):
+        return ConversationHandler.END
+    await navegar_para(
+        update,
+        context,
+        "Gestão de Apoios > Status",
+        "Envie:\n\n`apoiador_id | ativo|pausado|encerrado`\n\nO status controla a exibição pública e a elegibilidade em cards/textos.",
+        InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="admin_publicidade")]]),
+    )
+    return APOIO_PAUSAR
+
+
+async def admin_apoio_pausar_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id if update.effective_user else 0
+    if not _admin_apoio(user_id):
+        return ConversationHandler.END
+    partes = [p.strip() for p in (update.message.text or "").split("|")]
+    if len(partes) < 2 or partes[1] not in {"ativo", "pausado", "encerrado"}:
+        await update.message.reply_text("Formato inválido. Envie: apoiador_id | ativo|pausado|encerrado")
+        return APOIO_PAUSAR
+    try:
+        _safe_table("apoiadores").update({"status": partes[1]}).eq("id", partes[0]).execute()
+        await navegar_para(update, context, "Gestão de Apoios", "✅ Status atualizado.", _teclado_gestao_apoios())
+    except Exception as exc:
+        logger.warning("Falha ao atualizar status de apoiador: %s", exc)
+        await navegar_para(update, context, "Gestão de Apoios", "Falha ao atualizar status do apoiador.", _teclado_gestao_apoios())
+    return ConversationHandler.END
+
+
 async def mostrar_apoiadores(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     if q:
@@ -491,22 +742,35 @@ async def mostrar_publicidade_admin(update: Update, context: ContextTypes.DEFAUL
         await navegar_para(update, context, "Gestão de Apoios", "⛔ Área exclusiva para administradores.", InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="menu_principal")]]))
         return
 
-    txt = (
-        "🤝 *Gestão de Apoios*\n\n"
-        "Esta área concentra a governança do programa institucional.\n"
-        "Os dados financeiros e de exibição são baseados em registros reais de exposição.\n\n"
-        "Meta operacional sugerida: composição de parcerias para ~R$ 1.000/mês sem aumentar intrusão visual."
-    )
-    await navegar_para(update, context, "Gestão de Apoios", txt, InlineKeyboardMarkup([[InlineKeyboardButton("🤝 Ver apoiadores", callback_data="apoio_ver_apoiadores")], [InlineKeyboardButton("🔙 Voltar ao admin", callback_data="area_admin")]]))
+    await navegar_para(update, context, "Gestão de Apoios", _texto_gestao_apoios(), _teclado_gestao_apoios())
 
 
 def registrar_handlers_apoio(application):
+    apoio_admin_handler = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(admin_apoio_novo_inicio, pattern="^admin_apoio_novo$"),
+            CallbackQueryHandler(admin_apoio_contrato_inicio, pattern="^admin_apoio_contrato$"),
+            CallbackQueryHandler(admin_apoio_config_inicio, pattern="^admin_apoio_config$"),
+            CallbackQueryHandler(admin_apoio_pausar_inicio, pattern="^admin_apoio_pausar$"),
+        ],
+        states={
+            APOIO_NOVO_APOIADOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_apoio_novo_salvar)],
+            APOIO_NOVO_CONTRATO: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_apoio_contrato_salvar)],
+            APOIO_CONFIG: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_apoio_config_salvar)],
+            APOIO_PAUSAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_apoio_pausar_salvar)],
+        },
+        fallbacks=[CallbackQueryHandler(mostrar_publicidade_admin, pattern="^admin_publicidade$")],
+        name="apoio_admin_handler",
+        persistent=False,
+    )
+    application.add_handler(apoio_admin_handler)
     application.add_handler(CommandHandler("apoiar", cmd_apoiar))
     application.add_handler(CallbackQueryHandler(cmd_apoiar, pattern="^apoiar_menu$"))
     application.add_handler(CallbackQueryHandler(mostrar_apoiadores, pattern="^apoio_ver_apoiadores$"))
     application.add_handler(CallbackQueryHandler(falar_com_admin, pattern="^apoio_contato_admin$"))
     application.add_handler(CallbackQueryHandler(mostrar_doacao, pattern="^apoio_doar$"))
     application.add_handler(CallbackQueryHandler(mostrar_publicidade_admin, pattern="^admin_publicidade$"))
+    application.add_handler(CallbackQueryHandler(admin_apoio_listar, pattern="^admin_apoio_listar$"))
 
 
 def obter_texto_patrocinio() -> str:

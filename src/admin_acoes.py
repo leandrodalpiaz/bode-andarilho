@@ -1414,16 +1414,26 @@ async def broadcast_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from src.sheets_supabase import listar_lojas
     lojas = listar_lojas(0, include_todas=True) or []
     ufs = sorted(list(set(str(l.get("estado_uf", "")).upper().strip() for l in lojas if l.get("estado_uf"))))
+    total_lojas = len(lojas)
 
     botoes = [[InlineKeyboardButton("🌎 Todas as UFs", callback_data="br_uf|TODAS")]]
     for uf in ufs:
         botoes.append([InlineKeyboardButton(f"📍 {uf}", callback_data=f"br_uf|{uf}")])
     botoes.append([InlineKeyboardButton("❌ Cancelar", callback_data="br_cancelar")])
+    detalhe_filtro = (
+        "Selecione o Estado (UF) dos Secretários que deseja filtrar:"
+        if ufs
+        else (
+            "Nenhuma loja cadastrada possui UF preenchida. O envio ainda pode seguir para todos os secretários vinculados, mas o filtro por UF só aparecerá depois que as lojas tiverem Estado UF cadastrado."
+            if total_lojas
+            else "Nenhuma loja cadastrada foi encontrada para segmentação."
+        )
+    )
 
     await navegar_para(
         update, context,
         "Comunicado > Estado",
-        "📢 *Comunicado para Secretários*\n\nSelecione o Estado (UF) dos Secretários que deseja filtrar:",
+        f"📢 *Comunicado para Secretários*\n\n{detalhe_filtro}",
         InlineKeyboardMarkup(botoes)
     )
     return BROADCAST_UF
