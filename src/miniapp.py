@@ -1720,6 +1720,8 @@ function validate(){
   ok=req('oriente','Oriente')&&ok;
   ok=req('potencia','Potência principal')&&ok;
   ok=req('potencia_outra','Potência local')&&ok;
+  
+  if(!ok) showToast('Verifique os campos obrigatórios em vermelho.', 4000);
   return ok;
 }
 document.getElementById('potencia').addEventListener('change',syncPotenciaOutra);
@@ -1935,6 +1937,8 @@ function validate(){
   ok=req('potencia','Potência principal')&&ok;
   ok=req('potencia_outra','Potência local')&&ok;
   ok=req('endereco','Endereço')&&ok;
+  
+  if(!ok) showToast('Verifique os campos obrigatórios em vermelho.', 4000);
   return ok;
 }
 function syncPotenciaComplemento(){
@@ -2083,6 +2087,12 @@ def html_cadastro_evento() -> str:
     <label for="observacoes">Ordem do dia / observações <span class="info">(opcional)</span></label>
     <textarea id="observacoes" placeholder="Informações adicionais da sessão..."></textarea>
   </div>
+  <div class="field">
+    <label for="endereco">Endereço da sessão ou link do Google Maps *</label>
+    <input id="endereco" type="text" placeholder="Ex.: https://maps.app.goo.gl/... ou Rua X, 123 - Centro">
+    <div id="endereco_err" class="err"></div>
+    <div class="info">Preferencialmente, cole o link do Google Maps para que o bot gere o atalho de mapa.</div>
+  </div>
 </div>
 
 <div id="dados_loja_card" class="card">
@@ -2136,12 +2146,6 @@ def html_cadastro_evento() -> str:
     <label for="potencia_outra">Potência local *</label>
     <input id="potencia_outra" type="text" placeholder="Ex.: GOB-RS, GLMERGS, GORGS">
     <div id="potencia_outra_err" class="err"></div>
-  </div>
-  <div class="field">
-    <label for="endereco">Endereço da sessão ou link do Google Maps *</label>
-    <input id="endereco" type="text" placeholder="Ex.: https://maps.app.goo.gl/... ou Rua X, 123 - Centro">
-    <div id="endereco_err" class="err"></div>
-    <div class="info">Preferencialmente, cole o link do Google Maps para que o bot gere o atalho de mapa.</div>
   </div>
 </div>
 
@@ -2202,7 +2206,7 @@ function selectedLoja(){
 }
 
 function setLojaFieldsReadonly(readonly){
-  ['nome_loja','numero_loja','oriente','rito','rito_outro','potencia','potencia_outra','endereco'].forEach(id=>{
+  ['nome_loja','numero_loja','oriente','rito','rito_outro','potencia','potencia_outra'].forEach(id=>{
     const el=document.getElementById(id);
     if(!el)return;
     el.readOnly=!!readonly;
@@ -2409,6 +2413,8 @@ function validate(){
   ok=req('potencia','Potência principal')&&ok;
   ok=req('potencia_outra','Potência local')&&ok;
   ok=req('endereco','Endereço')&&ok;
+  
+  if(!ok) showToast('Verifique os campos obrigatórios em vermelho.', 4000);
   return ok;
 }
 
