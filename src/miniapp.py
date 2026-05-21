@@ -838,6 +838,7 @@ async def api_rascunho_evento(request: Request) -> JSONResponse:
         return erro
     if _norm_text((body or {}).get("action")).lower() == "get":
         return JSONResponse({"ok": True, "draft": _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)})
+    logger.info("miniapp.evento.rascunho.inicio telegram_id=%s", telegram_id)
     dados = _extrair_dados_evento(body or {})
     nivel = str(get_nivel(telegram_id))
     lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
@@ -848,6 +849,7 @@ async def api_rascunho_evento(request: Request) -> JSONResponse:
     _salvar_rascunho(_RASCUNHOS_EVENTO, telegram_id, dados)
     try:
         await _enviar_resumo_rascunho_evento(request.app.state.telegram_app.bot, telegram_id)
+        logger.info("miniapp.evento.rascunho.revisao_enviada telegram_id=%s", telegram_id)
     except Exception as e:
         logger.warning("Falha ao enviar resumo do rascunho de evento para %s: %s", telegram_id, e)
         return _json_error(
@@ -1298,19 +1300,21 @@ async def _enviar_resumo_rascunho_evento(bot, telegram_id: int) -> None:
     lojas_existentes = listar_lojas(int(telegram_id), include_todas=(nivel == "3")) or []
     teclado = _teclado_rascunho_evento(dados, nivel, lojas_existentes)
     try:
-        await bot.send_message(
+        msg = await bot.send_message(
             chat_id=telegram_id,
             text=_resumo_evento_md(dados),
             parse_mode="MarkdownV2",
             reply_markup=teclado,
         )
+        logger.info("miniapp.evento.revisao.telegram.ok telegram_id=%s message_id=%s modo=markdownv2", telegram_id, getattr(msg, "message_id", ""))
     except Exception as e:
         logger.warning("Falha ao enviar revisão de evento com MarkdownV2 para %s: %s", telegram_id, e)
-        await bot.send_message(
+        msg = await bot.send_message(
             chat_id=telegram_id,
             text=_resumo_evento_texto(dados),
             reply_markup=teclado,
         )
+        logger.info("miniapp.evento.revisao.telegram.ok telegram_id=%s message_id=%s modo=texto", telegram_id, getattr(msg, "message_id", ""))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

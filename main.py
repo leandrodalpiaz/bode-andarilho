@@ -977,6 +977,11 @@ async def main():
     logger.info("WEBHOOK_URL: %s", webhook_url)
     logger.info("DROP_PENDING_UPDATES_ON_BOOT: %s", drop_pending_updates)
     logger.info("WEBHOOK_MAX_CONNECTIONS: %s", WEBHOOK_MAX_CONNECTIONS)
+    render_commit = os.getenv("RENDER_GIT_COMMIT", "").strip()
+    if render_commit:
+        logger.info("Build commit ativo (RENDER_GIT_COMMIT): %s", render_commit)
+    else:
+        logger.info("Build commit ativo (RENDER_GIT_COMMIT): nao informado")
     logger.info(
         "TELEGRAM_WEBHOOK_SECRET: %s",
         "EXPLICITO" if secret_explicit else "DERIVADO_DO_TOKEN",
