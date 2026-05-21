@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import random
+import time
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -30,6 +31,9 @@ TIPO_TELA = "tela_apoiadores"
 _FREQ_IA_MOD = 3
 
 APOIO_NOVO_APOIADOR, APOIO_NOVO_CONTRATO, APOIO_CONFIG, APOIO_PAUSAR = range(900, 904)
+
+_CACHE_TTL_SEG = int(os.getenv("APOIO_CACHE_TTL_SEG", "180") or "180")
+_ROWS_CACHE: Dict[str, Tuple[float, List[Dict]]] = {}
 
 
 def doacoes_ativas() -> bool:
@@ -78,13 +82,23 @@ def _fetch_rows(table: str, filters: Optional[List[Tuple[str, str, object]]] = N
         return []
 
 
+def _fetch_rows_cached(table: str, filters: Optional[List[Tuple[str, str, object]]] = None) -> List[Dict]:
+    key = repr((table, filters or []))
+    cached = _ROWS_CACHE.get(key)
+    if cached and time.time() - cached[0] < _CACHE_TTL_SEG:
+        return list(cached[1])
+    rows = _fetch_rows(table, filters)
+    _ROWS_CACHE[key] = (time.time(), list(rows))
+    return rows
+
+
 def buscar_apoiadores_ativos() -> List[Dict]:
-    return _fetch_rows("apoiadores", [("eq", "status", "ativo")])
+    return _fetch_rows_cached("apoiadores", [("eq", "status", "ativo")])
 
 
 def buscar_contratos_vigentes() -> List[Dict]:
     today = _today_iso()
-    return _fetch_rows(
+    return _fetch_rows_cached(
         "apoios_contratos",
         [("eq", "status", "ativo"), ("lte", "data_inicio", today), ("gte", "data_fim", today)],
     )
@@ -124,7 +138,7 @@ def _categoria_peso(cat: str) -> int:
 def _listar_elegiveis(tipo_exibicao: str) -> List[ApoiadorElegivel]:
     apoiadores = {a.get("id"): a for a in buscar_apoiadores_ativos() if a.get("id")}
     contratos = buscar_contratos_vigentes()
-    configs = {c.get("apoiador_id"): c for c in _fetch_rows("apoios_config") if c.get("apoiador_id")}
+    configs = {c.get("apoiador_id"): c for c in _fetch_rows_cached("apoios_config") if c.get("apoiador_id")}
 
     elegiveis: List[ApoiadorElegivel] = []
     for c in contratos:

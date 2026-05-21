@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import mimetypes
 import os
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 BUCKET_EVENT_CARDS = os.getenv("SUPABASE_EVENT_CARDS_BUCKET", "event-cards")
 CAPTION_PUBLICACAO_VISUAL = "Confirme sua presença pelos botões abaixo."
+_BACKGROUND_TASKS = set()
 
 
 @dataclass
@@ -109,6 +111,55 @@ def salvar_render_no_storage(evento: Dict[str, Any], path: str) -> str:
     return url or ""
 
 
+def _finalizar_publicacao_visual_sync(evento: Dict[str, Any], midia: MidiaEvento, file_id: str) -> None:
+    sync = {
+        "ID Evento": evento.get("ID Evento"),
+        "Modo visual": midia.modo,
+        "Telegram tipo mensagem grupo": "photo",
+    }
+    if midia.modo in ("template_loja", "template_padrao", "card_especial"):
+        url = salvar_render_no_storage(evento, midia.path or "")
+        if url:
+            sync["Card renderizado URL"] = url
+            evento["Card renderizado URL"] = url
+            if midia.modo == "card_especial":
+                sync["Card especial URL"] = url
+                evento["Card especial URL"] = url
+    if file_id:
+        sync["Card file_id Telegram"] = file_id
+    atualizar_evento(0, sync)
+    apoio_card = evento.get("_apoio_card") if isinstance(evento, dict) else None
+    if apoio_card:
+        registrar_exibicao_apoio(
+            apoio_card.get("apoiador_id", ""),
+            apoio_card.get("contrato_id", ""),
+            "card_logo",
+            contexto="publicacao_evento_grupo",
+            evento_id=str(evento.get("ID Evento") or evento.get("id_evento") or ""),
+        )
+
+
+def _atualizar_publicacao_texto_sync(evento: Dict[str, Any]) -> None:
+    atualizar_evento(0, {
+        "ID Evento": evento.get("ID Evento"),
+        "Modo visual": "texto_fallback",
+        "Telegram tipo mensagem grupo": "text",
+    })
+
+
+async def _to_thread_logged(func, *args) -> None:
+    try:
+        await asyncio.to_thread(func, *args)
+    except Exception as exc:
+        logger.warning("Falha em finalizacao assincrona da publicacao do evento: %s", exc)
+
+
+def _agendar_finalizacao(func, *args) -> None:
+    task = asyncio.create_task(_to_thread_logged(func, *args))
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
+
+
 async def publicar_evento_no_grupo(
     context: ContextTypes.DEFAULT_TYPE,
     chat_id: int,
@@ -125,34 +176,10 @@ async def publicar_evento_no_grupo(
                     photo=photo,
                     caption=CAPTION_PUBLICACAO_VISUAL,
                     reply_markup=reply_markup,
-                )
+            )
             photos = getattr(msg, "photo", None) or []
             file_id = photos[-1].file_id if photos else ""
-            sync = {
-                "ID Evento": evento.get("ID Evento"),
-                "Modo visual": midia.modo,
-                "Telegram tipo mensagem grupo": "photo",
-            }
-            if midia.modo in ("template_loja", "template_padrao", "card_especial"):
-                url = salvar_render_no_storage(evento, midia.path)
-                if url:
-                    sync["Card renderizado URL"] = url
-                    evento["Card renderizado URL"] = url
-                    if midia.modo == "card_especial":
-                        sync["Card especial URL"] = url
-                        evento["Card especial URL"] = url
-            if file_id:
-                sync["Card file_id Telegram"] = file_id
-            atualizar_evento(0, sync)
-            apoio_card = evento.get("_apoio_card") if isinstance(evento, dict) else None
-            if apoio_card:
-                registrar_exibicao_apoio(
-                    apoio_card.get("apoiador_id", ""),
-                    apoio_card.get("contrato_id", ""),
-                    "card_logo",
-                    contexto="publicacao_evento_grupo",
-                    evento_id=str(evento.get("ID Evento") or evento.get("id_evento") or ""),
-                )
+            _agendar_finalizacao(_finalizar_publicacao_visual_sync, dict(evento), midia, file_id)
             return msg, "photo"
         except Exception as e:
             logger.warning("Falha ao enviar card visual; usando texto fallback: %s", e)
@@ -163,11 +190,7 @@ async def publicar_evento_no_grupo(
         parse_mode="Markdown",
         reply_markup=reply_markup,
     )
-    atualizar_evento(0, {
-        "ID Evento": evento.get("ID Evento"),
-        "Modo visual": "texto_fallback",
-        "Telegram tipo mensagem grupo": "text",
-    })
+    _agendar_finalizacao(_atualizar_publicacao_texto_sync, dict(evento))
     return msg, "text"
 
 
