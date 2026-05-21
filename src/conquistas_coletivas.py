@@ -15,7 +15,7 @@ from src.sheets_supabase import (
     listar_eventos,
     registrar_marco_coletivo,
     supabase,
-    _marcos_coletivos_tabela_indisponivel,
+    _marcar_tabela_marcos_coletivos_indisponivel,
 )
 from src.potencias import formatar_potencia
 
@@ -61,7 +61,9 @@ async def enviar_mensagem_coletiva(bot: Bot, texto: str):
 def obter_max_record_marco_coletivo(prefixo: str) -> int:
     """Varre os slugs cadastrados na tabela e retorna o maior valor de recorde atual."""
     try:
-        if _marcos_coletivos_tabela_indisponivel:
+        from src import sheets_supabase as db
+
+        if db._marcos_coletivos_tabela_indisponivel:
             return 0
         resp = (
             supabase.table("marcos_coletivos")
@@ -80,6 +82,9 @@ def obter_max_record_marco_coletivo(prefixo: str) -> int:
                     pass
         return max(records) if records else 0
     except Exception as e:
+        if "marcos_coletivos" in str(e) and ("PGRST205" in str(e) or "schema cache" in str(e)):
+            _marcar_tabela_marcos_coletivos_indisponivel(e)
+            return 0
         logger.error("Erro ao obter max record para %s: %s", prefixo, e)
         return 0
 

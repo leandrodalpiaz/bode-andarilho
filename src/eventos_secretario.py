@@ -1546,7 +1546,10 @@ async def detalhe_pendente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cargo = membro.get("Cargo", "Nenhum")
     loja = membro.get("Loja", "-")
     numero = membro.get("Número da loja", "")
-    potencia = membro.get("Potência", "-")
+    from src.potencias import formatar_potencia_exibicao
+    potencia_raw = membro.get("Potência", "-")
+    pot_comp = membro.get("Potência complemento", "") or membro.get("potencia_complemento", "")
+    potencia = formatar_potencia_exibicao(potencia_raw, pot_comp, modo="completo")
     oriente = membro.get("Oriente", "-")
     veneravel = membro.get("Venerável Mestre", "-")
     
@@ -2878,16 +2881,20 @@ async def admin_confirmar_incorporacao(update: Update, context: ContextTypes.DEF
         )
         return
         
+    from src.potencias import formatar_potencia_exibicao
+    pot_membro = formatar_potencia_exibicao(membro.get('Potência'), membro.get('Potência complemento'), modo="completo")
+    pot_loja = formatar_potencia_exibicao(loja_vinculada.get('Potência'), loja_vinculada.get('Potência complemento'), modo="completo")
+
     texto_confirmacao = (
         f"👥 *Confirmar Incorporação Cadastral*\n\n"
         f"Deseja incorporar o Ir.·. *{membro.get('Nome')}* à sua Oficina\n\n"
         f"📋 *Dados digitados pelo Obreiro:*\n"
         f"• Loja: {membro.get('Loja')} nº {membro.get('Número da loja')}\n"
-        f"• Potência: {membro.get('Potência')} ({membro.get('Potência complemento')})\n"
+        f"• Potência: {pot_membro}\n"
         f"• Oriente: {membro.get('Oriente')}\n\n"
         f"🏛️ *Dados Oficiais que serão aplicados:*\n"
         f"• Loja: {loja_vinculada.get('Nome da loja')} nº {loja_vinculada.get('Número da loja')}\n"
-        f"• Potência: {loja_vinculada.get('Potência')} ({loja_vinculada.get('Potência complemento')})\n"
+        f"• Potência: {pot_loja}\n"
         f"• Oriente: {loja_vinculada.get('Oriente')}\n\n"
         f"Ao confirmar, o cadastro do obreiro será atualizado para *Ativo (Nível 1)* e travado para edição externa."
     )

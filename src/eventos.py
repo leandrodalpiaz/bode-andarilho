@@ -628,10 +628,18 @@ def montar_linha_confirmado(dados_membro_ou_snapshot: dict) -> str:
         or dados_membro_ou_snapshot.get("potencia")
         or ""
     ).strip()
+    potencia_comp = (
+        dados_membro_ou_snapshot.get("Potência complemento")
+        or dados_membro_ou_snapshot.get("potencia_complemento")
+        or ""
+    ).strip()
+
+    from src.potencias import formatar_potencia_exibicao
+    potencia_fmt = formatar_potencia_exibicao(potencia, potencia_comp, modo="completo")
 
     num_fmt = f" nº {numero}" if numero and str(numero) != "0" else ""
     loja_fmt = f"{loja}{num_fmt}".strip()
-    return f"• {nome} - {grau} - {loja_fmt} - {potencia}"
+    return f"• {nome} - {grau} - {loja_fmt} - {potencia_fmt}"
 
 
 def _status_evento_normalizado(evento: Optional[dict]) -> str:

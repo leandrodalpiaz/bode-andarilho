@@ -1089,13 +1089,6 @@ async def _publicar_e_finalizar_bg(
     telegram_id: int,
 ) -> None:
     try:
-        # Hook Conquistas Coletivas do Evento (Lojas, Ritos, Graus, Potências)
-        try:
-            from src.conquistas_coletivas import processar_conquistas_coletivas_evento
-            await processar_conquistas_coletivas_evento(context.bot, evento)
-        except Exception as e_col:
-            logger.warning("Falha silenciosa ao processar conquistas coletivas do evento no background: %s", e_col)
-
         # Publica no grupo
         await _publicar_evento_no_grupo(context, id_evento, evento)
 
@@ -1108,6 +1101,14 @@ async def _publicar_e_finalizar_bg(
             )
         except Exception as e:
             logger.warning("Não foi possível editar a mensagem de confirmação no chat privado: %s", e)
+
+        try:
+            from src.conquistas_coletivas import processar_conquistas_coletivas_evento
+            task = asyncio.create_task(processar_conquistas_coletivas_evento(context.bot, evento))
+            _BACKGROUND_TASKS.add(task)
+            task.add_done_callback(_BACKGROUND_TASKS.discard)
+        except Exception as e_col:
+            logger.warning("Falha silenciosa ao agendar conquistas coletivas do evento: %s", e_col)
     except Exception as e:
         logger.exception("Erro em _publicar_e_finalizar_bg para o evento %s: %s", id_evento, e)
         try:

@@ -1413,7 +1413,7 @@ async def broadcast_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Coletar UFs ativas das lojas
     from src.sheets_supabase import listar_lojas
     lojas = listar_lojas(0, include_todas=True) or []
-    ufs = sorted(list(set(str(l.get("estado_uf", "")).upper().strip() for l in lojas if l.get("estado_uf"))))
+    ufs = sorted(list(set(str(l.get("Estado UF", "")).upper().strip() for l in lojas if l.get("Estado UF"))))
     total_lojas = len(lojas)
 
     botoes = [[InlineKeyboardButton("🌎 Todas as UFs", callback_data="br_uf|TODAS")]]
@@ -1454,11 +1454,11 @@ async def broadcast_escolher_uf(update: Update, context: ContextTypes.DEFAULT_TY
     lojas = listar_lojas(0, include_todas=True) or []
     cidades = set()
     for l in lojas:
-        if not l.get("cidade"):
+        if not l.get("Cidade"):
             continue
-        if uf != "TODAS" and str(l.get("estado_uf", "")).upper().strip() != uf:
+        if uf != "TODAS" and str(l.get("Estado UF", "")).upper().strip() != uf:
             continue
-        cidades.add(str(l.get("cidade", "")).strip().title())
+        cidades.add(str(l.get("Cidade", "")).strip().title())
 
     cidades_list = sorted(list(cidades))
     botoes = [[InlineKeyboardButton("🌆 Todas as Cidades", callback_data="br_cid|TODAS")]]
@@ -1490,13 +1490,13 @@ async def broadcast_escolher_cidade(update: Update, context: ContextTypes.DEFAUL
     lojas = listar_lojas(0, include_todas=True) or []
     ritos = set()
     for l in lojas:
-        if not l.get("rito"):
+        if not l.get("Rito"):
             continue
-        if uf != "TODAS" and str(l.get("estado_uf", "")).upper().strip() != uf:
+        if uf != "TODAS" and str(l.get("Estado UF", "")).upper().strip() != uf:
             continue
-        if cidade != "TODAS" and str(l.get("cidade", "")).strip().title() != cidade:
+        if cidade != "TODAS" and str(l.get("Cidade", "")).strip().title() != cidade:
             continue
-        ritos.add(str(l.get("rito", "")).strip())
+        ritos.add(str(l.get("Rito", "")).strip())
 
     ritos_list = sorted(list(ritos))
     botoes = [[InlineKeyboardButton("🔮 Todos os Ritos", callback_data="br_rito|TODOS")]]
@@ -1686,8 +1686,8 @@ async def convite_n2_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update,
         context,
         "Admin > Convite N2",
-        "Envie o Telegram ID do destinatário para gerar convite direto de Secretário N2.\n\n"
-        "Formato esperado: apenas números.\n\n"
+        "Envie o Telegram ID do destinatário ou a palavra `geral` para gerar um convite direto flexível.\n\n"
+        "O convite geral poderá ser usado por qualquer pessoa que clicar no link.\n\n"
         "Opcional: envie `revogar TOKEN` para revogar um convite existente.",
         InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="menu_principal")]]),
     )
@@ -1712,9 +1712,11 @@ async def convite_n2_receber(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await navegar_para(update, context, "Admin > Convite N2", msg, InlineKeyboardMarkup([[InlineKeyboardButton("Voltar", callback_data="area_admin")]]))
         return ConversationHandler.END
 
-    tid = "".join(ch for ch in texto if ch.isdigit())
-    if not tid:
-        await navegar_para(update, context, "Admin > Convite N2", "Telegram ID inválido. Envie apenas números.", InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="menu_principal")]]))
+    tid = texto
+    if tid.lower() == "geral":
+        tid = "0"
+    elif not tid.isdigit():
+        await navegar_para(update, context, "Admin > Convite N2", "Telegram ID inválido. Envie apenas números ou 'geral'.", InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="menu_principal")]]))
         return CONVITE_N2_RECEBER_ID
 
     token = criar_convite_secretario_n2(tid, user_id, ttl_horas=24)
@@ -1723,12 +1725,13 @@ async def convite_n2_receber(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return ConversationHandler.END
 
     bot_username = (getattr(context.bot, "username", None) or "").lstrip("@")
-    link = f"https://t.me/{bot_username}start={token}" if bot_username else token
+    link = f"https://t.me/{bot_username}?start={token}" if bot_username else token
+    escopo = "qualquer usuario" if tid == "0" else f"Telegram ID `{tid}`"
     texto_saida = (
-        f"Convite N2 criado para Telegram ID `{tid}`.\n\n"
+        f"Convite N2 criado para {escopo}.\n\n"
         f"Token: `{token}`\n"
         f"Link direto: {link}\n\n"
-        "Este convite é one-time, expira em 24h e só funciona para o Telegram ID informado."
+        "Este convite é one-time e expira em 24h."
     )
     await navegar_para(update, context, "Admin > Convite N2", texto_saida, InlineKeyboardMarkup([[InlineKeyboardButton("Voltar", callback_data="area_admin")]]))
     return ConversationHandler.END

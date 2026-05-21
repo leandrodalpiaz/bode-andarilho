@@ -821,10 +821,12 @@ def excluir_membro(telegram_id: int) -> bool:
 # Funções para Eventos
 # =========================
 
-def listar_eventos(include_inativos: bool = False) -> List[dict]:
+def listar_eventos(include_inativos: bool = False, include_passados: bool = False) -> List[dict]:
     """
     Lista eventos. Por padrão retorna apenas status 'ativo' (ou vazio => ativo).
     Filtro case-insensitive pois alguns registros podem ter "ativo" e outros "Ativo".
+    `include_passados` é aceito por compatibilidade com consumidores que precisam
+    mapear histórico; a fonte atual não aplica filtro de data neste ponto.
     """
     cache_key = bool(include_inativos)
     if cache_key in _cache_eventos:
@@ -2039,8 +2041,10 @@ def criar_convite_secretario_n2(telegram_id_destino: Any, criado_por: Any, ttl_h
     from datetime import timedelta
 
     tid_dest = _norm_intlike(telegram_id_destino)
+    if not tid_dest:
+        tid_dest = "0"
     criador = _norm_intlike(criado_por)
-    if not tid_dest or not criador:
+    if not criador:
         return None
 
     token = f"SEC2_{uuid.uuid4().hex[:12].upper()}"
@@ -2108,7 +2112,9 @@ def consumir_convite_secretario_n2(token: str, telegram_id_executor: Any) -> boo
             return False
         tid_exec = _norm_intlike(telegram_id_executor)
         tid_dest = _norm_intlike(convite.get("telegram_id_destino"))
-        if not tid_exec or tid_exec != tid_dest:
+        if not tid_exec:
+            return False
+        if tid_dest != "0" and tid_exec != tid_dest:
             logger.warning("Tentativa invalida de uso de convite N2. token=%s destino=%s executor=%s", token, tid_dest, tid_exec)
             return False
         supabase.table("convites_secretario_n2").update(

@@ -613,7 +613,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             convite = verificar_convite_secretario_n2(raw_arg)
             if convite:
                 destino = str(convite.get("telegram_id_destino") or "").strip()
-                if destino and destino == str(telegram_id):
+                if not destino or destino == "0" or destino == str(telegram_id):
                     context.user_data["convite_secretario_n2"] = raw_arg.strip().upper()
                     context.user_data["token_cadastro_secretario"] = True
                     logger.info("Convite N2 %s ativado para %s.", raw_arg, telegram_id)
