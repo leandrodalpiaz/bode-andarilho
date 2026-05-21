@@ -2324,7 +2324,7 @@ document.getElementById('loja_sel').addEventListener('change',function(){
     return;
   }
   lojaSelecionadaViaAtalho=true;
-  lojaConfirmadaViaAtalho=false;
+  lojaConfirmadaViaAtalho=true; // Auto-confirmar a loja selecionada
   novaLojaManual=false;
   clearErr('loja_sel');
   const o=this.options[this.selectedIndex];
@@ -2338,20 +2338,6 @@ document.getElementById('loja_sel').addEventListener('change',function(){
   if(l.endereco)document.getElementById('endereco').value=l.endereco;
   renderLojaResumo(l);
 });
-
-const btnConfirmarLoja=document.getElementById('btn_confirmar_loja');
-if(btnConfirmarLoja){
-  btnConfirmarLoja.addEventListener('click',()=>{
-    if(!selectedLoja()){
-      setErr('loja_sel','Selecione uma loja cadastrada antes de confirmar.');
-      return;
-    }
-    lojaConfirmadaViaAtalho=true;
-    clearErr('loja_sel');
-    renderLojaResumo(selectedLoja());
-    showToast('Loja confirmada para esta sessão.');
-  });
-}
 
 const btnNovaLojaManual=document.getElementById('btn_nova_loja_manual');
 if(btnNovaLojaManual){
