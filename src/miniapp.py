@@ -846,6 +846,25 @@ async def api_rascunho_evento(request: Request) -> JSONResponse:
     mensagem = _validar_dados_evento(dados)
     if mensagem:
         return _json_error(mensagem, 400)
+
+    # Se a loja já existe e o complemento estava vazio no banco, mas foi informado agora, atualiza no banco
+    loja_id = dados.get("loja_id")
+    if loja_id:
+        from src.sheets_supabase import buscar_loja_por_id, atualizar_loja
+        loja_obj = buscar_loja_por_id(loja_id)
+        if loja_obj:
+            comp_db = _norm_text(loja_obj.get("Potência complemento") or loja_obj.get("potencia_complemento"))
+            comp_novo = _norm_text(dados.get("potencia_complemento") or dados.get("potencia_outra"))
+            if comp_novo and not comp_db:
+                atualizar_loja(loja_id, {"Potência complemento": comp_novo})
+                logger.info("Atualizando potência complemento da loja %s no banco para %s", loja_id, comp_novo)
+                # Atualiza a loja no cache/dados locais para que a alteração seja refletida imediatamente
+                for lj in lojas_existentes:
+                    if _norm_text(lj.get("ID") or lj.get("id")) == loja_id:
+                        lj["Potência complemento"] = comp_novo
+                        lj["potencia_complemento"] = comp_novo
+                dados = _aplicar_loja_cadastrada_ao_evento(dados, lojas_existentes)
+
     _salvar_rascunho(_RASCUNHOS_EVENTO, telegram_id, dados)
     try:
         await _enviar_resumo_rascunho_evento(request.app.state.telegram_app.bot, telegram_id)
@@ -1088,6 +1107,7 @@ async def _confirmar_evento(update: Update, context, salvar_loja: bool) -> None:
                 "oriente": dados.get("oriente"),
                 "rito": dados.get("rito"),
                 "potencia": dados.get("potencia"),
+                "potencia_complemento": dados.get("potencia_complemento") or dados.get("potencia_outra") or "",
                 "endereco": dados.get("endereco"),
                 "secretario_responsavel_id": secretario_id,
                 "secretario_responsavel_nome": _norm_text(dados.get("secretario_responsavel_nome")),
@@ -1834,7 +1854,15 @@ if(tg && tg.MainButton){
         document.getElementById('numero_loja').readOnly = true;
         document.getElementById('potencia').style.pointerEvents = 'none';
         document.getElementById('potencia').style.opacity = '0.7';
-        if(document.getElementById('potencia_outra')) document.getElementById('potencia_outra').readOnly = true;
+        if(document.getElementById('potencia_outra')) {
+          const el = document.getElementById('potencia_outra');
+          const potVal = document.getElementById('potencia') ? document.getElementById('potencia').value : '';
+          const emptyComplement = !el.value && ['GOB','CMSB','COMAB'].includes(potVal);
+          el.readOnly = !emptyComplement;
+          if (emptyComplement) {
+            el.classList.remove('readonly-field');
+          }
+        }
         if(document.getElementById('lojas_membro_card')) document.getElementById('lojas_membro_card').style.display = 'none';
       }
       syncPotenciaOutra();
@@ -2223,10 +2251,17 @@ function setLojaFieldsReadonly(readonly){
   ['nome_loja','numero_loja','oriente','rito','rito_outro','potencia','potencia_outra'].forEach(id=>{
     const el=document.getElementById(id);
     if(!el)return;
-    el.readOnly=!!readonly;
-    if(el.tagName==='SELECT')el.disabled=!!readonly;
-    el.classList.toggle('readonly-field',!!readonly);
-    if(readonly) clearErr(id);
+    let makeReadonly = !!readonly;
+    if(id === 'potencia_outra' && readonly){
+      const potVal = document.getElementById('potencia') ? document.getElementById('potencia').value : '';
+      if(!el.value && ['GOB','CMSB','COMAB'].includes(potVal)){
+        makeReadonly = false;
+      }
+    }
+    el.readOnly=makeReadonly;
+    if(el.tagName==='SELECT')el.disabled=makeReadonly;
+    el.classList.toggle('readonly-field',makeReadonly);
+    if(makeReadonly) clearErr(id);
   });
 }
 

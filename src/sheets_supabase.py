@@ -1404,7 +1404,11 @@ def cadastrar_loja(telegram_id: int, dados: Dict[str, Any]) -> bool:
         responsavel_id = _norm_intlike(
             dados.get("secretario_responsavel_id")
             or dados.get("Telegram ID do secretário responsável")
-            or telegram_id
+        )
+        from src.potencias import normalizar_potencia
+        pot_principal, pot_comp = normalizar_potencia(
+            dados.get("potencia", ""),
+            dados.get("potencia_complemento") or dados.get("potencia_outra") or ""
         )
         responsavel_nome = _norm_text(
             dados.get("secretario_responsavel_nome")
@@ -1423,8 +1427,8 @@ def cadastrar_loja(telegram_id: int, dados: Dict[str, Any]) -> bool:
             "numero": _norm_text(dados.get("numero", "")),
             "oriente_loja": _norm_text(dados.get("oriente", "")),
             "rito": _norm_text(dados.get("rito", "")),
-            "potencia": _norm_text(dados.get("potencia", "")),
-            "potencia_complemento": _norm_text(dados.get("potencia_complemento", "")),
+            "potencia": pot_principal,
+            "potencia_complemento": pot_comp,
             "endereco": _norm_text(dados.get("endereco", "")),
             "data_cadastro": data_cadastro,
         }
@@ -1485,6 +1489,29 @@ def atualizar_template_visual_loja(loja_id: Any, dados: Dict[str, Any]) -> bool:
         return True
     except Exception as e:
         logger.error("Erro ao atualizar template visual da loja %s: %s", lid, e)
+        return False
+
+
+def atualizar_loja(loja_id: Any, dados: Dict[str, Any]) -> bool:
+    """
+    Atualiza campos da loja (ex.: potência complemento, rito, endereço, etc.).
+    """
+    lid = _norm_text(loja_id)
+    if not lid:
+        return False
+
+    row = _sheets_to_row("lojas", dados)
+    row.pop("id", None)
+    for k in list(row.keys()):
+        if row[k] is None:
+            row[k] = ""
+
+    try:
+        _update_com_fallback_colunas("lojas", "id", lid, row)
+        _cache_lojas.clear()
+        return True
+    except Exception as e:
+        logger.error("Erro ao atualizar loja %s: %s", lid, e)
         return False
 
 
