@@ -2007,6 +2007,8 @@ def html_cadastro_evento() -> str:
     <div id="loja_sel_err" class="err"></div>
   </div>
   <div id="loja_resumo" class="loja-resumo hidden"></div>
+  <div id="loja_confirmada_hint" class="info hidden">Loja selecionada e confirmada para esta sessão.</div>
+  <button id="btn_confirmar_loja" type="button" class="btn-primary" style="display:none">Usar esta loja</button>
   <button id="btn_nova_loja_manual" type="button" class="btn-secondary" style="display:none">Cadastrar loja nova manualmente</button>
 </div>
 
@@ -2145,6 +2147,7 @@ def html_cadastro_evento() -> str:
 maskDate(document.getElementById('data_ev'));
 let lojasCarregadas=[];
 let lojaSelecionadaViaAtalho=false;
+let lojaConfirmadaViaAtalho=false;
 let adminFlow=false;
 let novaLojaManual=false;
 let enviandoEvento=false;
@@ -2201,11 +2204,15 @@ function setLojaFieldsReadonly(readonly){
 function renderLojaResumo(loja, mostrarManual){
   const box=document.getElementById('loja_resumo');
   const card=document.getElementById('dados_loja_card');
+  const btnConfirmar=document.getElementById('btn_confirmar_loja');
+  const hintConfirmada=document.getElementById('loja_confirmada_hint');
   if(!box||!card)return;
   if(!loja){
     box.classList.add('hidden');
     box.innerHTML='';
     card.classList.toggle('hidden', adminFlow&&!mostrarManual);
+    if(btnConfirmar)btnConfirmar.style.display='none';
+    if(hintConfirmada)hintConfirmada.classList.add('hidden');
     setLojaFieldsReadonly(false);
     return;
   }
@@ -2218,6 +2225,8 @@ function renderLojaResumo(loja, mostrarManual){
     +'Secretário: '+secretario;
   box.classList.remove('hidden');
   card.classList.add('hidden');
+  if(btnConfirmar)btnConfirmar.style.display=lojaConfirmadaViaAtalho?'none':'inline-flex';
+  if(hintConfirmada)hintConfirmada.classList.toggle('hidden', !lojaConfirmadaViaAtalho);
   setLojaFieldsReadonly(true);
 }
 
@@ -2280,6 +2289,7 @@ function renderLojaResumo(loja, mostrarManual){
         if(idx>=0){
           document.getElementById('loja_sel').value=String(idx);
           lojaSelecionadaViaAtalho=true;
+          lojaConfirmadaViaAtalho=true;
           novaLojaManual=false;
           renderLojaResumo(lojasCarregadas[idx]);
         }
@@ -2294,11 +2304,13 @@ function renderLojaResumo(loja, mostrarManual){
 document.getElementById('loja_sel').addEventListener('change',function(){
   if(!this.value){
     lojaSelecionadaViaAtalho=false;
+    lojaConfirmadaViaAtalho=false;
     novaLojaManual=false;
     renderLojaResumo(null,false);
     return;
   }
   lojaSelecionadaViaAtalho=true;
+  lojaConfirmadaViaAtalho=false;
   novaLojaManual=false;
   clearErr('loja_sel');
   const o=this.options[this.selectedIndex];
@@ -2313,11 +2325,26 @@ document.getElementById('loja_sel').addEventListener('change',function(){
   renderLojaResumo(l);
 });
 
+const btnConfirmarLoja=document.getElementById('btn_confirmar_loja');
+if(btnConfirmarLoja){
+  btnConfirmarLoja.addEventListener('click',()=>{
+    if(!selectedLoja()){
+      setErr('loja_sel','Selecione uma loja cadastrada antes de confirmar.');
+      return;
+    }
+    lojaConfirmadaViaAtalho=true;
+    clearErr('loja_sel');
+    renderLojaResumo(selectedLoja());
+    showToast('Loja confirmada para esta sessão.');
+  });
+}
+
 const btnNovaLojaManual=document.getElementById('btn_nova_loja_manual');
 if(btnNovaLojaManual){
   btnNovaLojaManual.addEventListener('click',()=>{
     novaLojaManual=true;
     lojaSelecionadaViaAtalho=false;
+    lojaConfirmadaViaAtalho=false;
     document.getElementById('loja_sel').value='';
     clearErr('loja_sel');
     renderLojaResumo(null,true);
@@ -2338,6 +2365,9 @@ function validate(){
   let ok=true;
   if(adminFlow&&!lojaSelecionadaViaAtalho&&!novaLojaManual){
     setErr('loja_sel','Selecione uma loja cadastrada ou confirme que é uma loja nova.');
+    ok=false;
+  }else if(adminFlow&&lojaSelecionadaViaAtalho&&!lojaConfirmadaViaAtalho){
+    setErr('loja_sel','Confirme "Usar esta loja" para continuar.');
     ok=false;
   }else{
     clearErr('loja_sel');
