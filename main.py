@@ -271,7 +271,7 @@ def _link_privado_bot(bot_username: Optional[str], start_param: str = "start") -
     """Monta link seguro para abrir o chat privado do bot com deep link opcional."""
     username = (bot_username or "BodeAndarilhoBot").lstrip("@")
     if start_param:
-        return f"https://t.me/{username}?start={start_param}"
+        return f"https://t.me/{username}start={start_param}"
     return f"https://t.me/{username}"
 
 
@@ -483,7 +483,7 @@ async def novo_membro_grupo_handler(update: Update, context):
         cadastro_ativo = bool(membro and membro_esta_ativo(membro))
 
         username_bot = (getattr(context.bot, "username", None) or "BodeAndarilhoBot").lstrip("@")
-        link_privado = f"https://t.me/{username_bot}?start=cadastro"
+        link_privado = f"https://t.me/{username_bot}start=cadastro"
 
         if cadastro_ativo:
             # Reativa o cadastro caso tenha sido marcado inativo numa saída anterior
@@ -884,7 +884,7 @@ def register_handlers(app: Application) -> None:
         MessageHandler(
             filters.ChatType.GROUPS
             & filters.TEXT
-            & filters.Regex(r"^(?i:/?(bode|menu|painel)(?:@[a-z0-9_]+)?)[.!?]*$"),
+            & filters.Regex(r"^(i:/(bode|menu|painel)(:@[a-z0-9_]+))[.!]*$"),
             bode_grupo_handler,
         )
     )

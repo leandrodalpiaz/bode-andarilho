@@ -319,7 +319,7 @@ async def exibir_menu_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await navegar_para(
         update, context,
         "Área do Administrador",
-        "⚙️ *Painel da Administração*\n\nO que deseja fazer?",
+        "⚙️ *Painel da Administração*\n\nO que deseja fazer",
         teclado
     )
 
@@ -501,7 +501,7 @@ async def selecionar_membro_promover(update: Update, context: ContextTypes.DEFAU
     await navegar_para(
         update, context,
         "Admin > Promover Secretário > Confirmar",
-        f"Confirmar promoção de *{membro.get('Nome')}* para secretário?",
+        f"Confirmar promoção de *{membro.get('Nome')}* para secretário",
         teclado
     )
     return 2  # CONFIRMAR_PROMOCAO
@@ -646,7 +646,7 @@ async def selecionar_membro_rebaixar(update: Update, context: ContextTypes.DEFAU
     await navegar_para(
         update, context,
         "Admin > Rebaixar Secretário > Confirmar",
-        f"Confirmar rebaixamento de *{membro.get('Nome')}* para comum?",
+        f"Confirmar rebaixamento de *{membro.get('Nome')}* para comum",
         teclado
     )
     return 2  # CONFIRMAR_REBAIXAMENTO
@@ -992,7 +992,7 @@ async def selecionar_campo_membro(update: Update, context: ContextTypes.DEFAULT_
             update, context,
             "Admin > Editar > Excluir",
             (
-                f"⚠️ *Confirma a exclusão de {nome}?*\n\n"
+                f"⚠️ *Confirma a exclusão de {nome}*\n\n"
                 "A exclusão é lógica: o cadastro será marcado como *Inativo*.\n"
                 "Se a base não suportar esse campo, o cadastro será removido da tabela."
             ),
@@ -1578,7 +1578,7 @@ async def broadcast_receber_mensagem(update: Update, context: ContextTypes.DEFAU
         f"---------------------------\n"
         f"{msg_text}\n"
         f"---------------------------\n\n"
-        f"Deseja realizar o envio definitivo agora?"
+        f"Deseja realizar o envio definitivo agora"
     )
 
     from src.bot import _enviar_ou_editar_mensagem, TIPO_RESULTADO
@@ -1723,7 +1723,7 @@ async def convite_n2_receber(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return ConversationHandler.END
 
     bot_username = (getattr(context.bot, "username", None) or "").lstrip("@")
-    link = f"https://t.me/{bot_username}?start={token}" if bot_username else token
+    link = f"https://t.me/{bot_username}start={token}" if bot_username else token
     texto_saida = (
         f"Convite N2 criado para Telegram ID `{tid}`.\n\n"
         f"Token: `{token}`\n"
@@ -1848,7 +1848,7 @@ async def processar_pedido_fundacao_usuario(update: Update, context: ContextType
         f"🏛️ *RITO DE FUNDACAO DE OFICINA*\n\n"
         f"Prezado Ir.·., voce solicitou fundar e edificar oficialmente a Oficina *'{loja_man}'* no ecossistema do Bode Andarilho.\n\n"
         f"Ao prosseguir, seu nome sera enviado a Chancelaria Geral para aprovação do encargo de *Secretario (Nivel 2)*.\n\n"
-        f"Deseja confirmar o envio do pedido de fundacao?"
+        f"Deseja confirmar o envio do pedido de fundacao"
     )
     
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -1907,7 +1907,7 @@ async def confirmar_pedido_fundacao_usuario(update: Update, context: ContextType
             f"🏛️ *Loja:* {loja_man}\n"
             f"📜 *Potência local:* {formatar_potencia_exibicao(pot, pot_comp)}\n"
             f"📍 *Oriente:* {ori}\n\n"
-            f"Deseja aprovar o cadastro, promovendo-o a Nivel 2 e edificando oficialmente esta Oficina?"
+            f"Deseja aprovar o cadastro, promovendo-o a Nivel 2 e edificando oficialmente esta Oficina"
         )
         
         teclado_admin = InlineKeyboardMarkup([

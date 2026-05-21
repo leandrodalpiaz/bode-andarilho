@@ -303,7 +303,7 @@ async def cmd_convidar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chave_codificada = urllib.parse.quote(chave)
     
     username_bot = (getattr(context.bot, "username", None) or "BodeAndarilhoBot").lstrip("@")
-    link = f"https://t.me/{username_bot}?start=PRE_{chave_codificada}"
+    link = f"https://t.me/{username_bot}start=PRE_{chave_codificada}"
     
     numero_fmt = f" nº {numero}" if numero and str(numero) != "0" else ""
     texto = (
@@ -357,7 +357,7 @@ async def _legacy_exibir_menu_secretario(update: Update, context: ContextTypes.D
     await navegar_para(
         update, context,
         "Área do Secretário",
-        "📋 *Bem-vindo à Área do Secretário*\n\nO que deseja fazer?",
+        "📋 *Bem-vindo à Área do Secretário*\n\nO que deseja fazer",
         teclado
     )
     await enviar_dica_contextual(update, context, "area_secretario_lojas")
@@ -781,7 +781,7 @@ async def confirmar_cancelamento(update: Update, context: ContextTypes.DEFAULT_T
     await navegar_para(
         update, context,
         f"Área do Secretário > Cancelar",
-        f"*Cancelar evento*\n\nTem certeza que deseja cancelar o evento?\n"
+        f"*Cancelar evento*\n\nTem certeza que deseja cancelar o evento\n"
         f"{_formatar_resumo_evento(evento)}\n\n"
         f"⚠️ Isso removerá todas as confirmações.",
         teclado
@@ -1331,7 +1331,7 @@ async def confirmar_refazer_evento(update: Update, context: ContextTypes.DEFAULT
     await navegar_para(
         update, context,
         "Área do Secretário > Refazer Evento",
-        f"*Refazer evento*\n\nTem certeza que deseja reabrir este evento?\n\n"
+        f"*Refazer evento*\n\nTem certeza que deseja reabrir este evento\n\n"
         f"{_formatar_resumo_evento(evento)}\n\n"
         f"⚠️ As confirmações que foram removidas NÃO serão recuperadas.",
         teclado
@@ -1561,7 +1561,7 @@ async def detalhe_pendente(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"▪️ Potência: *{potencia}*\n"
         f"▪️ Oriente: *{oriente}*\n"
         f"▪️ Venerável Mestre: *{veneravel}*\n\n"
-        f"Deseja validar o acesso deste obreiro ao painel do Bode Andarilho?"
+        f"Deseja validar o acesso deste obreiro ao painel do Bode Andarilho"
     )
 
     teclado = InlineKeyboardMarkup([
@@ -1661,7 +1661,7 @@ async def confirmar_recusar_membro(update: Update, context: ContextTypes.DEFAULT
 
     texto = (
         f"⚠️ *Confirmar Recusa de Cadastro*\n\n"
-        f"Tem certeza de que deseja recusar o registro de *{nome}*?\n\n"
+        f"Tem certeza de que deseja recusar o registro de *{nome}*\n\n"
         f"Esta ação enviará uma notificação avisando-o sobre a divergência e EXCLUIRÁ os dados provisórios dele para que ele possa refazer o processo."
     )
 
@@ -1846,7 +1846,7 @@ async def _exibir_menu_secretario_seguro(update: Update, context: ContextTypes.D
     await navegar_para(
         update, context,
         "Área do Secretário",
-        "📋 *Bem-vindo à Área do Secretário*\n\nO que deseja fazer?",
+        "📋 *Bem-vindo à Área do Secretário*\n\nO que deseja fazer",
         teclado
     )
     await enviar_dica_contextual(update, context, "area_secretario_lojas")
@@ -1887,7 +1887,7 @@ async def gerar_voucher_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
         token_at = v_ativo.get("token")
         usos = v_ativo.get("usos_atuais") or 0
         lim = v_ativo.get("limite_usos") or 100
-        link = f"https://t.me/{context.bot.username}?start={token_at}"
+        link = f"https://t.me/{context.bot.username}start={token_at}"
         texto_ativo = (
         f"🎫 *Convite Ativo Atual:*\n"
             f"📊 Usos: `{usos}/{lim}`\n"
@@ -1979,7 +1979,7 @@ async def _finalizar_criacao_voucher(update: Update, context: ContextTypes.DEFAU
         await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "❌ Falha ao gerar registro no banco de dados.")
         return ConversationHandler.END
         
-    link_completo = f"https://t.me/{context.bot.username}?start={token}"
+    link_completo = f"https://t.me/{context.bot.username}start={token}"
     nome_loja = loja.get("Nome da Loja") or loja.get("nome") or "Sua Loja"
     
     texto_sucesso = (
@@ -2083,7 +2083,7 @@ async def bastao_confirmar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     texto = (
         "🚨 *CONFIRMAÇÃO DUPLA*\n\n"
-        f"Tem certeza absoluta que deseja transferir todos os seus poderes administrativos de Secretário para o Ir.·. *{nome_suc}*?\n\n"
+        f"Tem certeza absoluta que deseja transferir todos os seus poderes administrativos de Secretário para o Ir.·. *{nome_suc}*\n\n"
         "1. Ele receberá plenos acessos de Nível 2 e será o dono desta Loja no sistema.\n"
         "2. Seu cadastro perderá acesso a esta Área do Secretário imediatamente após o clique."
     )
@@ -2270,14 +2270,14 @@ async def vigor_painel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif acolh >= 3:
             conselhos.append("💡 *Dica de Hospitalidade:* A acolhida está boa. Compartilhe os links de convite nos grupos principais para cruzar a barreira de 10 visitantes e ganhar o selo *Farol da Região*!")
         else:
-            conselhos.append("🤝 *Foco em Hospitalidade:* Que tal incentivar caravanas? Publique as datas no canal de expansão para aumentar seu Acolhimento.")
+            conselhos.append("🤝 *Foco em Hospitalidade:* Que tal incentivar caravanas Publique as datas no canal de expansão para aumentar seu Acolhimento.")
 
         if engaj >= 80.0:
             conselhos.append("🔥 *Alta Fidelidade:* Seu quórum interno está espetacular! Praticamente todo o quadro frequenta ativamente.")
         elif engaj >= 50.0:
             conselhos.append("📊 *Engajamento Mediano:* Metade dos seus obreiros confirmou presença. Estimule os que estão 'em silêncio' a instalar o bot.")
         else:
-            conselhos.append("⚠️ *Alerta de Evasão:* Menos de 50% do quadro registrou presença. Que tal rodar uma campanha interna para reativar as colunas?")
+            conselhos.append("⚠️ *Alerta de Evasão:* Menos de 50% do quadro registrou presença. Que tal rodar uma campanha interna para reativar as colunas")
             
         # Compõe texto final
         selos_bloco = "\n".join(selos_atingidos) if selos_atingidos else "_Nenhum selo conquistado este mês._"
@@ -2578,7 +2578,7 @@ async def trolhamento_coletivo_detalhe(update: Update, context: ContextTypes.DEF
         f"▪️ Potência: *{potencia}*\n"
         f"▪️ Oriente: *{oriente}*\n"
         f"▪️ Venerável Mestre: *{veneravel}*\n\n"
-        f"Deseja validar o acesso deste obreiro ao painel do Bode Andarilho?"
+        f"Deseja validar o acesso deste obreiro ao painel do Bode Andarilho"
     )
 
     teclado = InlineKeyboardMarkup([
@@ -2880,7 +2880,7 @@ async def admin_confirmar_incorporacao(update: Update, context: ContextTypes.DEF
         
     texto_confirmacao = (
         f"👥 *Confirmar Incorporação Cadastral*\n\n"
-        f"Deseja incorporar o Ir.·. *{membro.get('Nome')}* à sua Oficina?\n\n"
+        f"Deseja incorporar o Ir.·. *{membro.get('Nome')}* à sua Oficina\n\n"
         f"📋 *Dados digitados pelo Obreiro:*\n"
         f"• Loja: {membro.get('Loja')} nº {membro.get('Número da loja')}\n"
         f"• Potência: {membro.get('Potência')} ({membro.get('Potência complemento')})\n"

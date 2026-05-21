@@ -576,7 +576,7 @@ async def mostrar_apoiadores(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "Exiba seu Instagram, site ou contato. Uma presença discreta e elegante em telas de grande visualização, como listas de confirmados, cards de eventos e respostas da inteligência artificial.\n\n"
             "📌 *Apoie o Bode Andarilho*\n"
             "Sua contribuição ajuda a cobrir custos de hospedagem, manutenção técnica e melhorias para a nossa comunidade.\n\n"
-            "Deseja apoiar este projeto? Toque em *Falar com admin* e a administração receberá seu interesse."
+            "Deseja apoiar este projeto Toque em *Falar com admin* e a administração receberá seu interesse."
         )
     else:
         texto = (
