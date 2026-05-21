@@ -616,7 +616,6 @@ async def draft_loja_confirmar(update: Update, context) -> None:
     # Hook Conquistas Coletivas
     try:
         from src.conquistas import checar_e_disparar_marco_coletivo
-        import asyncio
         asyncio.create_task(checar_e_disparar_marco_coletivo(context.bot, dados))
     except Exception:
         pass
@@ -1163,7 +1162,6 @@ async def _confirmar_evento(update: Update, context, salvar_loja: bool) -> None:
         # Hook Conquistas Coletivas
         try:
             from src.conquistas import checar_e_disparar_marco_coletivo
-            import asyncio
             asyncio.create_task(checar_e_disparar_marco_coletivo(context.bot, {
                 "nome": dados.get("nome_loja"),
                 "oriente": dados.get("oriente")
@@ -2799,7 +2797,6 @@ async def api_cadastro_loja(request: Request) -> JSONResponse:
     # Hook Conquistas Coletivas
     try:
         from src.conquistas import checar_e_disparar_marco_coletivo
-        import asyncio
         bot = request.app.state.telegram_app.bot
         asyncio.create_task(checar_e_disparar_marco_coletivo(bot, dados_loja))
     except Exception:
