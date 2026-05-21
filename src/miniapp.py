@@ -1493,10 +1493,19 @@ if(tg){
   try{tg.expand();}catch(e){}
 }
 function setPrimaryLoading(isLoading){
+  if(tg && tg.MainButton && tg.MainButton.isVisible){
+    if(isLoading){
+      try{ tg.MainButton.showProgress(); }catch(e){}
+      try{ tg.MainButton.disable(); }catch(e){}
+    }else{
+      try{ tg.MainButton.hideProgress(); }catch(e){}
+      try{ tg.MainButton.enable(); }catch(e){}
+    }
+  }
   const btn=document.getElementById('btn_publicar_evento');
   if(btn){
     btn.disabled=!!isLoading;
-    btn.textContent=isLoading?'Enviando...':'Continuar para revisão';
+    btn.textContent=isLoading?'Enviando...':'Salvar rascunho e continuar no Telegram';
   }
 }
 function hideMainButtonSafe(){
@@ -2438,18 +2447,22 @@ async function publicarEvento(){
     });
     const j=await r.json();
     if(j.ok){
-      showToast('Rascunho salvo. Continue a confirmação no chat do Telegram.');
-      const btnIrChat=document.getElementById('btn_ir_chat');
-      if(btnIrChat)btnIrChat.style.display='inline-flex';
-      const btnPublicar=document.getElementById('btn_publicar_evento');
-      if(btnPublicar){
-        btnPublicar.disabled=true;
-        btnPublicar.textContent='Rascunho enviado para o Telegram';
+      if(tg && tg.MainButton && tg.MainButton.isVisible){
+        closeMiniAppSafe();
+      }else{
+        showToast('Rascunho salvo. Continue a confirmação no chat do Telegram.');
+        const btnIrChat=document.getElementById('btn_ir_chat');
+        if(btnIrChat)btnIrChat.style.display='inline-flex';
+        const btnPublicar=document.getElementById('btn_publicar_evento');
+        if(btnPublicar){
+          btnPublicar.disabled=true;
+          btnPublicar.textContent='Rascunho enviado para o Telegram';
+        }
+        const btnCancelar=document.getElementById('btn_cancelar_evento');
+        if(btnCancelar)btnCancelar.textContent='Fechar Mini App';
+        setPrimaryLoading(false);
+        enviandoEvento=false;
       }
-      const btnCancelar=document.getElementById('btn_cancelar_evento');
-      if(btnCancelar)btnCancelar.textContent='Fechar Mini App';
-      setPrimaryLoading(false);
-      enviandoEvento=false;
     }else{
       showToast(j.error||'Erro. Tente novamente.');
       setPrimaryLoading(false);
@@ -2462,18 +2475,25 @@ async function publicarEvento(){
   }
 }
 
-hideMainButtonSafe();
-const btnPublicar=document.getElementById('btn_publicar_evento');
-if(btnPublicar){
-  btnPublicar.addEventListener('click',publicarEvento);
-}
-const btnCancelar=document.getElementById('btn_cancelar_evento');
-if(btnCancelar){
-  btnCancelar.addEventListener('click',()=>closeMiniAppSafe());
-}
-const btnIrChat=document.getElementById('btn_ir_chat');
-if(btnIrChat){
-  btnIrChat.addEventListener('click',()=>closeMiniAppSafe());
+if(tg && tg.MainButton){
+  const acoes = document.getElementById('acoes_publicacao');
+  if(acoes) acoes.style.display = 'none';
+  tg.MainButton.setText('Salvar rascunho e continuar');
+  tg.MainButton.show();
+  tg.MainButton.onClick(publicarEvento);
+} else {
+  const btnPublicar=document.getElementById('btn_publicar_evento');
+  if(btnPublicar){
+    btnPublicar.addEventListener('click',publicarEvento);
+  }
+  const btnCancelar=document.getElementById('btn_cancelar_evento');
+  if(btnCancelar){
+    btnCancelar.addEventListener('click',()=>closeMiniAppSafe());
+  }
+  const btnIrChat=document.getElementById('btn_ir_chat');
+  if(btnIrChat){
+    btnIrChat.addEventListener('click',()=>closeMiniAppSafe());
+  }
 }
 """
     return _html_wrap("Agendamento de Sessão", body, script)
