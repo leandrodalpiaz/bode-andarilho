@@ -176,10 +176,11 @@ def _draw_text_shadow(
     font: ImageFont.ImageFont,
     fill: Tuple[int, int, int, int],
     anchor: Optional[str] = None,
-    shadow: Tuple[int, int, int, int] = (255, 247, 218, 170),
+    shadow: Tuple[int, int, int, int] = (255, 250, 235, 225),
 ) -> None:
     x, y = xy
-    for ox, oy in ((1, 1), (-1, 1), (1, -1), (-1, -1)):
+    # Expande o outline para 2 pixels de espessura para descolar bem do fundo
+    for ox, oy in ((1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1), (2, 2), (-2, 2), (2, -2), (-2, -2)):
         draw.text((x + ox, y + oy), text, font=font, fill=shadow, anchor=anchor)
     draw.text((x, y), text, font=font, fill=fill, anchor=anchor)
 
@@ -777,17 +778,17 @@ def _render_default_template_card(
         prefix = parts["data_hora"][: -len(parts["hora"])]
         y = _draw_centered_highlight_tail(draw, center_x, y, prefix, parts["hora"], date_font, hour_font, ink, ink)
     else:
-        y = _draw_centered_wrapped(draw, parts["data_hora"], center_x, y, date_font, ink, content_w, line_gap=4, max_lines=2)
+        y = _draw_centered_wrapped(draw, parts["data_hora"], center_x, y, date_font, ink, content_w, line_gap=8, max_lines=2)
     _draw_ornament_divider(draw, center_x, y + 3, int(content_w * 0.72), divider)
     y += int(height * 0.038)
     if parts["grau"]:
-        y = _draw_centered_wrapped(draw, f"Grau {parts['grau']}", center_x, y, degree_font, soft_ink, content_w, line_gap=2, max_lines=1)
+        y = _draw_centered_wrapped(draw, f"Grau {parts['grau']}", center_x, y, degree_font, soft_ink, content_w, line_gap=4, max_lines=1)
 
     y += int(height * 0.035)
     y = _draw_section_title(draw, "LOJA", center_x, y, section_font, ink, content_w)
     y = _draw_loja_name(draw, parts["loja"], parts["numero"], center_x, y, int(content_w * 0.96), loja_font, ink, accent)
     if parts["local_potencia"]:
-        y = _draw_centered_wrapped(draw, parts["local_potencia"], center_x, y + 4, local_font, soft_ink, content_w, line_gap=2, max_lines=2)
+        y = _draw_centered_wrapped(draw, parts["local_potencia"], center_x, y + 4, local_font, soft_ink, content_w, line_gap=6, max_lines=2)
 
     y += int(height * 0.04)
     y = _draw_section_title(draw, "SESSÃO", center_x, y, section_font, ink, content_w)
@@ -809,7 +810,7 @@ def _render_default_template_card(
             agape = f"Ágape {agape}"
         details.append((agape, ink))
     for text, color in details:
-        y = _draw_centered_wrapped(draw, text, center_x, y, body_font, color, int(content_w * 0.86), line_gap=3, max_lines=2)
+        y = _draw_centered_wrapped(draw, text, center_x, y, body_font, color, int(content_w * 0.86), line_gap=8, max_lines=2)
 
     y += int(height * 0.035)
     _draw_ornament_divider(draw, center_x, y, int(content_w * 0.72), divider)
@@ -824,7 +825,7 @@ def _render_default_template_card(
             note_lines = note_lines[:max_lines]
             note_lines[-1] = note_lines[-1].rstrip(" .") + "..."
             warnings.append("Ordem do dia longa; card renderizado com corte.")
-        _draw_centered_lines(draw, note_lines, center_x, y, note_font, ink, 6)
+        _draw_centered_lines(draw, note_lines, center_x, y, note_font, ink, 10)
 
     footer_y = int(height * 0.875)
     _draw_ornament_divider(draw, center_x, footer_y - 4, int(content_w * 0.46), divider)
@@ -842,7 +843,7 @@ def _render_default_template_card(
     os.makedirs(out_dir, exist_ok=True)
     event_id = _norm(_get_any(evento, "ID Evento", "id_evento", "id") or "preview") or "preview"
     out_path = os.path.join(out_dir, f"bode_event_card_{event_id}.jpg")
-    image.convert("RGB").save(out_path, "JPEG", quality=85)
+    image.convert("RGB").save(out_path, "JPEG", quality=95)
     return RenderResult(path=out_path, warnings=warnings)
 
 
