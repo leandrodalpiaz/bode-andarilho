@@ -179,6 +179,9 @@ async def publicar_evento_no_grupo(
                     photo=photo,
                     caption=CAPTION_PUBLICACAO_VISUAL,
                     reply_markup=reply_markup,
+                    read_timeout=60,
+                    write_timeout=60,
+                    connect_timeout=60,
             )
             logger.info("Foto enviada! message_id=%s", getattr(msg, "message_id", "N/A"))
             photos = getattr(msg, "photo", None) or []

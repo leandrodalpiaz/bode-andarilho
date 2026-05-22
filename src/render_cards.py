@@ -838,8 +838,8 @@ def _render_default_template_card(
     out_dir = output_dir or tempfile.gettempdir()
     os.makedirs(out_dir, exist_ok=True)
     event_id = _norm(_get_any(evento, "ID Evento", "id_evento", "id") or "preview") or "preview"
-    out_path = os.path.join(out_dir, f"bode_event_card_{event_id}.png")
-    image.convert("RGB").save(out_path, "PNG", optimize=True)
+    out_path = os.path.join(out_dir, f"bode_event_card_{event_id}.jpg")
+    image.convert("RGB").save(out_path, "JPEG", quality=85)
     return RenderResult(path=out_path, warnings=warnings)
 
 
