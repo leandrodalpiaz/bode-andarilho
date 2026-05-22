@@ -672,6 +672,28 @@ def _extrair_dados_evento(body: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
+
+def _validar_loja_para_evento(dados: dict) -> str | None:
+    faltantes = []
+    campos = [
+        ("nome_loja", "nome da loja"),
+        ("numero_loja", "número da loja"),
+        ("oriente", "oriente/cidade"),
+        ("rito", "rito"),
+        ("potencia", "potência principal"),
+        ("potencia_complemento", "potência local"),
+        ("endereco", "endereço da sessão"),
+    ]
+    for chave, rotulo in campos:
+        valor = str(dados.get(chave) or "").strip()
+        if chave == "numero_loja" and valor == "0":
+            valor = ""
+        if not valor:
+            faltantes.append(rotulo)
+    if faltantes:
+        return f"A loja selecionada está com o cadastro incompleto. Por favor, edite a loja e preencha os seguintes campos antes de criar uma sessão: {', '.join(faltantes)}."
+    return None
+
 def _validar_dados_evento(dados: Dict[str, Any]) -> Optional[str]:
     obrigatorios = [
         dados["data"], dados["horario"], dados["grau"], dados["tipo_sessao"],
@@ -844,26 +866,49 @@ async def api_rascunho_evento(request: Request) -> JSONResponse:
     nivel = str(get_nivel(telegram_id))
     lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
     dados = _aplicar_loja_cadastrada_ao_evento(dados, lojas_existentes)
+    mensagem_loja = _validar_loja_para_evento(dados)
+    if mensagem_loja:
+        return _json_error(mensagem_loja, 400)
     mensagem = _validar_dados_evento(dados)
     if mensagem:
         return _json_error(mensagem, 400)
 
-    # Se a loja já existe e o complemento estava vazio no banco, mas foi informado agora, atualiza no banco
+    # Se a loja já existe e algum dado vital estava vazio no banco, mas foi informado agora, atualiza no banco
     loja_id = dados.get("loja_id")
     if loja_id:
         from src.sheets_supabase import buscar_loja_por_id, atualizar_loja
         loja_obj = buscar_loja_por_id(loja_id)
         if loja_obj:
-            comp_db = _norm_text(loja_obj.get("Potência complemento") or loja_obj.get("potencia_complemento"))
-            comp_novo = _norm_text(dados.get("potencia_complemento") or dados.get("potencia_outra"))
-            if comp_novo and not comp_db:
-                atualizar_loja(loja_id, {"Potência complemento": comp_novo})
-                logger.info("Atualizando potência complemento da loja %s no banco para %s", loja_id, comp_novo)
+            mapeamento = {
+                "Nome da Loja": "nome_loja",
+                "Número": "numero_loja",
+                "Oriente da Loja": "oriente",
+                "Rito": "rito",
+                "Potência": "potencia",
+                "Potência complemento": "potencia_complemento",
+                "Endereço": "endereco",
+            }
+            atualizacoes = {}
+            for campo_db, chave_dados in mapeamento.items():
+                val_db = _norm_text(loja_obj.get(campo_db) or "")
+                val_novo = _norm_text(dados.get(chave_dados) or (dados.get("potencia_outra") if chave_dados == "potencia_complemento" else ""))
+                
+                # Se no banco está vazio (ou número é 0), e o usuário preencheu no evento, atualiza no banco
+                if (not val_db or val_db == "0") and val_novo and val_novo != "0":
+                    atualizacoes[campo_db] = val_novo
+            
+            if atualizacoes:
+                atualizar_loja(loja_id, atualizacoes)
+                logger.info("Atualizando campos faltantes da loja %s no banco: %s", loja_id, list(atualizacoes.keys()))
                 # Atualiza a loja no cache/dados locais para que a alteração seja refletida imediatamente
                 for lj in lojas_existentes:
                     if _norm_text(lj.get("ID") or lj.get("id")) == loja_id:
-                        lj["Potência complemento"] = comp_novo
-                        lj["potencia_complemento"] = comp_novo
+                        for k, v in atualizacoes.items():
+                            lj[k] = v
+                            # Também atualiza a chave normalizada se existir
+                            if k == "Endereço": lj["endereco"] = v
+                            if k == "Oriente da Loja": lj["oriente_loja"] = v
+                            if k == "Potência complemento": lj["potencia_complemento"] = v
                 dados = _aplicar_loja_cadastrada_ao_evento(dados, lojas_existentes)
 
     _salvar_rascunho(_RASCUNHOS_EVENTO, telegram_id, dados)
@@ -2903,53 +2948,12 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
     try:
         bot = request.app.state.telegram_app.bot
 
-        dia_semana_pt = {
-            "Monday": "segunda",
-          "Tuesday": "terça",
-            "Wednesday": "quarta",
-            "Thursday": "quinta",
-            "Friday": "sexta",
-          "Saturday": "sábado",
-            "Sunday": "domingo",
-        }.get(dia_semana, "")
+        import asyncio
+        asyncio.create_task(_publicar_evento_no_grupo(request.app.state.telegram_app, id_evento, dict(evento)))
+    except Exception as e:
+        logger.warning("Falha ao agendar publicacao do evento %s no grupo para %s: %s", id_evento, telegram_id, e)
 
-        data_hora = f"{_escape_md(data_str)} ({_escape_md(dia_semana_pt)}) • {_escape_md(horario)}" if dia_semana_pt else f"{_escape_md(data_str)} • {_escape_md(horario)}"
-        nome_esc   = _escape_md(nome_loja)
-        num_fmt    = f" {_escape_md(numero_loja)}" if numero_loja and numero_loja != "0" else ""
-        endereco_raw = (endereco or "").strip()
-        endereco_url = endereco_raw if endereco_raw.startswith(("http://", "https://")) else ""
-        texto_grupo = (
-            "NOVA SESSÃO\n\n"
-            f"{data_hora}\n"
-            f"Grau: {_escape_md(grau)}\n\n"
-            "LOJA\n"
-            f"{nome_esc}{num_fmt}\n"
-            f"{_escape_md(oriente)} - {_escape_md(potencia)}\n\n"
-            "SESSÃO\n"
-            f"Tipo: {_escape_md(tipo_sessao)}\n"
-            f"Rito: {_escape_md(rito)}\n"
-            f"Traje: {_escape_md(traje)}\n"
-            f"Ágape: {_escape_md(agape)}\n\n"
-            "ORDEM DO DIA / OBSERVAÇÕES\n"
-            f"{_escape_md(observacoes) or '-'}\n\n"
-        )
-
-        if endereco_url:
-            texto_grupo += f"Local: [Abrir no mapa]({endereco_url})"
-        else:
-            texto_grupo += f"Local: {_escape_md(endereco)}"
-
-        try:
-            grupo_id_int = int(_GRUPO_PRINCIPAL_ID)
-            await bot.send_message(
-                chat_id=grupo_id_int,
-                text=texto_grupo,
-                parse_mode="Markdown",
-                reply_markup=_teclado_pos_publicacao(id_evento, agape),
-            )
-        except Exception as eg:
-            logger.warning("Falha ao publicar evento no grupo: %s", eg)
-
+    try:
         await bot.send_message(
             chat_id=telegram_id,
             text="✅ *Evento cadastrado e publicado no grupo\\!*",

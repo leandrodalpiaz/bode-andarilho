@@ -157,6 +157,36 @@ ATALHOS_TEXTO_PRIVADO = {
 }
 
 
+def _parece_postagem_manual_sessao(texto: str, has_media: bool = False) -> bool:
+    bruto = texto or ""
+    lower = bruto.lower()
+    
+    if "?" in bruto:
+        return False
+    if "visit" in lower:
+        return False
+    if not has_media:
+        return False
+
+    gatilhos = [
+        "sessão", "sessao", "evento", "grau", "loja", "oriente",
+        "rito", "ágape", "agape", "traje", "ordem do dia",
+    ]
+    pontos = sum(1 for termo in gatilhos if termo in lower)
+    tem_data = bool(re.search(r"\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b", lower))
+    tem_hora = bool(re.search(r"\b\d{1,2}[:h]\d{2}\b|\b\d{1,2}h\b", lower))
+    tem_bloco = "\n" in bruto and pontos >= 3
+    return (tem_data and tem_hora and pontos >= 2) or tem_bloco
+
+
+def _texto_alerta_postagem_manual_sessao() -> str:
+    return (
+        "Irmão, o Bode Andarilho não consegue interpretar isso como uma sessão válida fora do fluxo oficial.\n\n"
+        "Para publicar uma sessão, use o cadastro pelo Mini App. Se precisar de acesso, solicite ao Secretário da Loja; "
+        "se a Loja ainda não estiver cadastrada, regularize primeiro o cadastro da Loja."
+    )
+
+
 # ============================================
 # MENU PRINCIPAL (PAINEL DO OBREIRO)
 # ============================================
@@ -893,11 +923,27 @@ async def texto_privado_router(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(texto_trava, parse_mode="Markdown")
         return
 
-    texto = (update.message.text or "").strip()
-    if not texto:
+    texto = (update.message.text or update.message.caption or "").strip()
+    has_media = bool(update.message.photo or update.message.document)
+    if not texto and not has_media:
         return
 
     if await rotear_atalho_privado(update, context, texto):
+        return
+
+    if _parece_postagem_manual_sessao(texto, has_media):
+        teclado = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📋 Área do Secretário", callback_data="area_secretario")],
+            [InlineKeyboardButton("🏛 Gerenciar lojas", callback_data="menu_lojas")],
+        ])
+        await _enviar_ou_editar_mensagem(
+            context,
+            telegram_id,
+            TIPO_RESULTADO,
+            _texto_alerta_postagem_manual_sessao(),
+            teclado,
+            limpar_conteudo=True,
+        )
         return
 
     from src.ia_assistente import assistente_ia_texto_livre

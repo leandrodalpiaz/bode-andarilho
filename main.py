@@ -23,6 +23,7 @@ import logging
 import signal
 import hmac
 import hashlib
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -383,6 +384,28 @@ async def bode_grupo_handler(update: Update, context):
         )
 
 
+def _parece_postagem_manual_sessao(texto: str, has_media: bool = False) -> bool:
+    bruto = texto or ""
+    lower = bruto.lower()
+    
+    if "?" in bruto:
+        return False
+    if "visit" in lower:
+        return False
+    if not has_media:
+        return False
+
+    gatilhos = [
+        "sessão", "sessao", "evento", "grau", "loja", "oriente",
+        "rito", "ágape", "agape", "traje", "ordem do dia",
+    ]
+    pontos = sum(1 for termo in gatilhos if termo in lower)
+    tem_data = bool(re.search(r"\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b", lower))
+    tem_hora = bool(re.search(r"\b\d{1,2}[:h]\d{2}\b|\b\d{1,2}h\b", lower))
+    tem_bloco = "\n" in bruto and pontos >= 3
+    return (tem_data and tem_hora and pontos >= 2) or tem_bloco
+
+
 async def mensagem_grupo_handler(update: Update, context):
     """Handler para mensagens genéricas em grupos."""
     try:
@@ -393,7 +416,8 @@ async def mensagem_grupo_handler(update: Update, context):
         if not chat or chat.type not in ("group", "supergroup"):
             return
 
-        text = (update.message.text or "").strip().lower()
+        text = (update.message.text or update.message.caption or "").strip().lower()
+        has_media = bool(update.message.photo or update.message.document)
 
         logger.info(
             "mensagem_grupo_handler: chat_id=%s user_id=%s texto=%r",
@@ -405,6 +429,27 @@ async def mensagem_grupo_handler(update: Update, context):
         if text in ("/start", "/cadastro"):
             await update.message.reply_text(
                 GRUPO_COMANDO_PRIVADO
+            )
+            return
+
+        if _parece_postagem_manual_sessao(update.message.text or update.message.caption or "", has_media):
+            link_privado = _link_privado_bot(getattr(context.bot, "username", None), "start")
+            teclado = InlineKeyboardMarkup([
+                [InlineKeyboardButton("📩 Abrir privado do bot", url=link_privado)]
+            ])
+            resposta = await update.message.reply_text(
+                "Irmão, o Bode Andarilho não consegue interpretar isso como uma sessão válida fora do fluxo oficial.\n\n"
+                "Para publicar uma sessão, use o cadastro pelo Mini App. Se precisar de acesso, solicite ao Secretário da Loja; "
+                "se a Loja ainda não estiver cadastrada, regularize primeiro o cadastro da Loja.",
+                reply_markup=teclado,
+            )
+            asyncio.create_task(
+                _auto_delete_mensagens_grupo(
+                    context,
+                    chat.id,
+                    [resposta.message_id],
+                    delay=30,
+                )
             )
             return
 
@@ -913,13 +958,13 @@ def register_handlers(app: Application) -> None:
 
     # ===== 13.5 TEXTO LIVRE NO PRIVADO =====
     app.add_handler(MessageHandler(
-        filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND,
+        filters.ChatType.PRIVATE & (filters.TEXT | filters.PHOTO | filters.Document.IMAGE) & ~filters.COMMAND,
         texto_privado_router
     ))
 
     # ===== 14. HANDLERS DE MENSAGENS EM GRUPO =====
     app.add_handler(MessageHandler(
-        filters.ChatType.GROUPS & filters.TEXT & ~filters.COMMAND,
+        filters.ChatType.GROUPS & (filters.TEXT | filters.PHOTO | filters.Document.IMAGE) & ~filters.COMMAND,
         mensagem_grupo_handler
     ))
     app.add_handler(MessageHandler(
