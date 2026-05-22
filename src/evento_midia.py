@@ -167,16 +167,20 @@ async def publicar_evento_no_grupo(
     texto_fallback: str,
     reply_markup,
 ):
+    logger.info("Iniciando publicar_evento_no_grupo para chat_id=%s", chat_id)
     midia = preparar_midia_evento(evento)
+    logger.info("preparar_midia_evento retornou path=%s", midia.path)
     if midia.path:
         try:
             with open(midia.path, "rb") as photo:
+                logger.info("Enviando foto para %s...", chat_id)
                 msg = await context.bot.send_photo(
                     chat_id=chat_id,
                     photo=photo,
                     caption=CAPTION_PUBLICACAO_VISUAL,
                     reply_markup=reply_markup,
             )
+            logger.info("Foto enviada! message_id=%s", getattr(msg, "message_id", "N/A"))
             photos = getattr(msg, "photo", None) or []
             file_id = photos[-1].file_id if photos else ""
             _agendar_finalizacao(_finalizar_publicacao_visual_sync, dict(evento), midia, file_id)
@@ -184,12 +188,14 @@ async def publicar_evento_no_grupo(
         except Exception as e:
             logger.warning("Falha ao enviar card visual; usando texto fallback: %s", e)
 
+    logger.info("Enviando mensagem de texto fallback para %s...", chat_id)
     msg = await context.bot.send_message(
         chat_id=chat_id,
         text=texto_fallback,
         parse_mode="Markdown",
         reply_markup=reply_markup,
     )
+    logger.info("Fallback enviado! message_id=%s", getattr(msg, "message_id", "N/A"))
     _agendar_finalizacao(_atualizar_publicacao_texto_sync, dict(evento))
     return msg, "text"
 
