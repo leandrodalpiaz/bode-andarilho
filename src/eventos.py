@@ -2576,13 +2576,13 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_to_message_id=query.message.message_id if query.message else None,
     )
 
-    # A lista completa é temporária e auto-destrutiva após 20s em qualquer chat
+    # A lista completa é temporária e auto-destrutiva após 15s em qualquer chat
     asyncio.create_task(
         _auto_delete_message(
             context,
             update.effective_chat.id,
             msg.message_id,
-            delay=20,
+            delay=15,
         )
     )
     try:
