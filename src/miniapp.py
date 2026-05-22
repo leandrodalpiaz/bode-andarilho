@@ -72,6 +72,20 @@ from src.ritos import normalizar_rito
 
 logger = logging.getLogger(__name__)
 
+DIAS_SEMANA_PT_BR = {
+    "Monday": "segunda-feira",
+    "Tuesday": "terça-feira",
+    "Wednesday": "quarta-feira",
+    "Thursday": "quinta-feira",
+    "Friday": "sexta-feira",
+    "Saturday": "sábado",
+    "Sunday": "domingo",
+}
+
+
+def _dia_semana_pt_br(dt: Optional[datetime]) -> str:
+    return DIAS_SEMANA_PT_BR.get(dt.strftime("%A"), "") if dt else ""
+
 # ─────────────────────────────────────────────────────────────────────────────
 # URLS DOS WEBAPPS (lidas do ambiente em import-time)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -733,7 +747,7 @@ def _payload_evento(dados: Dict[str, Any], secretario_id: str) -> Dict[str, Any]
     return {
         "ID da loja": dados.get("loja_id", ""),
         "Data do evento": dados["data"],
-        "Dia da semana": dt.strftime("%A") if dt else "",
+        "Dia da semana": _dia_semana_pt_br(dt),
         "Hora": dados["horario"],
         "Nome da loja": dados["nome_loja"],
         "Número da loja": dados["numero_loja"],
@@ -805,15 +819,7 @@ def _aplicar_loja_cadastrada_ao_evento(dados: Dict[str, Any], lojas_existentes: 
 
 def _texto_publicacao_evento(dados: Dict[str, Any]) -> str:
     dt = _parse_data_ddmmyyyy(dados.get("data", ""))
-    dia_semana = {
-        "Monday": "segunda",
-        "Tuesday": "terça",
-        "Wednesday": "quarta",
-        "Thursday": "quinta",
-        "Friday": "sexta",
-        "Saturday": "sábado",
-        "Sunday": "domingo",
-    }.get(dt.strftime("%A"), "") if dt else ""
+    dia_semana = _dia_semana_pt_br(dt)
     numero_loja = _norm_text(dados.get("numero_loja") or "0")
     numero_fmt = f" {numero_loja}" if numero_loja and numero_loja != "0" else ""
     return "\n".join([
@@ -2920,7 +2926,7 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
     if dt < hoje:
         return JSONResponse({"ok": False, "error": "A data não pode ser no passado."}, status_code=400)
 
-    dia_semana = dt.strftime("%A")
+    dia_semana = _dia_semana_pt_br(dt)
 
     evento: Dict[str, Any] = {
         "Data do evento":              data_str,

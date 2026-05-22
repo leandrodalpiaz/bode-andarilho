@@ -21,6 +21,9 @@ from src.potencias import formatar_potencia
 
 logger = logging.getLogger(__name__)
 
+RECORD_MINIMO_PARA_ALERTA = 3
+RECORD_PASSO_ALERTA = 5
+
 
 def _slugify(texto: Any) -> str:
     """Gera um slug simples, removendo acentos e caracteres especiais."""
@@ -87,6 +90,19 @@ def obter_max_record_marco_coletivo(prefixo: str) -> int:
             return 0
         logger.error("Erro ao obter max record para %s: %s", prefixo, e)
         return 0
+
+
+def _proximo_marco_recorde(max_recorde: int) -> int:
+    """Evita alerta de recorde a cada incremento unitário no grupo."""
+    if max_recorde < RECORD_MINIMO_PARA_ALERTA:
+        return RECORD_MINIMO_PARA_ALERTA
+    if max_recorde < RECORD_PASSO_ALERTA:
+        return RECORD_PASSO_ALERTA
+    return ((max_recorde // RECORD_PASSO_ALERTA) + 1) * RECORD_PASSO_ALERTA
+
+
+def _deve_alertar_recorde(contagem_atual: int, max_recorde: int) -> bool:
+    return contagem_atual >= _proximo_marco_recorde(max_recorde)
 
 
 def _parse_data(valor: Any) -> Optional[date]:
@@ -164,7 +180,7 @@ async def processar_conquistas_coletivas_evento(bot: Bot, evento: Dict[str, Any]
                 # Checar recorde
                 prefix_recorde = f"recorde_sessao_rito|{rito_slug}|"
                 max_rec = obter_max_record_marco_coletivo(prefix_recorde)
-                if count_rito > max_rec:
+                if _deve_alertar_recorde(count_rito, max_rec):
                     msg = (
                         f"📈 *Novo Recorde do {rito}!*\n\n"
                         f"Alcançamos a marca histórica de *{count_rito} sessões simultâneas disponíveis* "
@@ -195,7 +211,7 @@ async def processar_conquistas_coletivas_evento(bot: Bot, evento: Dict[str, Any]
             else:
                 prefix_recorde = f"recorde_sessao_grau|{grau_slug}|"
                 max_rec = obter_max_record_marco_coletivo(prefix_recorde)
-                if count_grau > max_rec:
+                if _deve_alertar_recorde(count_grau, max_rec):
                     msg = (
                         f"📈 *Novo Recorde para o Grau {grau}!*\n\n"
                         f"Estabelecemos um novo recorde de *{count_grau} sessões simultâneas disponíveis* "
@@ -232,7 +248,7 @@ async def processar_conquistas_coletivas_evento(bot: Bot, evento: Dict[str, Any]
             else:
                 prefix_recorde = f"recorde_sessao_potencia|{pot_slug}|"
                 max_rec = obter_max_record_marco_coletivo(prefix_recorde)
-                if count_pot > max_rec:
+                if _deve_alertar_recorde(count_pot, max_rec):
                     msg = (
                         f"📈 *Novo Recorde da Potência {pot_nome}!*\n\n"
                         f"Alcançamos a marca inédita de *{count_pot} sessões simultâneas disponíveis* "

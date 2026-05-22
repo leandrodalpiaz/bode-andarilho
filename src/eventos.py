@@ -185,6 +185,25 @@ def registrar_post_evento_grupo(id_evento: str, chat_id: int, message_id: int) -
         return
     _CACHE_POST_EVENTO_GRUPO[id_evento] = (int(chat_id), int(message_id))
 
+
+def _post_evento_grupo(id_evento: str, evento: Optional[dict]) -> Optional[Tuple[int, int]]:
+    """Retorna chat/message_id do card publicado no grupo, preferindo cache em memória."""
+    ids = [id_evento]
+    if evento:
+        ids.extend(_ids_evento_aliases(id_evento, evento))
+        canon = normalizar_id_evento(evento)
+        if canon:
+            ids.append(canon)
+    for eid in ids:
+        if eid and eid in _CACHE_POST_EVENTO_GRUPO:
+            return _CACHE_POST_EVENTO_GRUPO[eid]
+    if evento:
+        chat_id = _tid_to_int(evento.get("Telegram ID do grupo") or evento.get("grupo_telegram_id"))
+        msg_id = _tid_to_int(evento.get("Telegram Message ID do grupo") or evento.get("grupo_mensagem_id"))
+        if chat_id is not None and msg_id is not None:
+            return int(chat_id), int(msg_id)
+    return None
+
 # ============================================
 # CONSTANTES E CONFIGURAÇÕES
 # ============================================
@@ -2568,11 +2587,13 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     reply_markup = InlineKeyboardMarkup(botoes)
 
-    reply_parameters = (
-        ReplyParameters(message_id=query.message.message_id)
-        if query.message
-        else None
-    )
+    anchor_message_id = query.message.message_id if query.message else None
+    if update.effective_chat and update.effective_chat.type in ("group", "supergroup"):
+        post = _post_evento_grupo(id_evento, evento)
+        if post and int(post[0]) == int(update.effective_chat.id):
+            anchor_message_id = int(post[1])
+
+    reply_parameters = ReplyParameters(message_id=anchor_message_id) if anchor_message_id else None
 
     msg = await context.bot.send_message(
         chat_id=update.effective_chat.id,

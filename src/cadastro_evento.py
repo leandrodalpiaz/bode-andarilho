@@ -180,9 +180,17 @@ def _tipo_agape_evento(texto_agape: str) -> str:
     return "sem"
 
 
-def _dia_semana_ingles(dt: datetime) -> str:
-    """Retorna o dia da semana em inglês."""
-    return dt.strftime("%A")
+def _dia_semana_pt_br(dt: datetime) -> str:
+    """Retorna o dia da semana em português do Brasil."""
+    return {
+        "Monday": "segunda-feira",
+        "Tuesday": "terça-feira",
+        "Wednesday": "quarta-feira",
+        "Thursday": "quinta-feira",
+        "Friday": "sexta-feira",
+        "Saturday": "sábado",
+        "Sunday": "domingo",
+    }.get(dt.strftime("%A"), "")
 
 
 def _teclado_cancelar() -> InlineKeyboardMarkup:
@@ -321,7 +329,7 @@ def _montar_evento_dict(context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Any]:
     hora_txt = context.user_data.get("novo_evento_horario", "")
 
     dt = _parse_data_ddmmyyyy(data_txt)
-    dia_semana = _dia_semana_ingles(dt) if dt else ""
+    dia_semana = _dia_semana_pt_br(dt) if dt else ""
 
     agape_sim = context.user_data.get("novo_evento_agape", "nao")
     agape_tipo = context.user_data.get("novo_evento_agape_tipo", "")
