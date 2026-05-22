@@ -26,7 +26,7 @@ from typing import Optional, Tuple, List, Dict, Any
 from src.ritos import normalizar_rito
 from src.location_service import buscar_estados_uf, buscar_cidades_por_uf
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import ReplyParameters, Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest, Forbidden
 from telegram.ext import ContextTypes, ConversationHandler, CallbackQueryHandler, CommandHandler
 
@@ -2568,12 +2568,18 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     reply_markup = InlineKeyboardMarkup(botoes)
 
+    reply_parameters = (
+        ReplyParameters(message_id=query.message.message_id)
+        if query.message
+        else None
+    )
+
     msg = await context.bot.send_message(
         chat_id=update.effective_chat.id,
         text=texto,
         parse_mode="Markdown",
         reply_markup=reply_markup,
-        reply_to_message_id=query.message.message_id if query.message else None,
+        reply_parameters=reply_parameters,
     )
 
     # A lista completa é temporária e auto-destrutiva após 15s em qualquer chat

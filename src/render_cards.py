@@ -6,6 +6,7 @@ import os
 import tempfile
 import unicodedata
 from dataclasses import dataclass
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -55,6 +56,30 @@ ITALIC_FONT_CANDIDATES = (
     "DejaVuSerif-Italic.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf",
 )
+WEEKDAYS_PT_BR = {
+    "monday": "segunda-feira",
+    "tuesday": "terça-feira",
+    "wednesday": "quarta-feira",
+    "thursday": "quinta-feira",
+    "friday": "sexta-feira",
+    "saturday": "sábado",
+    "sunday": "domingo",
+    "segunda": "segunda-feira",
+    "segunda-feira": "segunda-feira",
+    "terça": "terça-feira",
+    "terca": "terça-feira",
+    "terça-feira": "terça-feira",
+    "terca-feira": "terça-feira",
+    "quarta": "quarta-feira",
+    "quarta-feira": "quarta-feira",
+    "quinta": "quinta-feira",
+    "quinta-feira": "quinta-feira",
+    "sexta": "sexta-feira",
+    "sexta-feira": "sexta-feira",
+    "sábado": "sábado",
+    "sabado": "sábado",
+    "domingo": "domingo",
+}
 
 
 @dataclass
@@ -65,6 +90,57 @@ class RenderResult:
 
 def _norm(value: Any) -> str:
     return "" if value is None else str(value).strip()
+
+
+def _parse_date(value: Any) -> Optional[datetime]:
+    raw = _norm(value)
+    if not raw:
+        return None
+    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%Y/%m/%d", "%d/%m/%y"):
+        try:
+            return datetime.strptime(raw[:10], fmt)
+        except Exception:
+            continue
+    return None
+
+
+def _weekday_pt_br(value: Any, dt: Optional[datetime] = None) -> str:
+    raw = _norm(value).lower()
+    slug = unicodedata.normalize("NFKD", raw)
+    slug = "".join(ch for ch in slug if not unicodedata.combining(ch))
+    slug = slug.replace("_", "-").strip()
+    if raw in WEEKDAYS_PT_BR:
+        return WEEKDAYS_PT_BR[raw]
+    if slug in WEEKDAYS_PT_BR:
+        return WEEKDAYS_PT_BR[slug]
+    if dt:
+        return (
+            "segunda-feira",
+            "terça-feira",
+            "quarta-feira",
+            "quinta-feira",
+            "sexta-feira",
+            "sábado",
+            "domingo",
+        )[dt.weekday()]
+    return _norm(value)
+
+
+def _format_date_br(value: Any) -> str:
+    dt = _parse_date(value)
+    return dt.strftime("%d/%m/%Y") if dt else _norm(value)
+
+
+def _format_hour_br(value: Any) -> str:
+    raw = _norm(value)
+    if not raw:
+        return ""
+    for fmt in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(raw[:8], fmt).strftime("%Hh%M")
+        except Exception:
+            continue
+    return raw
 
 
 def _slug_text(value: Any) -> str:
@@ -176,11 +252,11 @@ def _draw_text_shadow(
     font: ImageFont.ImageFont,
     fill: Tuple[int, int, int, int],
     anchor: Optional[str] = None,
-    shadow: Tuple[int, int, int, int] = (255, 250, 235, 225),
+    shadow: Tuple[int, int, int, int] = (255, 252, 240, 245),
 ) -> None:
     x, y = xy
-    # Expande o outline para 2 pixels de espessura para descolar bem do fundo
-    for ox, oy in ((1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1), (2, 2), (-2, 2), (2, -2), (-2, -2)):
+    # Outline claro e discreto para manter leitura sobre o pergaminho.
+    for ox, oy in ((1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1), (2, 0), (-2, 0), (0, 2), (0, -2)):
         draw.text((x + ox, y + oy), text, font=font, fill=shadow, anchor=anchor)
     draw.text((x, y), text, font=font, fill=fill, anchor=anchor)
 
@@ -243,7 +319,12 @@ def _layout_config(loja: Dict[str, Any], width: int, height: int) -> Dict[str, A
 def _event_text(evento: Dict[str, Any]) -> str:
     numero = _norm(evento.get("Número da loja"))
     numero_fmt = f" {numero}" if numero and numero != "0" else ""
-    data_hora = f"{_norm(evento.get('Data do evento'))} - {_norm(evento.get('Hora'))}".strip(" -")
+    data_raw = evento.get("Data do evento")
+    data = _format_date_br(data_raw)
+    dia = _weekday_pt_br(evento.get("Dia da semana"), _parse_date(data_raw))
+    hora = _format_hour_br(evento.get("Hora"))
+    data_hora = f"{data} ({dia})" if data and dia else data
+    data_hora = f"{data_hora} - {hora}".strip(" -")
     loja = f"{_norm(evento.get('Nome da loja'))}{numero_fmt}".strip()
     oriente_potencia = " - ".join([v for v in (_norm(evento.get("Oriente")), _norm(evento.get("Potência"))) if v])
     linhas = [
@@ -559,9 +640,11 @@ def _event_visual_parts(evento: Dict[str, Any]) -> Dict[str, str]:
     potencia_complemento = _norm(_get_any(evento, "Potencia complemento", "Potência complemento", "potencia_complemento"))
     potencia_display = formatar_potencia_exibicao(potencia, potencia_complemento)
     local_potencia = " - ".join([v for v in (cidade, uf, potencia_display) if v])
-    data = _norm(_get_any(evento, "Data do evento", "Data", "data_evento", "data"))
-    dia = _norm(_get_any(evento, "Dia da semana", "dia_semana", "dia"))
-    hora = _norm(_get_any(evento, "Hora", "hora_evento", "hora"))
+    data_raw = _get_any(evento, "Data do evento", "Data", "data_evento", "data")
+    data_dt = _parse_date(data_raw)
+    data = _format_date_br(data_raw)
+    dia = _weekday_pt_br(_get_any(evento, "Dia da semana", "dia_semana", "dia"), data_dt)
+    hora = _format_hour_br(_get_any(evento, "Hora", "hora_evento", "hora"))
     data_hora = data
     if dia:
         data_hora = f"{data} ({dia})" if data else f"({dia})"
@@ -739,11 +822,12 @@ def _render_default_template_card(
     width, height = image.size
     warnings: List[str] = []
     preferred_font = _norm(_get_any(loja, "Fonte padrão", "fonte_padrao"))
-    ink = _hex_to_rgba(_norm(_get_any(loja, "Cor texto padrão", "cor_texto_padrao")) or DEFAULT_TEXT_COLOR, 255)
-    soft_ink = _hex_to_rgba("#3a2410", 235)
-    accent = _hex_to_rgba("#0c5265", 255)
-    rito_accent = _hex_to_rgba("#0c5265", 245)
-    divider = _hex_to_rgba("#8a5a22", 150)
+    ink = _hex_to_rgba(_norm(_get_any(loja, "Cor texto padrão", "cor_texto_padrao")) or "#241305", 255)
+    soft_ink = _hex_to_rgba("#4a2c12", 245)
+    accent = _hex_to_rgba("#8a1f1f", 255)
+    rito_accent = _hex_to_rgba("#174f64", 255)
+    section_ink = _hex_to_rgba("#6f3f12", 255)
+    divider = _hex_to_rgba("#9a6728", 185)
     parts = _event_visual_parts(evento)
 
     _apply_watermark(image)
@@ -762,36 +846,36 @@ def _render_default_template_card(
     center_x = width // 2
     y = int(height * 0.235)
 
-    date_font = _fit_font(draw, parts["data_hora"], int(content_w * 0.98), max(56, width // 15), max(36, width // 26), preferred_font, BODY_FONT_CANDIDATES)
+    date_font = _fit_font(draw, parts["data_hora"], int(content_w * 0.98), max(58, width // 14), max(38, width // 25), preferred_font, BODY_FONT_CANDIDATES)
     hour_font = _load_font(max(getattr(date_font, "size", 46) + 4, width // 14), preferred_font, TITLE_FONT_CANDIDATES)
     degree_font = _load_font(max(24, width // 34), preferred_font, ITALIC_FONT_CANDIDATES)
-    section_font = _load_font(max(30, width // 29), preferred_font, TITLE_FONT_CANDIDATES)
+    section_font = _load_font(max(31, width // 28), preferred_font, TITLE_FONT_CANDIDATES)
     loja_font = _fit_font(draw, parts["loja"], int(content_w * 0.96), max(62, width // 14), max(34, width // 25), preferred_font, ITALIC_FONT_CANDIDATES)
-    local_font = _load_font(max(28, width // 32), preferred_font, BODY_FONT_CANDIDATES)
-    body_font = _load_font(max(31, width // 30), preferred_font, BODY_FONT_CANDIDATES)
-    note_font = _load_font(max(27, width // 34), preferred_font, ITALIC_FONT_CANDIDATES)
+    local_font = _load_font(max(29, width // 31), preferred_font, BODY_FONT_CANDIDATES)
+    body_font = _load_font(max(32, width // 29), preferred_font, BODY_FONT_CANDIDATES)
+    note_font = _load_font(max(29, width // 32), preferred_font, ITALIC_FONT_CANDIDATES)
     footer_small = _load_font(max(17, width // 60), preferred_font, TITLE_FONT_CANDIDATES)
 
     _draw_ornament_divider(draw, center_x, y, int(content_w * 0.86), divider)
     y += int(height * 0.035)
     if parts["hora"] and parts["data_hora"].endswith(parts["hora"]):
         prefix = parts["data_hora"][: -len(parts["hora"])]
-        y = _draw_centered_highlight_tail(draw, center_x, y, prefix, parts["hora"], date_font, hour_font, ink, ink)
+        y = _draw_centered_highlight_tail(draw, center_x, y, prefix, parts["hora"], date_font, hour_font, ink, accent)
     else:
         y = _draw_centered_wrapped(draw, parts["data_hora"], center_x, y, date_font, ink, content_w, line_gap=8, max_lines=2)
     _draw_ornament_divider(draw, center_x, y + 3, int(content_w * 0.72), divider)
     y += int(height * 0.038)
     if parts["grau"]:
-        y = _draw_centered_wrapped(draw, f"Grau {parts['grau']}", center_x, y, degree_font, soft_ink, content_w, line_gap=4, max_lines=1)
+        y = _draw_centered_wrapped(draw, f"Grau {parts['grau']}", center_x, y, degree_font, accent, content_w, line_gap=4, max_lines=1)
 
     y += int(height * 0.035)
-    y = _draw_section_title(draw, "LOJA", center_x, y, section_font, ink, content_w)
+    y = _draw_section_title(draw, "LOJA", center_x, y, section_font, section_ink, content_w)
     y = _draw_loja_name(draw, parts["loja"], parts["numero"], center_x, y, int(content_w * 0.96), loja_font, ink, accent)
     if parts["local_potencia"]:
         y = _draw_centered_wrapped(draw, parts["local_potencia"], center_x, y + 4, local_font, soft_ink, content_w, line_gap=6, max_lines=2)
 
     y += int(height * 0.04)
-    y = _draw_section_title(draw, "SESSÃO", center_x, y, section_font, ink, content_w)
+    y = _draw_section_title(draw, "SESSÃO", center_x, y, section_font, section_ink, content_w)
     details: List[Tuple[str, Tuple[int, int, int, int]]] = []
     if parts["tipo"]:
         tipo = parts["tipo"]
@@ -815,7 +899,7 @@ def _render_default_template_card(
     y += int(height * 0.035)
     _draw_ornament_divider(draw, center_x, y, int(content_w * 0.72), divider)
     y += int(height * 0.025)
-    y = _draw_section_title(draw, "ORDEM DO DIA / OBSERVAÇÕES", center_x, y, section_font, ink, content_w)
+    y = _draw_section_title(draw, "ORDEM DO DIA / OBSERVAÇÕES", center_x, y, section_font, section_ink, content_w)
     if parts["observacoes"]:
         max_note_bottom = int(height * 0.825)
         line_h = max(_measure(draw, "Ag", note_font)[1], getattr(note_font, "size", 26)) + 6

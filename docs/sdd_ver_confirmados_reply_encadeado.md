@@ -33,7 +33,7 @@ A funcao `ver_confirmados` nao deve ser reescrita por uma versao simplificada. A
 
 ## Comportamento
 
-Ao clicar em `Ver confirmados`, o bot deve enviar a lista atual por `context.bot.send_message(...)`, usando `reply_to_message_id=query.message.message_id` quando houver mensagem de origem no callback.
+Ao clicar em `Ver confirmados`, o bot deve enviar a lista atual por `context.bot.send_message(...)`, usando `ReplyParameters(message_id=query.message.message_id)` quando houver mensagem de origem no callback.
 
 O card original nao deve ser editado, substituido ou apagado.
 
@@ -46,12 +46,18 @@ O botao `Fechar` deve continuar removendo ou ocultando apenas a mensagem da list
 Em `src/eventos.py::ver_confirmados`, o envio esperado e:
 
 ```python
+reply_parameters = (
+    ReplyParameters(message_id=query.message.message_id)
+    if query.message
+    else None
+)
+
 msg = await context.bot.send_message(
     chat_id=update.effective_chat.id,
     text=texto,
     parse_mode="Markdown",
     reply_markup=reply_markup,
-    reply_to_message_id=query.message.message_id if query.message else None,
+    reply_parameters=reply_parameters,
 )
 ```
 
@@ -86,7 +92,7 @@ CallbackQueryHandler(fechar_mensagem, pattern=r"^fechar_mensagem$")
 ## Verificacao
 
 - Conferir que `src/eventos.py::ver_confirmados` continua montando a lista atual.
-- Conferir que o envio usa `reply_to_message_id=query.message.message_id`.
+- Conferir que o envio usa `ReplyParameters(message_id=query.message.message_id)`.
 - Conferir que `_auto_delete_message(..., delay=15)` e usado para a lista.
 - Conferir que os handlers seguem registrados em `main.py`.
 - Rodar `python -m compileall src main.py` apos alteracoes de codigo.
