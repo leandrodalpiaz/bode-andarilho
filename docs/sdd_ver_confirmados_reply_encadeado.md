@@ -1,49 +1,49 @@
 # SDD - Ver Confirmados Abaixo Do Card
 
 Projeto: Bode Andarilho
-Modulo: eventos e confirmacoes
+Módulo: eventos e confirmações
 Arquivo principal: `src/eventos.py`
 Data: 22/05/2026
 Status: Implementado nesta branch
 
 ## Contexto
 
-A lista de confirmados atual esta correta e deve ser preservada. O ajuste de UX trata apenas do local onde essa lista aparece quando o usuario clica em `Ver confirmados` no card de uma sessao.
+A lista de confirmados atual está correta e deve ser preservada. O ajuste de UX trata apenas do local onde essa lista aparece quando o usuário clica em `Ver confirmados` no card de uma sessão.
 
-O comportamento desejado e manter a lista visualmente vinculada ao card de origem, exibindo-a como uma mensagem de reply abaixo do card. Isso preserva a prova social perto da sessao correspondente e evita que o usuario veja uma mensagem solta, desconectada do evento.
+O comportamento desejado é manter a lista visualmente vinculada ao card de origem, exibindo-a como uma mensagem de reply abaixo do card. Isso preserva a prova social perto da sessão correspondente e evita que o usuário veja uma mensagem solta, desconectada do evento.
 
 ## Escopo
 
-Este ajuste nao altera os dados, a formatacao, os botoes, as consultas, as regras de confirmacao/cancelamento nem as integracoes existentes.
+Este ajuste não altera os dados, a formatação, os botões, as consultas, as regras de confirmação/cancelamento nem as integrações existentes.
 
 Devem ser preservados em `src/eventos.py::ver_confirmados`:
 
 - busca do evento e aliases de identificador;
-- consulta das confirmacoes;
+- consulta das confirmações;
 - enriquecimento com dados do membro;
-- formatacao atual da lista;
-- indicacao de visitante;
-- botoes ja existentes;
+- formatação atual da lista;
+- indicação de visitante;
+- botões já existentes;
 - apoio institucional;
-- registro de exibicao de apoio;
-- botao `Fechar`;
-- envio como mensagem temporaria.
+- registro de exibição de apoio;
+- botão `Fechar`;
+- envio como mensagem temporária.
 
-A funcao `ver_confirmados` nao deve ser reescrita por uma versao simplificada. A mudanca e somente de exibicao.
+A função `ver_confirmados` não deve ser reescrita por uma versão simplificada. A mudança é somente de exibição.
 
 ## Comportamento
 
 Ao clicar em `Ver confirmados`, o bot deve enviar a lista atual por `context.bot.send_message(...)`, usando `ReplyParameters(message_id=query.message.message_id)` quando houver mensagem de origem no callback.
 
-O card original nao deve ser editado, substituido ou apagado.
+O card original não deve ser editado, substituído ou apagado.
 
-A mensagem da lista deve ser temporaria e autoapagada apos 15 segundos, para reduzir poluicao visual no grupo principal.
+A mensagem da lista deve ser temporária e autoapagada após 15 segundos, para reduzir poluição visual no grupo principal.
 
-O botao `Fechar` deve continuar removendo ou ocultando apenas a mensagem da lista, sem tocar no card original.
+O botão `Fechar` deve continuar removendo ou ocultando apenas a mensagem da lista, sem tocar no card original.
 
-## Implementacao
+## Implementação
 
-Em `src/eventos.py::ver_confirmados`, o envio esperado e:
+Em `src/eventos.py::ver_confirmados`, o envio esperado é:
 
 ```python
 reply_parameters = (
@@ -61,7 +61,7 @@ msg = await context.bot.send_message(
 )
 ```
 
-Depois do envio, a mensagem da lista deve ser agendada para exclusao automatica em 15 segundos:
+Depois do envio, a mensagem da lista deve ser agendada para exclusão automática em 15 segundos:
 
 ```python
 asyncio.create_task(
@@ -74,25 +74,25 @@ asyncio.create_task(
 )
 ```
 
-Os handlers ja estao registrados em `main.py`:
+Os handlers já estão registrados em `main.py`:
 
 ```python
 CallbackQueryHandler(ver_confirmados, pattern=r"^ver_confirmados\|")
 CallbackQueryHandler(fechar_mensagem, pattern=r"^fechar_mensagem$")
 ```
 
-## Criterios De Aceite
+## Critérios de Aceite
 
 - Ao clicar em `Ver confirmados` no grupo, a lista aparece abaixo do card como reply encadeado.
 - O card original permanece intacto.
-- A lista desaparece automaticamente apos 15 segundos.
+- A lista desaparece automaticamente após 15 segundos.
 - Clicar em `Fechar` antes dos 15 segundos remove apenas a lista.
-- Nenhum dado, botao, regra ou integracao existente e removido.
+- Nenhum dado, botão, regra ou integração existente é removido.
 
-## Verificacao
+## Verificação
 
 - Conferir que `src/eventos.py::ver_confirmados` continua montando a lista atual.
 - Conferir que o envio usa `ReplyParameters(message_id=query.message.message_id)`.
-- Conferir que `_auto_delete_message(..., delay=15)` e usado para a lista.
+- Conferir que `_auto_delete_message(..., delay=15)` é usado para a lista.
 - Conferir que os handlers seguem registrados em `main.py`.
-- Rodar `python -m compileall src main.py` apos alteracoes de codigo.
+- Rodar `python -m compileall src main.py` após alterações de código.

@@ -129,7 +129,7 @@ Formato recomendado:
 
 ## 7. Diploma digital
 
-Entrada do usuario:
+Entrada do usuário:
 
 - Menu principal -> `Meu Diploma`
 - comando `/perfil`
@@ -140,7 +140,7 @@ Fluxo:
 1. `src.perfil.mostrar_perfil` busca o cadastro do membro.
 2. `src.render_diploma.renderizar_diploma` gera duas imagens PNG 9:16.
 3. O Telegram envia as imagens como `send_media_group`.
-4. Os botoes de perfil seguem em mensagem separada, pois album do Telegram nao aceita teclado inline anexado.
+4. Os botões de perfil seguem em mensagem separada, pois o álbum do Telegram não aceita teclado inline anexado.
 5. Se a imagem falhar, o perfil textual antigo continua como fallback.
 
 Arquivos base:
@@ -210,22 +210,22 @@ Painel do administrador (nível 3):
 
 Publicidade textual:
 
-- `src.apoio.PATROCINADORES` segue como lista estatica/temporaria.
+- `src.apoio.PATROCINADORES` segue como lista estática/temporária.
 - `src.apoio.obter_texto_patrocinio()` injeta apoio institucional em textos longos.
 
 Publicidade visual do diploma:
 
-- `src.publicidade.obter_publicidade_diploma()` centraliza a configuracao visual.
-- Se existir `assets/branding/sponsor_sindoficios.png`, a imagem e usada no rodape da pagina 2.
-- Se nao existir, o diploma usa a peca de exemplo: `Sua imagem aqui`.
+- `src.publicidade.obter_publicidade_diploma()` centraliza a configuração visual.
+- Se existir `assets/branding/sponsor_sindoficios.png`, a imagem é usada no rodapé da página 2.
+- Se não existir, o diploma usa a peça de exemplo: `Sua imagem aqui`.
 
-Gestao administrativa atual:
+Gestão administrativa atual:
 
-- Menu principal -> Administracao -> Publicidade/Apoiadores.
+- Menu principal -> Administração -> Publicidade/Apoiadores.
 - Callback: `admin_publicidade`.
-- Acesso restrito a nivel 3.
-- A tela mostra a peca ativa, status da imagem e a mensagem usada no diploma.
-- Este ciclo nao possui upload/CRUD completo por bot; a troca visual e feita substituindo o asset aprovado.
+- Acesso restrito a nível 3.
+- A tela mostra a peça ativa, status da imagem e a mensagem usada no diploma.
+- Este ciclo não possui upload/CRUD completo por bot; a troca visual é feita substituindo o asset aprovado.
 
 ## 9. Como editar no futuro
 

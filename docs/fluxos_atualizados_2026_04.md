@@ -20,7 +20,7 @@ Arquivos de maior impacto para fluxo:
 ## Diretriz de UX (homologação)
 
 - O fluxo conversacional é secundário.
-- Sempre que possível, cadastros e edições devem ocorrer via Mini App (formulários) para reduzir erro de digitação e manter padronização.
+- Sempre que possível, cadastros e edições devem ocorrer via Mini App (formulários) para reduzir erros de digitação e manter a padronização.
 
 ## Onboarding grupo -> privado
 

@@ -28,6 +28,7 @@ import hashlib
 import hmac
 import json
 import asyncio
+import base64
 import logging
 import mimetypes
 import os
@@ -53,6 +54,7 @@ from src.sheets_supabase import (
     buscar_loja_por_nome_numero,
     listar_secretarios_ativos,
     upload_storage_publico,
+    supabase,
 )
 from src.permissoes import get_nivel
 from src.evento_midia import BUCKET_EVENT_CARDS, publicar_evento_no_grupo as publicar_midia_evento_no_grupo
@@ -107,6 +109,9 @@ _RENDER_URL = _webapp_base_url()
 WEBAPP_URL_MEMBRO = f"{_RENDER_URL}/webapp/cadastro_membro" if _RENDER_URL else ""
 WEBAPP_URL_EVENTO = f"{_RENDER_URL}/webapp/cadastro_evento" if _RENDER_URL else ""
 WEBAPP_URL_LOJA   = f"{_RENDER_URL}/webapp/cadastro_loja"   if _RENDER_URL else ""
+WEBAPP_URL_APOIOS = f"{_RENDER_URL}/webapp/apoios" if _RENDER_URL else ""
+
+BUCKET_APOIOS_PUBLICIDADE = os.getenv("SUPABASE_APOIOS_BUCKET", "apoios-publicidade")
 
 _GRUPO_PRINCIPAL_ID = os.getenv("GRUPO_PRINCIPAL_ID", "")
 
