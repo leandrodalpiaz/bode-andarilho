@@ -2949,7 +2949,14 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
         bot = request.app.state.telegram_app.bot
 
         import asyncio
-        asyncio.create_task(_publicar_evento_no_grupo(request.app.state.telegram_app, id_evento, dict(evento)))
+        async def task_segura():
+            try:
+                await _publicar_evento_no_grupo(request.app.state.telegram_app, id_evento, dict(evento))
+            except Exception as e:
+                logger.error("ERRO GRAVE NA TASK BACKGROUND DE PUBLICACAO: %s", e, exc_info=True)
+        t = asyncio.create_task(task_segura())
+        _BACKGROUND_TASKS.add(t)
+        t.add_done_callback(_BACKGROUND_TASKS.discard)
     except Exception as e:
         logger.warning("Falha ao agendar publicacao do evento %s no grupo para %s: %s", id_evento, telegram_id, e)
 
