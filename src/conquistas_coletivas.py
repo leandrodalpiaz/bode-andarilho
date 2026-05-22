@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 RECORD_MINIMO_PARA_ALERTA = 3
 RECORD_PASSO_ALERTA = 5
+ENV_DISPAROS_COLETIVOS = "CONQUISTAS_COLETIVAS_GRUPO"
 
 
 def _slugify(texto: Any) -> str:
@@ -45,8 +46,20 @@ def _obter_grupo_central() -> Optional[int]:
         return None
 
 
+def _disparos_coletivos_habilitados() -> bool:
+    """Mantem os alertas coletivos pausados por padrao para evitar spam no grupo."""
+    raw = (os.getenv(ENV_DISPAROS_COLETIVOS) or "").strip().lower()
+    return raw in {"1", "true", "sim", "yes", "on"}
+
+
 async def enviar_mensagem_coletiva(bot: Bot, texto: str):
     """Envia uma mensagem de texto formatada para o grupo central."""
+    if not _disparos_coletivos_habilitados():
+        logger.info(
+            "Disparo coletivo suprimido: %s nao esta habilitado.",
+            ENV_DISPAROS_COLETIVOS,
+        )
+        return
     grupo_id = _obter_grupo_central()
     if not grupo_id:
         logger.warning("Grupo central não configurado. Ignorando mensagem coletiva.")
@@ -123,6 +136,13 @@ async def processar_conquistas_coletivas_evento(bot: Bot, evento: Dict[str, Any]
     (ineditismo e novos recordes de sessões disponíveis).
     """
     try:
+        if not _disparos_coletivos_habilitados():
+            logger.info(
+                "Conquistas coletivas pausadas: %s nao esta habilitado.",
+                ENV_DISPAROS_COLETIVOS,
+            )
+            return
+
         # 1. Extração e Normalização de Campos
         loja_id = str(evento.get("loja_id") or evento.get("ID da loja") or "").strip()
         nome_loja = str(evento.get("nome_loja") or evento.get("Nome da loja") or "").strip()
