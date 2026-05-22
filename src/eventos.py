@@ -2568,34 +2568,23 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     reply_markup = InlineKeyboardMarkup(botoes)
 
-    if update.effective_chat and update.effective_chat.type == "private":
-        await _enviar_ou_editar_mensagem(
-            context,
-            update.effective_user.id,
-            TIPO_RESULTADO,
-            texto,
-            reply_markup,
-            limpar_conteudo=True,
-        )
-    else:
-        msg = await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text=texto,
-            parse_mode="Markdown",
-            reply_markup=reply_markup,
-        )
+    msg = await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=texto,
+        parse_mode="Markdown",
+        reply_markup=reply_markup,
+        reply_to_message_id=query.message.message_id if query.message else None,
+    )
 
-        # No grupo, a lista completa é temporária para evitar poluição visual.
-        # O resumo é independente e permanece visível.
-        if update.effective_chat and update.effective_chat.type in ("group", "supergroup"):
-            asyncio.create_task(
-                _auto_delete_message(
-                    context,
-                    update.effective_chat.id,
-                    msg.message_id,
-                    delay=15,
-                )
-            )
+    # A lista completa é temporária e auto-destrutiva após 20s em qualquer chat
+    asyncio.create_task(
+        _auto_delete_message(
+            context,
+            update.effective_chat.id,
+            msg.message_id,
+            delay=20,
+        )
+    )
     try:
         for p in apoio_pick:
             registrar_exibicao_apoio(

@@ -200,6 +200,9 @@ def _draw_centered_lines(
     return current_y
 
 
+import functools
+
+@functools.lru_cache(maxsize=32)
 def _open_image(source: str) -> Image.Image:
     if source.startswith(("http://", "https://")):
         resp = requests.get(source, timeout=20)
