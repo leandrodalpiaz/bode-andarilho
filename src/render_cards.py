@@ -392,17 +392,25 @@ def _apply_circular_mask(stamp: Image.Image) -> Image.Image:
 
 
 def _remove_edge_background(stamp: Image.Image) -> Image.Image:
+    from collections import deque
     stamp = stamp.convert("RGBA")
     pixels = stamp.load()
     width, height = stamp.size
-    stack = []
-    seen = set()
+    
+    seen = bytearray(width * height)
+    queue = deque()
+    
     for x in range(width):
-        stack.append((x, 0))
-        stack.append((x, height - 1))
-    for y in range(height):
-        stack.append((0, y))
-        stack.append((width - 1, y))
+        queue.append((x, 0))
+        queue.append((x, height - 1))
+        seen[x] = 1
+        seen[(height - 1) * width + x] = 1
+        
+    for y in range(1, height - 1):
+        queue.append((0, y))
+        queue.append((width - 1, y))
+        seen[y * width] = 1
+        seen[y * width + width - 1] = 1
 
     def is_background(px: int, py: int) -> bool:
         r, g, b, a = pixels[px, py]
@@ -411,16 +419,31 @@ def _remove_edge_background(stamp: Image.Image) -> Image.Image:
         neutral = abs(r - g) <= 7 and abs(g - b) <= 7
         return neutral and r >= 185 and g >= 185 and b >= 185
 
-    while stack:
-        px, py = stack.pop()
-        if px < 0 or py < 0 or px >= width or py >= height or (px, py) in seen:
-            continue
-        seen.add((px, py))
+    while queue:
+        px, py = queue.popleft()
+        
         if not is_background(px, py):
             continue
+            
         r, g, b, _ = pixels[px, py]
         pixels[px, py] = (r, g, b, 0)
-        stack.extend(((px + 1, py), (px - 1, py), (px, py + 1), (px, py - 1)))
+        
+        if px + 1 < width and not seen[py * width + (px + 1)]:
+            seen[py * width + (px + 1)] = 1
+            queue.append((px + 1, py))
+            
+        if px - 1 >= 0 and not seen[py * width + (px - 1)]:
+            seen[py * width + (px - 1)] = 1
+            queue.append((px - 1, py))
+            
+        if py + 1 < height and not seen[(py + 1) * width + px]:
+            seen[(py + 1) * width + px] = 1
+            queue.append((px, py + 1))
+            
+        if py - 1 >= 0 and not seen[(py - 1) * width + px]:
+            seen[(py - 1) * width + px] = 1
+            queue.append((px, py - 1))
+
     return stamp
 
 
