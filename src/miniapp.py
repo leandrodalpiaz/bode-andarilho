@@ -2694,6 +2694,470 @@ async def get_cadastro_loja(request: Request) -> HTMLResponse:
     return HTMLResponse(html_cadastro_loja())
 
 
+def _apoios_table(name: str):
+    if not supabase:
+        return None
+    return supabase.table(name)
+
+
+def _money_float(value: Any) -> float:
+    try:
+        return float(str(value or "0").replace(",", "."))
+    except Exception:
+        return 0.0
+
+
+def _int_or_default(value: Any, default: int = 0) -> int:
+    try:
+        return int(float(str(value or default).replace(",", ".")))
+    except Exception:
+        return default
+
+
+def _bool_from_any(value: Any) -> bool:
+    return str(value or "").strip().lower() in {"1", "s", "sim", "true", "on", "ativo", "yes"}
+
+
+def _current_month() -> str:
+    return datetime.now().strftime("%Y-%m")
+
+
+def _norm_iso_date(value: Any) -> str:
+    raw = _norm_text(value)
+    if not raw:
+        return ""
+    if len(raw) == 10 and raw[4] == "-" and raw[7] == "-":
+        return raw
+    for fmt in ("%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(raw, fmt).strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    return raw[:10]
+
+
+async def _apoios_request_payload(request: Request) -> Dict[str, Any]:
+    if request.method == "GET":
+        return dict(request.query_params)
+    try:
+        return await request.json()
+    except Exception:
+        return {}
+
+
+async def _validar_admin_apoios(request: Request, body: Dict[str, Any]) -> tuple[Optional[int], Optional[JSONResponse]]:
+    bot_token: str = request.app.state.bot_token
+    init_data = (body.get("init_data") or request.query_params.get("init_data") or "").strip()
+    user = verify_telegram_webapp_data(init_data, bot_token)
+    if not user or not user.get("id"):
+        return None, JSONResponse({"ok": False, "error": "Nao autorizado."}, status_code=403)
+    telegram_id = int(user["id"])
+    if str(get_nivel(telegram_id)) != "3":
+        return telegram_id, JSONResponse({"ok": False, "error": "Area exclusiva para administradores."}, status_code=403)
+    return telegram_id, None
+
+
+def _fetch_apoios(table: str, order: str = "created_at", desc: bool = True) -> List[Dict[str, Any]]:
+    t = _apoios_table(table)
+    if t is None:
+        return []
+    try:
+        q = t.select("*")
+        if order:
+            q = q.order(order, desc=desc)
+        return list((q.execute().data or []))
+    except Exception as exc:
+        logger.warning("Falha ao consultar %s: %s", table, exc)
+        return []
+
+
+def _decode_data_url(data_url: str) -> tuple[bytes, str]:
+    raw = _norm_text(data_url)
+    if not raw or "," not in raw:
+        return b"", "application/octet-stream"
+    header, payload = raw.split(",", 1)
+    content_type = "application/octet-stream"
+    if header.startswith("data:") and ";" in header:
+        content_type = header[5:].split(";", 1)[0] or content_type
+    try:
+        return base64.b64decode(payload), content_type
+    except Exception:
+        return b"", content_type
+
+
+def _upload_apoio_asset(prefix: str, row_id: str, field: str, data_url: str) -> str:
+    content, content_type = _decode_data_url(data_url)
+    if not content:
+        return ""
+    ext = mimetypes.guess_extension(content_type) or ".bin"
+    path = f"{prefix}/{row_id}/{field}{ext}"
+    return upload_storage_publico(BUCKET_APOIOS_PUBLICIDADE, path, content, content_type) or ""
+
+
+def _upsert_apoios_config(apoiador_id: str, body: Dict[str, Any]) -> None:
+    table = _apoios_table("apoios_config")
+    if not apoiador_id or table is None:
+        return
+    row = {
+        "apoiador_id": apoiador_id,
+        "permite_logo_card": _bool_from_any(body.get("permite_logo_card")),
+        "permite_confirmados": _bool_from_any(body.get("permite_confirmados")),
+        "permite_ia": _bool_from_any(body.get("permite_ia")),
+        "permite_rodape": _bool_from_any(body.get("permite_rodape")),
+        "permite_botao_link": _bool_from_any(body.get("permite_botao_link", "true")),
+        "limite_card_mes": _int_or_default(body.get("limite_card_mes")),
+        "limite_confirmados_mes": _int_or_default(body.get("limite_confirmados_mes")),
+        "limite_ia_mes": _int_or_default(body.get("limite_ia_mes")),
+        "limite_rodape_mes": _int_or_default(body.get("limite_rodape_mes")),
+        "peso_prioridade": max(1, _int_or_default(body.get("peso_prioridade"), 1)),
+        "updated_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    existente = table.select("id").eq("apoiador_id", apoiador_id).limit(1).execute()
+    if existente.data:
+        table.update(row).eq("id", existente.data[0]["id"]).execute()
+    else:
+        table.insert(row).execute()
+
+
+def _dashboard_apoios() -> Dict[str, Any]:
+    apoiadores = _fetch_apoios("apoiadores")
+    contratos = _fetch_apoios("apoios_contratos")
+    pagamentos = _fetch_apoios("apoios_pagamentos")
+    exibicoes = _fetch_apoios("apoios_exibicoes")
+    criativos = _fetch_apoios("apoios_criativos")
+    hoje = datetime.now().date()
+    mes = _current_month()
+    contratos_ativos: List[Dict[str, Any]] = []
+    vencendo: List[Dict[str, Any]] = []
+    vencidos: List[Dict[str, Any]] = []
+    inadimplentes: List[Dict[str, Any]] = []
+    for contrato in contratos:
+        status = str(contrato.get("status") or "").lower()
+        fim = None
+        try:
+            fim = datetime.strptime(str(contrato.get("data_fim") or "")[:10], "%Y-%m-%d").date()
+        except Exception:
+            pass
+        if status == "ativo" and (not fim or fim >= hoje):
+            contratos_ativos.append(contrato)
+            if fim and 0 <= (fim - hoje).days <= int(contrato.get("renovacao_alerta_dias") or 30):
+                vencendo.append(contrato)
+        if status == "vencido" or (fim and fim < hoje):
+            vencidos.append(contrato)
+        if status == "inadimplente":
+            inadimplentes.append(contrato)
+    pagamentos_mes = [p for p in pagamentos if str(p.get("competencia") or "").startswith(mes)]
+    recebido_mes = sum(_money_float(p.get("valor_pago")) for p in pagamentos_mes if str(p.get("status") or "").lower() == "pago")
+    saldo_aberto = sum(_money_float(p.get("valor_previsto")) - _money_float(p.get("valor_pago")) for p in pagamentos_mes if str(p.get("status") or "").lower() != "pago")
+    por_tipo: Dict[str, int] = {}
+    for exibicao in exibicoes:
+        tipo = str(exibicao.get("tipo_exibicao") or "sem_tipo")
+        por_tipo[tipo] = por_tipo.get(tipo, 0) + 1
+    return {
+        "apoiadores": apoiadores,
+        "contratos": contratos,
+        "pagamentos": pagamentos,
+        "criativos": criativos,
+        "metricas": {
+            "apoiadores_ativos": len([a for a in apoiadores if str(a.get("status") or "").lower() == "ativo"]),
+            "contratos_ativos": len(contratos_ativos),
+            "contratos_vencendo": len(vencendo),
+            "contratos_vencidos": len(vencidos),
+            "contratos_inadimplentes": len(inadimplentes),
+            "receita_prevista": round(sum(_money_float(c.get("valor_contribuicao")) for c in contratos_ativos), 2),
+            "recebido_mes": round(recebido_mes, 2),
+            "saldo_aberto_mes": round(saldo_aberto, 2),
+            "exibicoes_por_tipo": por_tipo,
+        },
+    }
+
+
+async def api_apoios_dashboard(request: Request) -> JSONResponse:
+    body = await _apoios_request_payload(request)
+    _, erro = await _validar_admin_apoios(request, body)
+    if erro:
+        return erro
+    return JSONResponse({"ok": True, **_dashboard_apoios()})
+
+
+async def api_apoios_apoiadores(request: Request) -> JSONResponse:
+    body = await _apoios_request_payload(request)
+    _, erro = await _validar_admin_apoios(request, body)
+    if erro:
+        return erro
+    if request.method == "GET":
+        return JSONResponse({"ok": True, "apoiadores": _fetch_apoios("apoiadores")})
+    row = {
+        "nome": _norm_text(body.get("nome"))[:200],
+        "responsavel_nome": _norm_text(body.get("responsavel_nome"))[:200],
+        "telefone": _norm_text(body.get("telefone"))[:50],
+        "email": _norm_text(body.get("email"))[:180],
+        "segmento": _norm_text(body.get("segmento"))[:120],
+        "cidade": _norm_text(body.get("cidade"))[:120],
+        "link_publico": _norm_text(body.get("link_publico"))[:400],
+        "texto_curto": _norm_text(body.get("texto_curto"))[:500],
+        "status": _norm_text(body.get("status") or "ativo")[:30],
+        "observacoes": _norm_text(body.get("observacoes"))[:800],
+        "updated_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    if not row["nome"]:
+        return JSONResponse({"ok": False, "error": "Informe o nome do apoiador."}, status_code=400)
+    try:
+        table = _apoios_table("apoiadores")
+        if table is None:
+            raise RuntimeError("Supabase indisponivel")
+        row_id = _norm_text(body.get("id"))
+        if row_id:
+            table.update(row).eq("id", row_id).execute()
+        else:
+            inserted = table.insert(row).execute()
+            row_id = str((inserted.data or [{}])[0].get("id") or "")
+        media_update: Dict[str, str] = {}
+        logo_url = _upload_apoio_asset("apoiadores", row_id, "logo", _norm_text(body.get("logo_data_url")))
+        img_url = _upload_apoio_asset("apoiadores", row_id, "publicidade", _norm_text(body.get("imagem_publicidade_data_url")))
+        if logo_url:
+            media_update["logo_url"] = logo_url
+        if img_url:
+            media_update["imagem_publicidade_url"] = img_url
+        if media_update:
+            table.update(media_update).eq("id", row_id).execute()
+        return JSONResponse({"ok": True, "id": row_id})
+    except Exception as exc:
+        logger.warning("Falha ao salvar apoiador via Mini App: %s", exc)
+        return JSONResponse({"ok": False, "error": "Falha ao salvar apoiador."}, status_code=500)
+
+
+async def api_apoios_contratos(request: Request) -> JSONResponse:
+    body = await _apoios_request_payload(request)
+    _, erro = await _validar_admin_apoios(request, body)
+    if erro:
+        return erro
+    if request.method == "GET":
+        return JSONResponse({"ok": True, "contratos": _fetch_apoios("apoios_contratos")})
+    row = {
+        "apoiador_id": _norm_text(body.get("apoiador_id")),
+        "categoria": _norm_text(body.get("categoria") or "institucional"),
+        "data_inicio": _norm_iso_date(body.get("data_inicio")),
+        "data_fim": _norm_iso_date(body.get("data_fim")),
+        "valor_contribuicao": _money_float(body.get("valor_contribuicao")),
+        "finalidade": _norm_text(body.get("finalidade"))[:400],
+        "status": _norm_text(body.get("status") or "ativo"),
+        "periodicidade": _norm_text(body.get("periodicidade") or "mensal"),
+        "dia_vencimento": _int_or_default(body.get("dia_vencimento"), 10),
+        "renovacao_alerta_dias": _int_or_default(body.get("renovacao_alerta_dias"), 30),
+        "termo_url": _norm_text(body.get("termo_url"))[:500],
+        "observacoes": _norm_text(body.get("observacoes"))[:800],
+        "updated_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    if not row["apoiador_id"] or not row["data_inicio"] or not row["data_fim"]:
+        return JSONResponse({"ok": False, "error": "Informe apoiador e periodo do contrato."}, status_code=400)
+    try:
+        table = _apoios_table("apoios_contratos")
+        if table is None:
+            raise RuntimeError("Supabase indisponivel")
+        row_id = _norm_text(body.get("id"))
+        if row_id:
+            table.update(row).eq("id", row_id).execute()
+        else:
+            inserted = table.insert(row).execute()
+            row_id = str((inserted.data or [{}])[0].get("id") or "")
+        _upsert_apoios_config(row["apoiador_id"], body)
+        return JSONResponse({"ok": True, "id": row_id})
+    except Exception as exc:
+        logger.warning("Falha ao salvar contrato via Mini App: %s", exc)
+        return JSONResponse({"ok": False, "error": "Falha ao salvar contrato."}, status_code=500)
+
+
+async def api_apoios_pagamentos(request: Request) -> JSONResponse:
+    body = await _apoios_request_payload(request)
+    _, erro = await _validar_admin_apoios(request, body)
+    if erro:
+        return erro
+    if request.method == "GET":
+        return JSONResponse({"ok": True, "pagamentos": _fetch_apoios("apoios_pagamentos")})
+    row = {
+        "apoiador_id": _norm_text(body.get("apoiador_id")),
+        "contrato_id": _norm_text(body.get("contrato_id")) or None,
+        "competencia": _norm_text(body.get("competencia") or _current_month())[:7],
+        "data_vencimento": _norm_iso_date(body.get("data_vencimento")) or None,
+        "valor_previsto": _money_float(body.get("valor_previsto")),
+        "valor_pago": _money_float(body.get("valor_pago")),
+        "data_pagamento": _norm_iso_date(body.get("data_pagamento")) or None,
+        "status": _norm_text(body.get("status") or "pendente"),
+        "forma_pagamento": _norm_text(body.get("forma_pagamento"))[:80],
+        "observacoes": _norm_text(body.get("observacoes"))[:800],
+        "updated_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    if not row["apoiador_id"] or not row["competencia"]:
+        return JSONResponse({"ok": False, "error": "Informe apoiador e competencia."}, status_code=400)
+    try:
+        table = _apoios_table("apoios_pagamentos")
+        if table is None:
+            raise RuntimeError("Supabase indisponivel")
+        row_id = _norm_text(body.get("id"))
+        if row_id:
+            table.update(row).eq("id", row_id).execute()
+        else:
+            inserted = table.insert(row).execute()
+            row_id = str((inserted.data or [{}])[0].get("id") or "")
+        comp_url = _upload_apoio_asset("pagamentos", row_id, "comprovante", _norm_text(body.get("comprovante_data_url")))
+        if comp_url:
+            table.update({"comprovante_url": comp_url}).eq("id", row_id).execute()
+        return JSONResponse({"ok": True, "id": row_id})
+    except Exception as exc:
+        logger.warning("Falha ao salvar pagamento via Mini App: %s", exc)
+        return JSONResponse({"ok": False, "error": "Falha ao salvar pagamento."}, status_code=500)
+
+
+async def api_apoios_criativos(request: Request) -> JSONResponse:
+    body = await _apoios_request_payload(request)
+    _, erro = await _validar_admin_apoios(request, body)
+    if erro:
+        return erro
+    if request.method == "GET":
+        return JSONResponse({"ok": True, "criativos": _fetch_apoios("apoios_criativos")})
+    row = {
+        "apoiador_id": _norm_text(body.get("apoiador_id")),
+        "contrato_id": _norm_text(body.get("contrato_id")) or None,
+        "tipo_posicionamento": _norm_text(body.get("tipo_posicionamento") or "tela_apoiadores"),
+        "titulo": _norm_text(body.get("titulo"))[:160],
+        "texto": _norm_text(body.get("texto"))[:1000],
+        "link_url": _norm_text(body.get("link_url"))[:500],
+        "status": _norm_text(body.get("status") or "ativo"),
+        "prioridade": _int_or_default(body.get("prioridade"), 1),
+        "data_inicio": _norm_iso_date(body.get("data_inicio")) or None,
+        "data_fim": _norm_iso_date(body.get("data_fim")) or None,
+        "updated_at": datetime.now().isoformat(timespec="seconds"),
+    }
+    if not row["apoiador_id"] or not row["tipo_posicionamento"]:
+        return JSONResponse({"ok": False, "error": "Informe apoiador e posicionamento."}, status_code=400)
+    try:
+        table = _apoios_table("apoios_criativos")
+        if table is None:
+            raise RuntimeError("Supabase indisponivel")
+        row_id = _norm_text(body.get("id"))
+        if row_id:
+            table.update(row).eq("id", row_id).execute()
+        else:
+            inserted = table.insert(row).execute()
+            row_id = str((inserted.data or [{}])[0].get("id") or "")
+        imagem_url = _upload_apoio_asset("criativos", row_id, "imagem", _norm_text(body.get("imagem_data_url")))
+        if imagem_url:
+            table.update({"imagem_url": imagem_url}).eq("id", row_id).execute()
+        return JSONResponse({"ok": True, "id": row_id})
+    except Exception as exc:
+        logger.warning("Falha ao salvar criativo via Mini App: %s", exc)
+        return JSONResponse({"ok": False, "error": "Falha ao salvar criativo."}, status_code=500)
+
+
+def html_apoios_admin() -> str:
+    body = """
+<div class="card">
+  <div class="card-title">Painel</div>
+  <div id="apoios_metricas" class="loja-resumo">Carregando...</div>
+</div>
+<div class="card">
+  <div class="card-title">Apoiador</div>
+  <input type="hidden" id="apoiador_id">
+  <div class="field"><label>Editar apoiador existente</label><select id="apoiador_select"><option value="">Novo apoiador</option></select></div>
+  <div class="field"><label>Nome</label><input id="apoiador_nome"></div>
+  <div class="field"><label>Responsavel</label><input id="apoiador_responsavel"></div>
+  <div class="field"><label>Telefone</label><input id="apoiador_telefone"></div>
+  <div class="field"><label>Email</label><input id="apoiador_email"></div>
+  <div class="field"><label>Segmento</label><input id="apoiador_segmento"></div>
+  <div class="field"><label>Cidade</label><input id="apoiador_cidade"></div>
+  <div class="field"><label>Link publico</label><input id="apoiador_link"></div>
+  <div class="field"><label>Texto curto</label><textarea id="apoiador_texto"></textarea></div>
+  <div class="field"><label>Status</label><select id="apoiador_status"><option>ativo</option><option>pausado</option><option>encerrado</option></select></div>
+  <div class="field"><label>Logo</label><input id="apoiador_logo" type="file" accept="image/*"></div>
+  <div class="field"><label>Imagem de publicidade</label><input id="apoiador_imagem" type="file" accept="image/*"></div>
+  <button class="btn-primary" type="button" onclick="salvarApoiador()">Salvar apoiador</button>
+</div>
+<div class="card">
+  <div class="card-title">Contrato e exibicao</div>
+  <input type="hidden" id="contrato_id">
+  <div class="field"><label>Editar contrato existente</label><select id="contrato_select"><option value="">Novo contrato</option></select></div>
+  <div class="field"><label>Apoiador</label><select id="contrato_apoiador"></select></div>
+  <div class="field"><label>Categoria</label><select id="contrato_categoria"><option>master</option><option>destaque</option><option>institucional</option><option>amigo_projeto</option></select></div>
+  <div class="field"><label>Inicio</label><input id="contrato_inicio" placeholder="2026-05-01"></div>
+  <div class="field"><label>Fim</label><input id="contrato_fim" placeholder="2026-12-31"></div>
+  <div class="field"><label>Valor</label><input id="contrato_valor" inputmode="decimal"></div>
+  <div class="field"><label>Finalidade</label><textarea id="contrato_finalidade"></textarea></div>
+  <div class="field"><label>Status</label><select id="contrato_status"><option>ativo</option><option>pausado</option><option>inadimplente</option><option>vencido</option><option>encerrado</option></select></div>
+  <div class="field"><label>Periodicidade</label><select id="contrato_periodicidade"><option>mensal</option><option>trimestral</option><option>semestral</option><option>anual</option><option>avulso</option></select></div>
+  <div class="field"><label>Dia vencimento</label><input id="contrato_dia_vencimento" inputmode="numeric" value="10"></div>
+  <div class="field"><label>Alerta renovacao</label><input id="contrato_alerta" inputmode="numeric" value="30"></div>
+  <div class="field"><label>Permissoes</label><select id="permite_logo_card"><option value="true">Logo em card</option><option value="false">Sem logo em card</option></select><select id="permite_confirmados"><option value="true">Lista confirmados</option><option value="false">Sem lista confirmados</option></select><select id="permite_ia"><option value="true">IA</option><option value="false">Sem IA</option></select><select id="permite_rodape"><option value="true">Rodape diploma</option><option value="false">Sem rodape diploma</option></select></div>
+  <div class="field"><label>Limites mensais</label><input id="limite_card_mes" placeholder="card"><input id="limite_confirmados_mes" placeholder="confirmados"><input id="limite_ia_mes" placeholder="ia"><input id="limite_rodape_mes" placeholder="rodape"></div>
+  <div class="field"><label>Peso prioridade</label><input id="peso_prioridade" inputmode="numeric" value="1"></div>
+  <button class="btn-primary" type="button" onclick="salvarContrato()">Salvar contrato</button>
+</div>
+<div class="card">
+  <div class="card-title">Financeiro</div>
+  <input type="hidden" id="pagamento_id">
+  <div class="field"><label>Editar lancamento</label><select id="pagamento_select"><option value="">Novo lancamento</option></select></div>
+  <div class="field"><label>Apoiador</label><select id="pagamento_apoiador"></select></div>
+  <div class="field"><label>Contrato</label><select id="pagamento_contrato"><option value="">Sem contrato</option></select></div>
+  <div class="field"><label>Competencia</label><input id="pagamento_competencia" placeholder="2026-05"></div>
+  <div class="field"><label>Vencimento</label><input id="pagamento_vencimento" placeholder="2026-05-10"></div>
+  <div class="field"><label>Valor previsto</label><input id="pagamento_previsto" inputmode="decimal"></div>
+  <div class="field"><label>Valor pago</label><input id="pagamento_pago" inputmode="decimal"></div>
+  <div class="field"><label>Data pagamento</label><input id="pagamento_data" placeholder="2026-05-10"></div>
+  <div class="field"><label>Status</label><select id="pagamento_status"><option>pendente</option><option>pago</option><option>parcial</option><option>atrasado</option><option>cancelado</option></select></div>
+  <div class="field"><label>Forma</label><input id="pagamento_forma"></div>
+  <div class="field"><label>Comprovante</label><input id="pagamento_comprovante" type="file" accept="image/*,.pdf"></div>
+  <button class="btn-primary" type="button" onclick="salvarPagamento()">Salvar financeiro</button>
+</div>
+<div class="card">
+  <div class="card-title">Criativo</div>
+  <input type="hidden" id="criativo_id">
+  <div class="field"><label>Editar criativo</label><select id="criativo_select"><option value="">Novo criativo</option></select></div>
+  <div class="field"><label>Apoiador</label><select id="criativo_apoiador"></select></div>
+  <div class="field"><label>Contrato</label><select id="criativo_contrato"><option value="">Sem contrato</option></select></div>
+  <div class="field"><label>Posicionamento</label><select id="criativo_tipo"><option value="card_logo">Logo em card</option><option value="rodape_diploma">Rodape diploma</option><option value="tela_apoiadores">Tela apoiadores</option><option value="ia_resposta_texto">Resposta IA</option><option value="confirmados_premium_texto">Lista confirmados</option></select></div>
+  <div class="field"><label>Titulo</label><input id="criativo_titulo"></div>
+  <div class="field"><label>Texto</label><textarea id="criativo_texto"></textarea></div>
+  <div class="field"><label>Link</label><input id="criativo_link"></div>
+  <div class="field"><label>Status</label><select id="criativo_status"><option>ativo</option><option>pausado</option><option>encerrado</option></select></div>
+  <div class="field"><label>Prioridade</label><input id="criativo_prioridade" inputmode="numeric" value="1"></div>
+  <div class="field"><label>Inicio/Fim</label><input id="criativo_inicio" placeholder="2026-05-01"><input id="criativo_fim" placeholder="2026-12-31"></div>
+  <div class="field"><label>Imagem</label><input id="criativo_imagem" type="file" accept="image/*"></div>
+  <button class="btn-primary" type="button" onclick="salvarCriativo()">Salvar criativo</button>
+</div>
+"""
+    script = """
+let state={apoiadores:[],contratos:[],pagamentos:[],criativos:[]};
+const byId=id=>document.getElementById(id);
+function opt(label,value){const o=document.createElement('option');o.textContent=label;o.value=value||'';return o;}
+async function fileData(id){const f=(byId(id).files||[])[0];if(!f)return '';return await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result||'');r.onerror=reject;r.readAsDataURL(f);});}
+async function api(path,payload){const resp=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,init_data:tgInitData()})});const data=await resp.json();if(!data.ok)throw new Error(data.error||'Falha na operacao.');return data;}
+function fillSelects(){
+  ['apoiador_select','contrato_apoiador','pagamento_apoiador','criativo_apoiador'].forEach(id=>{const s=byId(id);const first=s.querySelector('option')?.cloneNode(true);s.innerHTML='';if(first)s.appendChild(first);state.apoiadores.forEach(a=>s.appendChild(opt(`${a.nome||'Apoiador'} (${a.status||''})`,a.id)));});
+  ['contrato_select','pagamento_contrato','criativo_contrato'].forEach(id=>{const s=byId(id);const first=s.querySelector('option')?.cloneNode(true);s.innerHTML='';if(first)s.appendChild(first);state.contratos.forEach(c=>s.appendChild(opt(`${c.categoria||'contrato'} ${c.data_inicio||''} a ${c.data_fim||''}`,c.id)));});
+  byId('pagamento_select').innerHTML='<option value="">Novo lancamento</option>'; state.pagamentos.forEach(p=>byId('pagamento_select').appendChild(opt(`${p.competencia||''} - ${p.status||''} - R$ ${p.valor_previsto||0}`,p.id)));
+  byId('criativo_select').innerHTML='<option value="">Novo criativo</option>'; state.criativos.forEach(c=>byId('criativo_select').appendChild(opt(`${c.tipo_posicionamento||''} - ${c.titulo||''} (${c.status||''})`,c.id)));
+}
+function renderDashboard(m){byId('apoios_metricas').innerHTML=`Ativos: <strong>${m.apoiadores_ativos}</strong><br>Contratos ativos: <strong>${m.contratos_ativos}</strong><br>Vencendo: <strong>${m.contratos_vencendo}</strong> | Vencidos: <strong>${m.contratos_vencidos}</strong> | Inadimplentes: <strong>${m.contratos_inadimplentes}</strong><br>Receita prevista: <strong>R$ ${m.receita_prevista}</strong><br>Recebido no mes: <strong>R$ ${m.recebido_mes}</strong><br>Aberto no mes: <strong>R$ ${m.saldo_aberto_mes}</strong>`;}
+async function carregar(){try{const data=await api('/api/apoios/dashboard',{});state=data;renderDashboard(data.metricas);fillSelects();}catch(e){showToast(e.message,4500);}}
+function bindEdits(){
+  byId('apoiador_select').addEventListener('change',e=>{const a=state.apoiadores.find(x=>x.id===e.target.value)||{};byId('apoiador_id').value=a.id||'';byId('apoiador_nome').value=a.nome||'';byId('apoiador_responsavel').value=a.responsavel_nome||'';byId('apoiador_telefone').value=a.telefone||'';byId('apoiador_email').value=a.email||'';byId('apoiador_segmento').value=a.segmento||'';byId('apoiador_cidade').value=a.cidade||'';byId('apoiador_link').value=a.link_publico||'';byId('apoiador_texto').value=a.texto_curto||'';byId('apoiador_status').value=a.status||'ativo';});
+  byId('contrato_select').addEventListener('change',e=>{const c=state.contratos.find(x=>x.id===e.target.value)||{};byId('contrato_id').value=c.id||'';byId('contrato_apoiador').value=c.apoiador_id||'';byId('contrato_categoria').value=c.categoria||'institucional';byId('contrato_inicio').value=c.data_inicio||'';byId('contrato_fim').value=c.data_fim||'';byId('contrato_valor').value=c.valor_contribuicao||'';byId('contrato_finalidade').value=c.finalidade||'';byId('contrato_status').value=c.status||'ativo';byId('contrato_periodicidade').value=c.periodicidade||'mensal';byId('contrato_dia_vencimento').value=c.dia_vencimento||10;byId('contrato_alerta').value=c.renovacao_alerta_dias||30;});
+  byId('pagamento_select').addEventListener('change',e=>{const p=state.pagamentos.find(x=>x.id===e.target.value)||{};byId('pagamento_id').value=p.id||'';byId('pagamento_apoiador').value=p.apoiador_id||'';byId('pagamento_contrato').value=p.contrato_id||'';byId('pagamento_competencia').value=p.competencia||'';byId('pagamento_vencimento').value=p.data_vencimento||'';byId('pagamento_previsto').value=p.valor_previsto||'';byId('pagamento_pago').value=p.valor_pago||'';byId('pagamento_data').value=p.data_pagamento||'';byId('pagamento_status').value=p.status||'pendente';byId('pagamento_forma').value=p.forma_pagamento||'';});
+  byId('criativo_select').addEventListener('change',e=>{const c=state.criativos.find(x=>x.id===e.target.value)||{};byId('criativo_id').value=c.id||'';byId('criativo_apoiador').value=c.apoiador_id||'';byId('criativo_contrato').value=c.contrato_id||'';byId('criativo_tipo').value=c.tipo_posicionamento||'tela_apoiadores';byId('criativo_titulo').value=c.titulo||'';byId('criativo_texto').value=c.texto||'';byId('criativo_link').value=c.link_url||'';byId('criativo_status').value=c.status||'ativo';byId('criativo_prioridade').value=c.prioridade||1;byId('criativo_inicio').value=c.data_inicio||'';byId('criativo_fim').value=c.data_fim||'';});
+}
+async function salvarApoiador(){try{await api('/api/apoios/apoiadores',{id:val('apoiador_id'),nome:val('apoiador_nome'),responsavel_nome:val('apoiador_responsavel'),telefone:val('apoiador_telefone'),email:val('apoiador_email'),segmento:val('apoiador_segmento'),cidade:val('apoiador_cidade'),link_publico:val('apoiador_link'),texto_curto:val('apoiador_texto'),status:val('apoiador_status'),logo_data_url:await fileData('apoiador_logo'),imagem_publicidade_data_url:await fileData('apoiador_imagem')});showToast('Apoiador salvo.');await carregar();}catch(e){showToast(e.message,4500);}}
+async function salvarContrato(){try{await api('/api/apoios/contratos',{id:val('contrato_id'),apoiador_id:val('contrato_apoiador'),categoria:val('contrato_categoria'),data_inicio:val('contrato_inicio'),data_fim:val('contrato_fim'),valor_contribuicao:val('contrato_valor'),finalidade:val('contrato_finalidade'),status:val('contrato_status'),periodicidade:val('contrato_periodicidade'),dia_vencimento:val('contrato_dia_vencimento'),renovacao_alerta_dias:val('contrato_alerta'),permite_logo_card:val('permite_logo_card'),permite_confirmados:val('permite_confirmados'),permite_ia:val('permite_ia'),permite_rodape:val('permite_rodape'),limite_card_mes:val('limite_card_mes'),limite_confirmados_mes:val('limite_confirmados_mes'),limite_ia_mes:val('limite_ia_mes'),limite_rodape_mes:val('limite_rodape_mes'),peso_prioridade:val('peso_prioridade')});showToast('Contrato salvo.');await carregar();}catch(e){showToast(e.message,4500);}}
+async function salvarPagamento(){try{await api('/api/apoios/pagamentos',{id:val('pagamento_id'),apoiador_id:val('pagamento_apoiador'),contrato_id:val('pagamento_contrato'),competencia:val('pagamento_competencia'),data_vencimento:val('pagamento_vencimento'),valor_previsto:val('pagamento_previsto'),valor_pago:val('pagamento_pago'),data_pagamento:val('pagamento_data'),status:val('pagamento_status'),forma_pagamento:val('pagamento_forma'),comprovante_data_url:await fileData('pagamento_comprovante')});showToast('Financeiro salvo.');await carregar();}catch(e){showToast(e.message,4500);}}
+async function salvarCriativo(){try{await api('/api/apoios/criativos',{id:val('criativo_id'),apoiador_id:val('criativo_apoiador'),contrato_id:val('criativo_contrato'),tipo_posicionamento:val('criativo_tipo'),titulo:val('criativo_titulo'),texto:val('criativo_texto'),link_url:val('criativo_link'),status:val('criativo_status'),prioridade:val('criativo_prioridade'),data_inicio:val('criativo_inicio'),data_fim:val('criativo_fim'),imagem_data_url:await fileData('criativo_imagem')});showToast('Criativo salvo.');await carregar();}catch(e){showToast(e.message,4500);}}
+bindEdits(); carregar();
+"""
+    return _html_wrap("Publicidade e Apoiadores", body, script)
+
+
+async def get_apoios_admin(request: Request) -> HTMLResponse:
+    return HTMLResponse(html_apoios_admin())
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # API — LISTAR LOJAS (para o form de evento)
 # ─────────────────────────────────────────────────────────────────────────────

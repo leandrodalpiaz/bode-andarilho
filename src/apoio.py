@@ -10,7 +10,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
 
 from src.bot import navegar_para
@@ -27,6 +27,7 @@ TIPO_CARD = "card_logo"
 TIPO_CONF = "confirmados_premium_texto"
 TIPO_IA = "ia_resposta_texto"
 TIPO_TELA = "tela_apoiadores"
+TIPO_RODAPE_DIPLOMA = "rodape_diploma"
 
 _FREQ_IA_MOD = 3
 
@@ -34,6 +35,14 @@ APOIO_NOVO_APOIADOR, APOIO_NOVO_CONTRATO, APOIO_CONFIG, APOIO_PAUSAR = range(900
 
 _CACHE_TTL_SEG = int(os.getenv("APOIO_CACHE_TTL_SEG", "180") or "180")
 _ROWS_CACHE: Dict[str, Tuple[float, List[Dict]]] = {}
+
+
+def _webapp_apoios_url() -> str:
+    raw = (os.getenv("RENDER_EXTERNAL_URL", "") or "").strip().rstrip("/")
+    lowered = raw.lower()
+    if not raw or not lowered.startswith("https://") or "example.com" in lowered or "seu-app.onrender.com" in lowered:
+        return ""
+    return f"{raw}/webapp/apoios"
 
 
 def doacoes_ativas() -> bool:
@@ -48,6 +57,8 @@ class ApoiadorElegivel:
     categoria: str
     texto_curto: str
     link_publico: str
+    logo_url: str
+    imagem_url: str
     peso: int
     limites: Dict[str, int]
 
@@ -104,6 +115,40 @@ def buscar_contratos_vigentes() -> List[Dict]:
     )
 
 
+def buscar_criativos_ativos(tipo_posicionamento: str = "") -> List[Dict]:
+    hoje = _today_iso()
+    rows = _fetch_rows_cached("apoios_criativos", [("eq", "status", "ativo")])
+    ativos = []
+    for row in rows:
+        if tipo_posicionamento and str(row.get("tipo_posicionamento") or "") != tipo_posicionamento:
+            continue
+        inicio = str(row.get("data_inicio") or "")
+        fim = str(row.get("data_fim") or "")
+        if inicio and inicio > hoje:
+            continue
+        if fim and fim < hoje:
+            continue
+        ativos.append(row)
+    return sorted(ativos, key=lambda x: int(x.get("prioridade") or 1), reverse=True)
+
+
+def _criativo_por_apoiador(tipo_posicionamento: str) -> Dict[str, Dict]:
+    return {
+        str(c.get("apoiador_id")): c
+        for c in buscar_criativos_ativos(tipo_posicionamento)
+        if c.get("apoiador_id")
+    }
+
+
+def selecionar_criativo_apoio(tipo_posicionamento: str) -> Optional[Dict]:
+    elegiveis = _listar_elegiveis(tipo_posicionamento)
+    if elegiveis:
+        escolhido = _weighted_pick(elegiveis, 1)[0]
+        return escolhido.__dict__
+    criativos = buscar_criativos_ativos(tipo_posicionamento)
+    return criativos[0] if criativos else None
+
+
 def _contar_exibicoes_mes(apoiador_id: str, tipo_exibicao: str) -> int:
     t = _safe_table("apoios_exibicoes")
     if t is None:
@@ -128,6 +173,7 @@ def _limite_key(tipo_exibicao: str) -> str:
         TIPO_CARD: "limite_card_mes",
         TIPO_CONF: "limite_confirmados_mes",
         TIPO_IA: "limite_ia_mes",
+        TIPO_RODAPE_DIPLOMA: "limite_rodape_mes",
     }.get(tipo_exibicao, "")
 
 
@@ -139,6 +185,7 @@ def _listar_elegiveis(tipo_exibicao: str) -> List[ApoiadorElegivel]:
     apoiadores = {a.get("id"): a for a in buscar_apoiadores_ativos() if a.get("id")}
     contratos = buscar_contratos_vigentes()
     configs = {c.get("apoiador_id"): c for c in _fetch_rows_cached("apoios_config") if c.get("apoiador_id")}
+    criativos_por_apoiador = _criativo_por_apoiador(tipo_exibicao)
 
     elegiveis: List[ApoiadorElegivel] = []
     for c in contratos:
@@ -153,6 +200,8 @@ def _listar_elegiveis(tipo_exibicao: str) -> List[ApoiadorElegivel]:
             continue
         if tipo_exibicao == TIPO_IA and not bool(cfg.get("permite_ia")):
             continue
+        if tipo_exibicao == TIPO_RODAPE_DIPLOMA and not bool(cfg.get("permite_rodape")):
+            continue
 
         limite_col = _limite_key(tipo_exibicao)
         limite = int(cfg.get(limite_col) or 0)
@@ -160,7 +209,8 @@ def _listar_elegiveis(tipo_exibicao: str) -> List[ApoiadorElegivel]:
             continue
 
         ap = apoiadores[aid]
-        texto = str(ap.get("texto_curto") or "").strip()
+        criativo = criativos_por_apoiador.get(str(aid), {})
+        texto = str(criativo.get("texto") or ap.get("texto_curto") or "").strip()
         if tipo_exibicao in (TIPO_CONF, TIPO_IA) and not texto:
             continue
 
@@ -172,7 +222,9 @@ def _listar_elegiveis(tipo_exibicao: str) -> List[ApoiadorElegivel]:
                 nome=str(ap.get("nome") or "Apoiador"),
                 categoria=str(c.get("categoria") or "institucional"),
                 texto_curto=texto,
-                link_publico=str(ap.get("link_publico") or "").strip(),
+                link_publico=str(criativo.get("link_url") or ap.get("link_publico") or "").strip(),
+                logo_url=str(criativo.get("imagem_url") or ap.get("logo_url") or "").strip(),
+                imagem_url=str(criativo.get("imagem_url") or ap.get("imagem_publicidade_url") or "").strip(),
                 peso=max(1, peso),
                 limites={"mes": limite},
             )
@@ -209,7 +261,12 @@ def selecionar_apoiador_para_card() -> Optional[Dict]:
             "logo_path": str(pick),
         }
     escolhido = _weighted_pick(elegiveis, 1)[0]
-    return {"apoiador_id": escolhido.apoiador_id, "contrato_id": escolhido.contrato_id, "nome": escolhido.nome}
+    return {
+        "apoiador_id": escolhido.apoiador_id,
+        "contrato_id": escolhido.contrato_id,
+        "nome": escolhido.nome,
+        "logo_url": escolhido.logo_url,
+    }
 
 
 def selecionar_apoiadores_para_confirmados(limite: int = 2) -> List[Dict]:
@@ -386,6 +443,13 @@ def _texto_gestao_apoios() -> str:
 
 
 def _teclado_gestao_apoios() -> InlineKeyboardMarkup:
+    url = _webapp_apoios_url()
+    if url:
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("Abrir gestor no Mini App", web_app=WebAppInfo(url=url))],
+            [InlineKeyboardButton("ðŸ“‹ Listar apoiadores", callback_data="admin_apoio_listar")],
+            [InlineKeyboardButton("ðŸ”™ Voltar ao admin", callback_data="area_admin")],
+        ])
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📋 Listar apoiadores", callback_data="admin_apoio_listar")],
         [InlineKeyboardButton("➕ Novo apoiador", callback_data="admin_apoio_novo")],
@@ -581,6 +645,7 @@ async def mostrar_apoiadores(update: Update, context: ContextTypes.DEFAULT_TYPE)
     vigentes = {c.get("apoiador_id") for c in buscar_contratos_vigentes() if c.get("apoiador_id")}
     ativos = [a for a in buscar_apoiadores_ativos() if a.get("id") in vigentes]
     ativos = ativos[:10]
+    criativos_tela = _criativo_por_apoiador(TIPO_TELA)
 
     if not ativos:
         texto = (
@@ -599,14 +664,16 @@ async def mostrar_apoiadores(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         for a in ativos:
             texto += f"• *{a.get('nome','Apoiador')}*"
-            tc = str(a.get("texto_curto") or "").strip()
+            criativo = criativos_tela.get(str(a.get("id")), {})
+            tc = str(criativo.get("texto") or a.get("texto_curto") or "").strip()
             if tc:
                 texto += f" — {tc}"
             texto += "\n"
 
     botoes = []
     for a in ativos:
-        link = str(a.get("link_publico") or "").strip()
+        criativo = criativos_tela.get(str(a.get("id")), {})
+        link = str(criativo.get("link_url") or a.get("link_publico") or "").strip()
         if link:
             botoes.append([InlineKeyboardButton(f"🌐 {a.get('nome','Apoiador')}", url=link)])
     botoes.append([InlineKeyboardButton("💬 Falar com admin", callback_data="apoio_contato_admin")])
