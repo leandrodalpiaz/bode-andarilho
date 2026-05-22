@@ -21,8 +21,7 @@ from src.potencias import formatar_potencia
 
 logger = logging.getLogger(__name__)
 
-RECORD_MINIMO_PARA_ALERTA = 3
-RECORD_PASSO_ALERTA = 5
+# Passos removidos para usar limiares globais em seu lugar
 ENV_DISPAROS_COLETIVOS = "CONQUISTAS_COLETIVAS_GRUPO"
 
 
@@ -105,17 +104,7 @@ def obter_max_record_marco_coletivo(prefixo: str) -> int:
         return 0
 
 
-def _proximo_marco_recorde(max_recorde: int) -> int:
-    """Evita alerta de recorde a cada incremento unitário no grupo."""
-    if max_recorde < RECORD_MINIMO_PARA_ALERTA:
-        return RECORD_MINIMO_PARA_ALERTA
-    if max_recorde < RECORD_PASSO_ALERTA:
-        return RECORD_PASSO_ALERTA
-    return ((max_recorde // RECORD_PASSO_ALERTA) + 1) * RECORD_PASSO_ALERTA
 
-
-def _deve_alertar_recorde(contagem_atual: int, max_recorde: int) -> bool:
-    return contagem_atual >= _proximo_marco_recorde(max_recorde)
 
 
 def _parse_data(valor: Any) -> Optional[date]:
@@ -177,15 +166,9 @@ async def processar_conquistas_coletivas_evento(bot: Bot, evento: Dict[str, Any]
             if dt_ev and dt_ev >= hoje:
                 sessoes_futuras.append(ev)
 
-        # 3. Rito (Ineditismo e Recorde de Disponibilidade)
+        # 3. Rito (Ineditismo)
         if rito:
             rito_slug = _slugify(rito)
-            # Contar quantas sessões ativas futuras existem deste rito
-            count_rito = sum(
-                1 for ev in sessoes_futuras
-                if _slugify(ev.get("Rito") or ev.get("rito")) == rito_slug
-            )
-
             slug_rito_primeira = f"primeira_sessao_rito|{rito_slug}"
             if not checar_marco_coletivo_existente(slug_rito_primeira):
                 msg = (
@@ -195,29 +178,10 @@ async def processar_conquistas_coletivas_evento(bot: Bot, evento: Dict[str, Any]
                 )
                 await enviar_mensagem_coletiva(bot, msg)
                 registrar_marco_coletivo(slug_rito_primeira, "rito")
-                registrar_marco_coletivo(f"recorde_sessao_rito|{rito_slug}|1", "rito")
-            else:
-                # Checar recorde
-                prefix_recorde = f"recorde_sessao_rito|{rito_slug}|"
-                max_rec = obter_max_record_marco_coletivo(prefix_recorde)
-                if _deve_alertar_recorde(count_rito, max_rec):
-                    msg = (
-                        f"📈 *Novo Recorde do {rito}!*\n\n"
-                        f"Alcançamos a marca histórica de *{count_rito} sessões simultâneas disponíveis* "
-                        f"para visitação sob o *{rito}* no ecossistema!\n\n"
-                        f"A união e o dinamismo de nossas colunas continuam a crescer! 🤝🐐"
-                    )
-                    await enviar_mensagem_coletiva(bot, msg)
-                    registrar_marco_coletivo(f"{prefix_recorde}{count_rito}", "rito")
 
-        # 4. Grau (Ineditismo e Recorde de Disponibilidade)
+        # 4. Grau (Ineditismo)
         if grau:
             grau_slug = _slugify(grau)
-            count_grau = sum(
-                1 for ev in sessoes_futuras
-                if _slugify(ev.get("Grau") or ev.get("grau")) == grau_slug
-            )
-
             slug_grau_primeira = f"primeira_sessao_grau|{grau_slug}"
             if not checar_marco_coletivo_existente(slug_grau_primeira):
                 msg = (
@@ -227,34 +191,11 @@ async def processar_conquistas_coletivas_evento(bot: Bot, evento: Dict[str, Any]
                 )
                 await enviar_mensagem_coletiva(bot, msg)
                 registrar_marco_coletivo(slug_grau_primeira, "grau")
-                registrar_marco_coletivo(f"recorde_sessao_grau|{grau_slug}|1", "grau")
-            else:
-                prefix_recorde = f"recorde_sessao_grau|{grau_slug}|"
-                max_rec = obter_max_record_marco_coletivo(prefix_recorde)
-                if _deve_alertar_recorde(count_grau, max_rec):
-                    msg = (
-                        f"📈 *Novo Recorde para o Grau {grau}!*\n\n"
-                        f"Estabelecemos um novo recorde de *{count_grau} sessões simultâneas disponíveis* "
-                        f"no grau de *{grau}*!\n\n"
-                        f"O fortalecimento do ensino e da presença dos Irmãos neste grau é notável! 🔨🌟"
-                    )
-                    await enviar_mensagem_coletiva(bot, msg)
-                    registrar_marco_coletivo(f"{prefix_recorde}{count_grau}", "grau")
 
-        # 5. Potência (Ineditismo e Recorde de Disponibilidade)
+        # 5. Potência (Ineditismo)
         if potencia:
             pot_nome = formatar_potencia(potencia, potencia_comp)
             pot_slug = _slugify(pot_nome)
-            
-            # Contar sessões da potência
-            count_pot = 0
-            for ev in sessoes_futuras:
-                ev_pot = str(ev.get("Potência") or ev.get("potencia") or "").strip()
-                ev_comp = str(ev.get("Potência complemento") or ev.get("potencia_complemento") or "").strip()
-                ev_pot_nome = formatar_potencia(ev_pot, ev_comp)
-                if _slugify(ev_pot_nome) == pot_slug:
-                    count_pot += 1
-
             slug_pot_primeira = f"primeira_sessao_potencia|{pot_slug}"
             if not checar_marco_coletivo_existente(slug_pot_primeira):
                 msg = (
@@ -264,19 +205,34 @@ async def processar_conquistas_coletivas_evento(bot: Bot, evento: Dict[str, Any]
                 )
                 await enviar_mensagem_coletiva(bot, msg)
                 registrar_marco_coletivo(slug_pot_primeira, "potencia")
-                registrar_marco_coletivo(f"recorde_sessao_potencia|{pot_slug}|1", "potencia")
+
+        # 6. Global Record (Sessões Ativas Disponíveis)
+        total_ativas = len(sessoes_futuras)
+        
+        limiares_fixos = [25, 50, 100]
+        def proximo_limiar(atual: int) -> int:
+            if atual < 100:
+                for l in limiares_fixos:
+                    if l > atual:
+                        return l
+                return 100
+            elif atual < 1000:
+                return ((atual // 100) + 1) * 100
             else:
-                prefix_recorde = f"recorde_sessao_potencia|{pot_slug}|"
-                max_rec = obter_max_record_marco_coletivo(prefix_recorde)
-                if _deve_alertar_recorde(count_pot, max_rec):
-                    msg = (
-                        f"📈 *Novo Recorde da Potência {pot_nome}!*\n\n"
-                        f"Alcançamos a marca inédita de *{count_pot} sessões simultâneas disponíveis* "
-                        f"da Potência *{pot_nome}* no ecossistema!\n\n"
-                        f"A maçonaria unida e caminhando junta! 🐐✨"
-                    )
-                    await enviar_mensagem_coletiva(bot, msg)
-                    registrar_marco_coletivo(f"{prefix_recorde}{count_pot}", "potencia")
+                return ((atual // 500) + 1) * 500
+
+        max_global = obter_max_record_marco_coletivo("recorde_global_sessoes|")
+        prox = proximo_limiar(max_global)
+        
+        if total_ativas >= prox:
+            msg = (
+                f"🚀 *Marco Histórico de Sessões!*\n\n"
+                f"Alcançamos a marca de *{total_ativas} sessões ativas e disponíveis* "
+                f"para visitação simultaneamente em nosso ecossistema!\n\n"
+                f"O Bode Andarilho segue conectando Irmãos e fortalecendo nossas colunas. 🐐✨"
+            )
+            await enviar_mensagem_coletiva(bot, msg)
+            registrar_marco_coletivo(f"recorde_global_sessoes|{total_ativas}", "global")
 
     except Exception as e:
         logger.error("Erro ao processar conquistas coletivas do evento: %s", e)

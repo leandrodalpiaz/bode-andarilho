@@ -1734,6 +1734,15 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
     evento["ID Evento"] = id_evento
     texto_grupo = montar_texto_publicacao_evento(evento)
 
+    # Hook Conquistas Coletivas do Evento (Lojas, Ritos, Graus, Potências)
+    # Executado ANTES de publicar no grupo, para que a notificação de conquista
+    # fique acima do card do evento.
+    try:
+        from src.conquistas_coletivas import processar_conquistas_coletivas_evento
+        await processar_conquistas_coletivas_evento(context.bot, evento)
+    except Exception as e_col:
+        logger.warning("Falha ao processar conquistas coletivas do evento: %s", e_col)
+
     try:
         msg_publicada, tipo_msg = await publicar_evento_no_grupo(
             context,
@@ -1774,7 +1783,6 @@ async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TY
         # 2. Escriturário do Sistema (Sem erros/pendências de IA)
         if not context.user_data.get("ia_dados_faltantes", False):
             asyncio.create_task(checar_e_conceder(user_id, "escriturario_sistema", context.bot))
-
         # 3. Conquistas Coletivas do Evento (Lojas, Ritos, Graus, Potências)
         try:
             from src.conquistas_coletivas import processar_conquistas_coletivas_evento
