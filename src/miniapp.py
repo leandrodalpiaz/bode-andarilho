@@ -1007,6 +1007,50 @@ def _teclado_visual_rascunho_evento(nivel: str, salvar_loja: bool) -> InlineKeyb
     return InlineKeyboardMarkup(linhas)
 
 
+def _loja_do_rascunho_evento(dados: Dict[str, Any], lojas_existentes: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    loja_id = _norm_text(dados.get("loja_id"))
+    if loja_id:
+        for loja in lojas_existentes:
+            if _norm_text(loja.get("ID") or loja.get("id")) == loja_id:
+                return loja
+
+    nome = _norm_text(dados.get("nome_loja"))
+    numero = _norm_text(dados.get("numero_loja") or "0")
+    if not nome:
+        return None
+    for loja in lojas_existentes:
+        if (
+            _norm_text(loja.get("Nome da Loja") or loja.get("nome")) == nome
+            and _norm_text(loja.get("Numero") or loja.get("Número") or loja.get("numero") or "0") == numero
+        ):
+            return loja
+    return None
+
+
+def _template_url_loja(loja: Optional[Dict[str, Any]]) -> str:
+    if not loja:
+        return ""
+    direto = _norm_text(loja.get("Template sessão URL") or loja.get("template_sessao_url"))
+    if direto:
+        return direto
+    for chave, valor in loja.items():
+        chave_norm = _norm_text(chave).lower()
+        if "template" in chave_norm and "url" in chave_norm:
+            url = _norm_text(valor)
+            if url:
+                return url
+    return ""
+
+
+def _teclado_template_loja_indisponivel(loja_id: str, origem: str) -> InlineKeyboardMarkup:
+    linhas: List[List[InlineKeyboardButton]] = []
+    if loja_id:
+        linhas.append([InlineKeyboardButton("Enviar template da loja agora", callback_data=f"loja_template_pos|{loja_id}")])
+    linhas.append([InlineKeyboardButton("Usar arte sugerida pelo sistema", callback_data=f"draft_evento_visual|template_padrao|{origem}")])
+    linhas.append([InlineKeyboardButton("Voltar ao resumo", callback_data="draft_evento_visual_voltar")])
+    return InlineKeyboardMarkup(linhas)
+
+
 async def draft_evento_escolher_visual(update: Update, context, salvar_loja: bool) -> None:
     query = update.callback_query
     await query.answer()
@@ -1065,11 +1109,22 @@ async def draft_evento_definir_visual(update: Update, context) -> None:
     _, modo_visual, origem = partes
     nivel = str(get_nivel(telegram_id))
     if modo_visual == "template_loja" and nivel == "3":
-        await query.answer("No fluxo administrativo, use o padrão do sistema ou uma arte pronta da sessão.", show_alert=True)
+        await query.answer("No fluxo administrativo, use a arte sugerida pelo sistema ou a arte pronta da sessão.", show_alert=True)
         return
     if modo_visual not in {"template_loja", "template_padrao", "card_especial"}:
         await query.answer("Opção visual inválida.", show_alert=True)
         return
+    if modo_visual == "template_loja":
+        lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
+        loja = _loja_do_rascunho_evento(dados, lojas_existentes)
+        template_url = _template_url_loja(loja)
+        if not template_url:
+            loja_id = _norm_text((loja or {}).get("ID") or (loja or {}).get("id") or dados.get("loja_id"))
+            await query.edit_message_text(
+                "Esta loja ainda não tem Template da loja configurado. Envie o template agora no privado ou use a arte sugerida pelo sistema para esta sessão.",
+                reply_markup=_teclado_template_loja_indisponivel(loja_id, origem),
+            )
+            return
     dados["modo_visual"] = modo_visual
     if modo_visual != "card_especial":
         dados.pop("card_especial_url", None)
@@ -1119,7 +1174,12 @@ async def receber_arte_pronta_evento(update: Update, context) -> None:
     path = f"eventos/drafts/{telegram_id}/arte_pronta{ext}"
     url = upload_storage_publico(BUCKET_EVENT_CARDS, path, bytes(raw), content_type)
     if not url:
-        await msg.reply_text("Não consegui salvar a arte no Storage. Tente novamente.")
+        await msg.reply_text(
+            "Storage de cards indisponível; use arte sugerida pelo sistema por enquanto.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("Usar arte sugerida pelo sistema", callback_data=f"draft_evento_visual|template_padrao|{origem}")
+            ]]),
+        )
         return
     dados["modo_visual"] = "card_especial"
     dados["card_especial_url"] = url

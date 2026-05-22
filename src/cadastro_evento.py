@@ -527,16 +527,58 @@ def _botao_modo_visual(rotulo: str, modo: str, atual: str) -> InlineKeyboardButt
     return InlineKeyboardButton(prefixo + rotulo, callback_data=f"modo_visual_evento|{modo}")
 
 
+def _loja_evento_atual_contexto(context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Any]:
+    loja_id = _norm_text(context.user_data.get("novo_evento_loja_id"))
+    lojas = context.user_data.get("lojas_disponiveis") or []
+    if loja_id:
+        for loja in lojas:
+            if _norm_text(loja.get("ID") or loja.get("id")) == loja_id:
+                return loja
+    nome = _norm_text(context.user_data.get("novo_evento_nome_loja"))
+    numero = _norm_text(context.user_data.get("novo_evento_numero_loja") or "0")
+    if nome:
+        for loja in lojas:
+            if (
+                _norm_text(loja.get("Nome da Loja") or loja.get("nome")) == nome
+                and _norm_text(loja.get("Número") or loja.get("Numero") or loja.get("numero") or "0") == numero
+            ):
+                return loja
+    return {}
+
+
+def _template_url_loja_evento(context: ContextTypes.DEFAULT_TYPE) -> str:
+    loja = _loja_evento_atual_contexto(context)
+    direto = _norm_text(loja.get("Template sessão URL") or loja.get("template_sessao_url"))
+    if direto:
+        return direto
+    for chave, valor in loja.items():
+        chave_norm = _norm_text(chave).lower()
+        if "template" in chave_norm and "url" in chave_norm:
+            url = _norm_text(valor)
+            if url:
+                return url
+    return ""
+
+
+def _teclado_template_loja_indisponivel_evento(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
+    loja = _loja_evento_atual_contexto(context)
+    loja_id = _norm_text(loja.get("ID") or loja.get("id") or context.user_data.get("novo_evento_loja_id"))
+    linhas: List[List[InlineKeyboardButton]] = []
+    if loja_id:
+        linhas.append([InlineKeyboardButton("Enviar template da loja agora", callback_data=f"loja_template_pos|{loja_id}")])
+    linhas.append([InlineKeyboardButton("Usar arte sugerida pelo sistema", callback_data="modo_visual_evento|template_padrao")])
+    linhas.append([InlineKeyboardButton("Voltar", callback_data="modo_visual_info")])
+    return InlineKeyboardMarkup(linhas)
+
+
 def _teclado_previa_visual(context: ContextTypes.DEFAULT_TYPE, tem_duplicado: bool) -> InlineKeyboardMarkup:
     linhas = []
     atual = _modo_visual_atual(context)
     nivel = str(get_nivel(context.user_data.get("novo_evento_criado_por_id") or 0))
 
     linhas.append([InlineKeyboardButton(f"Visual atual: {_rotulo_modo_visual_evento(atual)}", callback_data="modo_visual_info")])
-    if nivel == "3":
-        linhas.append([_botao_modo_visual("Arte sugerida pelo sistema", "template_padrao", atual)])
-    else:
-        linhas.append([_botao_modo_visual("Arte sugerida pelo sistema", "template_padrao", atual)])
+    linhas.append([_botao_modo_visual("Arte sugerida pelo sistema", "template_padrao", atual)])
+    if nivel != "3":
         linhas.append([_botao_modo_visual("Template da loja", "template_loja", atual)])
     linhas.append([InlineKeyboardButton("Arte pronta da sessão", callback_data="trocar_card_evento")])
 
@@ -567,6 +609,18 @@ async def escolher_modo_visual_evento(update: Update, context: ContextTypes.DEFA
     if modo not in {"template_padrao", "template_loja"}:
         if query:
                     await query.answer("Opção visual inválida.", show_alert=True)
+        return CONFIRMAR
+    nivel = str(get_nivel(context.user_data.get("novo_evento_criado_por_id") or 0))
+    if modo == "template_loja" and nivel == "3":
+        if query:
+            await query.answer("No fluxo administrativo, use a arte sugerida pelo sistema ou a arte pronta da sessão.", show_alert=True)
+        return CONFIRMAR
+    if modo == "template_loja" and not _template_url_loja_evento(context):
+        if query:
+            await query.edit_message_text(
+                "Esta loja ainda não tem Template da loja configurado. Envie o template agora no privado ou use a arte sugerida pelo sistema para esta sessão.",
+                reply_markup=_teclado_template_loja_indisponivel_evento(context),
+            )
         return CONFIRMAR
     context.user_data["novo_evento_modo_visual"] = modo
     context.user_data.pop("novo_evento_card_especial_url", None)
@@ -636,7 +690,12 @@ async def receber_card_especial(update: Update, context: ContextTypes.DEFAULT_TY
     path = f"eventos/drafts/{update.effective_user.id}/especial{ext}"
     url = upload_storage_publico(BUCKET_EVENT_CARDS, path, bytes(raw), content_type)
     if not url:
-        await msg.reply_text("Não consegui salvar o card no Storage. Tente novamente.")
+        await msg.reply_text(
+            "Storage de cards indisponível; use arte sugerida pelo sistema por enquanto.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("Usar arte sugerida pelo sistema", callback_data="modo_visual_evento|template_padrao")
+            ]]),
+        )
         return TROCAR_CARD
 
     context.user_data["novo_evento_modo_visual"] = "card_especial"

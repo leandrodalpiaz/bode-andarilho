@@ -245,7 +245,7 @@ DIAS_SEMANA = {
 # ============================================
 
 def traduzir_dia(dia_ingles: str) -> str:
-    return DIAS_SEMANA.get(dia_ingles, dia_ingles)
+    return DIAS_SEMANA.get(dia_ingles, dia_ingles).lower()
 
 
 def traduzir_dia_abreviado(dia_ingles: str) -> str:
@@ -259,6 +259,43 @@ def traduzir_dia_abreviado(dia_ingles: str) -> str:
         "Sunday": "Domingo",
     }
     return dias_abreviados.get(dia_ingles, dia_ingles)
+
+
+def _resumo_evento_confirmados(evento: Optional[dict], id_evento: str) -> str:
+    if not evento:
+        return f"*Presenças confirmadas da sessão*\n`{id_evento}`"
+
+    nome = str(evento.get("Nome da loja") or evento.get("nome_loja") or "Loja").strip()
+    numero = str(evento.get("Número da loja") or evento.get("numero_loja") or "").strip()
+    numero_fmt = f" {numero}" if numero and numero != "0" else ""
+    data_txt = str(evento.get("Data do evento") or "").strip()
+    hora = str(evento.get("Hora") or "").strip()
+    data_obj = parse_data_evento(data_txt)
+    dia = traduzir_dia(data_obj.strftime("%A")) if data_obj else str(evento.get("Dia da semana") or "").strip()
+    quando = data_txt
+    if dia:
+        quando = f"{quando} ({dia})" if quando else f"({dia})"
+    if hora:
+        quando = f"{quando} • {hora}" if quando else hora
+
+    grau = str(evento.get("Grau") or "").strip()
+    rito = str(evento.get("Rito") or "").strip()
+    oriente = str(evento.get("Oriente") or "").strip()
+    potencia = formatar_potencia(*potencia_de_dados(evento))
+
+    linhas = [
+        "*Presenças confirmadas desta sessão*",
+        f"*{nome}{numero_fmt}*",
+    ]
+    if quando:
+        linhas.append(f"📅 {quando}")
+    detalhe_loja = " - ".join([v for v in (oriente, potencia) if v])
+    if detalhe_loja:
+        linhas.append(f"📍 {detalhe_loja}")
+    detalhe_sessao = " | ".join([v for v in (grau, rito) if v])
+    if detalhe_sessao:
+        linhas.append(f"🏛 {detalhe_sessao}")
+    return "\n".join(linhas)
 
 
 def extrair_tipo_agape(texto_agape: str) -> str:
@@ -2494,14 +2531,7 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
     eventos = listar_eventos() or []
     evento = next((ev for ev in eventos if normalizar_id_evento(ev) == id_evento), None)
 
-    if not evento:
-        titulo = "CONFIRMADOS"
-        data_evento = ""
-        nome_loja = ""
-    else:
-        nome_loja = str(evento.get("Nome da loja", "") or "").strip()
-        data_evento = str(evento.get("Data do evento", "") or "").strip()
-        titulo = f"CONFIRMADOS - {nome_loja}"
+    cabecalho = _resumo_evento_confirmados(evento, id_evento)
 
     ids_aliases = _ids_evento_aliases(id_evento, evento)
     confirmacoes = listar_confirmacoes_por_eventos(ids_aliases) or []
@@ -2558,7 +2588,7 @@ async def ver_confirmados(update: Update, context: ContextTypes.DEFAULT_TYPE):
             linhas.append(montar_linha_confirmado(snapshot))
 
     corpo = "Nenhuma presença confirmada até o momento." if not linhas else "\n".join(linhas)
-    texto = f"*{titulo}*\n{data_evento}\n\n{corpo}"
+    texto = f"{cabecalho}\n\n{corpo}"
     apoio_pick: List[Dict] = []
     botao_apoio = None
     try:

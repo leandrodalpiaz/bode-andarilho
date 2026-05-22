@@ -602,7 +602,13 @@ async def receber_template_loja(update: Update, context: ContextTypes.DEFAULT_TY
         ext = "jpg"
     url = upload_storage_publico(BUCKET_EVENT_CARDS, f"lojas/{loja_id}/template.{ext}", bytes(raw), content_type)
     if not url:
-        await msg.reply_text("Não consegui salvar o template no Supabase Storage. Verifique o bucket event-cards.")
+        await msg.reply_text(
+            "Storage de cards indisponível; use arte sugerida pelo sistema por enquanto.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("Usar padrão por enquanto", callback_data="loja_template_pular")],
+                [InlineKeyboardButton("Gerenciar lojas", callback_data="menu_lojas")],
+            ]),
+        )
         return TEMPLATE_UPLOAD
 
     layout = {
@@ -981,6 +987,7 @@ cadastro_loja_handler = ConversationHandler(
         ],
         TEMPLATE_UPLOAD: [
             MessageHandler(filters.ChatType.PRIVATE & (filters.PHOTO | filters.Document.IMAGE), receber_template_loja),
+            CallbackQueryHandler(pular_template_pos_cadastro, pattern="^loja_template_pular$"),
             CallbackQueryHandler(cancelar_cadastro_loja, pattern="^cancelar_cadastro_loja$"),
         ],
     },
