@@ -1518,7 +1518,7 @@ def atualizar_loja(loja_id: Any, dados: Dict[str, Any]) -> bool:
 
 
 def upload_storage_publico(bucket: str, path: str, content: bytes, content_type: str = "application/octet-stream") -> Optional[str]:
-    """Faz upload para Supabase Storage e retorna URL pública."""
+    """Faz upload para Supabase Storage e retorna URL pública. Cria o bucket se não existir."""
     if not bucket or not path or not content:
         return None
     try:
@@ -1527,7 +1527,21 @@ def upload_storage_publico(bucket: str, path: str, content: bytes, content_type:
             storage.remove([path])
         except Exception:
             pass
-        storage.upload(path, content, {"content-type": content_type, "upsert": "true"})
+        try:
+            storage.upload(path, content, {"content-type": content_type, "upsert": "true"})
+        except Exception as upload_err:
+            err_str = str(upload_err).lower()
+            if "bucket not found" in err_str or "404" in err_str:
+                try:
+                    logger.info("Bucket '%s' não encontrado. Tentando criar...", bucket)
+                    supabase.storage.create_bucket(bucket, options={"public": True})
+                    # Tenta realizar o upload novamente após a criação do bucket
+                    storage.upload(path, content, {"content-type": content_type, "upsert": "true"})
+                except Exception as create_err:
+                    logger.error("Erro ao criar bucket '%s' e reenviar arquivo: %s", bucket, create_err)
+                    raise upload_err
+            else:
+                raise upload_err
         return storage.get_public_url(path)
     except Exception as e:
         logger.error("Erro ao subir arquivo para Storage (%s/%s): %s", bucket, path, e)

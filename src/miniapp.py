@@ -1004,8 +1004,7 @@ def _teclado_visual_rascunho_evento(nivel: str, salvar_loja: bool) -> InlineKeyb
     sufixo = "com_loja" if salvar_loja else "sem_loja"
     linhas: List[List[InlineKeyboardButton]] = []
     linhas.append([InlineKeyboardButton("Arte sugerida pelo sistema", callback_data=f"draft_evento_visual|template_padrao|{sufixo}")])
-    if str(nivel) != "3":
-        linhas.append([InlineKeyboardButton("Template da loja", callback_data=f"draft_evento_visual|template_loja|{sufixo}")])
+    linhas.append([InlineKeyboardButton("Template da loja", callback_data=f"draft_evento_visual|template_loja|{sufixo}")])
     linhas.append([InlineKeyboardButton("Arte pronta da sessão", callback_data=f"draft_evento_visual|card_especial|{sufixo}")])
     linhas.append([InlineKeyboardButton("Voltar ao resumo", callback_data="draft_evento_visual_voltar")])
     linhas.append([InlineKeyboardButton("Cancelar", callback_data="draft_evento_cancelar")])
@@ -1113,9 +1112,6 @@ async def draft_evento_definir_visual(update: Update, context) -> None:
         return
     _, modo_visual, origem = partes
     nivel = str(get_nivel(telegram_id))
-    if modo_visual == "template_loja" and nivel == "3":
-        await query.answer("No fluxo administrativo, use a arte sugerida pelo sistema ou a arte pronta da sessão.", show_alert=True)
-        return
     if modo_visual not in {"template_loja", "template_padrao", "card_especial"}:
         await query.answer("Opção visual inválida.", show_alert=True)
         return
