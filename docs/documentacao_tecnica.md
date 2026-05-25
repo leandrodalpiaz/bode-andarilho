@@ -51,14 +51,28 @@ src/
 main.py
 ```
 
-## 4. Camada Visual de Eventos
+## 4. Camada Visual de Eventos (Os 3 Fluxos de Sessão)
 
-Regra operacional:
+A publicação visual de eventos no grupo segue 3 fluxos de exibição distintos, todos totalmente disponíveis e unificados tanto para o **Secretário** quanto para o **Administrador**:
 
-1. Se o evento tiver `card_especial_url`, publica o card especial.
-2. Senão, se houver template da Loja, renderiza com o template da Loja.
-3. Senão, usa o template padrão do sistema.
-4. Se qualquer etapa visual falhar, usa texto fallback.
+1. **Arte padrão do sistema (`template_padrao`)**:
+   - Renderiza as informações de texto da sessão sobre a imagem de fundo padrão do sistema (`assets/templates/default_event_card.png`).
+   - Usado como fallback ou caso a loja não possua template próprio.
+
+2. **Arte pronta da sessão (`card_especial`)**:
+   - O bot publica diretamente uma imagem pronta enviada pelo usuário (ideal para palestras, seminários ou artes ad-hoc produzidas pela própria oficina).
+   - O bot anexa a essa imagem os botões inline de confirmação de presença e gerenciamento.
+   - **Regra de Armazenamento**: Esta arte **não** é salva no registro da loja. Ela é salva sob o rascunho temporário do evento (`eventos/drafts/{telegram_id}/arte_pronta.jpg`) e, no momento da publicação, é associada especificamente àquele evento no banco de dados (`Card especial URL`). Cada nova sessão desse fluxo exige o envio de uma nova imagem.
+
+3. **Template da loja (`template_loja`)**:
+   - A loja possui uma imagem de template em branco própria. O bot utiliza essa imagem personalizada da loja como plano de fundo e renderiza os textos da sessão dinamicamente por cima dela.
+   - **Regra de Armazenamento**: O template em branco é configurado uma única vez e armazenado no registro da loja (`Template sessão URL` no banco de dados). Nas próximas sessões, ao selecionar "Template da loja", o sistema busca a imagem salva automaticamente, **sem necessidade de novos envios**.
+   - **Atualização**: O template pode ser atualizado a qualquer momento pelo menu do bot (`Gerenciar lojas` ➡ `Configurar template visual`).
+
+### Resiliência e Auto-criação de Buckets (Supabase Storage)
+Caso ocorra uma falha de bucket inexistente (`Bucket not found` / HTTP `404`) durante o upload da arte pronta ou do template de loja no Supabase Storage (bucket `event-cards`), a função `upload_storage_publico` tenta criar automaticamente o bucket público no Supabase e em seguida refaz o upload de forma transparente.
+
+Se qualquer etapa visual (renderização ou download/upload) falhar completamente, o bot realiza a publicação usando o **texto de fallback** clássico.
 
 Essa camada não altera:
 
