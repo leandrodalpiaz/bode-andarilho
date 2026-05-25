@@ -1875,7 +1875,7 @@ async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif estado == NOME_LOJA:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "ðŸ› *Nome da loja*",
+            "🏛️ *Nome da loja*",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )
@@ -1889,7 +1889,7 @@ async def ev_voltar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif estado == ORIENTE:
         await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
-            "ðŸ“ *Oriente*",
+            "📍 *Oriente*",
             _teclado_voltar_cancelar(),
             limpar_conteudo=True
         )

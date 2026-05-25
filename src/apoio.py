@@ -31,18 +31,18 @@ TIPO_RODAPE_DIPLOMA = "rodape_diploma"
 
 _FREQ_IA_MOD = 3
 
-APOIO_NOVO_APOIADOR, APOIO_NOVO_CONTRATO, APOIO_CONFIG, APOIO_PAUSAR = range(900, 904)
+
 
 _CACHE_TTL_SEG = int(os.getenv("APOIO_CACHE_TTL_SEG", "180") or "180")
 _ROWS_CACHE: Dict[str, Tuple[float, List[Dict]]] = {}
 
 
-def _webapp_apoios_url() -> str:
+def _webapp_apoios_url(suffix: str = "") -> str:
     raw = (os.getenv("RENDER_EXTERNAL_URL", "") or "").strip().rstrip("/")
     lowered = raw.lower()
     if not raw or not lowered.startswith("https://") or "example.com" in lowered or "seu-app.onrender.com" in lowered:
-        return ""
-    return f"{raw}/webapp/apoios"
+        raw = "http://localhost:8000"
+    return f"{raw}/webapp/apoios{suffix}"
 
 
 def doacoes_ativas() -> bool:
@@ -443,19 +443,16 @@ def _texto_gestao_apoios() -> str:
 
 
 def _teclado_gestao_apoios() -> InlineKeyboardMarkup:
-    url = _webapp_apoios_url()
-    if url:
-        return InlineKeyboardMarkup([
-            [InlineKeyboardButton("Abrir gestor no Mini App", web_app=WebAppInfo(url=url))],
-            [InlineKeyboardButton("ðŸ“‹ Listar apoiadores", callback_data="admin_apoio_listar")],
-            [InlineKeyboardButton("ðŸ”™ Voltar ao admin", callback_data="area_admin")],
-        ])
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📋 Listar apoiadores", callback_data="admin_apoio_listar")],
-        [InlineKeyboardButton("➕ Novo apoiador", callback_data="admin_apoio_novo")],
-        [InlineKeyboardButton("🧾 Novo contrato", callback_data="admin_apoio_contrato")],
-        [InlineKeyboardButton("⚙️ Configurar exibição", callback_data="admin_apoio_config")],
-        [InlineKeyboardButton("⏸️ Pausar/reativar apoiador", callback_data="admin_apoio_pausar")],
+        [
+            InlineKeyboardButton("🤝 Apoiadores", web_app=WebAppInfo(url=_webapp_apoios_url("/apoiadores"))),
+            InlineKeyboardButton("📋 Contratos", web_app=WebAppInfo(url=_webapp_apoios_url("/contratos")))
+        ],
+        [
+            InlineKeyboardButton("💰 Financeiro", web_app=WebAppInfo(url=_webapp_apoios_url("/financeiro"))),
+            InlineKeyboardButton("🎨 Criativos", web_app=WebAppInfo(url=_webapp_apoios_url("/criativos")))
+        ],
+        [InlineKeyboardButton("🧾 Gerar comprovante", callback_data="admin_apoio_comprovante_inicio")],
         [InlineKeyboardButton("🔙 Voltar ao admin", callback_data="area_admin")],
     ])
 
@@ -484,154 +481,143 @@ async def admin_apoio_listar(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await navegar_para(update, context, "Gestão de Apoios > Lista", "\n".join(linhas), _teclado_gestao_apoios())
 
 
-async def admin_apoio_novo_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_apoio_comprovante_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    if q:
+        try:
+            await q.answer()
+        except Exception:
+            pass
     user_id = update.effective_user.id if update.effective_user else 0
     if not _admin_apoio(user_id):
-        return ConversationHandler.END
+        return
+    
+    apoiadores = _fetch_rows("apoiadores")
+    if not apoiadores:
+        await navegar_para(update, context, "Gerar Comprovante", "Nenhum apoiador cadastrado no sistema.", _teclado_gestao_apoios())
+        return
+    
+    botoes = []
+    linha = []
+    for a in apoiadores:
+        linha.append(InlineKeyboardButton(a.get("nome", "Apoiador"), callback_data=f"admin_apoio_comp_apoiador:{a.get('id')}"))
+        if len(linha) == 2:
+            botoes.append(linha)
+            linha = []
+    if linha:
+        botoes.append(linha)
+    botoes.append([InlineKeyboardButton("❌ Cancelar", callback_data="admin_publicidade")])
+    
     await navegar_para(
         update,
         context,
-        "Gestão de Apoios > Novo",
-        "Envie os dados do apoiador em uma linha:\n\n`nome | responsável | telefone | email | segmento | cidade | link | texto curto`\n\nUse `-` para campos vazios.",
-        InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="admin_publicidade")]]),
+        "Gerar Comprovante",
+        "Selecione o apoiador para gerar o comprovante:",
+        InlineKeyboardMarkup(botoes)
     )
-    return APOIO_NOVO_APOIADOR
 
 
-async def admin_apoio_novo_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id if update.effective_user else 0
-    if not _admin_apoio(user_id):
-        return ConversationHandler.END
-    partes = [p.strip() for p in (update.message.text or "").split("|")]
-    if len(partes) < 8 or not partes[0] or partes[0] == "-":
-        await update.message.reply_text("Formato inválido. Envie: nome | responsável | telefone | email | segmento | cidade | link | texto curto")
-        return APOIO_NOVO_APOIADOR
-    keys = ["nome", "responsavel_nome", "telefone", "email", "segmento", "cidade", "link_publico", "texto_curto"]
-    row = {k: (v if v != "-" else "") for k, v in zip(keys, partes[:8])}
-    row["status"] = "ativo"
+async def admin_apoio_comp_apoiador(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    if not q or not q.data:
+        return
     try:
-        _safe_table("apoiadores").insert(row).execute()
-        await navegar_para(update, context, "Gestão de Apoios", "✅ Apoiador cadastrado.", _teclado_gestao_apoios())
-    except Exception as exc:
-        logger.warning("Falha ao cadastrar apoiador: %s", exc)
-        await navegar_para(update, context, "Gestão de Apoios", "Falha ao cadastrar apoiador. Verifique se `docs/supabase_apoios_institucionais.sql` foi aplicado.", _teclado_gestao_apoios())
-    return ConversationHandler.END
-
-
-async def admin_apoio_contrato_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await q.answer()
+    except Exception:
+        pass
     user_id = update.effective_user.id if update.effective_user else 0
     if not _admin_apoio(user_id):
-        return ConversationHandler.END
+        return
+    
+    apoiador_id = q.data.split(":")[1]
+    apoiador_list = _fetch_rows("apoiadores", [("eq", "id", apoiador_id)])
+    if not apoiador_list:
+        await navegar_para(update, context, "Gerar Comprovante", "Apoiador não encontrado.", _teclado_gestao_apoios())
+        return
+    apoiador = apoiador_list[0]
+    
+    pagamentos = _fetch_rows("apoios_pagamentos", [("eq", "apoiador_id", apoiador_id)])
+    if not pagamentos:
+        await navegar_para(update, context, "Gerar Comprovante", f"Nenhum pagamento registrado no financeiro para *{apoiador.get('nome')}*.", _teclado_gestao_apoios())
+        return
+        
+    botoes = []
+    pagamentos.sort(key=lambda x: x.get("competencia", ""), reverse=True)
+    for p in pagamentos[:10]:
+        status_label = "Pago" if p.get("status") == "pago" else "Pendente"
+        botoes.append([InlineKeyboardButton(f"Comp. {p.get('competencia')} ({status_label})", callback_data=f"admin_apoio_comp_gerar:{apoiador_id}:{p.get('id')}")])
+        
+    botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="admin_apoio_comprovante_inicio")])
+    
     await navegar_para(
         update,
         context,
-        "Gestão de Apoios > Contrato",
-        "Envie o contrato em uma linha:\n\n`apoiador_id | categoria | data_inicio AAAA-MM-DD | data_fim AAAA-MM-DD | valor | finalidade`\n\nCategorias: master, destaque, institucional, amigo_projeto.",
-        InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="admin_publicidade")]]),
+        "Gerar Comprovante",
+        f"Selecione a competência do comprovante para *{apoiador.get('nome')}*:",
+        InlineKeyboardMarkup(botoes)
     )
-    return APOIO_NOVO_CONTRATO
 
 
-async def admin_apoio_contrato_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id if update.effective_user else 0
-    if not _admin_apoio(user_id):
-        return ConversationHandler.END
-    partes = [p.strip() for p in (update.message.text or "").split("|")]
-    if len(partes) < 6:
-        await update.message.reply_text("Formato inválido. Envie: apoiador_id | categoria | data_inicio | data_fim | valor | finalidade")
-        return APOIO_NOVO_CONTRATO
-    row = {
-        "apoiador_id": partes[0],
-        "categoria": partes[1],
-        "data_inicio": partes[2],
-        "data_fim": partes[3],
-        "valor_contribuicao": _money(partes[4]),
-        "finalidade": partes[5],
-        "status": "ativo",
-    }
+async def admin_apoio_comp_gerar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    if not q or not q.data:
+        return
     try:
-        _safe_table("apoios_contratos").insert(row).execute()
-        await navegar_para(update, context, "Gestão de Apoios", "✅ Contrato cadastrado.", _teclado_gestao_apoios())
-    except Exception as exc:
-        logger.warning("Falha ao cadastrar contrato de apoio: %s", exc)
-        await navegar_para(update, context, "Gestão de Apoios", "Falha ao cadastrar contrato. Verifique apoiador_id e tabela de apoios.", _teclado_gestao_apoios())
-    return ConversationHandler.END
-
-
-async def admin_apoio_config_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        await q.answer()
+    except Exception:
+        pass
     user_id = update.effective_user.id if update.effective_user else 0
     if not _admin_apoio(user_id):
-        return ConversationHandler.END
-    await navegar_para(
-        update,
-        context,
-        "Gestão de Apoios > Exibição",
-        "Envie a configuração em uma linha:\n\n`apoiador_id | logo_card sim/não | confirmados sim/não | ia sim/não | limite_card | limite_confirmados | limite_ia | peso`",
-        InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="admin_publicidade")]]),
+        return
+        
+    partes = q.data.split(":")
+    apoiador_id = partes[1]
+    pagamento_id = partes[2]
+    
+    apoiador_list = _fetch_rows("apoiadores", [("eq", "id", apoiador_id)])
+    pagamento_list = _fetch_rows("apoios_pagamentos", [("eq", "id", pagamento_id)])
+    
+    if not apoiador_list or not pagamento_list:
+        await navegar_para(update, context, "Gerar Comprovante", "Dados não encontrados.", _teclado_gestao_apoios())
+        return
+        
+    a = apoiador_list[0]
+    p = pagamento_list[0]
+    
+    status_icon = "✅" if p.get("status") == "pago" else "⚠️" if p.get("status") == "pendente" else "ℹ️"
+    status_text = str(p.get("status") or "").upper()
+    val_prev = float(p.get("valor_previsto") or 0.0)
+    val_pago = float(p.get("valor_pago") or 0.0)
+    
+    def format_date(iso_str):
+        if not iso_str:
+            return "N/A"
+        try:
+            parts = iso_str.split("-")
+            if len(parts) == 3:
+                return f"{parts[2]}/{parts[1]}/{parts[0]}"
+        except Exception:
+            pass
+        return iso_str
+        
+    dt_pag = format_date(p.get("data_pagamento"))
+    forma = p.get("forma_pagamento") or "N/A"
+    
+    texto = (
+        "🧾 *COMPROVANTE DE APOIO INSTITUCIONAL*\n\n"
+        f"*Apoiador:* {a.get('nome')}\n"
+        f"*Responsável:* {a.get('responsavel_nome') or 'N/A'}\n"
+        f"*Competência:* {p.get('competencia')}\n"
+        f"*Valor Previsto:* R$ {val_prev:.2f}\n"
+        f"*Valor Pago:* R$ {val_pago:.2f}\n"
+        f"*Status:* {status_icon} {status_text}\n"
+        f"*Data Pagamento:* {dt_pag}\n"
+        f"*Forma:* {forma}\n\n"
+        "---\n"
+        "_Bode Andarilho — Publicidade e Apoios_"
     )
-    return APOIO_CONFIG
-
-
-async def admin_apoio_config_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id if update.effective_user else 0
-    if not _admin_apoio(user_id):
-        return ConversationHandler.END
-    partes = [p.strip() for p in (update.message.text or "").split("|")]
-    if len(partes) < 8:
-        await update.message.reply_text("Formato inválido. Envie: apoiador_id | logo_card | confirmados | ia | limite_card | limite_confirmados | limite_ia | peso")
-        return APOIO_CONFIG
-    row = {
-        "apoiador_id": partes[0],
-        "permite_logo_card": _parse_bool_token(partes[1]),
-        "permite_confirmados": _parse_bool_token(partes[2]),
-        "permite_ia": _parse_bool_token(partes[3]),
-        "limite_card_mes": int(_money(partes[4])),
-        "limite_confirmados_mes": int(_money(partes[5])),
-        "limite_ia_mes": int(_money(partes[6])),
-        "peso_prioridade": max(1, int(_money(partes[7]))),
-    }
-    try:
-        existente = _safe_table("apoios_config").select("id").eq("apoiador_id", partes[0]).limit(1).execute()
-        if existente.data:
-            _safe_table("apoios_config").update(row).eq("id", existente.data[0]["id"]).execute()
-        else:
-            _safe_table("apoios_config").insert(row).execute()
-        await navegar_para(update, context, "Gestão de Apoios", "✅ Configuração de exibição salva.", _teclado_gestao_apoios())
-    except Exception as exc:
-        logger.warning("Falha ao salvar config de apoio: %s", exc)
-        await navegar_para(update, context, "Gestão de Apoios", "Falha ao salvar configuração de exibição.", _teclado_gestao_apoios())
-    return ConversationHandler.END
-
-
-async def admin_apoio_pausar_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id if update.effective_user else 0
-    if not _admin_apoio(user_id):
-        return ConversationHandler.END
-    await navegar_para(
-        update,
-        context,
-        "Gestão de Apoios > Status",
-        "Envie:\n\n`apoiador_id | ativo|pausado|encerrado`\n\nO status controla a exibição pública e a elegibilidade em cards/textos.",
-        InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="admin_publicidade")]]),
-    )
-    return APOIO_PAUSAR
-
-
-async def admin_apoio_pausar_salvar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id if update.effective_user else 0
-    if not _admin_apoio(user_id):
-        return ConversationHandler.END
-    partes = [p.strip() for p in (update.message.text or "").split("|")]
-    if len(partes) < 2 or partes[1] not in {"ativo", "pausado", "encerrado"}:
-        await update.message.reply_text("Formato inválido. Envie: apoiador_id | ativo|pausado|encerrado")
-        return APOIO_PAUSAR
-    try:
-        _safe_table("apoiadores").update({"status": partes[1]}).eq("id", partes[0]).execute()
-        await navegar_para(update, context, "Gestão de Apoios", "✅ Status atualizado.", _teclado_gestao_apoios())
-    except Exception as exc:
-        logger.warning("Falha ao atualizar status de apoiador: %s", exc)
-        await navegar_para(update, context, "Gestão de Apoios", "Falha ao atualizar status do apoiador.", _teclado_gestao_apoios())
-    return ConversationHandler.END
+    
+    await navegar_para(update, context, "Comprovante Gerado", texto, _teclado_gestao_apoios())
 
 
 async def mostrar_apoiadores(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -655,7 +641,7 @@ async def mostrar_apoiadores(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "Exiba seu Instagram, site ou contato. Uma presença discreta e elegante em telas de grande visualização, como listas de confirmados, cards de eventos e respostas da inteligência artificial.\n\n"
             "📌 *Apoie o Bode Andarilho*\n"
             "Sua contribuição ajuda a cobrir custos de hospedagem, manutenção técnica e melhorias para a nossa comunidade.\n\n"
-            "Deseja apoiar este projeto Toque em *Falar com admin* e a administração receberá seu interesse."
+            "Deseja apoiar este projeto? Toque em *Falar com admin* e a administração receberá seu interesse."
         )
     else:
         texto = (
@@ -693,12 +679,22 @@ async def cmd_apoiar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.answer()
         except Exception:
             pass
+
+    user_id = update.effective_user.id if update.effective_user else 0
+    if get_nivel(user_id) != "3":
+        await navegar_para(
+            update,
+            context,
+            "Apoio Institucional",
+            "🤝 *Apoio Institucional*\n\nA funcionalidade de Apoio Institucional está em fase de preparação e estará disponível em breve para todos os Irmãos.",
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="menu_principal")]]),
+        )
+        return
+
     texto = (
-        "🤝 *Apoio Institucional*\n\n"
-        "O Bode Andarilho oferece espaços de apoio para marcas e profissionais que desejam colaborar com a comunidade de forma sutil.\n\n"
-        "Apoiar o projeto ajuda a manter custos de hospedagem, manutenção técnica e melhorias contínuas, com divulgação discreta em pontos estratégicos do aplicativo.\n\n"
-        "Exemplos de inserção: seu Instagram, site ou contato. O objetivo é integrar parceiros à comunidade sem comprometer a experiência de uso.\n\n"
-        "Faixas sugeridas: Amigo, Institucional, Destaque e Master."
+        "🤝 *REDE DE APOIO DO BODE ANDARILHO*\n\n"
+        "Ajude a manter o nosso bot no ar, incentivando as visitações entre as Oficinas, e aproveite para divulgar o seu trabalho para a nossa comunidade. Escolha a sua faixa de apoio:\n\n"
+        "Para conhecer mais sobre a finalidade de cada plano, valores e a disponibilidade de vagas, acione o botão abaixo."
     )
     await navegar_para(
         update,
@@ -706,10 +702,51 @@ async def cmd_apoiar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Apoio Institucional",
         texto,
         InlineKeyboardMarkup([
-            [InlineKeyboardButton("🤝 Apoiadores", callback_data="apoio_ver_apoiadores")],
+            [InlineKeyboardButton("📋 Conhecer os Planos", callback_data="apoio_ver_planos")],
+            [InlineKeyboardButton("🤝 Ver apoiadores", callback_data="apoio_ver_apoiadores")],
             [InlineKeyboardButton("💬 Falar com admin", callback_data="apoio_contato_admin")],
             *([[InlineKeyboardButton("💝 Doar ao projeto", callback_data="apoio_doar")]] if doacoes_ativas() else []),
             [InlineKeyboardButton("🔙 Voltar", callback_data="menu_principal")],
+        ]),
+    )
+
+
+async def mostrar_detalhes_planos(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    if q:
+        try:
+            await q.answer()
+        except Exception:
+            pass
+
+    user_id = update.effective_user.id if update.effective_user else 0
+    if get_nivel(user_id) != "3":
+        return
+
+    texto = (
+        "🤝 *REDE DE APOIO DO BODE ANDARILHO*\n\n"
+        "Ajude a manter o nosso bot no ar, incentivando as visitações entre as Oficinas, e aproveite para divulgar o seu trabalho para a nossa comunidade. Escolha a sua faixa de apoio:\n\n"
+        "🔹 *1. Amigo do Projeto — R$ 33,00 / mês* (ou R$ 330,00/ano)\n"
+        "• *Propósito:* Apoio de Irmão para Irmão. Ideal para contribuição individual e simples para cobrir os custos básicos da tecnologia.\n"
+        "• *Onde aparece:* Nome e link na \"Tela de Apoiadores\" do Mini App.\n\n"
+        "🔹 *2. Institucional — R$ 60,00 / mês* (ou R$ 600,00/ano) — _[Restam 5 vagas]_\n"
+        "• *Propósito:* Ideal para o profissional autônomo ou pequeno empreendedor que quer fortalecer a causa e deixar seus serviços à disposição dos Irmãos.\n"
+        "• *Onde aparece:* Tela de Apoiadores, inserção nas menções da IA e rodapé de diplomas gerados.\n\n"
+        "🔹 *3. Destaque — R$ 120,00 / mês* (ou R$ 1.200,00/ano) — _[Restam 3 vagas]_\n"
+        "• *Propósito:* Para quem quer estar onde o movimento acontece. Ideal para empresas que apoiam ativamente a intervisitação e querem presença diária.\n"
+        "• *Onde aparece:* Benefícios anteriores + texto de apoio discreto no rodapé da lista de confirmados das sessões.\n\n"
+        "👑 *4. Master — R$ 250,00 / mês* (ou R$ 2.500,00/ano) — _[Restam 2 vagas]_\n"
+        "• *Propósito:* Para os grandes benfeitores. Ideal para empresas que compreendem o impacto do sistema na modernização das Lojas e querem máxima associação à evolução do projeto.\n"
+        "• *Onde aparece:* Prioridade nos sorteios de espaços + todos os benefícios + exibição da logo nos cards/flyers de divulgação dos eventos."
+    )
+    await navegar_para(
+        update,
+        context,
+        "Apoio Institucional > Planos",
+        texto,
+        InlineKeyboardMarkup([
+            [InlineKeyboardButton("💬 Falar com admin", callback_data="apoio_contato_admin")],
+            [InlineKeyboardButton("🔙 Voltar", callback_data="apoiar_menu")],
         ]),
     )
 
@@ -827,24 +864,6 @@ async def mostrar_publicidade_admin(update: Update, context: ContextTypes.DEFAUL
 
 
 def registrar_handlers_apoio(application):
-    apoio_admin_handler = ConversationHandler(
-        entry_points=[
-            CallbackQueryHandler(admin_apoio_novo_inicio, pattern="^admin_apoio_novo$"),
-            CallbackQueryHandler(admin_apoio_contrato_inicio, pattern="^admin_apoio_contrato$"),
-            CallbackQueryHandler(admin_apoio_config_inicio, pattern="^admin_apoio_config$"),
-            CallbackQueryHandler(admin_apoio_pausar_inicio, pattern="^admin_apoio_pausar$"),
-        ],
-        states={
-            APOIO_NOVO_APOIADOR: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_apoio_novo_salvar)],
-            APOIO_NOVO_CONTRATO: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_apoio_contrato_salvar)],
-            APOIO_CONFIG: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_apoio_config_salvar)],
-            APOIO_PAUSAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_apoio_pausar_salvar)],
-        },
-        fallbacks=[CallbackQueryHandler(mostrar_publicidade_admin, pattern="^admin_publicidade$")],
-        name="apoio_admin_handler",
-        persistent=False,
-    )
-    application.add_handler(apoio_admin_handler)
     application.add_handler(CommandHandler("apoiar", cmd_apoiar))
     application.add_handler(CallbackQueryHandler(cmd_apoiar, pattern="^apoiar_menu$"))
     application.add_handler(CallbackQueryHandler(mostrar_apoiadores, pattern="^apoio_ver_apoiadores$"))
@@ -852,6 +871,10 @@ def registrar_handlers_apoio(application):
     application.add_handler(CallbackQueryHandler(mostrar_doacao, pattern="^apoio_doar$"))
     application.add_handler(CallbackQueryHandler(mostrar_publicidade_admin, pattern="^admin_publicidade$"))
     application.add_handler(CallbackQueryHandler(admin_apoio_listar, pattern="^admin_apoio_listar$"))
+    application.add_handler(CallbackQueryHandler(admin_apoio_comprovante_inicio, pattern="^admin_apoio_comprovante_inicio$"))
+    application.add_handler(CallbackQueryHandler(admin_apoio_comp_apoiador, pattern="^admin_apoio_comp_apoiador:"))
+    application.add_handler(CallbackQueryHandler(admin_apoio_comp_gerar, pattern="^admin_apoio_comp_gerar:"))
+    application.add_handler(CallbackQueryHandler(mostrar_detalhes_planos, pattern="^apoio_ver_planos$"))
 
 
 def obter_texto_patrocinio() -> str:

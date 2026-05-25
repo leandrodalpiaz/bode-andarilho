@@ -3052,110 +3052,1362 @@ async def api_apoios_criativos(request: Request) -> JSONResponse:
 
 def html_apoios_admin() -> str:
     body = """
-<div class="card">
-  <div class="card-title">Painel</div>
-  <div id="apoios_metricas" class="loja-resumo">Carregando...</div>
-</div>
-<div class="card">
-  <div class="card-title">Apoiador</div>
-  <input type="hidden" id="apoiador_id">
-  <div class="field"><label>Editar apoiador existente</label><select id="apoiador_select"><option value="">Novo apoiador</option></select></div>
-  <div class="field"><label>Nome</label><input id="apoiador_nome"></div>
-  <div class="field"><label>Responsavel</label><input id="apoiador_responsavel"></div>
-  <div class="field"><label>Telefone</label><input id="apoiador_telefone"></div>
-  <div class="field"><label>Email</label><input id="apoiador_email"></div>
-  <div class="field"><label>Segmento</label><input id="apoiador_segmento"></div>
-  <div class="field"><label>Cidade</label><input id="apoiador_cidade"></div>
-  <div class="field"><label>Link publico</label><input id="apoiador_link"></div>
-  <div class="field"><label>Texto curto</label><textarea id="apoiador_texto"></textarea></div>
-  <div class="field"><label>Status</label><select id="apoiador_status"><option>ativo</option><option>pausado</option><option>encerrado</option></select></div>
-  <div class="field"><label>Logo</label><input id="apoiador_logo" type="file" accept="image/*"></div>
-  <div class="field"><label>Imagem de publicidade</label><input id="apoiador_imagem" type="file" accept="image/*"></div>
-  <button class="btn-primary" type="button" onclick="salvarApoiador()">Salvar apoiador</button>
-</div>
-<div class="card">
-  <div class="card-title">Contrato e exibicao</div>
-  <input type="hidden" id="contrato_id">
-  <div class="field"><label>Editar contrato existente</label><select id="contrato_select"><option value="">Novo contrato</option></select></div>
-  <div class="field"><label>Apoiador</label><select id="contrato_apoiador"></select></div>
-  <div class="field"><label>Categoria</label><select id="contrato_categoria"><option>master</option><option>destaque</option><option>institucional</option><option>amigo_projeto</option></select></div>
-  <div class="field"><label>Inicio</label><input id="contrato_inicio" placeholder="2026-05-01"></div>
-  <div class="field"><label>Fim</label><input id="contrato_fim" placeholder="2026-12-31"></div>
-  <div class="field"><label>Valor</label><input id="contrato_valor" inputmode="decimal"></div>
-  <div class="field"><label>Finalidade</label><textarea id="contrato_finalidade"></textarea></div>
-  <div class="field"><label>Status</label><select id="contrato_status"><option>ativo</option><option>pausado</option><option>inadimplente</option><option>vencido</option><option>encerrado</option></select></div>
-  <div class="field"><label>Periodicidade</label><select id="contrato_periodicidade"><option>mensal</option><option>trimestral</option><option>semestral</option><option>anual</option><option>avulso</option></select></div>
-  <div class="field"><label>Dia vencimento</label><input id="contrato_dia_vencimento" inputmode="numeric" value="10"></div>
-  <div class="field"><label>Alerta renovacao</label><input id="contrato_alerta" inputmode="numeric" value="30"></div>
-  <div class="field"><label>Permissoes</label><select id="permite_logo_card"><option value="true">Logo em card</option><option value="false">Sem logo em card</option></select><select id="permite_confirmados"><option value="true">Lista confirmados</option><option value="false">Sem lista confirmados</option></select><select id="permite_ia"><option value="true">IA</option><option value="false">Sem IA</option></select><select id="permite_rodape"><option value="true">Rodape diploma</option><option value="false">Sem rodape diploma</option></select></div>
-  <div class="field"><label>Limites mensais</label><input id="limite_card_mes" placeholder="card"><input id="limite_confirmados_mes" placeholder="confirmados"><input id="limite_ia_mes" placeholder="ia"><input id="limite_rodape_mes" placeholder="rodape"></div>
-  <div class="field"><label>Peso prioridade</label><input id="peso_prioridade" inputmode="numeric" value="1"></div>
-  <button class="btn-primary" type="button" onclick="salvarContrato()">Salvar contrato</button>
-</div>
-<div class="card">
-  <div class="card-title">Financeiro</div>
-  <input type="hidden" id="pagamento_id">
-  <div class="field"><label>Editar lancamento</label><select id="pagamento_select"><option value="">Novo lancamento</option></select></div>
-  <div class="field"><label>Apoiador</label><select id="pagamento_apoiador"></select></div>
-  <div class="field"><label>Contrato</label><select id="pagamento_contrato"><option value="">Sem contrato</option></select></div>
-  <div class="field"><label>Competencia</label><input id="pagamento_competencia" placeholder="2026-05"></div>
-  <div class="field"><label>Vencimento</label><input id="pagamento_vencimento" placeholder="2026-05-10"></div>
-  <div class="field"><label>Valor previsto</label><input id="pagamento_previsto" inputmode="decimal"></div>
-  <div class="field"><label>Valor pago</label><input id="pagamento_pago" inputmode="decimal"></div>
-  <div class="field"><label>Data pagamento</label><input id="pagamento_data" placeholder="2026-05-10"></div>
-  <div class="field"><label>Status</label><select id="pagamento_status"><option>pendente</option><option>pago</option><option>parcial</option><option>atrasado</option><option>cancelado</option></select></div>
-  <div class="field"><label>Forma</label><input id="pagamento_forma"></div>
-  <div class="field"><label>Comprovante</label><input id="pagamento_comprovante" type="file" accept="image/*,.pdf"></div>
-  <button class="btn-primary" type="button" onclick="salvarPagamento()">Salvar financeiro</button>
-</div>
-<div class="card">
-  <div class="card-title">Criativo</div>
-  <input type="hidden" id="criativo_id">
-  <div class="field"><label>Editar criativo</label><select id="criativo_select"><option value="">Novo criativo</option></select></div>
-  <div class="field"><label>Apoiador</label><select id="criativo_apoiador"></select></div>
-  <div class="field"><label>Contrato</label><select id="criativo_contrato"><option value="">Sem contrato</option></select></div>
-  <div class="field"><label>Posicionamento</label><select id="criativo_tipo"><option value="card_logo">Logo em card</option><option value="rodape_diploma">Rodape diploma</option><option value="tela_apoiadores">Tela apoiadores</option><option value="ia_resposta_texto">Resposta IA</option><option value="confirmados_premium_texto">Lista confirmados</option></select></div>
-  <div class="field"><label>Titulo</label><input id="criativo_titulo"></div>
-  <div class="field"><label>Texto</label><textarea id="criativo_texto"></textarea></div>
-  <div class="field"><label>Link</label><input id="criativo_link"></div>
-  <div class="field"><label>Status</label><select id="criativo_status"><option>ativo</option><option>pausado</option><option>encerrado</option></select></div>
-  <div class="field"><label>Prioridade</label><input id="criativo_prioridade" inputmode="numeric" value="1"></div>
-  <div class="field"><label>Inicio/Fim</label><input id="criativo_inicio" placeholder="2026-05-01"><input id="criativo_fim" placeholder="2026-12-31"></div>
-  <div class="field"><label>Imagem</label><input id="criativo_imagem" type="file" accept="image/*"></div>
-  <button class="btn-primary" type="button" onclick="salvarCriativo()">Salvar criativo</button>
+<div class="card" style="text-align: center; padding: 20px;">
+  <div style="font-size: 48px; margin-bottom: 12px;">📢</div>
+  <h2 style="margin-bottom: 8px;">Painel de Gestão</h2>
+  <p style="color: var(--hint); margin: 8px 0 20px; font-size: 14px;">Selecione um dos módulos para gerenciar:</p>
+  <div class="actions-stack">
+    <button class="btn-primary" style="margin-bottom: 10px;" onclick="window.location.href='/webapp/apoios/apoiadores'">🤝 Apoiadores</button>
+    <button class="btn-primary" style="margin-bottom: 10px;" onclick="window.location.href='/webapp/apoios/contratos'">📋 Contratos</button>
+    <button class="btn-primary" style="margin-bottom: 10px;" onclick="window.location.href='/webapp/apoios/financeiro'">💰 Financeiro</button>
+    <button class="btn-primary" style="margin-bottom: 10px;" onclick="window.location.href='/webapp/apoios/criativos'">🎨 Criativos</button>
+  </div>
 </div>
 """
-    script = """
-let state={apoiadores:[],contratos:[],pagamentos:[],criativos:[]};
-const byId=id=>document.getElementById(id);
-function opt(label,value){const o=document.createElement('option');o.textContent=label;o.value=value||'';return o;}
-async function fileData(id){const f=(byId(id).files||[])[0];if(!f)return '';return await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result||'');r.onerror=reject;r.readAsDataURL(f);});}
-async function api(path,payload){const resp=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,init_data:tgInitData()})});const data=await resp.json();if(!data.ok)throw new Error(data.error||'Falha na operacao.');return data;}
-function fillSelects(){
-  ['apoiador_select','contrato_apoiador','pagamento_apoiador','criativo_apoiador'].forEach(id=>{const s=byId(id);const first=s.querySelector('option')?.cloneNode(true);s.innerHTML='';if(first)s.appendChild(first);state.apoiadores.forEach(a=>s.appendChild(opt(`${a.nome||'Apoiador'} (${a.status||''})`,a.id)));});
-  ['contrato_select','pagamento_contrato','criativo_contrato'].forEach(id=>{const s=byId(id);const first=s.querySelector('option')?.cloneNode(true);s.innerHTML='';if(first)s.appendChild(first);state.contratos.forEach(c=>s.appendChild(opt(`${c.categoria||'contrato'} ${c.data_inicio||''} a ${c.data_fim||''}`,c.id)));});
-  byId('pagamento_select').innerHTML='<option value="">Novo lancamento</option>'; state.pagamentos.forEach(p=>byId('pagamento_select').appendChild(opt(`${p.competencia||''} - ${p.status||''} - R$ ${p.valor_previsto||0}`,p.id)));
-  byId('criativo_select').innerHTML='<option value="">Novo criativo</option>'; state.criativos.forEach(c=>byId('criativo_select').appendChild(opt(`${c.tipo_posicionamento||''} - ${c.titulo||''} (${c.status||''})`,c.id)));
-}
-function renderDashboard(m){byId('apoios_metricas').innerHTML=`Ativos: <strong>${m.apoiadores_ativos}</strong><br>Contratos ativos: <strong>${m.contratos_ativos}</strong><br>Vencendo: <strong>${m.contratos_vencendo}</strong> | Vencidos: <strong>${m.contratos_vencidos}</strong> | Inadimplentes: <strong>${m.contratos_inadimplentes}</strong><br>Receita prevista: <strong>R$ ${m.receita_prevista}</strong><br>Recebido no mes: <strong>R$ ${m.recebido_mes}</strong><br>Aberto no mes: <strong>R$ ${m.saldo_aberto_mes}</strong>`;}
-async function carregar(){try{const data=await api('/api/apoios/dashboard',{});state=data;renderDashboard(data.metricas);fillSelects();}catch(e){showToast(e.message,4500);}}
-function bindEdits(){
-  byId('apoiador_select').addEventListener('change',e=>{const a=state.apoiadores.find(x=>x.id===e.target.value)||{};byId('apoiador_id').value=a.id||'';byId('apoiador_nome').value=a.nome||'';byId('apoiador_responsavel').value=a.responsavel_nome||'';byId('apoiador_telefone').value=a.telefone||'';byId('apoiador_email').value=a.email||'';byId('apoiador_segmento').value=a.segmento||'';byId('apoiador_cidade').value=a.cidade||'';byId('apoiador_link').value=a.link_publico||'';byId('apoiador_texto').value=a.texto_curto||'';byId('apoiador_status').value=a.status||'ativo';});
-  byId('contrato_select').addEventListener('change',e=>{const c=state.contratos.find(x=>x.id===e.target.value)||{};byId('contrato_id').value=c.id||'';byId('contrato_apoiador').value=c.apoiador_id||'';byId('contrato_categoria').value=c.categoria||'institucional';byId('contrato_inicio').value=c.data_inicio||'';byId('contrato_fim').value=c.data_fim||'';byId('contrato_valor').value=c.valor_contribuicao||'';byId('contrato_finalidade').value=c.finalidade||'';byId('contrato_status').value=c.status||'ativo';byId('contrato_periodicidade').value=c.periodicidade||'mensal';byId('contrato_dia_vencimento').value=c.dia_vencimento||10;byId('contrato_alerta').value=c.renovacao_alerta_dias||30;});
-  byId('pagamento_select').addEventListener('change',e=>{const p=state.pagamentos.find(x=>x.id===e.target.value)||{};byId('pagamento_id').value=p.id||'';byId('pagamento_apoiador').value=p.apoiador_id||'';byId('pagamento_contrato').value=p.contrato_id||'';byId('pagamento_competencia').value=p.competencia||'';byId('pagamento_vencimento').value=p.data_vencimento||'';byId('pagamento_previsto').value=p.valor_previsto||'';byId('pagamento_pago').value=p.valor_pago||'';byId('pagamento_data').value=p.data_pagamento||'';byId('pagamento_status').value=p.status||'pendente';byId('pagamento_forma').value=p.forma_pagamento||'';});
-  byId('criativo_select').addEventListener('change',e=>{const c=state.criativos.find(x=>x.id===e.target.value)||{};byId('criativo_id').value=c.id||'';byId('criativo_apoiador').value=c.apoiador_id||'';byId('criativo_contrato').value=c.contrato_id||'';byId('criativo_tipo').value=c.tipo_posicionamento||'tela_apoiadores';byId('criativo_titulo').value=c.titulo||'';byId('criativo_texto').value=c.texto||'';byId('criativo_link').value=c.link_url||'';byId('criativo_status').value=c.status||'ativo';byId('criativo_prioridade').value=c.prioridade||1;byId('criativo_inicio').value=c.data_inicio||'';byId('criativo_fim').value=c.data_fim||'';});
-}
-async function salvarApoiador(){try{await api('/api/apoios/apoiadores',{id:val('apoiador_id'),nome:val('apoiador_nome'),responsavel_nome:val('apoiador_responsavel'),telefone:val('apoiador_telefone'),email:val('apoiador_email'),segmento:val('apoiador_segmento'),cidade:val('apoiador_cidade'),link_publico:val('apoiador_link'),texto_curto:val('apoiador_texto'),status:val('apoiador_status'),logo_data_url:await fileData('apoiador_logo'),imagem_publicidade_data_url:await fileData('apoiador_imagem')});showToast('Apoiador salvo.');await carregar();}catch(e){showToast(e.message,4500);}}
-async function salvarContrato(){try{await api('/api/apoios/contratos',{id:val('contrato_id'),apoiador_id:val('contrato_apoiador'),categoria:val('contrato_categoria'),data_inicio:val('contrato_inicio'),data_fim:val('contrato_fim'),valor_contribuicao:val('contrato_valor'),finalidade:val('contrato_finalidade'),status:val('contrato_status'),periodicidade:val('contrato_periodicidade'),dia_vencimento:val('contrato_dia_vencimento'),renovacao_alerta_dias:val('contrato_alerta'),permite_logo_card:val('permite_logo_card'),permite_confirmados:val('permite_confirmados'),permite_ia:val('permite_ia'),permite_rodape:val('permite_rodape'),limite_card_mes:val('limite_card_mes'),limite_confirmados_mes:val('limite_confirmados_mes'),limite_ia_mes:val('limite_ia_mes'),limite_rodape_mes:val('limite_rodape_mes'),peso_prioridade:val('peso_prioridade')});showToast('Contrato salvo.');await carregar();}catch(e){showToast(e.message,4500);}}
-async function salvarPagamento(){try{await api('/api/apoios/pagamentos',{id:val('pagamento_id'),apoiador_id:val('pagamento_apoiador'),contrato_id:val('pagamento_contrato'),competencia:val('pagamento_competencia'),data_vencimento:val('pagamento_vencimento'),valor_previsto:val('pagamento_previsto'),valor_pago:val('pagamento_pago'),data_pagamento:val('pagamento_data'),status:val('pagamento_status'),forma_pagamento:val('pagamento_forma'),comprovante_data_url:await fileData('pagamento_comprovante')});showToast('Financeiro salvo.');await carregar();}catch(e){showToast(e.message,4500);}}
-async function salvarCriativo(){try{await api('/api/apoios/criativos',{id:val('criativo_id'),apoiador_id:val('criativo_apoiador'),contrato_id:val('criativo_contrato'),tipo_posicionamento:val('criativo_tipo'),titulo:val('criativo_titulo'),texto:val('criativo_texto'),link_url:val('criativo_link'),status:val('criativo_status'),prioridade:val('criativo_prioridade'),data_inicio:val('criativo_inicio'),data_fim:val('criativo_fim'),imagem_data_url:await fileData('criativo_imagem')});showToast('Criativo salvo.');await carregar();}catch(e){showToast(e.message,4500);}}
-bindEdits(); carregar();
-"""
-    return _html_wrap("Publicidade e Apoiadores", body, script)
+    return _html_wrap("Publicidade e Apoiadores", body, "")
 
 
 async def get_apoios_admin(request: Request) -> HTMLResponse:
     return HTMLResponse(html_apoios_admin())
+
+
+def html_apoios_apoiadores() -> str:
+    body = """
+<style>
+.item-card { background: rgba(128,128,128,0.1); border: 1px solid var(--border); border-radius: 8px; padding: 10px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.item-card:hover { border-color: var(--btn); background: rgba(128,128,128,0.15); }
+.item-card.selected { border-color: var(--btn); background: rgba(36,129,204,0.1); }
+.badge { font-size: 11px; padding: 3px 8px; border-radius: 12px; font-weight: bold; text-transform: uppercase; }
+.badge-ativo { background: #2ec4b6; color: #fff; }
+.badge-pausado { background: #ff9f1c; color: #fff; }
+.badge-encerrado { background: #7f8c8d; color: #fff; }
+.badge-inadimplente { background: #e71d36; color: #fff; }
+.badge-vencido { background: #7f8c8d; color: #fff; }
+.sec-title { font-size: 14px; font-weight: bold; margin-bottom: 10px; color: var(--hint); display: flex; justify-content: space-between; align-items: center; }
+.list-container { max-height: 250px; overflow-y: auto; margin-bottom: 15px; }
+.btn-small { background: var(--btn); color: var(--btn-text); border: none; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; font-weight: 600; }
+.avatar-preview { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; background: rgba(128,128,128,0.2); margin-right: 10px; display: inline-block; vertical-align: middle; }
+.card-content-flex { display: flex; align-items: center; }
+.btn-danger { background: #ff3b30; color: #fff; }
+</style>
+
+<div class="card">
+  <div class="sec-title">
+    <span>🤝 Apoiadores Cadastrados</span>
+    <button class="btn-small" onclick="novoApoiador()">+ Novo</button>
+  </div>
+  <div id="lista_apoiadores" class="list-container">Carregando...</div>
+</div>
+
+<div class="card" id="form_card">
+  <div class="card-title" id="form_title">Novo Apoiador</div>
+  <input type="hidden" id="apoiador_id">
+  
+  <div class="field">
+    <label>Nome do Apoiador / Empresa</label>
+    <input id="apoiador_nome" placeholder="Ex: Sind Ofícios">
+    <span class="err" id="apoiador_nome_err"></span>
+  </div>
+  
+  <div class="field">
+    <label>Nome do Responsável</label>
+    <input id="apoiador_responsavel" placeholder="Ex: João Silva">
+  </div>
+  
+  <div class="field flex-fields" style="display: flex; gap: 10px;">
+    <div style="flex: 1;">
+      <label>Telefone</label>
+      <input id="apoiador_telefone" placeholder="Ex: (48) 99999-9999">
+    </div>
+    <div style="flex: 1;">
+      <label>E-mail</label>
+      <input id="apoiador_email" type="email" placeholder="Ex: contato@empresa.com">
+    </div>
+  </div>
+  
+  <div class="field flex-fields" style="display: flex; gap: 10px;">
+    <div style="flex: 1;">
+      <label>Segmento de Atuação</label>
+      <input id="apoiador_segmento" placeholder="Ex: Advocacia, Alimentos">
+    </div>
+    <div style="flex: 1;">
+      <label>Cidade</label>
+      <input id="apoiador_cidade" placeholder="Ex: Florianópolis">
+    </div>
+  </div>
+  
+  <div class="field">
+    <label>Link Público (Site / Redes Sociais)</label>
+    <input id="apoiador_link" type="url" placeholder="https://...">
+  </div>
+  
+  <div class="field">
+    <label>Descrição / Texto Curto</label>
+    <textarea id="apoiador_texto" placeholder="Breve texto sobre o apoiador..."></textarea>
+  </div>
+  
+  <div class="field">
+    <label>Status</label>
+    <select id="apoiador_status">
+      <option value="ativo">Ativo</option>
+      <option value="pausado">Pausado</option>
+      <option value="encerrado">Encerrado</option>
+    </select>
+  </div>
+  
+  <div class="field" style="display: flex; align-items: center; gap: 12px;">
+    <div style="flex: 1;">
+      <label>Logo do Apoiador</label>
+      <input id="apoiador_logo" type="file" accept="image/*" onchange="previewImg(this, 'preview_logo')">
+    </div>
+    <img id="preview_logo" class="avatar-preview" src="" style="display: none;">
+  </div>
+  
+  <div class="field" style="display: flex; align-items: center; gap: 12px;">
+    <div style="flex: 1;">
+      <label>Imagem de Publicidade</label>
+      <input id="apoiador_imagem" type="file" accept="image/*" onchange="previewImg(this, 'preview_publicidade')">
+    </div>
+    <img id="preview_publicidade" class="avatar-preview" src="" style="display: none; border-radius: 8px;">
+  </div>
+  
+  <div class="field">
+    <label>Observações Internas</label>
+    <textarea id="apoiador_observacoes" placeholder="Notas contratuais, detalhes importantes..."></textarea>
+  </div>
+
+  <div class="actions">
+    <button class="btn-primary" id="btn_salvar" onclick="salvarApoiador()">Salvar Apoiador</button>
+  </div>
+</div>
+"""
+    script = """
+let state = { apoiadores: [] };
+const byId = id => document.getElementById(id);
+
+function previewImg(input, imgId) {
+  const file = input.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      byId(imgId).src = e.target.result;
+      byId(imgId).style.display = 'block';
+    }
+    reader.readAsDataURL(file);
+  }
+}
+
+async function fileData(id) {
+  const f = (byId(id).files || [])[0];
+  if (!f) return '';
+  return await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result || '');
+    r.onerror = reject;
+    r.readAsDataURL(f);
+  });
+}
+
+async function api(path, payload) {
+  const resp = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...payload, init_data: tgInitData() })
+  });
+  const data = await resp.json();
+  if (!data.ok) throw new Error(data.error || 'Falha na operação.');
+  return data;
+}
+
+function renderApoiadores() {
+  const container = byId('lista_apoiadores');
+  if (state.apoiadores.length === 0) {
+    container.innerHTML = '<div style="color: var(--hint); text-align: center; padding: 12px;">Nenhum apoiador cadastrado.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  state.apoiadores.forEach(a => {
+    const card = document.createElement('div');
+    card.className = 'item-card';
+    card.id = 'apoiador_card_' + a.id;
+    
+    const logoSrc = a.logo_url || '';
+    const logoHtml = logoSrc ? `<img class="avatar-preview" src="${logoSrc}">` : '<div class="avatar-preview" style="display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; color: var(--hint);">🤝</div>';
+    
+    card.innerHTML = `
+      <div class="card-content-flex">
+        ${logoHtml}
+        <div>
+          <div style="font-weight: 600;">${a.nome || 'Sem nome'}</div>
+          <div style="font-size: 12px; color: var(--hint);">${a.segmento || 'Sem segmento'} - ${a.cidade || ''}</div>
+        </div>
+      </div>
+      <span class="badge badge-${a.status || 'ativo'}">${a.status || 'ativo'}</span>
+    `;
+    card.onclick = () => editarApoiador(a);
+    container.appendChild(card);
+  });
+}
+
+function novoApoiador() {
+  byId('form_title').textContent = 'Novo Apoiador';
+  byId('apoiador_id').value = '';
+  byId('apoiador_nome').value = '';
+  byId('apoiador_responsavel').value = '';
+  byId('apoiador_telefone').value = '';
+  byId('apoiador_email').value = '';
+  byId('apoiador_segmento').value = '';
+  byId('apoiador_cidade').value = '';
+  byId('apoiador_link').value = '';
+  byId('apoiador_texto').value = '';
+  byId('apoiador_status').value = 'ativo';
+  byId('apoiador_logo').value = '';
+  byId('apoiador_imagem').value = '';
+  byId('preview_logo').style.display = 'none';
+  byId('preview_publicidade').style.display = 'none';
+  byId('apoiador_observacoes').value = '';
+  
+  document.querySelectorAll('.item-card').forEach(el => el.classList.remove('selected'));
+  clearErr('apoiador_nome');
+}
+
+function editarApoiador(a) {
+  novoApoiador();
+  byId('form_title').textContent = 'Editar Apoiador';
+  byId('apoiador_id').value = a.id || '';
+  byId('apoiador_nome').value = a.nome || '';
+  byId('apoiador_responsavel').value = a.responsavel_nome || '';
+  byId('apoiador_telefone').value = a.telefone || '';
+  byId('apoiador_email').value = a.email || '';
+  byId('apoiador_segmento').value = a.segmento || '';
+  byId('apoiador_cidade').value = a.cidade || '';
+  byId('apoiador_link').value = a.link_publico || '';
+  byId('apoiador_texto').value = a.texto_curto || '';
+  byId('apoiador_status').value = a.status || 'ativo';
+  byId('apoiador_observacoes').value = a.observacoes || '';
+  
+  if (a.logo_url) {
+    byId('preview_logo').src = a.logo_url;
+    byId('preview_logo').style.display = 'block';
+  }
+  if (a.imagem_publicidade_url) {
+    byId('preview_publicidade').src = a.imagem_publicidade_url;
+    byId('preview_publicidade').style.display = 'block';
+  }
+  
+  const selectedCard = byId('apoiador_card_' + a.id);
+  if (selectedCard) selectedCard.classList.add('selected');
+}
+
+async function carregar() {
+  try {
+    const data = await api('/api/apoios/dashboard', {});
+    state = data;
+    renderApoiadores();
+  } catch (e) {
+    showToast(e.message, 4500);
+  }
+}
+
+async function salvarApoiador() {
+  if (!req('apoiador_nome', 'Nome do Apoiador')) {
+    scrollToFirstError();
+    return;
+  }
+  
+  const btn = byId('btn_salvar');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+  
+  try {
+    await api('/api/apoios/apoiadores', {
+      id: val('apoiador_id'),
+      nome: val('apoiador_nome'),
+      responsavel_nome: val('apoiador_responsavel'),
+      telefone: val('apoiador_telefone'),
+      email: val('apoiador_email'),
+      segmento: val('apoiador_segmento'),
+      cidade: val('apoiador_cidade'),
+      link_publico: val('apoiador_link'),
+      texto_curto: val('apoiador_texto'),
+      status: val('apoiador_status'),
+      logo_data_url: await fileData('apoiador_logo'),
+      imagem_publicidade_data_url: await fileData('apoiador_imagem'),
+      observacoes: val('apoiador_observacoes')
+    });
+    showToast('Apoiador salvo com sucesso!');
+    novoApoiador();
+    await carregar();
+  } catch (e) {
+    showToast(e.message, 4500);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Salvar Apoiador';
+  }
+}
+
+carregar();
+"""
+    return _html_wrap("Apoiadores", body, script)
+
+
+async def get_apoios_apoiadores(request: Request) -> HTMLResponse:
+    return HTMLResponse(html_apoios_apoiadores())
+
+
+def html_apoios_contratos() -> str:
+    body = """
+<style>
+.item-card { background: rgba(128,128,128,0.1); border: 1px solid var(--border); border-radius: 8px; padding: 10px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.item-card:hover { border-color: var(--btn); background: rgba(128,128,128,0.15); }
+.item-card.selected { border-color: var(--btn); background: rgba(36,129,204,0.1); }
+.badge { font-size: 11px; padding: 3px 8px; border-radius: 12px; font-weight: bold; text-transform: uppercase; }
+.badge-ativo { background: #2ec4b6; color: #fff; }
+.badge-pausado { background: #ff9f1c; color: #fff; }
+.badge-encerrado { background: #7f8c8d; color: #fff; }
+.badge-inadimplente { background: #e71d36; color: #fff; }
+.badge-vencido { background: #7f8c8d; color: #fff; }
+.sec-title { font-size: 14px; font-weight: bold; margin-bottom: 10px; color: var(--hint); display: flex; justify-content: space-between; align-items: center; }
+.list-container { max-height: 250px; overflow-y: auto; margin-bottom: 15px; }
+.btn-small { background: var(--btn); color: var(--btn-text); border: none; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; font-weight: 600; }
+.switch-container { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.switch-container input { width: auto; }
+</style>
+
+<div class="card">
+  <div class="sec-title">
+    <span>📋 Contratos Registrados</span>
+    <button class="btn-small" onclick="novoContrato()">+ Novo</button>
+  </div>
+  <div id="lista_contratos" class="list-container">Carregando...</div>
+</div>
+
+<div class="card" id="form_card">
+  <div class="card-title" id="form_title">Novo Contrato</div>
+  <input type="hidden" id="contrato_id">
+  
+  <div class="field">
+    <label>Apoiador</label>
+    <select id="contrato_apoiador">
+      <option value="">Selecione...</option>
+    </select>
+    <span class="err" id="contrato_apoiador_err"></span>
+  </div>
+  
+  <div class="field flex-fields" style="display: flex; gap: 10px;">
+    <div style="flex: 1;">
+      <label>Categoria</label>
+      <select id="contrato_categoria">
+        <option value="master">Master</option>
+        <option value="destaque">Destaque</option>
+        <option value="institucional">Institucional</option>
+        <option value="amigo_projeto">Amigo do Projeto</option>
+      </select>
+    </div>
+    <div style="flex: 1;">
+      <label>Periodicidade</label>
+      <select id="contrato_periodicidade">
+        <option value="mensal">Mensal</option>
+        <option value="trimestral">Trimestral</option>
+        <option value="semestral">Semestral</option>
+        <option value="anual">Anual</option>
+        <option value="avulso">Avulso</option>
+      </select>
+    </div>
+  </div>
+  
+  <div class="field flex-fields" style="display: flex; gap: 10px;">
+    <div style="flex: 1;">
+      <label>Data Início</label>
+      <input id="contrato_inicio" placeholder="DD/MM/AAAA">
+      <span class="err" id="contrato_inicio_err"></span>
+    </div>
+    <div style="flex: 1;">
+      <label>Data Fim</label>
+      <input id="contrato_fim" placeholder="DD/MM/AAAA">
+      <span class="err" id="contrato_fim_err"></span>
+    </div>
+  </div>
+
+  <div class="field flex-fields" style="display: flex; gap: 10px;">
+    <div style="flex: 1;">
+      <label>Valor da Contribuição (R$)</label>
+      <input id="contrato_valor" inputmode="decimal" placeholder="0.00">
+      <span class="err" id="contrato_valor_err"></span>
+    </div>
+    <div style="flex: 1;">
+      <label>Dia de Vencimento</label>
+      <input id="contrato_dia_vencimento" type="number" value="10" min="1" max="31">
+    </div>
+  </div>
+  
+  <div class="field flex-fields" style="display: flex; gap: 10px;">
+    <div style="flex: 1;">
+      <label>Alerta de Renovação (dias antes)</label>
+      <input id="contrato_alerta" type="number" value="30">
+    </div>
+    <div style="flex: 1;">
+      <label>Status</label>
+      <select id="contrato_status">
+        <option value="ativo">Ativo</option>
+        <option value="pausado">Pausado</option>
+        <option value="inadimplente">Inadimplente</option>
+        <option value="vencido">Vencido</option>
+        <option value="encerrado">Encerrado</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Link para Termo Assinado (PDF/Drive)</label>
+    <input id="contrato_termo" placeholder="https://...">
+  </div>
+  
+  <div class="field">
+    <label>Finalidade / Contrapartida</label>
+    <textarea id="contrato_finalidade" placeholder="Ex: Divulgação no site, postagens no canal..."></textarea>
+  </div>
+  
+  <div class="field">
+    <label>Configurações de Exibição</label>
+    <div style="margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+      <div class="switch-container"><input type="checkbox" id="permite_logo_card" checked> <label for="permite_logo_card" style="margin:0;">Logo em card</label></div>
+      <div class="switch-container"><input type="checkbox" id="permite_confirmados"> <label for="permite_confirmados" style="margin:0;">Confirmados premium</label></div>
+      <div class="switch-container"><input type="checkbox" id="permite_ia" checked> <label for="permite_ia" style="margin:0;">Menções IA</label></div>
+      <div class="switch-container"><input type="checkbox" id="permite_rodape" checked> <label for="permite_rodape" style="margin:0;">Rodapé diploma</label></div>
+      <div class="switch-container"><input type="checkbox" id="permite_botao_link" checked> <label for="permite_botao_link" style="margin:0;">Botão link</label></div>
+    </div>
+  </div>
+  
+  <div class="field">
+    <label>Limites de Exibição Mensal (0 = sem limite)</label>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px;">
+      <input id="limite_card_mes" type="number" placeholder="Limite Card" value="0">
+      <input id="limite_confirmados_mes" type="number" placeholder="Limite Confirmados" value="0">
+      <input id="limite_ia_mes" type="number" placeholder="Limite IA" value="0">
+      <input id="limite_rodape_mes" type="number" placeholder="Limite Rodapé" value="0">
+    </div>
+  </div>
+  
+  <div class="field">
+    <label>Peso de Prioridade (Exibições)</label>
+    <input id="peso_prioridade" type="number" value="1" min="1">
+  </div>
+  
+  <div class="field">
+    <label>Observações Internas</label>
+    <textarea id="contrato_observacoes" placeholder="Notas internas..."></textarea>
+  </div>
+
+  <div class="actions">
+    <button class="btn-primary" id="btn_salvar" onclick="salvarContrato()">Salvar Contrato</button>
+  </div>
+</div>
+"""
+    script = """
+let state = { contratos: [], apoiadores: [], config: [] };
+const byId = id => document.getElementById(id);
+
+async function api(path, payload) {
+  const resp = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...payload, init_data: tgInitData() })
+  });
+  const data = await resp.json();
+  if (!data.ok) throw new Error(data.error || 'Falha na operação.');
+  return data;
+}
+
+function fillSponsors() {
+  const s = byId('contrato_apoiador');
+  s.innerHTML = '<option value="">Selecione...</option>';
+  state.apoiadores.forEach(a => {
+    const o = document.createElement('option');
+    o.textContent = a.nome;
+    o.value = a.id;
+    s.appendChild(o);
+  });
+}
+
+function formatDateBR(isoDate) {
+  if (!isoDate) return '';
+  const parts = isoDate.split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return isoDate;
+}
+
+function renderContratos() {
+  const container = byId('lista_contratos');
+  if (state.contratos.length === 0) {
+    container.innerHTML = '<div style="color: var(--hint); text-align: center; padding: 12px;">Nenhum contrato cadastrado.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  state.contratos.forEach(c => {
+    const card = document.createElement('div');
+    card.className = 'item-card';
+    card.id = 'contrato_card_' + c.id;
+    
+    const apo = state.apoiadores.find(a => a.id === c.apoiador_id) || {};
+    const valFmt = Number(c.valor_contribuicao || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    
+    card.innerHTML = `
+      <div>
+        <div style="font-weight: 600;">${apo.nome || 'Apoiador Excluído'}</div>
+        <div style="font-size: 12px; color: var(--hint);">${c.categoria.toUpperCase()} - ${valFmt} (${c.periodicidade})</div>
+        <div style="font-size: 11px; color: var(--hint);">${formatDateBR(c.data_inicio)} até ${formatDateBR(c.data_fim)}</div>
+      </div>
+      <span class="badge badge-${c.status || 'ativo'}">${c.status || 'ativo'}</span>
+    `;
+    card.onclick = () => editarContrato(c);
+    container.appendChild(card);
+  });
+}
+
+function novoContrato() {
+  byId('form_title').textContent = 'Novo Contrato';
+  byId('contrato_id').value = '';
+  byId('contrato_apoiador').value = '';
+  byId('contrato_categoria').value = 'institucional';
+  byId('contrato_periodicidade').value = 'mensal';
+  byId('contrato_inicio').value = '';
+  byId('contrato_fim').value = '';
+  byId('contrato_valor').value = '';
+  byId('contrato_dia_vencimento').value = 10;
+  byId('contrato_alerta').value = 30;
+  byId('contrato_status').value = 'ativo';
+  byId('contrato_termo').value = '';
+  byId('contrato_finalidade').value = '';
+  byId('permite_logo_card').checked = true;
+  byId('permite_confirmados').checked = false;
+  byId('permite_ia').checked = true;
+  byId('permite_rodape').checked = true;
+  byId('permite_botao_link').checked = true;
+  byId('limite_card_mes').value = 0;
+  byId('limite_confirmados_mes').value = 0;
+  byId('limite_ia_mes').value = 0;
+  byId('limite_rodape_mes').value = 0;
+  byId('peso_prioridade').value = 1;
+  byId('contrato_observacoes').value = '';
+  
+  document.querySelectorAll('.item-card').forEach(el => el.classList.remove('selected'));
+  clearErr('contrato_apoiador');
+  clearErr('contrato_inicio');
+  clearErr('contrato_fim');
+  clearErr('contrato_valor');
+}
+
+function editarContrato(c) {
+  novoContrato();
+  byId('form_title').textContent = 'Editar Contrato';
+  byId('contrato_id').value = c.id || '';
+  byId('contrato_apoiador').value = c.apoiador_id || '';
+  byId('contrato_categoria').value = c.categoria || 'institucional';
+  byId('contrato_periodicidade').value = c.periodicidade || 'mensal';
+  byId('contrato_inicio').value = formatDateBR(c.data_inicio);
+  byId('contrato_fim').value = formatDateBR(c.data_fim);
+  byId('contrato_valor').value = c.valor_contribuicao || '';
+  byId('contrato_dia_vencimento').value = c.dia_vencimento || 10;
+  byId('contrato_alerta').value = c.renovacao_alerta_dias || 30;
+  byId('contrato_status').value = c.status || 'ativo';
+  byId('contrato_termo').value = c.termo_url || '';
+  byId('contrato_finalidade').value = c.finalidade || '';
+  byId('contrato_observacoes').value = c.observacoes || '';
+  
+  // Encontrar config correspondente
+  const cfg = state.config ? state.config.find(x => x.apoiador_id === c.apoiador_id) : null;
+  if (cfg) {
+    byId('permite_logo_card').checked = cfg.permite_logo_card !== false;
+    byId('permite_confirmados').checked = !!cfg.permite_confirmados;
+    byId('permite_ia').checked = cfg.permite_ia !== false;
+    byId('permite_rodape').checked = cfg.permite_rodape !== false;
+    byId('permite_botao_link').checked = cfg.permite_botao_link !== false;
+    byId('limite_card_mes').value = cfg.limite_card_mes || 0;
+    byId('limite_confirmados_mes').value = cfg.limite_confirmados_mes || 0;
+    byId('limite_ia_mes').value = cfg.limite_ia_mes || 0;
+    byId('limite_rodape_mes').value = cfg.limite_rodape_mes || 0;
+    byId('peso_prioridade').value = cfg.peso_prioridade || 1;
+  }
+  
+  const selectedCard = byId('contrato_card_' + c.id);
+  if (selectedCard) selectedCard.classList.add('selected');
+}
+
+async function carregar() {
+  try {
+    const data = await api('/api/apoios/dashboard', {});
+    state = data;
+    fillSponsors();
+    renderContratos();
+  } catch (e) {
+    showToast(e.message, 4500);
+  }
+}
+
+async function salvarContrato() {
+  let ok = true;
+  if (!req('contrato_apoiador', 'Apoiador')) ok = false;
+  if (!req('contrato_inicio', 'Data início')) ok = false;
+  if (!req('contrato_fim', 'Data fim')) ok = false;
+  if (!req('contrato_valor', 'Valor')) ok = false;
+  
+  if (!ok) {
+    scrollToFirstError();
+    return;
+  }
+  
+  const dIni = parseDateBR(val('contrato_inicio'));
+  const dFim = parseDateBR(val('contrato_fim'));
+  
+  if (!dIni) { setErr('contrato_inicio', 'Formato DD/MM/AAAA inválido.'); ok = false; }
+  if (!dFim) { setErr('contrato_fim', 'Formato DD/MM/AAAA inválido.'); ok = false; }
+  
+  if (!ok) {
+    scrollToFirstError();
+    return;
+  }
+  
+  const btn = byId('btn_salvar');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+  
+  try {
+    await api('/api/apoios/contratos', {
+      id: val('contrato_id'),
+      apoiador_id: val('contrato_apoiador'),
+      categoria: val('contrato_categoria'),
+      periodicidade: val('contrato_periodicidade'),
+      data_inicio: val('contrato_inicio'),
+      data_fim: val('contrato_fim'),
+      valor_contribuicao: val('contrato_valor'),
+      dia_vencimento: val('contrato_dia_vencimento'),
+      renovacao_alerta_dias: val('contrato_alerta'),
+      status: val('contrato_status'),
+      termo_url: val('contrato_termo'),
+      finalidade: val('contrato_finalidade'),
+      observacoes: val('contrato_observacoes'),
+      // configs
+      permite_logo_card: byId('permite_logo_card').checked ? 'true' : 'false',
+      permite_confirmados: byId('permite_confirmados').checked ? 'true' : 'false',
+      permite_ia: byId('permite_ia').checked ? 'true' : 'false',
+      permite_rodape: byId('permite_rodape').checked ? 'true' : 'false',
+      permite_botao_link: byId('permite_botao_link').checked ? 'true' : 'false',
+      limite_card_mes: val('limite_card_mes'),
+      limite_confirmados_mes: val('limite_confirmados_mes'),
+      limite_ia_mes: val('limite_ia_mes'),
+      limite_rodape_mes: val('limite_rodape_mes'),
+      peso_prioridade: val('peso_prioridade')
+    });
+    showToast('Contrato salvo com sucesso!');
+    novoContrato();
+    await carregar();
+  } catch (e) {
+    showToast(e.message, 4500);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Salvar Contrato';
+  }
+}
+
+maskDate(byId('contrato_inicio'));
+maskDate(byId('contrato_fim'));
+carregar();
+"""
+    return _html_wrap("Contratos", body, script)
+
+
+async def get_apoios_contratos(request: Request) -> HTMLResponse:
+    return HTMLResponse(html_apoios_contratos())
+
+
+def html_apoios_financeiro() -> str:
+    body = """
+<style>
+.item-card { background: rgba(128,128,128,0.1); border: 1px solid var(--border); border-radius: 8px; padding: 10px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.item-card:hover { border-color: var(--btn); background: rgba(128,128,128,0.15); }
+.item-card.selected { border-color: var(--btn); background: rgba(36,129,204,0.1); }
+.badge { font-size: 11px; padding: 3px 8px; border-radius: 12px; font-weight: bold; text-transform: uppercase; }
+.badge-pago { background: #2ec4b6; color: #fff; }
+.badge-pendente { background: #ff9f1c; color: #fff; }
+.badge-parcial { background: #3a86c8; color: #fff; }
+.badge-atrasado { background: #e71d36; color: #fff; }
+.badge-cancelado { background: #7f8c8d; color: #fff; }
+.sec-title { font-size: 14px; font-weight: bold; margin-bottom: 10px; color: var(--hint); display: flex; justify-content: space-between; align-items: center; }
+.list-container { max-height: 250px; overflow-y: auto; margin-bottom: 15px; }
+.btn-small { background: var(--btn); color: var(--btn-text); border: none; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; font-weight: 600; }
+.comp-preview { max-width: 100px; max-height: 100px; border-radius: 4px; object-fit: cover; margin-top: 6px; display: none; }
+</style>
+
+<div class="card">
+  <div class="sec-title">
+    <span>💰 Lançamentos Financeiros</span>
+    <button class="btn-small" onclick="novoPagamento()">+ Novo Lançamento</button>
+  </div>
+  <div id="lista_pagamentos" class="list-container">Carregando...</div>
+</div>
+
+<div class="card" id="form_card">
+  <div class="card-title" id="form_title">Novo Lançamento</div>
+  <input type="hidden" id="pagamento_id">
+  
+  <div class="field">
+    <label>Apoiador</label>
+    <select id="pagamento_apoiador" onchange="onApoiadorChange()">
+      <option value="">Selecione...</option>
+    </select>
+    <span class="err" id="pagamento_apoiador_err"></span>
+  </div>
+
+  <div class="field">
+    <label>Contrato Relacionado (Opcional)</label>
+    <select id="pagamento_contrato">
+      <option value="">Sem contrato</option>
+    </select>
+  </div>
+  
+  <div class="field flex-fields" style="display: flex; gap: 10px;">
+    <div style="flex: 1;">
+      <label>Competência (AAAA-MM)</label>
+      <input id="pagamento_competencia" placeholder="Ex: 2026-05">
+      <span class="err" id="pagamento_competencia_err"></span>
+    </div>
+    <div style="flex: 1;">
+      <label>Vencimento</label>
+      <input id="pagamento_vencimento" placeholder="DD/MM/AAAA">
+      <span class="err" id="pagamento_vencimento_err"></span>
+    </div>
+  </div>
+
+  <div class="field flex-fields" style="display: flex; gap: 10px;">
+    <div style="flex: 1;">
+      <label>Valor Previsto (R$)</label>
+      <input id="pagamento_previsto" inputmode="decimal" placeholder="0.00">
+      <span class="err" id="pagamento_previsto_err"></span>
+    </div>
+    <div style="flex: 1;">
+      <label>Valor Pago (R$)</label>
+      <input id="pagamento_pago" inputmode="decimal" placeholder="0.00" value="0">
+    </div>
+  </div>
+
+  <div class="field flex-fields" style="display: flex; gap: 10px;">
+    <div style="flex: 1;">
+      <label>Data Pagamento</label>
+      <input id="pagamento_data" placeholder="DD/MM/AAAA">
+    </div>
+    <div style="flex: 1;">
+      <label>Forma de Pagamento</label>
+      <input id="pagamento_forma" placeholder="Ex: PIX, Transferência">
+    </div>
+  </div>
+
+  <div class="field">
+    <label>Status</label>
+    <select id="pagamento_status">
+      <option value="pendente">Pendente</option>
+      <option value="pago">Pago</option>
+      <option value="parcial">Pago Parcial</option>
+      <option value="atrasado">Atrasado</option>
+      <option value="cancelado">Cancelado</option>
+    </select>
+  </div>
+  
+  <div class="field">
+    <label>Comprovante (Imagem / PDF)</label>
+    <input id="pagamento_comprovante" type="file" accept="image/*,.pdf" onchange="previewFile(this)">
+    <img id="preview_comprovante" class="comp-preview" src="">
+    <div id="pdf_status" style="display:none; margin-top:6px; font-size:12px; color:var(--hint);">📄 Documento PDF Selecionado</div>
+    <div id="comprovante_link_div" style="display:none; margin-top:6px;"><a id="comprovante_link" href="#" target="_blank" style="font-size:13px; color:var(--link);">Visualizar Comprovante Existente</a></div>
+  </div>
+
+  <div class="field">
+    <label>Observações</label>
+    <textarea id="pagamento_observacoes" placeholder="Notas financeiras..."></textarea>
+  </div>
+
+  <div class="actions">
+    <button class="btn-primary" id="btn_salvar" onclick="salvarPagamento()">Salvar Financeiro</button>
+  </div>
+</div>
+"""
+    script = """
+let state = { pagamentos: [], apoiadores: [], contratos: [] };
+const byId = id => document.getElementById(id);
+
+async function api(path, payload) {
+  const resp = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...payload, init_data: tgInitData() })
+  });
+  const data = await resp.json();
+  if (!data.ok) throw new Error(data.error || 'Falha na operação.');
+  return data;
+}
+
+function previewFile(input) {
+  const file = input.files[0];
+  byId('preview_comprovante').style.display = 'none';
+  byId('pdf_status').style.display = 'none';
+  if (file) {
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        byId('preview_comprovante').src = e.target.result;
+        byId('preview_comprovante').style.display = 'block';
+      }
+      reader.readAsDataURL(file);
+    } else {
+      byId('pdf_status').style.display = 'block';
+    }
+  }
+}
+
+async function fileData(id) {
+  const f = (byId(id).files || [])[0];
+  if (!f) return '';
+  return await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result || '');
+    r.onerror = reject;
+    r.readAsDataURL(f);
+  });
+}
+
+function fillSponsors() {
+  const s = byId('pagamento_apoiador');
+  s.innerHTML = '<option value="">Selecione...</option>';
+  state.apoiadores.forEach(a => {
+    const o = document.createElement('option');
+    o.textContent = a.nome;
+    o.value = a.id;
+    s.appendChild(o);
+  });
+}
+
+function onApoiadorChange() {
+  const sponsorId = val('pagamento_apoiador');
+  const s = byId('pagamento_contrato');
+  s.innerHTML = '<option value="">Sem contrato</option>';
+  if (!sponsorId) return;
+  
+  const sponsorContratos = state.contratos.filter(c => c.apoiador_id === sponsorId);
+  sponsorContratos.forEach(c => {
+    const o = document.createElement('option');
+    o.textContent = `${c.categoria.toUpperCase()} (${formatDateBR(c.data_inicio)} a ${formatDateBR(c.data_fim)})`;
+    o.value = c.id;
+    s.appendChild(o);
+  });
+}
+
+function formatDateBR(isoDate) {
+  if (!isoDate) return '';
+  const parts = isoDate.split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return isoDate;
+}
+
+function renderPagamentos() {
+  const container = byId('lista_pagamentos');
+  if (state.pagamentos.length === 0) {
+    container.innerHTML = '<div style="color: var(--hint); text-align: center; padding: 12px;">Nenhum lançamento lançamento financeiro.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  
+  const ord = [...state.pagamentos].sort((a,b) => (b.data_vencimento || '').localeCompare(a.data_vencimento || ''));
+  
+  ord.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'item-card';
+    card.id = 'pagamento_card_' + p.id;
+    
+    const apo = state.apoiadores.find(a => a.id === p.apoiador_id) || {};
+    const valPrev = Number(p.valor_previsto || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const valPago = Number(p.valor_pago || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    
+    card.innerHTML = `
+      <div>
+        <div style="font-weight: 600;">${apo.nome || 'Apoiador Excluído'}</div>
+        <div style="font-size: 12px; color: var(--hint);">Comp: ${p.competencia} - Previsto: ${valPrev}</div>
+        <div style="font-size: 11px; color: var(--hint);">Venc: ${formatDateBR(p.data_vencimento)} | Pago: ${valPago}</div>
+      </div>
+      <span class="badge badge-${p.status || 'pendente'}">${p.status || 'pendente'}</span>
+    `;
+    card.onclick = () => editarPagamento(p);
+    container.appendChild(card);
+  });
+}
+
+function novoPagamento() {
+  byId('form_title').textContent = 'Novo Lançamento';
+  byId('pagamento_id').value = '';
+  byId('pagamento_apoiador').value = '';
+  byId('pagamento_contrato').innerHTML = '<option value="">Sem contrato</option>';
+  byId('pagamento_competencia').value = new Date().toISOString().substring(0, 7);
+  byId('pagamento_vencimento').value = '';
+  byId('pagamento_previsto').value = '';
+  byId('pagamento_pago').value = '0';
+  byId('pagamento_data').value = '';
+  byId('pagamento_forma').value = '';
+  byId('pagamento_status').value = 'pendente';
+  byId('pagamento_comprovante').value = '';
+  byId('preview_comprovante').style.display = 'none';
+  byId('pdf_status').style.display = 'none';
+  byId('comprovante_link_div').style.display = 'none';
+  byId('pagamento_observacoes').value = '';
+  
+  document.querySelectorAll('.item-card').forEach(el => el.classList.remove('selected'));
+  clearErr('pagamento_apoiador');
+  clearErr('pagamento_competencia');
+  clearErr('pagamento_vencimento');
+  clearErr('pagamento_previsto');
+}
+
+function editarPagamento(p) {
+  novoPagamento();
+  byId('form_title').textContent = 'Editar Lançamento';
+  byId('pagamento_id').value = p.id || '';
+  byId('pagamento_apoiador').value = p.apoiador_id || '';
+  onApoiadorChange();
+  byId('pagamento_contrato').value = p.contrato_id || '';
+  byId('pagamento_competencia').value = p.competencia || '';
+  byId('pagamento_vencimento').value = formatDateBR(p.data_vencimento);
+  byId('pagamento_previsto').value = p.valor_previsto || '';
+  byId('pagamento_pago').value = p.valor_pago || '0';
+  byId('pagamento_data').value = formatDateBR(p.data_pagamento);
+  byId('pagamento_forma').value = p.forma_pagamento || '';
+  byId('pagamento_status').value = p.status || 'pendente';
+  byId('pagamento_observacoes').value = p.observacoes || '';
+  
+  if (p.comprovante_url) {
+    if (p.comprovante_url.endsWith('.pdf')) {
+      byId('pdf_status').style.display = 'block';
+    } else {
+      byId('preview_comprovante').src = p.comprovante_url;
+      byId('preview_comprovante').style.display = 'block';
+    }
+    byId('comprovante_link').href = p.comprovante_url;
+    byId('comprovante_link_div').style.display = 'block';
+  }
+  
+  const selectedCard = byId('pagamento_card_' + p.id);
+  if (selectedCard) selectedCard.classList.add('selected');
+}
+
+async function carregar() {
+  try {
+    const data = await api('/api/apoios/dashboard', {});
+    state = data;
+    fillSponsors();
+    renderPagamentos();
+  } catch (e) {
+    showToast(e.message, 4500);
+  }
+}
+
+async function salvarPagamento() {
+  let ok = true;
+  if (!req('pagamento_apoiador', 'Apoiador')) ok = false;
+  if (!req('pagamento_competencia', 'Competência')) ok = false;
+  if (!req('pagamento_vencimento', 'Data de vencimento')) ok = false;
+  if (!req('pagamento_previsto', 'Valor previsto')) ok = false;
+  
+  if (!ok) {
+    scrollToFirstError();
+    return;
+  }
+  
+  const dVenc = parseDateBR(val('pagamento_vencimento'));
+  if (!dVenc) { setErr('pagamento_vencimento', 'Formato DD/MM/AAAA inválido.'); ok = false; }
+  
+  const pDateStr = val('pagamento_data');
+  if (pDateStr) {
+    const dPag = parseDateBR(pDateStr);
+    if (!dPag) { setErr('pagamento_data', 'Formato DD/MM/AAAA inválido.'); ok = false; }
+  }
+  
+  if (!ok) {
+    scrollToFirstError();
+    return;
+  }
+  
+  const btn = byId('btn_salvar');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+  
+  try {
+    await api('/api/apoios/pagamentos', {
+      id: val('pagamento_id'),
+      apoiador_id: val('pagamento_apoiador'),
+      contrato_id: val('pagamento_contrato'),
+      competencia: val('pagamento_competencia'),
+      data_vencimento: val('pagamento_vencimento'),
+      valor_previsto: val('pagamento_previsto'),
+      valor_pago: val('pagamento_pago'),
+      data_pagamento: val('pagamento_data'),
+      status: val('pagamento_status'),
+      forma_pagamento: val('pagamento_forma'),
+      comprovante_data_url: await fileData('pagamento_comprovante'),
+      observacoes: val('pagamento_observacoes')
+    });
+    showToast('Lançamento financeiro salvo com sucesso!');
+    novoPagamento();
+    await carregar();
+  } catch (e) {
+    showToast(e.message, 4500);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Salvar Financeiro';
+  }
+}
+
+maskDate(byId('pagamento_vencimento'));
+maskDate(byId('pagamento_data'));
+carregar();
+"""
+    return _html_wrap("Financeiro", body, script)
+
+
+async def get_apoios_financeiro(request: Request) -> HTMLResponse:
+    return HTMLResponse(html_apoios_financeiro())
+
+
+def html_apoios_criativos() -> str:
+    body = """
+<style>
+.item-card { background: rgba(128,128,128,0.1); border: 1px solid var(--border); border-radius: 8px; padding: 10px; cursor: pointer; transition: all 0.2s; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.item-card:hover { border-color: var(--btn); background: rgba(128,128,128,0.15); }
+.item-card.selected { border-color: var(--btn); background: rgba(36,129,204,0.1); }
+.badge { font-size: 11px; padding: 3px 8px; border-radius: 12px; font-weight: bold; text-transform: uppercase; }
+.badge-ativo { background: #2ec4b6; color: #fff; }
+.badge-pausado { background: #ff9f1c; color: #fff; }
+.badge-encerrado { background: #7f8c8d; color: #fff; }
+.sec-title { font-size: 14px; font-weight: bold; margin-bottom: 10px; color: var(--hint); display: flex; justify-content: space-between; align-items: center; }
+.list-container { max-height: 250px; overflow-y: auto; margin-bottom: 15px; }
+.btn-small { background: var(--btn); color: var(--btn-text); border: none; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; font-weight: 600; }
+.avatar-preview { width: 40px; height: 40px; border-radius: 4px; object-fit: cover; background: rgba(128,128,128,0.2); margin-right: 10px; display: inline-block; vertical-align: middle; }
+.card-content-flex { display: flex; align-items: center; }
+</style>
+
+<div class="card">
+  <div class="sec-title">
+    <span>🎨 Materiais Publicitários</span>
+    <button class="btn-small" onclick="novoCriativo()">+ Novo Criativo</button>
+  </div>
+  <div id="lista_criativos" class="list-container">Carregando...</div>
+</div>
+
+<div class="card" id="form_card">
+  <div class="card-title" id="form_title">Novo Criativo</div>
+  <input type="hidden" id="criativo_id">
+  
+  <div class="field">
+    <label>Apoiador</label>
+    <select id="criativo_apoiador" onchange="onApoiadorChange()">
+      <option value="">Selecione...</option>
+    </select>
+    <span class="err" id="criativo_apoiador_err"></span>
+  </div>
+
+  <div class="field">
+    <label>Contrato Relacionado (Opcional)</label>
+    <select id="criativo_contrato">
+      <option value="">Sem contrato</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label>Posicionamento / Canal</label>
+    <select id="criativo_tipo">
+      <option value="card_logo">Logo em Card (Listagem Principal)</option>
+      <option value="rodape_diploma">Rodapé de Diploma</option>
+      <option value="tela_apoiadores">Tela de Apoiadores do WebApp</option>
+      <option value="ia_resposta_texto">Menção em Resposta da IA</option>
+      <option value="confirmados_premium_texto">Lista de Confirmados Premium</option>
+    </select>
+    <span class="err" id="criativo_tipo_err"></span>
+  </div>
+
+  <div class="field">
+    <label>Título do Anúncio (Opcional)</label>
+    <input id="criativo_titulo" placeholder="Ex: Promoção Exclusiva">
+  </div>
+
+  <div class="field">
+    <label>Texto / Copy Publicitária</label>
+    <textarea id="criativo_texto" placeholder="Mensagem da publicidade que será exibida..."></textarea>
+  </div>
+
+  <div class="field">
+    <label>URL de Destino / Link do Botão</label>
+    <input id="criativo_link" type="url" placeholder="https://...">
+  </div>
+
+  <div class="field flex-fields" style="display: flex; gap: 10px;">
+    <div style="flex: 1;">
+      <label>Data Início (Opcional)</label>
+      <input id="criativo_inicio" placeholder="DD/MM/AAAA">
+    </div>
+    <div style="flex: 1;">
+      <label>Data Fim (Opcional)</label>
+      <input id="criativo_fim" placeholder="DD/MM/AAAA">
+    </div>
+  </div>
+
+  <div class="field flex-fields" style="display: flex; gap: 10px;">
+    <div style="flex: 1;">
+      <label>Prioridade / Peso</label>
+      <input id="criativo_prioridade" type="number" value="1" min="1">
+    </div>
+    <div style="flex: 1;">
+      <label>Status</label>
+      <select id="criativo_status">
+        <option value="ativo">Ativo</option>
+        <option value="pausado">Pausado</option>
+        <option value="encerrado">Encerrado</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="field" style="display: flex; align-items: center; gap: 12px;">
+    <div style="flex: 1;">
+      <label>Imagem Publicitária</label>
+      <input id="criativo_imagem" type="file" accept="image/*" onchange="previewImg(this)">
+    </div>
+    <img id="preview_imagem" class="avatar-preview" src="" style="display: none; border-radius: 6px;">
+  </div>
+
+  <div class="actions">
+    <button class="btn-primary" id="btn_salvar" onclick="salvarCriativo()">Salvar Criativo</button>
+  </div>
+</div>
+"""
+    script = """
+let state = { criativos: [], apoiadores: [], contratos: [] };
+const byId = id => document.getElementById(id);
+
+async function api(path, payload) {
+  const resp = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...payload, init_data: tgInitData() })
+  });
+  const data = await resp.json();
+  if (!data.ok) throw new Error(data.error || 'Falha na operação.');
+  return data;
+}
+
+function previewImg(input) {
+  const file = input.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      byId('preview_imagem').src = e.target.result;
+      byId('preview_imagem').style.display = 'block';
+    }
+    reader.readAsDataURL(file);
+  }
+}
+
+async function fileData(id) {
+  const f = (byId(id).files || [])[0];
+  if (!f) return '';
+  return await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result || '');
+    r.onerror = reject;
+    r.readAsDataURL(f);
+  });
+}
+
+function fillSponsors() {
+  const s = byId('criativo_apoiador');
+  s.innerHTML = '<option value="">Selecione...</option>';
+  state.apoiadores.forEach(a => {
+    const o = document.createElement('option');
+    o.textContent = a.nome;
+    o.value = a.id;
+    s.appendChild(o);
+  });
+}
+
+function onApoiadorChange() {
+  const sponsorId = val('criativo_apoiador');
+  const s = byId('criativo_contrato');
+  s.innerHTML = '<option value="">Sem contrato</option>';
+  if (!sponsorId) return;
+  
+  const sponsorContratos = state.contratos.filter(c => c.apoiador_id === sponsorId);
+  sponsorContratos.forEach(c => {
+    const o = document.createElement('option');
+    o.textContent = `${c.categoria.toUpperCase()} (${formatDateBR(c.data_inicio)} a ${formatDateBR(c.data_fim)})`;
+    o.value = c.id;
+    s.appendChild(o);
+  });
+}
+
+function formatDateBR(isoDate) {
+  if (!isoDate) return '';
+  const parts = isoDate.split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return isoDate;
+}
+
+function renderCriativos() {
+  const container = byId('lista_criativos');
+  if (state.criativos.length === 0) {
+    container.innerHTML = '<div style="color: var(--hint); text-align: center; padding: 12px;">Nenhum criativo cadastrado.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  state.criativos.forEach(c => {
+    const card = document.createElement('div');
+    card.className = 'item-card';
+    card.id = 'criativo_card_' + c.id;
+    
+    const apo = state.apoiadores.find(a => a.id === c.apoiador_id) || {};
+    const imgHtml = c.imagem_url ? `<img class="avatar-preview" src="${c.imagem_url}">` : '<div class="avatar-preview" style="display: inline-flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; color: var(--hint);">🎨</div>';
+    
+    card.innerHTML = `
+      <div class="card-content-flex">
+        ${imgHtml}
+        <div>
+          <div style="font-weight: 600;">${c.titulo || 'Sem título'} - ${apo.nome || 'Apoiador Excluído'}</div>
+          <div style="font-size: 12px; color: var(--hint);">${c.tipo_posicionamento.toUpperCase()}</div>
+        </div>
+      </div>
+      <span class="badge badge-${c.status || 'ativo'}">${c.status || 'ativo'}</span>
+    `;
+    card.onclick = () => editarCriativo(c);
+    container.appendChild(card);
+  });
+}
+
+function novoCriativo() {
+  byId('form_title').textContent = 'Novo Criativo';
+  byId('criativo_id').value = '';
+  byId('criativo_apoiador').value = '';
+  byId('criativo_contrato').innerHTML = '<option value="">Sem contrato</option>';
+  byId('criativo_tipo').value = 'tela_apoiadores';
+  byId('criativo_titulo').value = '';
+  byId('criativo_texto').value = '';
+  byId('criativo_link').value = '';
+  byId('criativo_inicio').value = '';
+  byId('criativo_fim').value = '';
+  byId('criativo_prioridade').value = 1;
+  byId('criativo_status').value = 'ativo';
+  byId('criativo_imagem').value = '';
+  byId('preview_imagem').style.display = 'none';
+  
+  document.querySelectorAll('.item-card').forEach(el => el.classList.remove('selected'));
+  clearErr('criativo_apoiador');
+  clearErr('criativo_tipo');
+}
+
+function editarCriativo(c) {
+  novoCriativo();
+  byId('form_title').textContent = 'Editar Criativo';
+  byId('criativo_id').value = c.id || '';
+  byId('criativo_apoiador').value = c.apoiador_id || '';
+  onApoiadorChange();
+  byId('criativo_contrato').value = c.contrato_id || '';
+  byId('criativo_tipo').value = c.tipo_posicionamento || 'tela_apoiadores';
+  byId('criativo_titulo').value = c.titulo || '';
+  byId('criativo_texto').value = c.texto || '';
+  byId('criativo_link').value = c.link_url || '';
+  byId('criativo_inicio').value = formatDateBR(c.data_inicio);
+  byId('criativo_fim').value = formatDateBR(c.data_fim);
+  byId('criativo_prioridade').value = c.prioridade || 1;
+  byId('criativo_status').value = c.status || 'ativo';
+  
+  if (c.imagem_url) {
+    byId('preview_imagem').src = c.imagem_url;
+    byId('preview_imagem').style.display = 'block';
+  }
+  
+  const selectedCard = byId('criativo_card_' + c.id);
+  if (selectedCard) selectedCard.classList.add('selected');
+}
+
+async function carregar() {
+  try {
+    const data = await api('/api/apoios/dashboard', {});
+    state = data;
+    fillSponsors();
+    renderCriativos();
+  } catch (e) {
+    showToast(e.message, 4500);
+  }
+}
+
+async function salvarCriativo() {
+  let ok = true;
+  if (!req('criativo_apoiador', 'Apoiador')) ok = false;
+  if (!req('criativo_tipo', 'Posicionamento')) ok = false;
+  
+  if (!ok) {
+    scrollToFirstError();
+    return;
+  }
+  
+  const cIni = val('criativo_inicio');
+  if (cIni) {
+    const dIni = parseDateBR(cIni);
+    if (!dIni) { setErr('criativo_inicio', 'Formato DD/MM/AAAA inválido.'); ok = false; }
+  }
+  
+  const cFim = val('criativo_fim');
+  if (cFim) {
+    const dFim = parseDateBR(cFim);
+    if (!dFim) { setErr('criativo_fim', 'Formato DD/MM/AAAA inválido.'); ok = false; }
+  }
+  
+  if (!ok) {
+    scrollToFirstError();
+    return;
+  }
+  
+  const btn = byId('btn_salvar');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+  
+  try {
+    await api('/api/apoios/criativos', {
+      id: val('criativo_id'),
+      apoiador_id: val('criativo_apoiador'),
+      contrato_id: val('criativo_contrato'),
+      tipo_posicionamento: val('criativo_tipo'),
+      titulo: val('criativo_titulo'),
+      texto: val('criativo_texto'),
+      link_url: val('criativo_link'),
+      data_inicio: val('criativo_inicio'),
+      data_fim: val('criativo_fim'),
+      prioridade: val('criativo_prioridade'),
+      status: val('criativo_status'),
+      imagem_data_url: await fileData('criativo_imagem')
+    });
+    showToast('Material publicitário salvo com sucesso!');
+    novoCriativo();
+    await carregar();
+  } catch (e) {
+    showToast(e.message, 4500);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Salvar Criativo';
+  }
+}
+
+maskDate(byId('criativo_inicio'));
+maskDate(byId('criativo_fim'));
+carregar();
+"""
+    return _html_wrap("Criativos", body, script)
+
+
+async def get_apoios_criativos(request: Request) -> HTMLResponse:
+    return HTMLResponse(html_apoios_criativos())
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -1848,10 +1848,10 @@ async def processar_pedido_fundacao_usuario(update: Update, context: ContextType
     loja_man = membro.get("Loja Manual") or membro.get("loja_manual") or "Minha Loja"
     
     texto = (
-        f"🏛️ *RITO DE FUNDACAO DE OFICINA*\n\n"
-        f"Prezado Ir.·., voce solicitou fundar e edificar oficialmente a Oficina *'{loja_man}'* no ecossistema do Bode Andarilho.\n\n"
-        f"Ao prosseguir, seu nome sera enviado a Chancelaria Geral para aprovação do encargo de *Secretario (Nivel 2)*.\n\n"
-        f"Deseja confirmar o envio do pedido de fundacao"
+        f"🏛️ *RITO DE FUNDAÇÃO DE OFICINA*\n\n"
+        f"Prezado Ir.·., você solicitou fundar e edificar oficialmente a Oficina *'{loja_man}'* no ecossistema do Bode Andarilho.\n\n"
+        f"Ao prosseguir, seu nome será enviado à Chancelaria Geral para aprovação do encargo de *Secretário (Nível 2)*.\n\n"
+        f"Deseja confirmar o envio do pedido de fundação"
     )
     
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -1896,7 +1896,7 @@ async def confirmar_pedido_fundacao_usuario(update: Update, context: ContextType
     
     if sucesso:
         await query.message.edit_text(
-            "📜 *Pedido Enviado!*\n\nSeu pedido de aprovação para Secretário foi transmitido a Chancelaria Geral. Aguarde a notificacao de aprovacao no seu privado.",
+            "📜 *Pedido Enviado!*\n\nSeu pedido de aprovação para Secretário foi transmitido à Chancelaria Geral. Aguarde a notificação de aprovação no seu privado.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Menu Principal", callback_data="menu_principal")]]),
             parse_mode="Markdown"
         )
@@ -1905,12 +1905,12 @@ async def confirmar_pedido_fundacao_usuario(update: Update, context: ContextType
         admins = [int(float(m.get("Telegram ID") or m.get("telegram_id"))) for m in membros if str(m.get("Nivel") or m.get("nivel") or "1") == "3"]
         
         msg_admin = (
-            f"👑 *NOVO PEDIDO DE FUNDACAO DE OFICINA*\n\n"
-            f"O Ir.·. *{nome}* ({grau}) reivindicou o Malhete de Secretario para a Oficina:\n\n"
+            f"👑 *NOVO PEDIDO DE FUNDAÇÃO DE OFICINA*\n\n"
+            f"O Ir.·. *{nome}* ({grau}) reivindicou o Malhete de Secretário para a Oficina:\n\n"
             f"🏛️ *Loja:* {loja_man}\n"
             f"📜 *Potência local:* {formatar_potencia_exibicao(pot, pot_comp)}\n"
             f"📍 *Oriente:* {ori}\n\n"
-            f"Deseja aprovar o cadastro, promovendo-o a Nivel 2 e edificando oficialmente esta Oficina"
+            f"Deseja aprovar o cadastro, promovendo-o a Nível 2 e edificando oficialmente esta Oficina"
         )
         
         teclado_admin = InlineKeyboardMarkup([
@@ -1986,7 +1986,7 @@ async def outorgar_malhete_admin(update: Update, context: ContextTypes.DEFAULT_T
         token = criar_voucher(nova_loja_id, obreiro_id)
         
         await query.message.edit_text(
-            f"✅ *APROVAÇÃO CONCLUÍDA!*\n\nO Ir.·. *{nome}* foi promovido a Secretario (Nivel 2) e a Loja *'{loja_man}'* (ID: {nova_loja_id}) esta oficialmente erguida!",
+            f"✅ *APROVAÇÃO CONCLUÍDA!*\n\nO Ir.·. *{nome}* foi promovido a Secretário (Nível 2) e a Loja *'{loja_man}'* (ID: {nova_loja_id}) está oficialmente erguida!",
             reply_markup=None, parse_mode="Markdown"
         )
         
@@ -2039,14 +2039,14 @@ async def recusar_outorga_admin(update: Update, context: ContextTypes.DEFAULT_TY
     nome = membro.get("Nome") or membro.get("nome") or "Ir."
     
     await query.message.edit_text(
-        f"❌ *PEDIDO DE FUNDACAO RECUSADO!*\n\nO pedido do Ir.·. {nome} foi arquivado.",
+        f"❌ *PEDIDO DE FUNDAÇÃO RECUSADO!*\n\nO pedido do Ir.·. {nome} foi arquivado.",
         reply_markup=None, parse_mode="Markdown"
     )
     
     try:
         msg_obreiro = (
             f"⚠️ *Informativo da Chancelaria*\n\n"
-            f"Prezado Ir.·. {nome}, seu pedido para fundar e gerenciar a Oficina no bot foi *RECUSADO* apos analise administrativa.\n\n"
+            f"Prezado Ir.·. {nome}, seu pedido para fundar e gerenciar a Oficina no bot foi *RECUSADO* após análise administrativa.\n\n"
             f"Caso acredite ser um erro, entre em contato diretamente com o Administrador Geral."
         )
         await context.bot.send_message(chat_id=obreiro_id, text=msg_obreiro, parse_mode="Markdown")
