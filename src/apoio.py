@@ -245,20 +245,22 @@ def _weighted_pick(elegiveis: List[ApoiadorElegivel], limite: int) -> List[Apoia
 def selecionar_apoiador_para_card() -> Optional[Dict]:
     elegiveis = _listar_elegiveis(TIPO_CARD)
     if not elegiveis:
-        placeholders = [
-            BRANDING_DIR / "sponsor_placeholder_1.png",
-            BRANDING_DIR / "sponsor_placeholder_2.png",
-            BRANDING_DIR / "sponsor_placeholder_3.png",
-        ]
-        existentes = [p for p in placeholders if p.exists()]
-        if not existentes:
-            return None
-        pick = random.choice(existentes)
+        logo_path = BRANDING_DIR / "sponsor_construtorasalomao.png"
+        pick = logo_path if logo_path.exists() else None
+        if not pick:
+            placeholders = [
+                BRANDING_DIR / "sponsor_placeholder_1.png",
+                BRANDING_DIR / "sponsor_placeholder_2.png",
+                BRANDING_DIR / "sponsor_placeholder_3.png",
+            ]
+            existentes = [p for p in placeholders if p.exists()]
+            pick = random.choice(existentes) if existentes else None
+
         return {
             "apoiador_id": "placeholder",
             "contrato_id": "",
-            "nome": "Espaço de apoio disponível",
-            "logo_path": str(pick),
+            "nome": "Construtora Salomão",
+            "logo_path": str(pick) if pick else None,
         }
     escolhido = _weighted_pick(elegiveis, 1)[0]
     return {
@@ -274,20 +276,25 @@ def selecionar_apoiadores_para_confirmados(limite: int = 2) -> List[Dict]:
     picks = [x.__dict__ for x in _weighted_pick(elegiveis, limite)]
     if picks:
         return picks
-    return [
+    
+    opcoes = [
         {
             "apoiador_id": "placeholder",
             "contrato_id": "",
-            "nome": "Divulgue sua marca ou projeto",
-            "texto_curto": "Exiba seu Instagram, link ou contato neste espaço. Uma presença sutil e amigável para toda a nossa comunidade.",
+            "nome": "Restaurante Ágape Fraterno",
+            "texto_curto": "Sabor, tradição e atendimento impecável para os seus melhores momentos em família ou de negócios.",
+            "logo_url": str(BRANDING_DIR / "sponsor_agapefraterno.png") if (BRANDING_DIR / "sponsor_agapefraterno.png").exists() else "",
         },
         {
             "apoiador_id": "placeholder2",
             "contrato_id": "",
-            "nome": "Apoie a manutenção do Bode Andarilho",
-            "texto_curto": "Colabore com a hospedagem, suporte técnico e melhorias do aplicativo por meio de uma inserção discreta.",
-        },
-    ][:limite]
+            "nome": "O seu negócio em destaque aqui",
+            "texto_curto": "Assim como você parou para ler esta mensagem, outros Irmãos também leriam sobre a sua empresa. Apoie o Bode Andarilho e ocupe este espaço.",
+            "logo_url": "",
+        }
+    ]
+    random.shuffle(opcoes)
+    return opcoes[:limite]
 
 
 def selecionar_apoiadores_para_ia(limite: int = 2) -> List[Dict]:
@@ -299,8 +306,9 @@ def selecionar_apoiadores_para_ia(limite: int = 2) -> List[Dict]:
         {
             "apoiador_id": "placeholder",
             "contrato_id": "",
-            "nome": "Divulgue sua marca aqui",
-            "texto_curto": "exiba seu Instagram, site ou contato por meio de uma inserção institucional discreta.",
+            "nome": "Clínica do Mestre",
+            "texto_curto": "Cuidado, prevenção e tecnologia avançada a favor da sua saúde e do seu bem-estar.",
+            "logo_url": str(BRANDING_DIR / "sponsor_clinicamestre.png") if (BRANDING_DIR / "sponsor_clinicamestre.png").exists() else "",
         }
     ][:limite]
 
@@ -878,4 +886,4 @@ def registrar_handlers_apoio(application):
 
 
 def obter_texto_patrocinio() -> str:
-    return "\n\n_Apoio institucional: sua marca pode apoiar a manutenção do Bode Andarilho._"
+    return "\n\n_Apoio: Magna Advogados — Tradição, ética e excelência na proteção do seu patrimônio._"

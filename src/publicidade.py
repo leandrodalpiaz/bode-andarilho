@@ -22,16 +22,16 @@ def obter_publicidade_diploma() -> dict:
     except Exception:
         pass
 
-    logo_path = BRANDING_DIR / "sponsor_sindoficios.png"
+    logo_path = BRANDING_DIR / "sponsor_imobiliaria33.png"
     if logo_path.exists():
         return {
-            "nome": "Apoio Institucional",
-            "mensagem": "O Sind Ofícios apoia o desenvolvimento e a manutenção do Bode Andarilho.",
+            "nome": "Imobiliária Trinta e Três",
+            "mensagem": "Encontre o imóvel perfeito com a confiança, transparência e retidão que a sua família merece.",
             "imagem": str(logo_path),
         }
 
     return {
-        "nome": "Divulgue sua marca",
-        "mensagem": "Apoie o Bode Andarilho e exiba sua marca neste espaço.",
+        "nome": "A sua marca vista por centenas de Irmãos",
+        "mensagem": "Assim como você leu esta mensagem, a nossa comunidade leria sobre o seu negócio. Seja uma Coluna de Sustentação do projeto.",
         "imagem": None,
     }
