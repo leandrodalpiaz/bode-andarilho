@@ -312,7 +312,6 @@ async def exibir_menu_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
         [InlineKeyboardButton("📢 Publicidade/Apoiadores", callback_data="admin_publicidade")],
         [InlineKeyboardButton("📢 Comunicado para Secretários", callback_data="admin_broadcast_inicio")],
-        [InlineKeyboardButton("🔐 Convite Direto N2", callback_data="admin_convite_n2_inicio")],
         [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
     ])
 
@@ -1397,7 +1396,6 @@ editar_membro_handler = ConversationHandler(
 
 
 BROADCAST_UF, BROADCAST_CIDADE, BROADCAST_RITO, BROADCAST_MENSAGEM, BROADCAST_CONFIRMAR = range(100, 105)
-CONVITE_N2_RECEBER_ID, CONVITE_N2_REVOGAR_TOKEN = range(200, 202)
 
 
 # ============================================
@@ -1677,75 +1675,6 @@ broadcast_handler = ConversationHandler(
     persistent=False
 )
 
-
-async def convite_n2_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if get_nivel(user_id) != "3":
-        return ConversationHandler.END
-    await navegar_para(
-        update,
-        context,
-        "Admin > Convite N2",
-        "Envie o Telegram ID do destinatário ou a palavra `geral` para gerar um convite direto flexível.\n\n"
-        "O convite geral poderá ser usado por qualquer pessoa que clicar no link.\n\n"
-        "Opcional: envie `revogar TOKEN` para revogar um convite existente.",
-        InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="menu_principal")]]),
-    )
-    return CONVITE_N2_RECEBER_ID
-
-
-async def convite_n2_receber(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if get_nivel(user_id) != "3":
-        return ConversationHandler.END
-    texto = str((update.message.text if update.message else "") or "").strip()
-    if not texto:
-        return CONVITE_N2_RECEBER_ID
-
-    from src.sheets_supabase import criar_convite_secretario_n2, revogar_convite_secretario_n2
-
-    lower = texto.lower()
-    if lower.startswith("revogar "):
-        token = texto.split(" ", 1)[1].strip().upper()
-        ok = revogar_convite_secretario_n2(token)
-        msg = "Convite revogado com sucesso." if ok else "Falha ao revogar convite."
-        await navegar_para(update, context, "Admin > Convite N2", msg, InlineKeyboardMarkup([[InlineKeyboardButton("Voltar", callback_data="area_admin")]]))
-        return ConversationHandler.END
-
-    tid = texto
-    if tid.lower() == "geral":
-        tid = "0"
-    elif not tid.isdigit():
-        await navegar_para(update, context, "Admin > Convite N2", "Telegram ID inválido. Envie apenas números ou 'geral'.", InlineKeyboardMarkup([[InlineKeyboardButton("Cancelar", callback_data="menu_principal")]]))
-        return CONVITE_N2_RECEBER_ID
-
-    token = criar_convite_secretario_n2(tid, user_id, ttl_horas=24)
-    if not token:
-        await navegar_para(update, context, "Admin > Convite N2", "Falha ao criar convite N2. Verifique a tabela `convites_secretario_n2` no Supabase.", InlineKeyboardMarkup([[InlineKeyboardButton("Voltar", callback_data="area_admin")]]))
-        return ConversationHandler.END
-
-    bot_username = (getattr(context.bot, "username", None) or "").lstrip("@")
-    link = f"https://t.me/{bot_username}?start={token}" if bot_username else token
-    escopo = "qualquer usuario" if tid == "0" else f"Telegram ID `{tid}`"
-    texto_saida = (
-        f"Convite N2 criado para {escopo}.\n\n"
-        f"Token: `{token}`\n"
-        f"Link direto: {link}\n\n"
-        "Este convite é one-time e expira em 24h."
-    )
-    await navegar_para(update, context, "Admin > Convite N2", texto_saida, InlineKeyboardMarkup([[InlineKeyboardButton("Voltar", callback_data="area_admin")]]))
-    return ConversationHandler.END
-
-
-convite_n2_handler = ConversationHandler(
-    entry_points=[CallbackQueryHandler(convite_n2_inicio, pattern="^admin_convite_n2_inicio$")],
-    states={
-        CONVITE_N2_RECEBER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, convite_n2_receber)],
-    },
-    fallbacks=[CommandHandler("cancelar", cancelar_operacao), CallbackQueryHandler(cancelar_operacao, pattern="^menu_principal$")],
-    name="convite_n2_handler",
-    persistent=False,
-)
 
 # ============================================
 # AUDITORIA DE TELHAMENTO DIGITAL

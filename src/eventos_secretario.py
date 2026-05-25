@@ -303,7 +303,7 @@ async def cmd_convidar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chave_codificada = urllib.parse.quote(chave)
     
     username_bot = (getattr(context.bot, "username", None) or "BodeAndarilhoBot").lstrip("@")
-    link = f"https://t.me/{username_bot}start=PRE_{chave_codificada}"
+    link = f"https://t.me/{username_bot}?start=PRE_{chave_codificada}"
     
     numero_fmt = f" nº {numero}" if numero and str(numero) != "0" else ""
     texto = (
@@ -1890,7 +1890,7 @@ async def gerar_voucher_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
         token_at = v_ativo.get("token")
         usos = v_ativo.get("usos_atuais") or 0
         lim = v_ativo.get("limite_usos") or 100
-        link = f"https://t.me/{context.bot.username}start={token_at}"
+        link = f"https://t.me/{context.bot.username}?start={token_at}"
         texto_ativo = (
         f"🎫 *Convite Ativo Atual:*\n"
             f"📊 Usos: `{usos}/{lim}`\n"
@@ -1982,7 +1982,7 @@ async def _finalizar_criacao_voucher(update: Update, context: ContextTypes.DEFAU
         await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "❌ Falha ao gerar registro no banco de dados.")
         return ConversationHandler.END
         
-    link_completo = f"https://t.me/{context.bot.username}start={token}"
+    link_completo = f"https://t.me/{context.bot.username}?start={token}"
     nome_loja = loja.get("Nome da Loja") or loja.get("nome") or "Sua Loja"
     
     texto_sucesso = (

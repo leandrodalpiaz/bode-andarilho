@@ -144,7 +144,6 @@ from src.admin_acoes import (
     rebaixar_handler,
     editar_membro_handler,
     broadcast_handler,
-    convite_n2_handler,
     admin_toggle_comunicacao,
     ver_todos_membros,
     membros_pagina_anterior,
@@ -282,7 +281,7 @@ def _link_privado_bot(bot_username: Optional[str], start_param: str = "start") -
     """Monta link seguro para abrir o chat privado do bot com deep link opcional."""
     username = (bot_username or "BodeAndarilhoBot").lstrip("@")
     if start_param:
-        return f"https://t.me/{username}start={start_param}"
+        return f"https://t.me/{username}?start={start_param}"
     return f"https://t.me/{username}"
 
 
@@ -537,8 +536,7 @@ async def novo_membro_grupo_handler(update: Update, context):
         membro = buscar_membro(user.id)
         cadastro_ativo = bool(membro and membro_esta_ativo(membro))
 
-        username_bot = (getattr(context.bot, "username", None) or "BodeAndarilhoBot").lstrip("@")
-        link_privado = f"https://t.me/{username_bot}start=cadastro"
+        link_privado = _link_privado_bot(getattr(context.bot, "username", None), "cadastro")
 
         if cadastro_ativo:
             # Reativa o cadastro caso tenha sido marcado inativo numa saída anterior
@@ -650,7 +648,6 @@ def register_handlers(app: Application) -> None:
     app.add_handler(rebaixar_handler)
     app.add_handler(editar_membro_handler)
     app.add_handler(broadcast_handler)
-    app.add_handler(convite_n2_handler)
     app.add_handler(editar_perfil_handler)
     app.add_handler(editar_evento_secretario_handler)
     app.add_handler(cadastro_loja_handler)

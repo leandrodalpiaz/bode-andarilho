@@ -2750,10 +2750,10 @@ async def _validar_admin_apoios(request: Request, body: Dict[str, Any]) -> tuple
     init_data = (body.get("init_data") or request.query_params.get("init_data") or "").strip()
     user = verify_telegram_webapp_data(init_data, bot_token)
     if not user or not user.get("id"):
-        return None, JSONResponse({"ok": False, "error": "Nao autorizado."}, status_code=403)
+        return None, JSONResponse({"ok": False, "error": "Não autorizado."}, status_code=403)
     telegram_id = int(user["id"])
     if str(get_nivel(telegram_id)) != "3":
-        return telegram_id, JSONResponse({"ok": False, "error": "Area exclusiva para administradores."}, status_code=403)
+        return telegram_id, JSONResponse({"ok": False, "error": "Área exclusiva para administradores."}, status_code=403)
     return telegram_id, None
 
 
@@ -2950,7 +2950,7 @@ async def api_apoios_contratos(request: Request) -> JSONResponse:
         "updated_at": datetime.now().isoformat(timespec="seconds"),
     }
     if not row["apoiador_id"] or not row["data_inicio"] or not row["data_fim"]:
-        return JSONResponse({"ok": False, "error": "Informe apoiador e periodo do contrato."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "Informe apoiador e período do contrato."}, status_code=400)
     try:
         table = _apoios_table("apoios_contratos")
         if table is None:
@@ -2989,7 +2989,7 @@ async def api_apoios_pagamentos(request: Request) -> JSONResponse:
         "updated_at": datetime.now().isoformat(timespec="seconds"),
     }
     if not row["apoiador_id"] or not row["competencia"]:
-        return JSONResponse({"ok": False, "error": "Informe apoiador e competencia."}, status_code=400)
+        return JSONResponse({"ok": False, "error": "Informe apoiador e competência."}, status_code=400)
     try:
         table = _apoios_table("apoios_pagamentos")
         if table is None:

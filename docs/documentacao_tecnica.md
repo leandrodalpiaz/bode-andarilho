@@ -204,7 +204,7 @@ Painel do administrador (nível 3):
 - `Gerenciar lojas`: listagem e operações administrativas sobre lojas.
 - `Publicidade/Apoiadores`: governança do programa institucional.
 - `Comunicado para Secretários`: envio segmentado (mensagem administrativa) aos secretários.
-- `Convite Direto N2`: gera `SEC2_...` vinculado a um `telegram_id` específico (one-time / TTL).
+- Promoção a secretário: feita após o cadastro comum do obreiro, pelo fluxo administrativo de promover/rebaixar.
 
 ## 8. Publicidade e apoiadores
 
