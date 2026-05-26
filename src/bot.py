@@ -1073,6 +1073,7 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "admin_ver_membros",
         "admin_editar_membro",
         "admin_broadcast_inicio",
+        "admin_gerar_convite_sec",
         "menu_notificacoes",
         "editar_perfil",
     }:

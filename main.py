@@ -154,6 +154,7 @@ from src.admin_acoes import (
     exibir_menu_admin,
     aprovar_secretario_callback,
     recusar_secretario_callback,
+    admin_gerar_convite_sec_callback,
 )
 
 # Edição do próprio perfil
@@ -884,6 +885,9 @@ def register_handlers(app: Application) -> None:
     ))
     app.add_handler(CallbackQueryHandler(
         recusar_secretario_callback, pattern=r"^recusar_secretario\|"
+    ))
+    app.add_handler(CallbackQueryHandler(
+        admin_gerar_convite_sec_callback, pattern=r"^admin_gerar_convite_sec$"
     ))
     app.add_handler(CallbackQueryHandler(
         ver_todos_membros, pattern=r"^admin_ver_membros$"

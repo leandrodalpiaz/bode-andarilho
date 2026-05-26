@@ -308,6 +308,7 @@ async def exibir_menu_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("✏️ Atualizar Obreiro", callback_data="admin_editar_membro")],
         [InlineKeyboardButton("🟢 Promover secretário", callback_data="admin_promover")],
         [InlineKeyboardButton("🔻 Rebaixar secretário", callback_data="admin_rebaixar")],
+        [InlineKeyboardButton("🔑 Gerar Convite Secretário", callback_data="admin_gerar_convite_sec")],
         [InlineKeyboardButton("🏛️ Gerenciar lojas", callback_data="menu_lojas")],
         [InlineKeyboardButton("🔔 Configurar notificações", callback_data="menu_notificacoes")],
         [InlineKeyboardButton("📢 Publicidade/Apoiadores", callback_data="admin_publicidade")],
@@ -2098,3 +2099,45 @@ async def recusar_secretario_callback(update: Update, context: ContextTypes.DEFA
             logger.warning("Erro ao notificar secretário de recusa: %s", e)
     else:
         await query.message.reply_text("❌ Falha no banco de dados ao recusar secretário.")
+
+
+async def admin_gerar_convite_sec_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gera um convite N2 direto (Secretário) e exibe o link para o administrador."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    if get_nivel(user_id) != "3":
+        await query.answer("⛔ Apenas Administradores podem realizar esta ação.", show_alert=True)
+        return
+
+    try:
+        await query.answer("Gerando convite...")
+    except Exception:
+        pass
+
+    from src.sheets_supabase import criar_convite_secretario_n2
+    token = criar_convite_secretario_n2(telegram_id_destino=0, criado_por=user_id, ttl_horas=72)
+    
+    if not token:
+        await query.message.reply_text("❌ Falha ao gerar o token de convite no banco de dados.")
+        return
+
+    bot_username = (getattr(context.bot, "username", None) or "BodeAndarilhoBot").lstrip("@")
+    link_convite = f"https://t.me/{bot_username}?start={token}"
+
+    teclado = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 Voltar", callback_data="area_admin")]
+    ])
+
+    texto = (
+        f"🔑 *Convite de Secretário (Nível 2) Gerado*\n\n"
+        f"Este convite permite que o usuário se registre no bot diretamente como *Secretário (Nível 2)*, sem necessidade de enviar CIM ou aguardar aprovação.\n\n"
+        f"👉 *Link de Convite (válido por 72h):*\n`{link_convite}`\n\n"
+        f"Copie o link acima clicando sobre o bloco e envie diretamente para o irmão."
+    )
+
+    await navegar_para(
+        update, context,
+        "Área do Administrador > Convite N2",
+        texto,
+        teclado
+    )
