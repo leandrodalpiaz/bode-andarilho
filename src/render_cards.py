@@ -316,16 +316,57 @@ def _layout_config(loja: Dict[str, Any], width: int, height: int) -> Dict[str, A
     }
 
 
+def obter_nome_formatado_loja(evento: Dict[str, Any]) -> str:
+    from src.sheets_supabase import buscar_loja_por_id, buscar_loja_por_nome_numero, extrair_prefixo_e_nome, padronizar_nome_loja
+    
+    e_nome = _norm(_get_any(evento, "Nome da loja", "nome_loja"))
+    e_numero = _norm(_get_any(evento, "Numero da loja", "Número da loja", "numero_loja", "numero"))
+    e_potencia = _norm(_get_any(evento, "Potencia", "Potência", "potencia"))
+    
+    prefixo = ""
+    nome_base = e_nome
+    
+    loja_obj = None
+    loja_id = _norm(_get_any(evento, "ID da loja", "loja_id"))
+    if loja_id:
+        loja_obj = buscar_loja_por_id(loja_id)
+    if not loja_obj:
+        # TODO (Fase de Otimização de Queries): Substituir busca por texto por pesquisa simples utilizando a Foreign Key loja_id (UUID).
+        loja_obj = buscar_loja_por_nome_numero(e_nome, e_numero, e_potencia)
+        
+    if loja_obj:
+        prefixo = _norm(loja_obj.get("prefixo") or loja_obj.get("Prefixo"))
+        nome_base = _norm(loja_obj.get("nome_loja") or loja_obj.get("Nome da Loja") or e_nome)
+        
+    if not prefixo:
+        prefixo, nome_base = extrair_prefixo_e_nome(nome_base)
+    else:
+        nome_base = padronizar_nome_loja(nome_base)
+        
+    prefixo_str = prefixo.strip()
+    nome_base_str = nome_base.strip()
+    numero_str = str(e_numero).strip()
+    
+    if numero_str and numero_str != "0":
+        if prefixo_str:
+            return f"{prefixo_str} {nome_base_str} nº {numero_str}"
+        else:
+            return f"{nome_base_str} nº {numero_str}"
+    else:
+        if prefixo_str:
+            return f"{prefixo_str} {nome_base_str}"
+        else:
+            return nome_base_str
+
+
 def _event_text(evento: Dict[str, Any]) -> str:
-    numero = _norm(evento.get("Número da loja"))
-    numero_fmt = f" {numero}" if numero and numero != "0" else ""
     data_raw = evento.get("Data do evento")
     data = _format_date_br(data_raw)
     dia = _weekday_pt_br(evento.get("Dia da semana"), _parse_date(data_raw))
     hora = _format_hour_br(evento.get("Hora"))
     data_hora = f"{data} ({dia})" if data and dia else data
     data_hora = f"{data_hora} - {hora}".strip(" -")
-    loja = f"{_norm(evento.get('Nome da loja'))}{numero_fmt}".strip()
+    loja = obter_nome_formatado_loja(evento)
     oriente_potencia = " - ".join([v for v in (_norm(evento.get("Oriente")), _norm(evento.get("Potência"))) if v])
     linhas = [
         "NOVA SESSÃO",
@@ -632,8 +673,7 @@ def _draw_potencia_stamp(
 
 def _event_visual_parts(evento: Dict[str, Any]) -> Dict[str, str]:
     numero = _norm(_get_any(evento, "Numero da loja", "Número da loja", "numero_loja", "numero"))
-    numero_fmt = f" {numero}" if numero and numero != "0" else ""
-    loja = f"{_norm(_get_any(evento, 'Nome da loja', 'nome_loja'))}{numero_fmt}".strip()
+    loja = obter_nome_formatado_loja(evento)
     cidade = _norm(_get_any(evento, "Cidade", "cidade", "Oriente", "oriente"))
     uf = _norm(_get_any(evento, "UF", "uf", "Estado", "estado"))
     potencia = _norm(_get_any(evento, "Potencia", "Potência", "potencia"))
@@ -751,9 +791,16 @@ def _draw_loja_name(
     fill: Tuple[int, int, int, int],
     highlight: Tuple[int, int, int, int],
 ) -> int:
-    if numero and loja.endswith(f" {numero}"):
-        prefix = loja[: -len(numero)]
-        return _draw_centered_highlight_tail(draw, center_x, y, prefix, numero, font, font, fill, highlight)
+    if numero:
+        suffix1 = f" nº {numero}"
+        suffix2 = f" {numero}"
+        if loja.endswith(suffix1):
+            prefix = loja[: -len(suffix1)]
+            return _draw_centered_highlight_tail(draw, center_x, y, prefix, suffix1, font, font, fill, highlight)
+        elif loja.endswith(suffix2):
+            prefix = loja[: -len(suffix2)]
+            return _draw_centered_highlight_tail(draw, center_x, y, prefix, suffix2, font, font, fill, highlight)
+            
     return _draw_centered_wrapped(draw, loja, center_x, y, font, fill, max_width, line_gap=4, max_lines=2)
 
 

@@ -1,0 +1,763 @@
+fix_bot.py:19 -> found: sessão | "sessão", "sessao", "evento", "grau", "loja", "oriente",
+fix_bot.py:20 -> found: ágape | "rito", "ágape", "agape", "traje", "ordem do dia",
+fix_miniapp.py:14 -> found: potência | ("potencia", "potência principal"),
+fix_miniapp.py:43 -> found: ágape | r'    try:\n        grupo_id_int = int\(_GRUPO_PRINCIPAL_ID\)\n        await bot\.send_message\(\n            chat_id=grupo_id_int,\n            text=texto_grupo,\n            parse_mode="Markdown",\n            reply_markup=_teclado_pos_publicacao\(id_evento, agape\),\n        \)\n    except Exception as eg:\n        logger\.warning\("Falha ao publicar evento no grupo: %s", eg\)\n\n    await bot\.send_message\(\n        chat_id=telegram_id,\n        text="✅ \*Evento cadastrado e publicado no grupo\\\\!\*",\n        parse_mode="MarkdownV2",\n    \)',
+main.py:319 -> found: não | logger.debug("Nao foi possivel autoapagar mensagem %s no chat %s: %s", msg_id, chat_id, e)
+main.py:405 -> found: sessão | "sessão", "sessao", "evento", "grau", "loja", "oriente",
+main.py:406 -> found: ágape | "rito", "ágape", "agape", "traje", "ordem do dia",
+main.py:670 -> found: sessões | app.add_handler(CommandHandler(["buscar", "agenda", "sessoes", "eventos"], cmd_agenda))
+main.py:1024 -> found: não | logger.info("TOKEN carregado: %s", "SIM" if token else "NAO")
+main.py:1035 -> found: não | logger.info("Build commit ativo (RENDER_GIT_COMMIT): nao informado")
+README.md:34 -> found: potências | - Selos de potência (GOB/CMSB/COMAB): `assets/potencias/`
+test_post.py:14 -> found: horário | "horario": "20:00",
+test_post.py:21 -> found: potência | "potencia": "GOB",
+test_post.py:23 -> found: ágape | "agape": "Sim",
+documentacao_tecnica.md:36 -> found: potências | potencias/             # selos GOB/CMSB/COMAB
+documentacao_tecnica.md:49 -> found: potências | potencias.py
+documentacao_tecnica.md:89 -> found: potências | 1. Topo esquerdo: selo da potência em `assets/potencias/` e complemento pequeno.
+documentacao_tecnica.md:244 -> found: potências | assets/potencias/gob.png
+documentacao_tecnica.md:245 -> found: potências | assets/potencias/cmsb.png
+documentacao_tecnica.md:246 -> found: potências | assets/potencias/comab.png
+documentacao_tecnica.md:265 -> found: potência | - `potencia`: apenas `GOB`, `CMSB` ou `COMAB`
+fluxos_atualizados_2026_04.md:17 -> found: potências | - `src/potencias.py`
+fluxos_atualizados_2026_04.md:74 -> found: potência | - `potencia`: `GOB`, `CMSB`, `COMAB`
+go_live_solo.md:47 -> found: sessões | - `/ia quais sessoes eu posso visitar essa semana?` mostra resposta + botão de ação.
+admin_acoes.py:47 -> found: potências | from src.potencias import formatar_potencia_exibicao, normalizar_potencia, potencia_requer_complemento, sugestao_complemento, validar_potencia
+admin_acoes.py:78 -> found: potência | "potencia": {"nome": "Potência", "chave": "Potência", "nivel_minimo": "2"},
+admin_acoes.py:92 -> found: potência | [InlineKeyboardButton("GOB", callback_data="editar_valor_membro|potencia|GOB")],
+admin_acoes.py:93 -> found: potência | [InlineKeyboardButton("CMSB", callback_data="editar_valor_membro|potencia|CMSB")],
+admin_acoes.py:94 -> found: potência | [InlineKeyboardButton("COMAB", callback_data="editar_valor_membro|potencia|COMAB")],
+admin_acoes.py:103 -> found: opções | opcoes = [
+admin_acoes.py:109 -> found: opções | opcoes = [
+admin_acoes.py:115 -> found: opções | opcoes = [
+admin_acoes.py:122 -> found: opções | for sigla, descricao in opcoes
+admin_acoes.py:125 -> found: potência | linhas.append([InlineKeyboardButton("🔙 Voltar", callback_data="editar_campo_membro|potencia")])
+admin_acoes.py:146 -> found: potência | if campo_id == "potencia":
+admin_acoes.py:259 -> found: número | numero = loja.get("Número") or loja.get("numero") or ""
+admin_acoes.py:261 -> found: número | loja_id=loja_id, nome_loja=nome, numero_loja=numero
+admin_acoes.py:1099 -> found: potência | if campo_id == "potencia":
+admin_acoes.py:1306 -> found: número | numero = ev.get("Número da loja", "")
+admin_acoes.py:1308 -> found: número | numero_fmt = f" {numero}" if numero else ""
+admin_acoes.py:1783 -> found: potência | f"Sua verificacao de identidade foi plenamente *VALIDADA e chancelada* pela Potencia!\n\n"
+admin_acoes.py:1822 -> found: potência | f"Sua verificacao visual de Credencial Maconcia foi *RECUSADA* pelo Auditor da sua Potencia.\n\n"
+admin_acoes.py:1836 -> found: confirmação | """Exibe dialogo de confirmacao de intencao para fundacao."""
+admin_acoes.py:1852 -> found: você | f"Prezado Ir.·., voce solicitou fundar e edificar oficialmente a Oficina *'{loja_man}'* no ecossistema do Bode Andarilho.\n\n"
+admin_acoes.py:1853 -> found: secretário, será | f"Ao prosseguir, seu nome sera enviado a Chancelaria Geral para aprovação do encargo de *Secretario (Nivel 2)*.\n\n"
+admin_acoes.py:1882 -> found: potência | pot = membro.get("Potência") or membro.get("potencia") or ""
+admin_acoes.py:1890 -> found: potência | "potencia": pot,
+admin_acoes.py:1909 -> found: secretário | f"O Ir.·. *{nome}* ({grau}) reivindicou o Malhete de Secretario para a Oficina:\n\n"
+admin_acoes.py:1951 -> found: não | await query.message.reply_text("❌ Obreiro nao localizado.")
+admin_acoes.py:1955 -> found: potência | pot = membro.get("Potência") or membro.get("potencia") or "GOB"
+admin_acoes.py:1964 -> found: número | "numero": num,
+admin_acoes.py:1966 -> found: potência | "potencia": pot,
+admin_acoes.py:1989 -> found: secretário | f"✅ *APROVAÇÃO CONCLUÍDA!*\n\nO Ir.·. *{nome}* foi promovido a Secretario (Nivel 2) e a Loja *'{loja_man}'* (ID: {nova_loja_id}) esta oficialmente erguida!",
+apoio.py:328 -> found: não | bloqueios = ["erro", "não sei", "nao sei", "permiss", "negad"]
+bot.py:113 -> found: não | "nao sei usar": "menu_ajuda",
+bot.py:117 -> found: sessões | "sessoes": "ver_eventos",
+bot.py:119 -> found: sessões | "ver sessoes": "ver_eventos",
+bot.py:128 -> found: sessões | "buscar sessoes": "ver_eventos",
+bot.py:172 -> found: sessão | "sessão", "sessao", "evento", "grau", "loja", "oriente",
+bot.py:173 -> found: ágape | "rito", "ágape", "agape", "traje", "ordem do dia",
+bot.py:458 -> found: já | logger.info("Diploma inicial ja esta em processamento para %s; ignorando novo disparo.", user_id)
+bot.py:631 -> found: número | context.user_data["cadastro_numero_loja"] = str(loja.get("Número") or loja.get("numero") or "0").strip()
+bot.py:633 -> found: potência | context.user_data["cadastro_potencia"] = (loja.get("Potência") or loja.get("potencia") or "").strip()
+bot.py:666 -> found: potência | potencia = partes[2].replace("-", " ")
+bot.py:670 -> found: potência | context.user_data["cadastro_potencia"] = potencia
+bot.py:769 -> found: secretário | if nivel in ("2", "3") and texto_normalizado in {"secretario", "area secretario"}:
+bot.py:906 -> found: não | logger.debug("Nao foi possivel enviar ou programar exclusao de aviso no grupo: %s", e)
+bot.py:1014 -> found: potência | "potencia": membro.get("Potência") or membro.get("potencia") or "",
+cadastro.py:67 -> found: potências | from src.potencias import (
+cadastro.py:87 -> found: potência | NOME, DATA_NASC, GRAU, VM, LOJA, NUMERO_LOJA, ORIENTE, POTENCIA, POTENCIA_COMPLEMENTO, FOTO_CIM, CONFIRMAR = range(11)
+cadastro.py:147 -> found: potência | return POTENCIA
+cadastro.py:171 -> found: potência | POTENCIA: "🧭 *Passo 8/9*\nInforme sua *Potência principal* (GOB, CMSB ou COMAB).",
+cadastro.py:216 -> found: não | if normalizado in {"nao", "n", "não", "no"}:
+cadastro.py:239 -> found: potência | estado_voltar = POTENCIA
+cadastro.py:407 -> found: potência | potencia = (context.user_data.get("cadastro_potencia") or "").strip()
+cadastro.py:420 -> found: potência | f"⚜️ *Potência local:* {formatar_potencia(potencia, potencia_comp)}\n\n"
+cadastro.py:531 -> found: potência | context.user_data["cadastro_potencia"] = dados.get("potencia", "").strip()
+cadastro.py:555 -> found: pós | pos = context.user_data.get("pos_cadastro")
+cadastro.py:557 -> found: pós | if pos:
+cadastro.py:558 -> found: pós | context.user_data["pos_cadastro"] = pos
+cadastro.py:588 -> found: pós | pos = context.user_data.get("pos_cadastro")
+cadastro.py:590 -> found: pós | if pos:
+cadastro.py:591 -> found: pós | context.user_data["pos_cadastro"] = pos
+cadastro.py:618 -> found: potência | context.user_data["cadastro_potencia"] = (membro.get("Potência") or membro.get("potencia") or "").strip()
+cadastro.py:683 -> found: número | num = str(l.get("Número") or l.get("numero") or "0")
+cadastro.py:704 -> found: não | f"📝 A Loja *{loja_digitada}* nao foi localizada. Seguira como Nova Oficina pendente de validacao.",
+cadastro.py:735 -> found: número | num = str(loja_encontrada.get("Número") or loja_encontrada.get("numero") or "0").strip()
+cadastro.py:737 -> found: potência | pot = (loja_encontrada.get("Potência") or loja_encontrada.get("potencia") or "").strip()
+cadastro.py:786 -> found: número | numero = (update.message.text or "").strip()
+cadastro.py:787 -> found: número | if not _validar_numero_loja(numero):
+cadastro.py:790 -> found: número | context.user_data["cadastro_numero_loja"] = numero
+cadastro.py:801 -> found: potência | return await _navegar_etapa(update, context, POTENCIA)
+cadastro.py:806 -> found: potência | potencia = (update.message.text or "").strip()
+cadastro.py:807 -> found: potência | if len(potencia) < 2:
+cadastro.py:808 -> found: potência | return await _reexibir_etapa(update, context, POTENCIA, CADASTRO_ERRO_POTENCIA)
+cadastro.py:810 -> found: potência | principal, _ = normalizar_potencia(potencia, "")
+cadastro.py:812 -> found: potência | return await _reexibir_etapa(update, context, POTENCIA, CADASTRO_ERRO_POTENCIA)
+cadastro.py:932 -> found: potência | "potencia": context.user_data.get("cadastro_potencia", ""),
+cadastro.py:1015 -> found: pós | pos = context.user_data.get("pos_cadastro")
+cadastro.py:1017 -> found: pós | if pos:
+cadastro.py:1018 -> found: pós | context.user_data["pos_cadastro"] = pos
+cadastro.py:1031 -> found: pós | if pos and isinstance(pos, dict) and pos.get("acao") == "confirmar":
+cadastro.py:1034 -> found: pós | await iniciar_confirmacao_presenca_pos_cadastro(update, context, pos)
+cadastro.py:1114 -> found: pós | pos = context.user_data.get("pos_cadastro")
+cadastro.py:1116 -> found: pós | if pos:
+cadastro.py:1117 -> found: pós | context.user_data["pos_cadastro"] = pos
+cadastro.py:1165 -> found: potência | POTENCIA: [
+cadastro.py:1282 -> found: número | l_num = _norm_resiliente(l.get("Número") or l.get("numero") or "0")
+cadastro.py:1331 -> found: secretário | logger.info(f"Governanca: Notificacao enviada ao Secretario {sec_id}")
+cadastro.py:1333 -> found: secretário | logger.warning("Falha ao notificar secretario %s: %s", sec_id, e_notif)
+cadastro.py:1337 -> found: secretário | logger.info("Governanca: Sem Secretario ativo na Loja. Encaminhando para Admins Globais (Nivel 3)...")
+cadastro.py:1392 -> found: potência | pot = dados_membro.get("potencia") or dados_membro.get("Potência") or ""
+cadastro.py:1417 -> found: secretário | logger.warning("Falha ao notificar admin %s de secretario pendente: %s", adm_id, e)
+cadastro_evento.py:56 -> found: potências | from src.potencias import formatar_potencia, potencia_de_dados
+cadastro_evento.py:84 -> found: horário | HORARIO,
+cadastro_evento.py:91 -> found: potência | POTENCIA,
+cadastro_evento.py:93 -> found: ágape | AGAPE,
+cadastro_evento.py:110 -> found: não | AGAPE_RESPOSTAS = [("Sim", "sim"), ("Não", "nao")]
+cadastro_evento.py:112 -> found: não | OBS_RESPOSTAS = [("Sim", "sim"), ("Não", "nao")]
+cadastro_evento.py:176 -> found: ágape | if "com ágape" in texto or "com agape" in texto:
+cadastro_evento.py:213 -> found: opções, ágape | opcoes = AGAPE_RESPOSTAS if prefix == "agape" else OBS_RESPOSTAS
+cadastro_evento.py:214 -> found: opções | linhas = [[InlineKeyboardButton(lbl, callback_data=f"{prefix}|{val}")] for (lbl, val) in opcoes]
+cadastro_evento.py:292 -> found: número | def _event_key(data: str, hora: str, nome: str, numero: str) -> str:
+cadastro_evento.py:294 -> found: número | return f"{_norm_text(data)}|{_norm_text(hora)}|{_norm_text(nome).lower()}|{_norm_text(numero)}"
+cadastro_evento.py:334 -> found: não | agape_sim = context.user_data.get("novo_evento_agape", "nao")
+cadastro_evento.py:349 -> found: não | if context.user_data.get("novo_evento_observacoes_tem", "nao") != "sim":
+cadastro_evento.py:410 -> found: horário | ("novo_evento_horario", HORARIO),
+cadastro_evento.py:417 -> found: potência | ("novo_evento_potencia", POTENCIA),
+cadastro_evento.py:419 -> found: ágape | ("novo_evento_agape", AGAPE),
+cadastro_evento.py:447 -> found: número | numero = _escape_md(evento.get("Número da loja", ""))
+cadastro_evento.py:448 -> found: número | numero_fmt = f" {numero}" if numero and numero != "0" else ""
+cadastro_evento.py:455 -> found: potência | potencia = _escape_md(formatar_potencia(*potencia_de_dados(evento)))
+cadastro_evento.py:457 -> found: ágape | agape = _escape_md(evento.get("Ágape", ""))
+cadastro_evento.py:471 -> found: potência | f"⚜️ *Potência local:* {potencia}",
+cadastro_evento.py:473 -> found: ágape | f"🍽 *Ágape:* {agape}",
+cadastro_evento.py:538 -> found: número | numero = _norm_text(context.user_data.get("novo_evento_numero_loja") or "0")
+cadastro_evento.py:543 -> found: número | and _norm_text(loja.get("Número") or loja.get("Numero") or loja.get("numero") or "0") == numero
+cadastro_evento.py:832 -> found: número | numero = loja.get("Número", "")
+cadastro_evento.py:833 -> found: número | nome_fmt = f"{nome} {numero}" if numero else nome
+cadastro_evento.py:908 -> found: número | numero = loja.get("Número", "")
+cadastro_evento.py:909 -> found: número | nome_fmt = f"{nome} {numero}" if numero else nome
+cadastro_evento.py:993 -> found: potência | f"⚜️ Potência local: {formatar_potencia(loja.get('Potência') or loja.get('potencia'), loja.get('Potência complemento') or loja.get('potencia_complemento'))}\n"
+cadastro_evento.py:1133 -> found: número | numero = loja.get("Número", "")
+cadastro_evento.py:1134 -> found: número | nome_fmt = f"{nome} {numero}" if numero else nome
+cadastro_evento.py:1223 -> found: horário | return HORARIO
+cadastro_evento.py:1240 -> found: horário | return HORARIO
+cadastro_evento.py:1300 -> found: número | numero = _norm_text(update.message.text)
+cadastro_evento.py:1301 -> found: número | numero = _truncate(numero, 30)
+cadastro_evento.py:1302 -> found: número | if not numero:
+cadastro_evento.py:1303 -> found: número | numero = "0"
+cadastro_evento.py:1305 -> found: número | context.user_data["novo_evento_numero_loja"] = numero
+cadastro_evento.py:1454 -> found: potência | return POTENCIA
+cadastro_evento.py:1485 -> found: ágape | _teclado_sim_nao("agape"),
+cadastro_evento.py:1488 -> found: ágape | return AGAPE
+cadastro_evento.py:1502 -> found: não | if val not in ("sim", "nao"):
+cadastro_evento.py:1506 -> found: ágape | _teclado_sim_nao("agape"),
+cadastro_evento.py:1509 -> found: ágape | return AGAPE
+cadastro_evento.py:1569 -> found: não | if val not in ("sim", "nao"):
+cadastro_evento.py:1774 -> found: secretaria/secretária | # Hook Conquistas da Secretaria
+cadastro_evento.py:1780 -> found: ágape | if "gratuito" in str(evento.get("agape", "")).lower():
+cadastro_evento.py:1868 -> found: horário | elif estado == HORARIO:
+cadastro_evento.py:1917 -> found: potência | elif estado == POTENCIA:
+cadastro_evento.py:1931 -> found: ágape | elif estado == AGAPE:
+cadastro_evento.py:1935 -> found: ágape | _teclado_sim_nao("agape"),
+cadastro_evento.py:2037 -> found: horário | HORARIO: [
+cadastro_evento.py:2072 -> found: potência | POTENCIA: [
+cadastro_evento.py:2082 -> found: ágape | AGAPE: [
+cadastro_evento.py:2083 -> found: ágape | CallbackQueryHandler(receber_agape, pattern=r"^agape\|"),
+conquistas.py:226 -> found: potência | potencia = str(dados_loja.get("potencia", dados_loja.get("Potência", ""))).strip().upper()
+conquistas.py:230 -> found: número | num_loja = dados_loja.get("numero", dados_loja.get("Número da loja", ""))
+conquistas.py:236 -> found: potência | if potencia:
+conquistas.py:237 -> found: potência | chave_pot = f"{potencia} - {comp}" if comp else potencia
+conquistas.py:386 -> found: ágape | contagem_agape = sum(1 for c in confirmacoes if "sim" in str(c.get("Ágape") or c.get("agape") or "").lower())
+conquistas.py:405 -> found: não | if cid and cid not in ("Nao Informado", "Não Informado", ""):
+conquistas.py:418 -> found: potência | pot = str(lj.get("Potência") or lj.get("potencia") or "").strip().upper()
+conquistas.py:431 -> found: potência | pot = str(ev.get("Potência") or ev.get("potencia") or "").strip().upper()
+conquistas.py:438 -> found: ágape | # 🥄 IC: Iniciado na Colher (Count Agape >= 1)
+conquistas.py:442 -> found: ágape | # 🍷 OG: Cavaleiro do Garfo (Count Agape >= 15)
+conquistas.py:493 -> found: secretário | # 💼 IO: Intendente das Oficinas (Secretario com perfil 100% preenchido)
+conquistas.py:501 -> found: potência | pot = str(loja_sede.get("Potência") or loja_sede.get("potencia") or "").strip()
+conquistas.py:556 -> found: ágape | contagem_agape = sum(1 for c in confirmacoes if "sim" in str(c.get("Ágape") or c.get("agape") or "").lower())
+conquistas.py:570 -> found: não | if cid and cid not in ("Nao Informado", "Não Informado", ""):
+conquistas.py:582 -> found: potência | pot = str(lj.get("Potência") or lj.get("potencia") or "").strip().upper()
+conquistas.py:591 -> found: potência | pot = str(ev.get("Potência") or ev.get("potencia") or "").strip().upper()
+conquistas.py:637 -> found: potência | pot = str(loja_sede.get("Potência") or loja_sede.get("potencia") or "").strip()
+conquistas.py:857 -> found: não | raise FileNotFoundError("Imagem nao gerada.")
+conquistas_coletivas.py:20 -> found: potências | from src.potencias import formatar_potencia
+conquistas_coletivas.py:58 -> found: não | "Disparo coletivo suprimido: %s nao esta habilitado.",
+conquistas_coletivas.py:130 -> found: não | "Conquistas coletivas pausadas: %s nao esta habilitado.",
+conquistas_coletivas.py:140 -> found: potência | potencia = str(evento.get("potencia") or evento.get("Potência") or "").strip()
+conquistas_coletivas.py:196 -> found: potência | if potencia:
+conquistas_coletivas.py:197 -> found: potência | pot_nome = formatar_potencia(potencia, potencia_comp)
+conquistas_coletivas.py:207 -> found: potência | registrar_marco_coletivo(slug_pot_primeira, "potencia")
+editar_perfil.py:19 -> found: potências | from src.potencias import (
+editar_perfil.py:38 -> found: potência | "potencia": {"nome": "Potência", "chave": "Potência", "modo": "inline"},
+editar_perfil.py:51 -> found: potência | "potencia": ["Potência", "potencia"],
+editar_perfil.py:58 -> found: potência | if campo_id == "potencia":
+editar_perfil.py:61 -> found: potência | for chave in aliases.get("potencia", ["Potência"]):
+editar_perfil.py:91 -> found: potência | "potencia",
+editar_perfil.py:101 -> found: potência | if is_locked and campo_id in ("loja", "numero_loja", "potencia"):
+editar_perfil.py:129 -> found: opções | opcoes = ["Aprendiz", "Companheiro", "Mestre"]
+editar_perfil.py:131 -> found: opções | opcoes = ["Sim", "Não"]
+editar_perfil.py:132 -> found: potência | elif campo_id == "potencia":
+editar_perfil.py:133 -> found: opções | opcoes = ["GOB", "CMSB", "COMAB"]
+editar_perfil.py:135 -> found: opções | opcoes = []
+editar_perfil.py:136 -> found: opções | linhas = [[InlineKeyboardButton(valor, callback_data=f"editar_valor_perfil|{campo_id}|{valor}")] for valor in opcoes]
+editar_perfil.py:145 -> found: opções | opcoes = [
+editar_perfil.py:151 -> found: opções | opcoes = [
+editar_perfil.py:157 -> found: opções | opcoes = [
+editar_perfil.py:164 -> found: opções | for sigla, descricao in opcoes
+editar_perfil.py:167 -> found: potência | linhas.append([InlineKeyboardButton("🔙 Voltar", callback_data="editar_campo_perfil|potencia")])
+editar_perfil.py:282 -> found: potência | if campo_id == "potencia":
+editar_perfil.py:319 -> found: potência | CAMPOS_EDITAVEIS_PERFIL["potencia"]["chave"]: principal,
+editar_perfil.py:344 -> found: potência | if campo_id == "potencia":
+editar_perfil.py:352 -> found: potência | CAMPOS_EDITAVEIS_PERFIL["potencia"]["chave"]: principal,
+editar_perfil.py:387 -> found: não | elif normalizado in {"não", "nao", "n"}:
+editar_perfil.py:411 -> found: potência | CAMPOS_EDITAVEIS_PERFIL["potencia"]["chave"]: principal,
+editar_perfil.py:418 -> found: potência | pot_atual = _valor_campo(membro, "potencia", CAMPOS_EDITAVEIS_PERFIL["potencia"])
+eventos.py:81 -> found: potências | from src.potencias import formatar_potencia, potencia_de_dados
+eventos.py:132 -> found: ágape | f"{i}. {item.get('nome', 'Irmão')} | {item.get('data', '')} - {item.get('loja', '')} | {item.get('agape', '')}"
+eventos.py:269 -> found: número | numero = str(evento.get("Número da loja") or evento.get("numero_loja") or "").strip()
+eventos.py:270 -> found: número | numero_fmt = f" {numero}" if numero and numero != "0" else ""
+eventos.py:284 -> found: potência | potencia = formatar_potencia(*potencia_de_dados(evento))
+eventos.py:292 -> found: potência | detalhe_loja = " - ".join([v for v in (oriente, potencia) if v])
+eventos.py:307 -> found: ágape | if "com ágape" in texto or "com agape" in texto:
+eventos.py:360 -> found: número | numero = _escape_md(evento.get("Número da loja", ""))
+eventos.py:361 -> found: número | numero_fmt = f" {numero}" if numero and numero != "0" else ""
+eventos.py:370 -> found: potência | potencia = _escape_md(formatar_potencia(*potencia_de_dados(evento)))
+eventos.py:375 -> found: ágape | agape = _escape_md(evento.get("Ágape", ""))
+eventos.py:394 -> found: potência | f"{oriente} - {potencia}\n\n"
+eventos.py:399 -> found: ágape | f"Ágape: {agape}\n\n"
+eventos.py:421 -> found: ágape | agape = str(evento.get("Ágape", "") or "")
+eventos.py:423 -> found: ágape | linhas = _teclado_confirmacao_evento(id_evento, agape)
+eventos.py:426 -> found: confirmado | # Se o usuário não estiver confirmado, o handler responde com um toast amigável.
+eventos.py:674 -> found: número | numero = (
+eventos.py:679 -> found: número | numero = str(numero).strip()
+eventos.py:682 -> found: potência | potencia = (
+eventos.py:684 -> found: potência | or dados_membro_ou_snapshot.get("potencia")
+eventos.py:693 -> found: potências | from src.potencias import formatar_potencia_exibicao
+eventos.py:694 -> found: potência | potencia_fmt = formatar_potencia_exibicao(potencia, potencia_comp, modo="completo")
+eventos.py:696 -> found: número | num_fmt = f" nº {numero}" if numero and str(numero) != "0" else ""
+eventos.py:891 -> found: número | numero = str(ev.get("Número da loja", "") or "").strip()
+eventos.py:892 -> found: número | numero_fmt = f" {numero}" if numero and numero != "0" else ""
+eventos.py:894 -> found: potência | potencia = formatar_potencia(*potencia_de_dados(ev))
+eventos.py:895 -> found: potência | pot_fmt = f" ({potencia})" if potencia else ""
+eventos.py:971 -> found: número | num_l = str(l.get("Número") or l.get("numero") or "").strip()
+eventos.py:1008 -> found: potência | p = str(ev.get("Potência") or ev.get("potencia") or "").strip()
+eventos.py:1026 -> found: potência | p = str(ev.get("Potência") or ev.get("potencia") or "").strip()
+eventos.py:1060 -> found: número | numero = evento.get("Número da loja", "")
+eventos.py:1061 -> found: número | numero_fmt = f" {numero}" if numero else ""
+eventos.py:1070 -> found: ágape | agape=texto_participacao,
+eventos.py:1077 -> found: ágape | "agape": texto_participacao,
+eventos.py:1385 -> found: não | if not oriente_raw or oriente_raw.lower() in ("não informado", "nao informado"):
+eventos.py:1604 -> found: potências | potencias = _potencias_ativas_eventos(eventos)
+eventos.py:1606 -> found: potências | if not potencias:
+eventos.py:1615 -> found: potências | for pot in potencias[:MAX_EVENTOS_LISTA]:
+eventos.py:1777 -> found: número | numero = str(evento.get("Número da loja", "") or "").strip()
+eventos.py:1778 -> found: número | numero_fmt = f" {numero}" if numero else ""
+eventos.py:1780 -> found: potência | potencia = formatar_potencia(*potencia_de_dados(evento))
+eventos.py:1787 -> found: ágape | agape = str(evento.get("Ágape", "") or "").strip()
+eventos.py:1802 -> found: potência | f"⚜️ *Potência:* {potencia}\n"
+eventos.py:1809 -> found: ágape | f"🍽 *Ágape:* {agape}\n"
+eventos.py:1834 -> found: ágape | botoes.extend(_teclado_confirmacao_evento(id_evento, agape))
+eventos.py:2029 -> found: potência | "potencia": membro.get("Potência", ""),
+eventos.py:2030 -> found: ágape | "agape": f"{participacao_agape} ({desc_agape})",
+eventos.py:2071 -> found: horário | horario = str(evento.get("Hora", "") or "").strip()
+eventos.py:2083 -> found: horário | horario=horario,
+eventos.py:2104 -> found: horário | horario=horario,
+eventos.py:2115 -> found: horário | horario=horario,
+eventos.py:2154 -> found: pós | async def iniciar_confirmacao_presenca_pos_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE, pos: dict):
+eventos.py:2156 -> found: pós | id_evento = pos.get("id_evento")
+eventos.py:2157 -> found: pós | tipo_agape = pos.get("tipo_agape", "sem")
+eventos.py:2264 -> found: potência | "potencia": membro.get("Potência", ""),
+eventos.py:2265 -> found: ágape | "agape": f"{participacao_agape} ({desc_agape})",
+eventos.py:2295 -> found: horário | horario = str(evento.get("Hora", "") or "").strip()
+eventos.py:2304 -> found: horário | horario=horario,
+eventos.py:2314 -> found: horário | horario=horario,
+eventos.py:2458 -> found: potência | "Potência": c.get("Potência", c.get("potencia", "")),
+eventos.py:2585 -> found: potência | "Potência": c.get("Potência", c.get("potencia", "")),
+eventos.py:2787 -> found: número | numero = str(evento.get("Número da loja", "") or "").strip()
+eventos.py:2788 -> found: número | numero_fmt = f" {numero}" if numero else ""
+eventos.py:2792 -> found: potência | potencia = formatar_potencia(*potencia_de_dados(evento))
+eventos.py:2799 -> found: confirmação | confirmacao = buscar_confirmacao_em_eventos(ids_aliases, user_id)
+eventos.py:2801 -> found: confirmação | if confirmacao:
+eventos.py:2802 -> found: confirmação, ágape | agape = confirmacao.get("Ágape", "")
+eventos.py:2803 -> found: ágape | if agape:
+eventos.py:2804 -> found: ágape | agape_info = f"\n🍽 *Ágape:* {agape}"
+eventos.py:2811 -> found: potência | f"⚜️ {potencia}{agape_info}"
+eventos.py:2858 -> found: número | numero = str(evento.get("Número da loja", "") or "").strip()
+eventos.py:2859 -> found: número | numero_fmt = f" {numero}" if numero else ""
+eventos.py:2863 -> found: potência | potencia = str(evento.get("Potência", "") or "").strip()
+eventos.py:2870 -> found: confirmação | confirmacao = buscar_confirmacao_em_eventos(ids_aliases, user_id)
+eventos.py:2872 -> found: confirmação | if confirmacao:
+eventos.py:2873 -> found: confirmação, ágape | agape = confirmacao.get("Ágape", "")
+eventos.py:2874 -> found: ágape | if agape:
+eventos.py:2875 -> found: ágape | agape_info = f"\n🍽 *Ágape:* {agape}"
+eventos.py:2882 -> found: potência | f"⚜️ {potencia}{agape_info}\n\n"
+eventos.py:3021 -> found: potência | potencia = partes[1]
+eventos.py:3024 -> found: potência | titulo, filtrados = _filtrar_por_potencia(eventos, potencia)
+eventos.py:3047 -> found: potência | f"Ver Sessões > Potência > {potencia}",
+eventos_secretario.py:111 -> found: potência | "potencia": {"nome": "Potência", "chave": "Potência"},
+eventos_secretario.py:113 -> found: ágape | "agape": {"nome": "Ágape (texto livre)", "chave": "Ágape"},
+eventos_secretario.py:135 -> found: número | numero = evento.get("Número da loja", "")
+eventos_secretario.py:136 -> found: número | numero_fmt = f" {numero}" if numero else ""
+eventos_secretario.py:146 -> found: ágape | if "sem ágape" in texto or "sem agape" in texto:
+eventos_secretario.py:148 -> found: ágape | marcadores = ("com ágape", "com agape", "confirmada", "gratuito", "pago", "sim")
+eventos_secretario.py:190 -> found: número | numero = str(evento.get("Número da loja", "") or "").strip()
+eventos_secretario.py:191 -> found: número | numero_fmt = f" {numero}" if numero else ""
+eventos_secretario.py:200 -> found: confirmado | "A sessão que você havia confirmado foi cancelada pelo secretário.\n\n"
+eventos_secretario.py:265 -> found: confirmado | logger.info("Notificações privadas enviadas para %s confirmado(s) do evento %s (motivo=%s).", enviados, id_evento, motivo)
+eventos_secretario.py:288 -> found: número | numero = str(membro.get("Número da loja", "") or "").strip()
+eventos_secretario.py:289 -> found: potência | potencia = str(membro.get("Potência", "") or "").strip()
+eventos_secretario.py:291 -> found: potência | if not nome_loja or not potencia:
+eventos_secretario.py:302 -> found: potência, número | chave = f"{nome_limpo}_{numero}_{potencia}".replace(" ", "-")
+eventos_secretario.py:308 -> found: número | numero_fmt = f" nº {numero}" if numero and str(numero) != "0" else ""
+eventos_secretario.py:549 -> found: ágape | agape = str(c.get("Ágape", "") or "").lower()
+eventos_secretario.py:550 -> found: ágape | if _confirmacao_com_agape(agape):
+eventos_secretario.py:576 -> found: ágape | tipo_agape = "Com ágape" if _confirmacao_com_agape(agape) else "Sem ágape"
+eventos_secretario.py:580 -> found: número | numero = evento.get("Número da loja", "")
+eventos_secretario.py:581 -> found: número | numero_fmt = f" {numero}" if numero else ""
+eventos_secretario.py:657 -> found: número | numero = evento.get("Número da loja", "")
+eventos_secretario.py:658 -> found: número | numero_fmt = f" {numero}" if numero else ""
+eventos_secretario.py:1057 -> found: número | numero = str(ev.get("Número da loja", "") or "").strip()
+eventos_secretario.py:1058 -> found: número | numero_fmt = f" {numero}" if numero else ""
+eventos_secretario.py:1135 -> found: número | numero = str(evento.get("Número da loja", "") or "").strip()
+eventos_secretario.py:1136 -> found: número | numero_fmt = f" {numero}" if numero else ""
+eventos_secretario.py:1474 -> found: número | num = _key(l.get("Número") or l.get("numero") or "0")
+eventos_secretario.py:1548 -> found: número | numero = membro.get("Número da loja", "")
+eventos_secretario.py:1549 -> found: potências | from src.potencias import formatar_potencia_exibicao
+eventos_secretario.py:1552 -> found: potência | potencia = formatar_potencia_exibicao(potencia_raw, pot_comp, modo="completo")
+eventos_secretario.py:1556 -> found: número | num_fmt = f" nº {numero}" if numero else ""
+eventos_secretario.py:1564 -> found: potência | f"▪️ Potência: *{potencia}*\n"
+eventos_secretario.py:1626 -> found: secretaria/secretária | "Seu cadastro no Bode Andarilho foi validado e aprovado pela secretaria de sua oficina.\n\n"
+eventos_secretario.py:1804 -> found: potências | from src.potencias import normalizar_potencia
+eventos_secretario.py:1805 -> found: potência | pot_s = loja_vinculada.get("Potência") or loja_vinculada.get("potencia") or ""
+eventos_secretario.py:1822 -> found: opções | opcoes = [
+eventos_secretario.py:1828 -> found: opções | opcoes.append([InlineKeyboardButton(f"📋 Trolhamento Solidário ({trolhamentos_count})", callback_data="trolhamento_coletivo_listar")])
+eventos_secretario.py:1830 -> found: opções | opcoes.append([InlineKeyboardButton(voucher_str, callback_data="gerar_voucher_inicio")])
+eventos_secretario.py:1833 -> found: opções | opcoes.append([InlineKeyboardButton("🤝 Passagem de Bastão", callback_data="bastao_listar")])
+eventos_secretario.py:1835 -> found: opções | opcoes.extend([
+eventos_secretario.py:1847 -> found: opções | teclado = InlineKeyboardMarkup(opcoes)
+eventos_secretario.py:1934 -> found: número | "⌨ *DIGITE O LIMITE*\n\nPor favor, envie uma mensagem apenas com o numero desejado (ex: `15`):",
+eventos_secretario.py:2030 -> found: número | numero_loja = loja.get("Número") or loja.get("numero") or "0"
+eventos_secretario.py:2351 -> found: potências | from src.potencias import normalizar_potencia
+eventos_secretario.py:2369 -> found: número | l_num = _norm_resiliente(l.get("Número") or l.get("numero") or "0")
+eventos_secretario.py:2379 -> found: potência | pot_m = m.get("Potência") or m.get("potencia") or ""
+eventos_secretario.py:2439 -> found: número | l_num = _norm_resiliente(l.get("Número") or l.get("numero") or "0")
+eventos_secretario.py:2491 -> found: potências | from src.potencias import normalizar_potencia
+eventos_secretario.py:2502 -> found: potência | pot_s = loja_vinculada.get("Potência") or loja_vinculada.get("potencia") or ""
+eventos_secretario.py:2568 -> found: número | numero = membro.get("Número da loja") or membro.get("numero_loja") or ""
+eventos_secretario.py:2569 -> found: potência | potencia = membro.get("Potência") or membro.get("potencia") or "-"
+eventos_secretario.py:2573 -> found: número | num_fmt = f" nº {numero}" if numero else ""
+eventos_secretario.py:2581 -> found: potência | f"▪️ Potência: *{potencia}*\n"
+eventos_secretario.py:2641 -> found: secretaria/secretária | "Seu cadastro no Bode Andarilho foi validado e aprovado via Trolhamento Solidário pela secretaria de sua potência.\n\n"
+eventos_secretario.py:2688 -> found: secretaria/secretária | "Por favor, entre em contato diretamente com a secretaria da sua potência para verificar sua ficha cadastral e, em seguida, tente novamente por aqui!"
+eventos_secretario.py:2757 -> found: número | num_oficial = str(loja_oficial.get("Número da loja") or loja_oficial.get("numero") or "").strip()
+eventos_secretario.py:2884 -> found: potências | from src.potencias import formatar_potencia_exibicao
+eventos_secretario.py:2948 -> found: número | "Número da loja": str(loja_vinculada.get("Número da loja") or loja_vinculada.get("numero") or "").strip(),
+eventos_secretario.py:2949 -> found: potência | "Potência": str(loja_vinculada.get("Potência") or loja_vinculada.get("potencia") or "").strip(),
+ia_assistente.py:181 -> found: código | "regras de negocio", "como funciona por tras", "codigo fonte", "permissoes",
+ia_assistente.py:219 -> found: não | - Nao preserva frase completa.
+ia_assistente.py:390 -> found: não | f"Criar ou ampliar intencao para tema recorrente: `{topic}` ({qtd} ocorrencias nao reconhecidas)."
+ia_assistente.py:411 -> found: há | sugestoes.append("Ainda ha pouco volume para sugestoes fortes. Continue coletando interacoes reais do piloto.")
+ia_assistente.py:433 -> found: não | f"Criar ou ampliar intencao para `{topic}` e adicionar FAQ/tutorial curto ({qtd} nao reconhecidas)."
+ia_assistente.py:437 -> found: não | f"Revisar gatilhos e ajuda para `{topic}` ({qtd} nao reconhecidas)."
+ia_assistente.py:639 -> found: não | palavras_frustracao = ["bosta", "merda", "lixo", "burro", "nao funciona", "ruim", "porcaria", "caralho", "porra", "inferno"]
+ia_assistente.py:680 -> found: informação | action_value=item.acao_valor if item.acao_tipo == "callback" else "informacao",
+ia_assistente.py:764 -> found: potência | f_potencia = entities.get("potencia")
+ia_assistente.py:1275 -> found: potência | context.user_data["novo_evento_potencia"] = entities.get("potencia", "")
+ia_assistente.py:1281 -> found: não, ágape | agape = entities.get("agape", "nao")
+ia_assistente.py:1282 -> found: ágape | context.user_data["novo_evento_agape"] = agape
+ia_assistente.py:1287 -> found: não | context.user_data["novo_evento_observacoes_tem"] = "sim" if obs else "nao"
+ia_multinivel.py:107 -> found: próximo, próxima | if "proxima" in t or "proximo" in t:
+ia_multinivel.py:215 -> found: ágape | if "sem agape" in t or "sem ágape" in t:
+ia_multinivel.py:216 -> found: não | return ("nao", "")
+ia_multinivel.py:217 -> found: ágape | if "agape pago" in t or "ágape pago" in t:
+ia_multinivel.py:219 -> found: ágape | if "agape gratuito" in t or "ágape gratuito" in t:
+ia_multinivel.py:221 -> found: ágape | if "com agape" in t or "com ágape" in t:
+ia_multinivel.py:238 -> found: potência | "potencia": "Potência",
+ia_multinivel.py:241 -> found: número | "numero da loja": "Número da loja",
+ia_multinivel.py:242 -> found: número | "numero loja": "Número da loja",
+ia_multinivel.py:269 -> found: irmão | # "do irmao João", "do João", "de João", "membro João"
+ia_multinivel.py:271 -> found: irmão | r"(?:do\s+irmao|do\s+ir\.|do|de|membro|irmao)\s+([A-Z][a-záéíóúãõ]+(?:\s+[A-Z][a-záéíóúãõ]+)*)",
+ia_multinivel.py:342 -> found: sessão | "criar evento", "criar sessao", "cadastrar sessao", "cadastrar evento",
+ia_multinivel.py:343 -> found: sessão | "nova sessao", "novo evento", "agendar sessao", "agendar evento",
+ia_multinivel.py:344 -> found: sessão | "publicar sessao", "marcar sessao",
+ia_multinivel.py:377 -> found: ágape | entities["agape"] = agape_tem
+ia_multinivel.py:388 -> found: potência | # Extrair campos soltos do texto: tipo_sessao, rito, potencia, traje, observacoes
+ia_multinivel.py:426 -> found: potência | entities["potencia"] = loja.get("Potência", "")
+ia_multinivel.py:449 -> found: ágape | _CAMPOS_EVENTO_OBRIGATORIOS = ["data", "hora", "nome_loja", "grau", "tipo_sessao", "agape"]
+ia_multinivel.py:467 -> found: ágape | "agape": "Tipo de Ágape",
+ia_multinivel.py:475 -> found: ágape | if len(faltantes) == 1 and faltantes[0] == "agape":
+ia_multinivel.py:498 -> found: número | numero = entities.get("numero_loja", "")
+ia_multinivel.py:499 -> found: número | num_fmt = f" {numero}" if numero and numero != "0" else ""
+ia_multinivel.py:509 -> found: ágape | if entities.get("agape"):
+ia_multinivel.py:510 -> found: ágape | agape_txt = "Sim" if entities["agape"] == "sim" else "Não"
+ia_multinivel.py:518 -> found: número | numero = entities.get("numero_loja", "")
+ia_multinivel.py:519 -> found: número | num_fmt = f" {numero}" if numero and numero != "0" else ""
+ia_multinivel.py:521 -> found: ágape | if entities.get("agape") == "sim":
+ia_multinivel.py:534 -> found: potência | f"⚜️ *Potência:* {entities.get('potencia', '')}",
+ia_multinivel.py:572 -> found: sessão | "sessao magna": "Magna", "magna": "Magna",
+ia_multinivel.py:573 -> found: sessão | "sessao ordinaria": "Ordinária", "ordinaria": "Ordinária",
+ia_multinivel.py:574 -> found: sessão | "sessao extraordinaria": "Extraordinária", "extraordinaria": "Extraordinária",
+ia_multinivel.py:575 -> found: sessão | "sessao branca": "Branca", "branca": "Branca",
+ia_multinivel.py:576 -> found: sessão | "sessao funebre": "Fúnebre", "funebre": "Fúnebre",
+ia_multinivel.py:607 -> found: potência | "alterar potencia", "mudar potencia",
+ia_multinivel.py:611 -> found: número | "alterar numero da loja", "mudar numero da loja",
+ia_multinivel.py:702 -> found: potência | "minha loja", "meu oriente", "minha potencia", "meu rito",
+ia_multinivel.py:703 -> found: número | "meu numero", "minha data", "meu nascimento",
+ia_multinivel.py:717 -> found: secretário | (["promover secretario", "promover membro"], "admin_promover", "Vou abrir o fluxo de promoção de membro."),
+ia_multinivel.py:718 -> found: secretário | (["rebaixar secretario", "rebaixar membro"], "admin_rebaixar", "Vou abrir o fluxo de rebaixamento."),
+ia_multinivel.py:752 -> found: sessões | ["ver sessoes", "quais sessoes", "eventos da semana", "proximas sessoes",
+ia_multinivel.py:753 -> found: sessão | "proximos eventos", "tem sessao", "tem evento", "posso visitar",
+ia_multinivel.py:754 -> found: sessões | "sessoes disponiveis", "agenda", "calendario"],
+ia_multinivel.py:762 -> found: já | "historico de visitas", "ja confirmei", "confirmacoes"],
+ia_multinivel.py:778 -> found: sessão | "lembrete de sessao", "lembretes"],
+ia_multinivel.py:785 -> found: não | ["ajuda", "central de ajuda", "nao entendi", "como funciona",
+ia_multinivel.py:793 -> found: ágape | ["glossario", "o que e agape", "o que e vm", "termos",
+ia_multinivel.py:825 -> found: secretário | ["area do secretario", "painel do secretario", "menu secretario",
+ia_multinivel.py:826 -> found: secretário | "area secretario"],
+ia_multinivel.py:929 -> found: ágape | if agape_tem is not None and not entities.get("agape"):
+ia_multinivel.py:930 -> found: ágape | entities["agape"] = agape_tem
+ia_multinivel.py:1017 -> found: são | "SP": "SP", "sao paulo": "SP",
+ia_multinivel.py:1084 -> found: sessão, potência | if cid.lower() in ["mestre", "aprendiz", "companheiro", "sessao", "loja", "rito", "potencia", "segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo"]:
+ia_multinivel.py:1115 -> found: sessão, sessões | "sessao", "sessoes", "evento", "eventos", "agenda", "calendario", "trabalho", "oficina"
+ia_multinivel.py:1136 -> found: potência | potencia = _extrair_potencia(texto)
+ia_multinivel.py:1148 -> found: potência | if potencia:
+ia_multinivel.py:1149 -> found: potência | entities["potencia"] = potencia
+ia_multinivel.py:1157 -> found: potência | if potencia: filtros.append(f"potência {potencia}")
+lembretes.py:99 -> found: confirmado | 4. Envia mensagem personalizada para cada confirmado
+lembretes.py:118 -> found: horário | horario = evento.get("Hora", "")
+lembretes.py:122 -> found: ágape | agape = evento.get("Ágape", "")
+lembretes.py:151 -> found: horário | horario=horario,
+lembretes.py:155 -> found: ágape | agape=agape,
+lembretes.py:171 -> found: secretário | secretario = buscar_membro(secretario_id)
+lembretes.py:172 -> found: secretário | if secretario:
+lembretes.py:173 -> found: secretário | nome_secretario = secretario.get("Nome", "")
+lembretes.py:182 -> found: horário | horario=horario,
+lembretes.py:186 -> found: ágape | agape=agape,
+lembretes.py:238 -> found: horário | horario = evento.get("Hora", "")
+lembretes.py:267 -> found: número | numero=numero_fmt,
+lembretes.py:269 -> found: horário | horario=horario,
+lembretes.py:284 -> found: secretário | secretario = buscar_membro(secretario_id)
+lembretes.py:285 -> found: secretário | if secretario:
+lembretes.py:286 -> found: secretário | nome_secretario = secretario.get("Nome", "")
+lembretes.py:292 -> found: número | numero=numero_fmt,
+lembretes.py:294 -> found: horário | horario=horario,
+lojas.py:52 -> found: potência, número | NOME, NUMERO, ORIENTE, RITO, POTENCIA, ENDERECO, RESPONSAVEL, CONFIRMAR, TEMPLATE_ESCOLHER, TEMPLATE_UPLOAD = range(10)
+lojas.py:99 -> found: número | f"*Número:* {dados.get('numero', '')}\n"
+lojas.py:102 -> found: potência | f"*Potência:* {dados.get('potencia', '')}\n"
+lojas.py:257 -> found: número | numero = loja.get("Número", "")
+lojas.py:258 -> found: número | rotulo = f"👥 {nome}{' ' + str(numero) if numero and str(numero) != '0' else ''}"
+lojas.py:309 -> found: número | numero = loja.get("Número", "")
+lojas.py:310 -> found: número | cabecalho = f"🏛 *{nome}*{' ' + str(numero) if numero and str(numero) != '0' else ''}"
+lojas.py:371 -> found: número | numero = loja.get('Número', '')
+lojas.py:372 -> found: número | identificacao = f"{nome} {numero}".strip()
+lojas.py:507 -> found: número | numero = loja.get("Número", "")
+lojas.py:508 -> found: número | botoes.append([InlineKeyboardButton(f"🖼 {nome}{' ' + str(numero) if numero else ''}", callback_data=f"loja_template|{i}")])
+lojas.py:701 -> found: número | return NUMERO
+lojas.py:706 -> found: número | numero = update.message.text.strip()
+lojas.py:707 -> found: número | if not numero.isdigit() and numero != "0":
+lojas.py:709 -> found: número | return NUMERO
+lojas.py:711 -> found: número | context.user_data["nova_loja"]["numero"] = numero
+lojas.py:759 -> found: potência | return POTENCIA
+lojas.py:764 -> found: potência | potencia = update.message.text.strip()
+lojas.py:765 -> found: potência | if len(potencia) < 2:
+lojas.py:767 -> found: potência | return POTENCIA
+lojas.py:769 -> found: potência | context.user_data["nova_loja"]["potencia"] = potencia
+lojas.py:904 -> found: número | loja = buscar_loja_por_nome_numero(dados.get("nome", ""), dados.get("numero", ""))
+lojas.py:970 -> found: número | NUMERO: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_numero_loja)],
+lojas.py:973 -> found: potência | POTENCIA: [MessageHandler(filters.TEXT & ~filters.COMMAND, receber_potencia)],
+messages.py:94 -> found: horário | "Ir.·., passando para lembrar de sua presença confirmada amanhã ({data}) às {horario} na Loja {loja}. "
+messages.py:102 -> found: horário | "Hoje é dia de trabalho! Sua presença está confirmada para as {horario} na Loja {loja}. "
+messages.py:112 -> found: horário | "🕐 *Horário:* {horario}\n"
+messages.py:122 -> found: número | "🏛 *Loja {loja} nº {numero}*\n"
+messages.py:124 -> found: horário | "🕕 {horario}\n\n"
+messages.py:137 -> found: ágape | "🍽 *Participação no Ágape:* {agape}\n"
+messages.py:250 -> found: secretaria/secretária | "_Isso garante informações atuais para administração e secretaria._"
+messages.py:408 -> found: confirmado | # [CONTEXTO] Membro já confirmado; exibido no fluxo pós-cadastro
+messages.py:410 -> found: confirmado | CONFIRMACAO_JA_CONFIRMADO_POS_CADASTRO = "Você já estava confirmado para esta sessão."
+messages.py:420 -> found: horário | #            {nome},{data},{loja},{numero_fmt},{horario},{participacao},{bloco_importancia}
+messages.py:426 -> found: horário | "🕕 Horário: {horario}\n"
+messages.py:433 -> found: horário | #            {nome},{data},{loja},{numero_fmt},{horario},{participacao},{msg_agape}
+messages.py:437 -> found: horário | "📅 {data} às {horario}\n\n"
+messages.py:443 -> found: horário | #            {nome},{data},{loja},{numero_fmt},{horario},{participacao}
+messages.py:447 -> found: horário | "📅 {data} às {horario}\n\n"
+miniapp.py:66 -> found: potências | from src.potencias import (
+miniapp.py:167 -> found: potência | payload.get("potencia"),
+miniapp.py:170 -> found: potência | payload["potencia"] = principal
+miniapp.py:178 -> found: potência | dados.get("potencia"),
+miniapp.py:186 -> found: potência | potencia = _potencia_resumo(dados)
+miniapp.py:196 -> found: potência | f"*Potência local:* {_escape_md(potencia or '')}\n"
+miniapp.py:216 -> found: número | f"*Número:* {_escape_md(dados.get('numero', '0'))}\n"
+miniapp.py:293 -> found: potência | "potencia": _norm_text(body.get("potencia"))[:200],
+miniapp.py:299 -> found: potência | if not all([dados["nome"], dados["data_nasc"], dados["grau"], dados["mi"], dados["vm"], dados["loja"], dados["oriente"], dados["potencia"]]):
+miniapp.py:311 -> found: potência | if not validar_potencia(dados["potencia"], dados.get("potencia_complemento")):
+miniapp.py:317 -> found: potência | potencia, potencia_complemento = normalizar_potencia(dados.get("potencia"), dados.get("potencia_complemento"))
+miniapp.py:342 -> found: potência | "Potência": potencia,
+miniapp.py:367 -> found: potência | draft["potencia"] = user_data.get("cadastro_potencia", "")
+miniapp.py:374 -> found: potência | draft["potencia"] = user_data.get("cadastro_potencia", "")
+miniapp.py:434 -> found: secretário | logger.warning("Erro ao notificar admin de secretario pendente via Mini App: %s", e_notif)
+miniapp.py:504 -> found: número | "numero": _norm_text(body.get("numero") or "0")[:10],
+miniapp.py:508 -> found: potência | "potencia": _norm_text(body.get("potencia"))[:200],
+miniapp.py:518 -> found: potência | if not all([dados["nome"], dados["oriente"], dados["rito"], dados["potencia"], dados["endereco"]]):
+miniapp.py:524 -> found: potência | if not validar_potencia(dados["potencia"], dados.get("potencia_complemento")):
+miniapp.py:533 -> found: número | "numero": dados["numero"],
+miniapp.py:536 -> found: potência | "potencia": dados["potencia"],
+miniapp.py:590 -> found: secretário | secretario = next((sec for sec in (listar_secretarios_ativos() or []) if _norm_text(sec.get("telegram_id")) == secretario_id), None)
+miniapp.py:592 -> found: secretário | dados["secretario_responsavel_nome"] = _norm_text((secretario or {}).get("nome")) or secretario_id
+miniapp.py:644 -> found: número | dados.get("numero", ""),
+miniapp.py:645 -> found: potência | dados.get("potencia", "")
+miniapp.py:672 -> found: horário | "horario": _norm_text(body.get("horario"))[:5],
+miniapp.py:678 -> found: ágape | "agape": _norm_text(body.get("agape"))[:50],
+miniapp.py:685 -> found: potência | "potencia": _norm_text(body.get("potencia"))[:200],
+miniapp.py:702 -> found: potência | ("potencia", "potência principal"),
+miniapp.py:718 -> found: horário | dados["data"], dados["horario"], dados["grau"], dados["tipo_sessao"],
+miniapp.py:719 -> found: ágape | dados["traje"], dados["agape"], dados["nome_loja"], dados["oriente"],
+miniapp.py:720 -> found: potência | dados["rito"], dados["potencia"], dados["endereco"],
+miniapp.py:741 -> found: potência | if not validar_potencia(dados["potencia"], dados.get("potencia_complemento")):
+miniapp.py:751 -> found: potência | potencia, potencia_complemento = normalizar_potencia(dados.get("potencia"), dados.get("potencia_complemento"))
+miniapp.py:756 -> found: horário | "Hora": dados["horario"],
+miniapp.py:763 -> found: potência | "Potência": potencia,
+miniapp.py:766 -> found: ágape | "Ágape": dados["agape"],
+miniapp.py:785 -> found: número | "numero_loja": _norm_text(loja.get("Número") or loja.get("numero") or "0"),
+miniapp.py:788 -> found: potência | "potencia": _norm_text(loja.get("Potência") or loja.get("potencia")),
+miniapp.py:833 -> found: horário | f"{dados.get('data', '')} ({dia_semana}) • {dados.get('horario', '')}" if dia_semana else f"{dados.get('data', '')} • {dados.get('horario', '')}",
+miniapp.py:838 -> found: potência | f"{dados.get('oriente', '')} - {dados.get('potencia', '')}",
+miniapp.py:844 -> found: ágape | f"Ágape: {dados.get('agape', '')}",
+miniapp.py:898 -> found: potência | "Potência": "potencia",
+miniapp.py:965 -> found: secretário | secretario = next((sec for sec in (listar_secretarios_ativos() or []) if _norm_text(sec.get("telegram_id")) == secretario_id), None)
+miniapp.py:967 -> found: secretário | dados["secretario_responsavel_nome"] = _norm_text((secretario or {}).get("nome")) or secretario_id
+miniapp.py:1023 -> found: número | numero = _norm_text(dados.get("numero_loja") or "0")
+miniapp.py:1029 -> found: número | and _norm_text(loja.get("Numero") or loja.get("Número") or loja.get("numero") or "0") == numero
+miniapp.py:1268 -> found: número | "numero": dados.get("numero_loja"),
+miniapp.py:1271 -> found: potência | "potencia": dados.get("potencia"),
+miniapp.py:1356 -> found: número | numero = _norm_text(dados.get("numero_loja") or "0")
+miniapp.py:1358 -> found: potência | potencia = _norm_text(dados.get("potencia"))
+miniapp.py:1363 -> found: potência | loja_potencia = _norm_text(loja.get("Potência") or loja.get("potencia"))
+miniapp.py:1367 -> found: número | and _norm_text(loja.get("Número") or "0") == numero
+miniapp.py:1369 -> found: potência | and (not potencia or loja_potencia == potencia)
+miniapp.py:1386 -> found: potência | potencia = _potencia_resumo(dados)
+miniapp.py:1390 -> found: horário | f"*Horário:* {_escape_md(dados.get('horario', ''))}\n"
+miniapp.py:1394 -> found: ágape | f"*Ágape:* {_escape_md(dados.get('agape', ''))}\n"
+miniapp.py:1399 -> found: potência | f"*Potência local:* {_escape_md(potencia or '')}\n"
+miniapp.py:1413 -> found: potência | potencia = _potencia_resumo(dados)
+miniapp.py:1418 -> found: horário | f"Horário: {dados.get('horario', '')}",
+miniapp.py:1422 -> found: ágape | f"Ágape: {dados.get('agape', '')}",
+miniapp.py:1427 -> found: potência | f"Potência local: {potencia or ''}",
+miniapp.py:1852 -> found: potência | <label for="potencia">Potência *</label>
+miniapp.py:1853 -> found: potência | <select id="potencia">
+miniapp.py:1877 -> found: potência | wrap.style.display=['GOB','CMSB','COMAB'].includes(val('potencia'))?'block':'none';
+miniapp.py:1878 -> found: potência | if(!['GOB','CMSB','COMAB'].includes(val('potencia')))clearErr('potencia_outra');
+miniapp.py:1891 -> found: número | if(loja.numero)document.getElementById('numero_loja').value=loja.numero;
+miniapp.py:1893 -> found: potência | if(loja.potencia){
+miniapp.py:1894 -> found: potência | const select=document.getElementById('potencia');
+miniapp.py:1895 -> found: potência | const existe=Array.from(select.options).some(o=>o.value===loja.potencia);
+miniapp.py:1896 -> found: potência | select.value=existe?loja.potencia:'';
+miniapp.py:1913 -> found: potência | ok=req('potencia','Potência principal')&&ok;
+miniapp.py:1924 -> found: potência | document.getElementById('potencia').addEventListener('change',syncPotenciaOutra);
+miniapp.py:1926 -> found: potência | ['loja','numero_loja','oriente','potencia','potencia_outra'].forEach((id)=>{
+miniapp.py:1960 -> found: potência | potencia:val('potencia'),
+miniapp.py:1984 -> found: número | o.textContent=l.nome+(l.numero&&l.numero!=='0'?' '+l.numero:'');
+miniapp.py:2007 -> found: potência | if(j.draft.potencia)document.getElementById('potencia').value=j.draft.potencia;
+miniapp.py:2019 -> found: potência | document.getElementById('potencia').style.pointerEvents = 'none';
+miniapp.py:2020 -> found: potência | document.getElementById('potencia').style.opacity = '0.7';
+miniapp.py:2023 -> found: potência | const potVal = document.getElementById('potencia') ? document.getElementById('potencia').value : '';
+miniapp.py:2054 -> found: número | <label for="numero">Número <span class="info">(0 se não houver)</span></label>
+miniapp.py:2055 -> found: número | <input id="numero" type="text" value="0" inputmode="numeric" maxlength="8">
+miniapp.py:2084 -> found: potência | <label for="potencia">Potência *</label>
+miniapp.py:2085 -> found: potência | <select id="potencia">
+miniapp.py:2142 -> found: potência | ok=req('potencia','Potência principal')&&ok;
+miniapp.py:2154 -> found: potência | if(wrap)wrap.style.display=val('potencia')?'block':'none';
+miniapp.py:2156 -> found: potência | document.getElementById('potencia').addEventListener('change',syncPotenciaComplemento);
+miniapp.py:2173 -> found: número | numero:val('numero')||'0',
+miniapp.py:2177 -> found: potência | potencia:val('potencia'),
+miniapp.py:2199 -> found: número | if(j.draft.numero)document.getElementById('numero').value=j.draft.numero;
+miniapp.py:2202 -> found: potência | if(j.draft.potencia)document.getElementById('potencia').value=j.draft.potencia;
+miniapp.py:2232 -> found: horário | <label for="horario">Horário *</label>
+miniapp.py:2233 -> found: horário | <input id="horario" type="time" value="19:30">
+miniapp.py:2273 -> found: ágape | <label for="agape">Ágape *</label>
+miniapp.py:2274 -> found: ágape | <select id="agape">
+miniapp.py:2276 -> found: não | <option value="Nao">Não haverá ágape</option>
+miniapp.py:2342 -> found: potência | <label for="potencia">Potência *</label>
+miniapp.py:2343 -> found: potência | <select id="potencia">
+miniapp.py:2415 -> found: potência | ['nome_loja','numero_loja','oriente','rito','rito_outro','potencia','potencia_outra'].forEach(id=>{
+miniapp.py:2420 -> found: potência | const potVal = document.getElementById('potencia') ? document.getElementById('potencia').value : '';
+miniapp.py:2436 -> found: potência | ['nome_loja','oriente','rito','rito_outro','potencia','potencia_outra'].forEach(id=>{
+miniapp.py:2442 -> found: potência | syncOutro('potencia','potencia_outra_wrap','potencia_outra','');
+miniapp.py:2471 -> found: número | o.textContent=l.nome+(l.numero&&l.numero!=='0'?' '+l.numero:'');
+miniapp.py:2489 -> found: horário | if(jDraft.draft.horario)document.getElementById('horario').value=jDraft.draft.horario;
+miniapp.py:2493 -> found: ágape | if(jDraft.draft.agape)document.getElementById('agape').value=jDraft.draft.agape;
+miniapp.py:2499 -> found: potência | if(jDraft.draft.potencia)document.getElementById('potencia').value=jDraft.draft.potencia;
+miniapp.py:2501 -> found: potência | syncOutro('potencia','potencia_outra_wrap','potencia_outra','');
+miniapp.py:2535 -> found: número | if(l.numero)document.getElementById('numero_loja').value=l.numero;
+miniapp.py:2538 -> found: potência | if(l.potencia)document.getElementById('potencia').value=l.potencia;
+miniapp.py:2540 -> found: potência | syncOutro('potencia','potencia_outra_wrap','potencia_outra','');
+miniapp.py:2548 -> found: potência | document.getElementById('potencia').addEventListener('change',()=>syncOutro('potencia','potencia_outra_wrap','potencia_outra',''));
+miniapp.py:2552 -> found: potência | syncOutro('potencia','potencia_outra_wrap','potencia_outra','');
+miniapp.py:2569 -> found: horário | ok=req('horario','Horário')&&ok;
+miniapp.py:2575 -> found: ágape | ok=req('agape','Ágape')&&ok;
+miniapp.py:2580 -> found: potência | ok=req('potencia','Potência principal')&&ok;
+miniapp.py:2605 -> found: horário | horario:val('horario'),
+miniapp.py:2611 -> found: ágape | agape:val('agape'),
+miniapp.py:2618 -> found: potência | potencia:val('potencia'),
+miniapp.py:2753 -> found: não | return None, JSONResponse({"ok": False, "error": "Nao autorizado."}, status_code=403)
+miniapp.py:3188 -> found: número | "numero":   str(lj.get("Número") or "0"),
+miniapp.py:3191 -> found: potência | "potencia": lj.get("Potência", ""),
+miniapp.py:3240 -> found: potência | potencia, potencia_complemento = normalizar_potencia(
+miniapp.py:3241 -> found: potência | (body.get("potencia") or "").strip()[:200],
+miniapp.py:3245 -> found: potência | if not all([nome, data_nasc, grau, vm, loja, oriente, potencia]):
+miniapp.py:3247 -> found: potência | if not validar_potencia(potencia, potencia_complemento):
+miniapp.py:3285 -> found: potência | "Potência":           potencia,
+miniapp.py:3303 -> found: secretário | logger.warning("Erro ao notificar admin de secretario pendente via API: %s", e_notif)
+miniapp.py:3350 -> found: número | numero   = (body.get("numero")   or "0").strip()[:10]
+miniapp.py:3357 -> found: potência | potencia, potencia_complemento = normalizar_potencia(
+miniapp.py:3358 -> found: potência | (body.get("potencia") or "").strip()[:200],
+miniapp.py:3363 -> found: potência | if not all([nome, oriente, rito, potencia, endereco]):
+miniapp.py:3365 -> found: potência | if not validar_potencia(potencia, potencia_complemento):
+miniapp.py:3370 -> found: número | "numero":   numero,
+miniapp.py:3373 -> found: potência | "potencia": potencia,
+miniapp.py:3426 -> found: horário | horario     = (body.get("horario")    or "").strip()[:5]
+miniapp.py:3430 -> found: ágape | agape       = (body.get("agape")      or "").strip()[:50]
+miniapp.py:3440 -> found: potência | potencia, potencia_complemento = normalizar_potencia(
+miniapp.py:3441 -> found: potência | (body.get("potencia") or "").strip()[:200],
+miniapp.py:3446 -> found: potência, horário, ágape | if not all([data_str, horario, grau, tipo_sessao, traje, agape, nome_loja, oriente, rito, potencia, endereco]):
+miniapp.py:3448 -> found: potência | if not validar_potencia(potencia, potencia_complemento):
+miniapp.py:3464 -> found: horário | "Hora":                        horario,
+miniapp.py:3471 -> found: potência | "Potência":                    potencia,
+miniapp.py:3474 -> found: ágape | "Ágape":                       agape,
+notificacoes_coletivas.py:7 -> found: potências | from src.potencias import formatar_potencia_exibicao
+notificacoes_coletivas.py:35 -> found: não | logger.warning("Nenhum GRUPO_PRINCIPAL_ID configurado. O Card nao pode ser enviado.")
+notificacoes_coletivas.py:66 -> found: número | num = str(dados_loja.get("numero") or dados_loja.get("Número da loja") or "").strip()
+notificacoes_coletivas.py:68 -> found: potência | pot = str(dados_loja.get("potencia") or dados_loja.get("Potência") or "").strip().upper()
+notificacoes_coletivas.py:88 -> found: potência | potencia=pot.lower(),
+notificacoes_coletivas.py:114 -> found: potência | potencia=pot.lower(),
+notificacoes_coletivas.py:132 -> found: potência | potencia=pot.lower(),
+notificacoes_coletivas.py:171 -> found: potência | potencia="gob", # Default watermark
+notificacoes_coletivas.py:196 -> found: já | return # Ja rodou anteriormente
+notificacoes_coletivas.py:215 -> found: potência | pot = str(l.get("Potência") or l.get("potencia") or "").strip().upper()
+notificacoes_coletivas.py:269 -> found: potência | potencia="gob",
+perfil.py:26 -> found: potências | from src.potencias import formatar_potencia_exibicao
+perfil.py:97 -> found: potência | potencia = membro.get("Potência") or membro.get("potencia") or "Não informado"
+perfil.py:118 -> found: potência | f"*Potência:* {potencia}\n"
+potencias.py:40 -> found: potência | def normalizar_potencia(potencia: Any, complemento: Any = "") -> Tuple[str, str]:
+potencias.py:41 -> found: potência | principal = _norm(potencia).upper()
+potencias.py:49 -> found: potência | return "GOB", comp or _norm(potencia).upper()
+potencias.py:59 -> found: potência | return "CMSB", comp or _norm(potencia).upper()
+potencias.py:63 -> found: potência | return "COMAB", comp or _norm(potencia).upper()
+potencias.py:68 -> found: potência | def potencia_requer_complemento(potencia: Any) -> bool:
+potencias.py:69 -> found: potência | principal, _ = normalizar_potencia(potencia)
+potencias.py:73 -> found: potência | def validar_potencia(potencia: Any, complemento: Any = "") -> bool:
+potencias.py:74 -> found: potência | principal, comp = normalizar_potencia(potencia, complemento)
+potencias.py:80 -> found: potência | def formatar_potencia_exibicao(potencia: Any, complemento: Any = "", modo: str = "local") -> str:
+potencias.py:86 -> found: potência | principal, comp = normalizar_potencia(potencia, complemento)
+potencias.py:89 -> found: não | if comp and comp not in {"-", "N/A", "NA", "NÃO SE APLICA", "NAO SE APLICA"}:
+potencias.py:96 -> found: potência | def formatar_potencia(potencia: Any, complemento: Any = "") -> str:
+potencias.py:97 -> found: potência | return formatar_potencia_exibicao(potencia, complemento, modo="local")
+potencias.py:102 -> found: potência | dados.get("Potência") or dados.get("PotÃªncia") or dados.get("potencia"),
+render_cards.py:17 -> found: potências | from src.potencias import formatar_potencia_exibicao
+render_cards.py:26 -> found: potências | DEFAULT_POTENCIA_DIR = Path(__file__).resolve().parent.parent / "assets" / "potencias"
+render_cards.py:31 -> found: potência | "potencia": "#4f6f35",
+render_cards.py:320 -> found: número | numero = _norm(evento.get("Número da loja"))
+render_cards.py:321 -> found: número | numero_fmt = f" {numero}" if numero and numero != "0" else ""
+render_cards.py:367 -> found: potência | (("Potência", "potencia"), "POTÊNCIA"),
+render_cards.py:403 -> found: potência | kind = "grau" if label == "GRAU" else "rito" if label == "RITO" else "potencia"
+render_cards.py:407 -> found: potência | "potencia": ("Cor selo potência", "Cor selo potência", "cor_selo_potencia"),
+render_cards.py:438 -> found: potência | def _potencia_stamp_path(potencia: str) -> Optional[Path]:
+render_cards.py:439 -> found: potência | slug = _slug_text(potencia)
+render_cards.py:553 -> found: potência | elif process_type == "potencia":
+render_cards.py:593 -> found: potência | potencia: str,
+render_cards.py:597 -> found: potência | path = _potencia_stamp_path(potencia)
+render_cards.py:601 -> found: potência | stamp = _get_processed_image(path, "potencia")
+render_cards.py:629 -> found: potência | logger.warning("Falha ao aplicar selo de potencia '%s': %s", potencia, exc)
+render_cards.py:634 -> found: número | numero = _norm(_get_any(evento, "Numero da loja", "Número da loja", "numero_loja", "numero"))
+render_cards.py:635 -> found: número | numero_fmt = f" {numero}" if numero and numero != "0" else ""
+render_cards.py:639 -> found: potência | potencia = _norm(_get_any(evento, "Potencia", "Potência", "potencia"))
+render_cards.py:640 -> found: potência | potencia_complemento = _norm(_get_any(evento, "Potencia complemento", "Potência complemento", "potencia_complemento"))
+render_cards.py:641 -> found: potência | potencia_display = formatar_potencia_exibicao(potencia, potencia_complemento)
+render_cards.py:660 -> found: número | "numero": numero,
+render_cards.py:662 -> found: potência | "potencia": potencia,
+render_cards.py:664 -> found: sessão | "tipo": _norm(_get_any(evento, "Sessao", "Sessão", "Tipo de sessao", "Tipo de sessão", "tipo_sessao", "tipo_evento")),
+render_cards.py:667 -> found: ágape | "agape": _norm(_get_any(evento, "Agape", "Ágape", "agape")),
+render_cards.py:746 -> found: número | numero: str,
+render_cards.py:754 -> found: número | if numero and loja.endswith(f" {numero}"):
+render_cards.py:755 -> found: número | prefix = loja[: -len(numero)]
+render_cards.py:756 -> found: número | return _draw_centered_highlight_tail(draw, center_x, y, prefix, numero, font, font, fill, highlight)
+render_cards.py:837 -> found: potência | parts["potencia"],
+render_cards.py:873 -> found: número | y = _draw_loja_name(draw, parts["loja"], parts["numero"], center_x, y, int(content_w * 0.96), loja_font, ink, accent)
+render_cards.py:882 -> found: sessão | if not _slug_text(tipo).startswith("sessao"):
+render_cards.py:889 -> found: ágape | if parts["agape"]:
+render_cards.py:890 -> found: ágape | agape = parts["agape"]
+render_cards.py:891 -> found: não, ágape | if _slug_text(agape) in {"nao", "nao_ha", "sem", "sem_agape"}:
+render_cards.py:892 -> found: ágape | agape = "Sem Ágape"
+render_cards.py:893 -> found: ágape | elif not _slug_text(agape).startswith("agape"):
+render_cards.py:894 -> found: ágape | agape = f"Ágape {agape}"
+render_cards.py:895 -> found: ágape | details.append((agape, ink))
+render_cards.py:963 -> found: potência | kind = ("grau", "rito", "potencia")[min(idx, 2)]
+render_cards.py:967 -> found: potência | "potencia": "Cor selo potência",
+render_diploma.py:13 -> found: potências | from src.potencias import formatar_potencia_exibicao
+render_diploma.py:100 -> found: não | return "Nao informada"
+render_diploma.py:122 -> found: não | val = str(value or "Nao informado").strip()
+render_diploma.py:155 -> found: não | logger.warning("Template %s nao encontrado. Usando fundo simples.", path)
+render_diploma.py:273 -> found: não | loja = _value(membro, "Loja", "loja", default="Oficina nao informada")
+render_diploma.py:274 -> found: número | numero = _value(membro, "Número da loja", "Numero da loja", "numero_loja")
+render_diploma.py:275 -> found: não | oriente = _value(membro, "Oriente", "oriente", "Cidade", "cidade", default="Oriente nao informado")
+render_diploma.py:276 -> found: não, potência | potencia = _value(membro, "Potência", "potencia", default="Nao informada")
+render_diploma.py:278 -> found: potência | potencia_display = formatar_potencia_exibicao(potencia, potencia_comp)
+render_diploma.py:280 -> found: não | vm = _value(membro, "Venerável Mestre", "veneravel_mestre", "vm", default="Nao")
+render_diploma.py:281 -> found: não | mi = _value(membro, "Mestre Instalado", "mestre_instalado", "mi", default="Nao")
+render_diploma.py:284 -> found: número | loja_texto = f"{loja}, nº {numero}" if numero and numero != "0" else loja
+render_diploma.py:286 -> found: já | # A capa real ja traz a identidade visual. Os dados entram no espaco livre inferior.
+render_marcos.py:15 -> found: potências | POTENCIAS_DIR = ASSETS_DIR / "potencias"
+render_marcos.py:66 -> found: potência | potencia: Optional[str] = None,
+render_marcos.py:74 -> found: não | # Fallback para o diploma caso o asset premium nao esteja carregado
+scheduler.py:147 -> found: horário | """Job horario que verifica marcos cumulativos globais e dispara o card correspondente."""
+scheduler.py:152 -> found: horário | logger.error("Erro no job horario de mobilizacao coletiva: %s", e)
+scheduler.py:225 -> found: secretário | gerando o card oficial de vigor e enviando ao Secretario Responsavel.
+scheduler.py:242 -> found: secretário | sec_id_str = loja.get("Telegram ID do secretario responsavel") or loja.get("secretario_responsavel_id")
+scheduler.py:265 -> found: secretário | f"Saudacoes Ir.·. Secretario! Consolidamos o Livro de Arquitetura e apresentamos o **Card de Vigor Oficial** referente ao fechamento do mes anterior.\n\n"
+scheduler.py:372 -> found: horário | # --- JOB HERALDO: MONITORAMENTO DE MOBILIZACAO HORARIO ---
+sheets_supabase.py:145 -> found: ágape | "agape": _norm_text(item.get("agape")),
+sheets_supabase.py:183 -> found: potência | "Potência":           "potencia",
+sheets_supabase.py:212 -> found: potência | "Potência":                     "potencia",
+sheets_supabase.py:215 -> found: ágape | "Ágape":                        "agape",
+sheets_supabase.py:247 -> found: potência | "Potência":         "potencia",
+sheets_supabase.py:249 -> found: ágape | "Ágape":            "agape",
+sheets_supabase.py:261 -> found: número | "Número":        "numero",
+sheets_supabase.py:263 -> found: potência | "Potência":      "potencia",
+sheets_supabase.py:281 -> found: número | "numero":       "Número",
+sheets_supabase.py:283 -> found: potência | "potencia":     "Potência",
+sheets_supabase.py:651 -> found: potência | "potencia":       _norm_text(dados.get("Potência") or dados.get("potencia")),
+sheets_supabase.py:710 -> found: potência | "potencia":       "Potência",
+sheets_supabase.py:955 -> found: potência | "potencia":         _norm_text(dados.get("potencia") or dados.get("Potência")),
+sheets_supabase.py:959 -> found: ágape | "agape":            _norm_text(dados.get("agape") or dados.get("Ágape")),
+sheets_supabase.py:1329 -> found: potência | def buscar_loja_por_nome_numero(nome_loja: Any, numero_loja: Any, potencia: Any = None) -> Optional[Dict[str, Any]]:
+sheets_supabase.py:1330 -> found: potência | """Busca uma loja pela chave composta (nome, número, potencia opcional)."""
+sheets_supabase.py:1332 -> found: número | numero = _norm_text(numero_loja)
+sheets_supabase.py:1333 -> found: potência | pot = _norm_text(potencia) if potencia else None
+sheets_supabase.py:1341 -> found: número | .eq("numero", numero)
+sheets_supabase.py:1344 -> found: potência | query = query.eq("potencia", pot)
+sheets_supabase.py:1351 -> found: potência, número | logger.error("Erro ao buscar loja por nome/número/potencia (%s/%s/%s): %s", nome, numero, pot, e)
+sheets_supabase.py:1410 -> found: potências | from src.potencias import normalizar_potencia
+sheets_supabase.py:1412 -> found: potência | dados.get("potencia", ""),
+sheets_supabase.py:1429 -> found: número | "numero": _norm_text(dados.get("numero", "")),
+sheets_supabase.py:1432 -> found: potência | "potencia": pot_principal,
+sheets_supabase.py:1555 -> found: número | if _norm_text(row.get("numero")) != _norm_text(loja.get("Número", "")):
+sheets_supabase.py:1644 -> found: ágape | "agape": _norm_text(item.get("agape")),
+sheets_supabase.py:1669 -> found: ágape | .select("id,secretario_id,nome,data_sessao,loja,agape,criado_em")
+sheets_supabase.py:1684 -> found: ágape | "agape": _norm_text(row.get("agape")),
+sheets_supabase.py:2142 -> found: secretaria/secretária | """Realiza a transmissão do bastão da secretaria de forma atômica."""
+sheets_supabase.py:2167 -> found: secretaria/secretária | logger.error("Falha transacional ao transferir secretaria de %s para %s: %s", old_tid, new_tid, e)
+sheets_supabase.py:2618 -> found: potência | logger.error("Erro ao buscar auditores por potencia %s: %s", potencia_complemento, e)
+sheets_supabase.py:2638 -> found: potência | def is_first_of_potencia(potencia: str, potencia_comp: str) -> bool:
+sheets_supabase.py:2641 -> found: potência | pot = str(potencia).strip().upper()
+sheets_supabase.py:2645 -> found: potência | query = query.ilike("potencia", pot)
+sheets_supabase.py:2656 -> found: potência | logger.error("Erro ao verificar primeira loja da potencia: %s", e)
+sheets_supabase.py:2662 -> found: secretaria/secretária | Calcula os indices de vigor administrativo da Secretaria:
+sheets_supabase.py:2663 -> found: sessões | 1. Vigor de Agenda: Media de dias de antecedencia na criacao de sessoes.
+sheets_supabase.py:2680 -> found: até, próximo | # Janela movel dos ultimos 30 dias ate o futuro proximo
+sheets_supabase.py:2775 -> found: número | resp_loja = supabase.table("lojas").select("nome_loja, numero").eq("id", lid_str).limit(1).execute()
+sheets_supabase.py:2778 -> found: número | loja_num = resp_loja.data[0].get("numero") or ""
+faq.py:118 -> found: secretaria/secretária | "Ao auditar um candidato, você tem duas opções de recusa amigável: 1) 'Recusar por Inconsistência' (caso haja divergências cadastrais na Potência, enviando uma mensagem orientando o irmão a verificar os dados diretamente com a secretaria da Potência) e 2) 'Recusar por Dados Não Localizados' (caso suspeite de erro de digitação de loja ou número, orientando o irmão a refazer o cadastro).",
+nivel2.py:49 -> found: secretaria/secretária | " 2. *Recusar por Inconsistência:* Se houver divergências com os registros oficiais da potência. O bot envia uma mensagem orientando o irmão a entrar em contato com a secretaria da potência regional.\n"

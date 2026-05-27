@@ -1016,6 +1016,8 @@ async def shutdown(server, telegram_app: Application):
 
 async def main():
     """Função principal que inicia o bot e o servidor webhook."""
+    from src.telegram_sender import patch_telegram_bot_classes
+    patch_telegram_bot_classes()
 
     token = _require_env("TELEGRAM_TOKEN", _clean_env_text(TOKEN))
     render_url = _require_env("RENDER_EXTERNAL_URL", _clean_env_text(RENDER_URL))

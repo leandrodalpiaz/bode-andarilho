@@ -1398,8 +1398,10 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
             if not loja:
                 l_nome = membro.get("Loja") or membro.get("loja")
                 l_num = membro.get("Número da loja") or membro.get("numero_loja")
+                l_pot = membro.get("Potência") or membro.get("potencia")
                 if l_nome:
-                    loja = buscar_loja_por_nome_numero(l_nome, l_num)
+                    # TODO (Fase de Otimização de Queries): Substituir busca por texto por pesquisa simples utilizando a Foreign Key loja_id (UUID).
+                    loja = buscar_loja_por_nome_numero(l_nome, l_num, l_pot)
             if loja:
                 uf_origem = str(loja.get("Estado UF") or loja.get("estado_uf") or "").strip().upper()
                 
@@ -1926,7 +1928,12 @@ async def iniciar_confirmacao_presenca(update: Update, context: ContextTypes.DEF
             "id_evento": id_evento,
             "tipo_agape": tipo_agape
         }
-        teclado = InlineKeyboardMarkup([[InlineKeyboardButton("📝 Fazer cadastro", callback_data="iniciar_cadastro")]])
+        from src.miniapp import WEBAPP_URL_MEMBRO
+        from telegram import WebAppInfo
+        if WEBAPP_URL_MEMBRO:
+            teclado = InlineKeyboardMarkup([[InlineKeyboardButton("🧾 Abrir formulário de registro", web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO))]])
+        else:
+            teclado = InlineKeyboardMarkup([[InlineKeyboardButton("📝 Fazer cadastro", callback_data="iniciar_cadastro")]])
         sucesso_privado = await _enviar_ou_editar_mensagem(
             context, user_id, TIPO_RESULTADO,
             CONFIRMACAO_SEM_CADASTRO,

@@ -74,10 +74,18 @@ async def mostrar_perfil(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not membro:
         # Usuário não tem cadastro
-        teclado = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📝 Realizar Registro", callback_data="iniciar_cadastro")],
-            [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
-        ])
+        from src.miniapp import WEBAPP_URL_MEMBRO
+        from telegram import WebAppInfo
+        if WEBAPP_URL_MEMBRO:
+            teclado = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🧾 Abrir formulário de registro", web_app=WebAppInfo(url=WEBAPP_URL_MEMBRO))],
+                [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
+            ])
+        else:
+            teclado = InlineKeyboardMarkup([
+                [InlineKeyboardButton("📝 Realizar Registro", callback_data="iniciar_cadastro")],
+                [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
+            ])
         
         await navegar_para(
             update, context,

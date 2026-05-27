@@ -299,6 +299,7 @@ async def ver_membros_da_loja(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     loja = lojas[indice]
+    # TODO (Fase de Otimização de Queries): Substituir busca por texto por pesquisa simples utilizando a Foreign Key loja_id (UUID).
     membros = listar_membros_por_loja(
         loja_id=loja.get("ID") or loja.get("id"),
         nome_loja=loja.get("Nome da Loja"),
@@ -901,7 +902,8 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
         except Exception:
             pass
             
-        loja = buscar_loja_por_nome_numero(dados.get("nome", ""), dados.get("numero", ""))
+        # TODO (Fase de Otimização de Queries): Substituir busca por texto por pesquisa simples utilizando a Foreign Key loja_id (UUID).
+        loja = buscar_loja_por_nome_numero(dados.get("nome", ""), dados.get("numero", ""), dados.get("potencia", ""))
         loja_id = _norm_text((loja or {}).get("ID") or (loja or {}).get("id"))
         texto = (
             "✅ *Loja cadastrada com sucesso!*\n\n"

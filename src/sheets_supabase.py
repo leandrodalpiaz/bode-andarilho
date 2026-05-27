@@ -269,10 +269,12 @@ _LOJAS_SHEETS_TO_DB: Dict[str, str] = {
     "Telegram ID do secretário responsável": "secretario_responsavel_id",
     "Nome do secretário responsável": "secretario_responsavel_nome",
     "Vínculo atualizado em": "vinculo_atualizado_em",
-    "Vínculo atualizado por (Telegram ID)": "vinculo_atualizado_por_id",
+    "Vínculo updated por (Telegram ID)": "vinculo_atualizado_por_id", # keeps original wording compatibility
+    "Vínculo atualizado por (Telegram ID)": "vinculo_atualizado_por_id", # alias
     "CEP":           "cep",
     "Estado UF":     "estado_uf",
     "Cidade":        "cidade",
+    "Prefixo":       "prefixo",
 }
 _LOJAS_DB_TO_SHEETS: Dict[str, str] = {
     "id":          "ID",
@@ -292,6 +294,7 @@ _LOJAS_DB_TO_SHEETS: Dict[str, str] = {
     "cep":          "CEP",
     "estado_uf":    "Estado UF",
     "cidade":       "Cidade",
+    "prefixo":      "Prefixo",
 }
 
 _LOJAS_SHEETS_TO_DB.update({
@@ -852,6 +855,58 @@ def listar_eventos(include_inativos: bool = False, include_passados: bool = Fals
         return []
 
 
+def contar_sessoes_ativas_loja(loja_id: Any = None, nome_loja: Any = None, numero_loja: Any = None, potencia: Any = None) -> int:
+    """
+    Retorna o número de sessões (eventos) futuros/ativos para uma determinada loja.
+    Considera "ativa" a sessão com Status ativo/vazio e data igual ou posterior à data atual (hoje).
+    # TODO (Fase de Otimização de Queries): Substituir busca por texto por pesquisa simples utilizando a Foreign Key loja_id (UUID).
+    """
+    target_nome_loja = _norm_text(nome_loja)
+    target_numero_loja = _norm_text(numero_loja)
+    target_potencia = _norm_text(potencia)
+    
+    if loja_id:
+        loja = buscar_loja_por_id(loja_id)
+        if loja:
+            target_nome_loja = _norm_text(loja.get("Nome da Loja") or loja.get("nome_loja"))
+            target_numero_loja = _norm_text(loja.get("Número") or loja.get("numero"))
+            target_potencia = _norm_text(loja.get("Potência") or loja.get("potencia"))
+            
+    if not target_nome_loja:
+        return 0
+        
+    try:
+        query = supabase.table("eventos").select("id_evento, data_evento, status")
+        query = query.eq("nome_loja", target_nome_loja)
+        if target_numero_loja:
+            query = query.eq("numero_loja", target_numero_loja)
+        if target_potencia:
+            query = query.eq("potencia", target_potencia)
+            
+        resp = query.execute()
+        rows = resp.data or []
+        
+        from datetime import date
+        hoje = date.today()
+        ativos = 0
+        for row in rows:
+            status = _norm_text(row.get("status")).lower()
+            if status in ("cancelado", "inativo"):
+                continue
+            
+            data_raw = row.get("data_evento")
+            if not data_raw:
+                continue
+            
+            dt = _parse_data_generica(data_raw)
+            if dt and dt.date() >= hoje:
+                ativos += 1
+        return ativos
+    except Exception as e:
+        logger.error("Erro ao contar sessões ativas da loja %s %s %s: %s", target_nome_loja, target_numero_loja, target_potencia, e)
+        return 0
+
+
 def cadastrar_evento(evento: dict) -> Optional[str]:
     """
     Insere um novo evento.
@@ -889,6 +944,7 @@ def atualizar_evento(indice: int, evento: dict) -> bool:
         id_evento = _norm_text(evento.get("ID Evento") or evento.get("id_evento"))
         if not id_evento:
             # Alternativa: busca por data_evento + nome_loja
+            # TODO (Fase de Otimização de Queries): Substituir busca por texto por pesquisa simples utilizando a Foreign Key loja_id (UUID).
             data_ev = _norm_text(evento.get("Data do evento", ""))
             nome_loja = _norm_text(evento.get("Nome da loja", ""))
             if not data_ev or not nome_loja:
@@ -1304,6 +1360,56 @@ def listar_lojas(telegram_id: int, include_todas: bool = False) -> List[Dict[str
         return []
 
 
+def padronizar_nome_loja(nome_bruto: str) -> str:
+    """
+    Remove prefixos maçônicos no início da string (case-insensitive)
+    e retorna o nome base capitalizado via .title().
+    """
+    if not nome_bruto:
+        return ""
+    pattern = (
+        r"^(?:Augusta\s+e\s+Respeit[aá]vel\s+Loja\s+Simb[oóô]lica"
+        r"|Loja\s+Ma[cç][oóô]nica"
+        r"|Loja\s+Maconica"
+        r"|B\.?\s*A\.?\s*R\.?\s*L\.?\s*S\.?"
+        r"|A\.?\s*R\.?\s*L\.?\s*S\.?"
+        r"|A\.?\s*R\.?\s*L\.?\s*M\.?"
+        r"|BARLS"
+        r"|ARLS"
+        r"|Loja)\s*"
+    )
+    nome_limpo = re.sub(pattern, "", nome_bruto, flags=re.IGNORECASE)
+    res = nome_limpo.strip()
+    if not res:
+        res = nome_bruto.strip()
+    return res.title()
+
+
+def extrair_prefixo_e_nome(nome_bruto: str) -> tuple[str, str]:
+    """
+    Extrai o prefixo/título honorífico e o nome base de um nome de loja bruto.
+    """
+    if not nome_bruto:
+        return "", ""
+    pattern = (
+        r"^(Augusta\s+e\s+Respeit[aá]vel\s+Loja\s+Simb[oóô]lica"
+        r"|Loja\s+Ma[cç][oóô]nica"
+        r"|Loja\s+Maconica"
+        r"|B\.?\s*A\.?\s*R\.?\s*L\.?\s*S\.?"
+        r"|A\.?\s*R\.?\s*L\.?\s*S\.?"
+        r"|A\.?\s*R\.?\s*L\.?\s*M\.?"
+        r"|Loja)\s*"
+    )
+    match = re.match(pattern, nome_bruto, re.IGNORECASE)
+    if match:
+        prefixo = match.group(1).strip()
+        nome_base_raw = nome_bruto[match.end():].strip()
+        if not nome_base_raw:
+            return "", padronizar_nome_loja(nome_bruto)
+        return prefixo, padronizar_nome_loja(nome_base_raw)
+    return "", padronizar_nome_loja(nome_bruto)
+
+
 def listar_lojas_visiveis(user_id: int, nivel: str) -> List[Dict[str, Any]]:
     """Lista lojas visíveis para o usuário conforme perfil."""
     if str(nivel) == "3":
@@ -1326,12 +1432,15 @@ def buscar_loja_por_id(loja_id: Any) -> Optional[Dict[str, Any]]:
         return None
 
 
-def buscar_loja_por_nome_numero(nome_loja: Any, numero_loja: Any, potencia: Any = None) -> Optional[Dict[str, Any]]:
-    """Busca uma loja pela chave composta (nome, número, potencia opcional)."""
+def buscar_loja_por_nome_numero(nome_loja: Any, numero_loja: Any, potencia: Any) -> Optional[Dict[str, Any]]:
+    """
+    Busca uma loja pela chave composta estrita (nome, número, potencia).
+    # TODO (Fase de Otimização de Queries): Substituir busca por texto por pesquisa simples utilizando a Foreign Key loja_id (UUID).
+    """
     nome = _norm_text(nome_loja)
     numero = _norm_text(numero_loja)
-    pot = _norm_text(potencia) if potencia else None
-    if not nome:
+    pot = _norm_text(potencia)
+    if not nome or not pot:
         return None
     try:
         query = (
@@ -1339,10 +1448,8 @@ def buscar_loja_por_nome_numero(nome_loja: Any, numero_loja: Any, potencia: Any 
             .select("*")
             .eq("nome_loja", nome)
             .eq("numero", numero)
+            .eq("potencia", pot)
         )
-        if pot:
-            query = query.eq("potencia", pot)
-            
         resp = query.limit(1).execute()
         if not resp.data:
             return None
@@ -1365,9 +1472,11 @@ def obter_secretario_responsavel_evento(evento: Dict[str, Any]) -> Optional[int]
         loja = buscar_loja_por_id(loja_id)
 
     if not loja:
+        # TODO (Fase de Otimização de Queries): Substituir busca por texto por pesquisa simples utilizando a Foreign Key loja_id (UUID).
         loja = buscar_loja_por_nome_numero(
             evento.get("Nome da loja") or evento.get("nome_loja"),
             evento.get("Número da loja") or evento.get("numero_loja"),
+            evento.get("Potência") or evento.get("potencia"),
         )
 
     if loja:
@@ -1417,6 +1526,11 @@ def cadastrar_loja(telegram_id: int, dados: Dict[str, Any]) -> bool:
             or dados.get("Nome do secretário responsável")
         )
 
+        nome_bruto = _norm_text(dados.get("nome", ""))
+        prefixo, nome_base = extrair_prefixo_e_nome(nome_bruto)
+        if "prefixo" in dados:
+            prefixo = _norm_text(dados["prefixo"])
+
         row: Dict[str, Any] = {
             "telegram_id": str(responsavel_id or _norm_intlike(telegram_id)),
             "secretario_responsavel_id": str(responsavel_id or _norm_intlike(telegram_id)),
@@ -1425,7 +1539,8 @@ def cadastrar_loja(telegram_id: int, dados: Dict[str, Any]) -> bool:
             "vinculo_atualizado_por_id": _norm_intlike(
                 dados.get("vinculo_atualizado_por_id") or telegram_id
             ),
-            "nome_loja": _norm_text(dados.get("nome", "")),
+            "nome_loja": nome_base,
+            "prefixo": prefixo,
             "numero": _norm_text(dados.get("numero", "")),
             "oriente_loja": _norm_text(dados.get("oriente", "")),
             "rito": _norm_text(dados.get("rito", "")),
@@ -2516,8 +2631,8 @@ def limpar_midias_eventos_passados() -> int:
     bucket = "event-cards"
     
     try:
-        # Seleciona colunas essenciais de todos os eventos que possuam alguma URL salva
-        resp = supabase.table("eventos").select("id, data_evento, card_especial_url, card_renderizado_url").execute()
+        # Seleciona colunas essenciais de todos os eventos que possuam alguma URL salva ou ID do Telegram
+        resp = supabase.table("eventos").select("id, data_evento, card_especial_url, card_renderizado_url, card_file_id_telegram").execute()
         rows = resp.data or []
     except Exception as e:
         logger.error("Erro ao buscar eventos para limpeza de mídias: %s", e)
@@ -2543,11 +2658,20 @@ def limpar_midias_eventos_passados() -> int:
             
         # Se o evento ocorreu em dias passados
         if dt_ev.date() < hoje:
+            # Verifica se há algo para limpar
+            has_media_fields = (
+                row.get("card_especial_url") or
+                row.get("card_renderizado_url") or
+                row.get("card_file_id_telegram")
+            )
+            if not has_media_fields:
+                continue
+
             candidatos = []
             
-            # 1. Checa card especial
+            # 1. Checa card especial (se for upload específico de evento)
             url_esp = row.get("card_especial_url")
-            if url_esp:
+            if url_esp and ("/eventos/" in url_esp or "/drafts/" in url_esp):
                 path_esp = _extrair_path_storage_do_url(url_esp, bucket)
                 if path_esp:
                     candidatos.append(path_esp)
@@ -2565,15 +2689,18 @@ def limpar_midias_eventos_passados() -> int:
                     logger.info("Excluindo %d mídias expiradas do evento %s (Data: %s)", len(candidatos), ev_id, data_raw)
                     storage.remove(candidatos)
                     arquivos_removidos += len(candidatos)
-                    
-                    # Limpa os campos no banco para evitar reprocessamento
-                    supabase.table("eventos").update({
-                        "card_especial_url": None,
-                        "card_renderizado_url": None
-                    }).eq("id", ev_id).execute()
-                    
                 except Exception as err:
                     logger.warning("Falha ao excluir arquivos %s do storage: %s", candidatos, err)
+
+            # Sempre limpa os campos no banco para os eventos passados
+            try:
+                supabase.table("eventos").update({
+                    "card_especial_url": None,
+                    "card_renderizado_url": None,
+                    "card_file_id_telegram": None
+                }).eq("id", ev_id).execute()
+            except Exception as err_db:
+                logger.warning("Falha ao limpar metadados de mídia do evento %s no banco: %s", ev_id, err_db)
                     
     if arquivos_removidos > 0:
         logger.info("Limpeza de efemeridade concluída: %d mídias limpas do storage.", arquivos_removidos)

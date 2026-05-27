@@ -557,6 +557,17 @@ async def iniciar_cadastro_callback(update: Update, context: ContextTypes.DEFAUL
     if pos:
         context.user_data["pos_cadastro"] = pos
 
+    if WEBAPP_URL_MEMBRO:
+        await _enviar_ou_editar_mensagem(
+            context,
+            update.effective_user.id,
+            TIPO_RESULTADO,
+            CADASTRO_INICIO_PADRAO,
+            _teclado_inicio(False, False, False),
+            limpar_conteudo=True,
+        )
+        return ConversationHandler.END
+
     await navegar_para(
         update,
         context,

@@ -297,6 +297,12 @@ async def job_mensal_fechamento_vigor(app: Application):
 async def iniciar_scheduler(app: Application):
     global _scheduler
 
+    import os
+    run_scheduler = os.getenv("RUN_SCHEDULER", "true").lower() in ("true", "1", "yes")
+    if not run_scheduler:
+        logger.info("Scheduler desativado via RUN_SCHEDULER=false.")
+        return
+
     if _scheduler and _scheduler.running:
         logger.info("Scheduler já estava ativo; mantendo instância atual.")
         return

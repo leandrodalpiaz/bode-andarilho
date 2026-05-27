@@ -475,32 +475,17 @@ import re
 def limpar_nome_loja(nome: str) -> str:
     """
     Remove prefixos maçônicos redundantes para manter apenas o Nome Nobre.
-    Remove: A.R.L.S., ARLS, A R L S, Augusta e Respeitável Loja Simbólica, Loj., Loja, etc.
     """
-    if not nome:
-        return ""
-    # Padrões a remover do início da string (case-insensitive)
-    padroes = [
-        r"^A\.\s*R\.\s*L\.\s*S\.\s*",
-        r"^ARLS\s+",
-        r"^A\s+R\s+L\s+S\s+",
-        r"^Augusta\s+e\s+Respeitável\s+Loja\s+Simbólica\s+",
-        r"^Augusta\s+e\s+Respeitavel\s+Loja\s+Simbolica\s+",
-        r"^Loja\s+Simbólica\s+",
-        r"^Loja\s+Simbolica\s+",
-        r"^Loj\.\s*",
-        r"^Loja\s+",
-    ]
-    limpo = nome.strip()
-    for padrao in padroes:
-        limpo = re.sub(padrao, "", limpo, flags=re.IGNORECASE)
-    
-    # Se o usuário digitou apenas "ARLS" e ficou vazio, retorna o original (fallback)
-    return limpo.strip() or nome.strip()
+    from src.sheets_supabase import padronizar_nome_loja
+    return padronizar_nome_loja(nome)
 
 def _extrair_dados_loja(body: Dict[str, Any]) -> Dict[str, Any]:
+    from src.sheets_supabase import extrair_prefixo_e_nome
+    raw_nome = _norm_text(body.get("nome"))[:200]
+    prefixo, nome_base = extrair_prefixo_e_nome(raw_nome)
     return _normalizar_dados_potencia({
-        "nome": limpar_nome_loja(_norm_text(body.get("nome"))[:200]),
+        "nome": nome_base,
+        "prefixo": prefixo,
         "numero": _norm_text(body.get("numero") or "0")[:10],
         "oriente": _norm_text(body.get("oriente"))[:200],
         "rito": _norm_text(body.get("rito"))[:200],
@@ -530,6 +515,7 @@ def _payload_loja(dados: Dict[str, Any], executor_id: int) -> Dict[str, Any]:
     rito = dados["rito_outro"] if dados.get("rito") == "Outro" else dados["rito"]
     return {
         "nome": dados["nome"],
+        "prefixo": dados.get("prefixo", ""),
         "numero": dados["numero"],
         "oriente": dados["oriente"],
         "rito": rito,
@@ -639,6 +625,7 @@ async def draft_loja_confirmar(update: Update, context) -> None:
     except Exception:
         pass
     _limpar_rascunho(_RASCUNHOS_LOJA, telegram_id)
+    # TODO (Fase de Otimização de Queries): Substituir busca por texto por pesquisa simples utilizando a Foreign Key loja_id (UUID).
     loja = buscar_loja_por_nome_numero(
         dados.get("nome", ""),
         dados.get("numero", ""),
@@ -877,6 +864,15 @@ async def api_rascunho_evento(request: Request) -> JSONResponse:
     nivel = str(get_nivel(telegram_id))
     lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
     dados = _aplicar_loja_cadastrada_ao_evento(dados, lojas_existentes)
+    
+    # Validação do limite de 4 sessões ativas por Loja
+    from src.sheets_supabase import contar_sessoes_ativas_loja
+    if contar_sessoes_ativas_loja(dados.get("loja_id"), dados.get("nome_loja"), dados.get("numero_loja"), dados.get("potencia")) >= 4:
+        return _json_error(
+            "Limite de 4 sessões futuras/ativas atingido para esta Loja. Publicar poucas sessões mantém a agenda útil e evita despejar o calendário anual de uma vez.",
+            400
+        )
+        
     mensagem_loja = _validar_loja_para_evento(dados)
     if mensagem_loja:
         return _json_error(mensagem_loja, 400)
@@ -1251,6 +1247,23 @@ async def _confirmar_evento(update: Update, context, salvar_loja: bool) -> None:
         return
     lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
     dados = _aplicar_loja_cadastrada_ao_evento(dados, lojas_existentes)
+    
+    # Validação do limite de 4 sessões ativas por Loja
+    from src.sheets_supabase import contar_sessoes_ativas_loja
+    if contar_sessoes_ativas_loja(dados.get("loja_id"), dados.get("nome_loja"), dados.get("numero_loja"), dados.get("potencia")) >= 4:
+        msg_limite = (
+            "⚠️ *LIMITE DE SESSÕES ATIVAS ATINGIDO*\n\n"
+            "Ir.·. Secretário, identificamos que esta Oficina já possui 4 ou mais sessões futuras/ativas cadastradas.\n\n"
+            "Para manter o calendário dinâmico e evitar o acúmulo de informações, o sistema limita a publicação a no máximo 4 sessões futuras ativas por Loja.\n\n"
+            "Aguarde a realização de alguma sessão atual ou cancele uma existente para cadastrar novos convites. Publicar poucas sessões mantém a agenda útil e evita despejar o calendário anual de uma vez."
+        )
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        await query.edit_message_text(
+            text=msg_limite,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="menu_principal")]])
+        )
+        return
+        
     secretario_id = _norm_text(dados.get("secretario_responsavel_id")) or secretario_id
     loja_existente = not _evento_tem_loja_nova(dados, lojas_existentes)
     if salvar_loja and loja_existente:
@@ -1348,7 +1361,8 @@ def _evento_tem_loja_nova(dados: Dict[str, Any], lojas_existentes: List[Dict[str
         for loja in lojas_existentes:
             if _norm_text(loja.get("ID") or loja.get("id")) == loja_id:
                 return False
-    nome = _norm_text(dados.get("nome_loja"))
+    from src.sheets_supabase import padronizar_nome_loja
+    nome = _norm_text(padronizar_nome_loja(dados.get("nome_loja")))
     numero = _norm_text(dados.get("numero_loja") or "0")
     rito = _norm_text(dados.get("rito"))
     potencia = _norm_text(dados.get("potencia"))
@@ -1359,9 +1373,9 @@ def _evento_tem_loja_nova(dados: Dict[str, Any], lojas_existentes: List[Dict[str
         loja_potencia = _norm_text(loja.get("Potência") or loja.get("potencia"))
         loja_complemento = _norm_text(loja.get("Potência complemento") or loja.get("potencia_complemento"))
         if (
-            _norm_text(loja.get("Nome da Loja")) == nome
+            _norm_text(padronizar_nome_loja(loja.get("Nome da Loja") or loja.get("nome_loja"))) == nome
             and _norm_text(loja.get("Número") or "0") == numero
-            and _norm_text(loja.get("Rito")) == rito
+            and _norm_text(loja.get("Rito") or loja.get("rito")) == rito
             and (not potencia or loja_potencia == potencia)
             and (not potencia_complemento or loja_complemento == potencia_complemento)
         ):
@@ -4693,6 +4707,16 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
 
     if not all([data_str, horario, grau, tipo_sessao, traje, agape, nome_loja, oriente, rito, potencia, endereco]):
         return JSONResponse({"ok": False, "error": "Preencha todos os campos obrigatórios."}, status_code=400)
+        
+    # Validação do limite de 4 sessões ativas por Loja
+    loja_id = body.get("loja_id") or body.get("ID da loja")
+    from src.sheets_supabase import contar_sessoes_ativas_loja
+    if contar_sessoes_ativas_loja(loja_id, nome_loja, numero_loja, potencia) >= 4:
+        return JSONResponse({
+            "ok": False,
+            "error": "Limite de 4 sessões futuras/ativas atingido para esta Loja. Publicar poucas sessões mantém a agenda útil e evita despejar o calendário anual de uma vez."
+        }, status_code=400)
+        
     if not validar_potencia(potencia, potencia_complemento):
         return JSONResponse({"ok": False, "error": "Informe a potência principal e a potência local."}, status_code=400)
 

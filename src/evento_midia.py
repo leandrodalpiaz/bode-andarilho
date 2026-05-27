@@ -48,7 +48,12 @@ def obter_loja_evento(evento: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         loja = buscar_loja_por_id(loja_id)
         if loja:
             return loja
-    return buscar_loja_por_nome_numero(evento.get("Nome da loja"), evento.get("Número da loja"))
+    # TODO (Fase de Otimização de Queries): Substituir busca por texto por pesquisa simples utilizando a Foreign Key loja_id (UUID).
+    return buscar_loja_por_nome_numero(
+        evento.get("Nome da loja") or evento.get("nome_loja"),
+        evento.get("Número da loja") or evento.get("numero_loja"),
+        evento.get("Potência") or evento.get("potencia")
+    )
 
 
 def _baixar_url_para_temp(url: str, prefix: str = "bode_event_card_") -> Optional[str]:
@@ -112,31 +117,38 @@ def salvar_render_no_storage(evento: Dict[str, Any], path: str) -> str:
 
 
 def _finalizar_publicacao_visual_sync(evento: Dict[str, Any], midia: MidiaEvento, file_id: str) -> None:
-    sync = {
-        "ID Evento": evento.get("ID Evento"),
-        "Modo visual": midia.modo,
-        "Telegram tipo mensagem grupo": "photo",
-    }
-    if midia.modo in ("template_loja", "template_padrao", "card_especial"):
-        url = salvar_render_no_storage(evento, midia.path or "")
-        if url:
-            sync["Card renderizado URL"] = url
-            evento["Card renderizado URL"] = url
-            if midia.modo == "card_especial":
+    try:
+        sync = {
+            "ID Evento": evento.get("ID Evento"),
+            "Modo visual": midia.modo,
+            "Telegram tipo mensagem grupo": "photo",
+        }
+        if midia.modo == "card_especial":
+            url = evento.get("Card especial URL") or evento.get("card_especial_url") or ""
+            if url:
                 sync["Card especial URL"] = url
-                evento["Card especial URL"] = url
-    if file_id:
-        sync["Card file_id Telegram"] = file_id
-    atualizar_evento(0, sync)
-    apoio_card = evento.get("_apoio_card") if isinstance(evento, dict) else None
-    if apoio_card:
-        registrar_exibicao_apoio(
-            apoio_card.get("apoiador_id", ""),
-            apoio_card.get("contrato_id", ""),
-            "card_logo",
-            contexto="publicacao_evento_grupo",
-            evento_id=str(evento.get("ID Evento") or evento.get("id_evento") or ""),
-        )
+                sync["Card renderizado URL"] = url
+
+        if file_id:
+            sync["Card file_id Telegram"] = file_id
+        atualizar_evento(0, sync)
+        
+        apoio_card = evento.get("_apoio_card") if isinstance(evento, dict) else None
+        if apoio_card:
+            registrar_exibicao_apoio(
+                apoio_card.get("apoiador_id", ""),
+                apoio_card.get("contrato_id", ""),
+                "card_logo",
+                contexto="publicacao_evento_grupo",
+                evento_id=str(evento.get("ID Evento") or evento.get("id_evento") or ""),
+            )
+    finally:
+        # Sempre remove o arquivo temporário local
+        try:
+            if midia.path and os.path.exists(midia.path):
+                os.remove(midia.path)
+        except Exception as e_rm:
+            logger.warning("Falha ao remover arquivo temporário finalizado %s: %s", midia.path, e_rm)
 
 
 def _atualizar_publicacao_texto_sync(evento: Dict[str, Any]) -> None:
@@ -168,8 +180,10 @@ async def publicar_evento_no_grupo(
     reply_markup,
 ):
     logger.info("Iniciando publicar_evento_no_grupo para chat_id=%s", chat_id)
-    midia = preparar_midia_evento(evento)
+    midia = await asyncio.to_thread(preparar_midia_evento, evento)
     logger.info("preparar_midia_evento retornou path=%s", midia.path)
+    
+    sucesso_envio = False
     if midia.path:
         try:
             with open(midia.path, "rb") as photo:
@@ -187,9 +201,17 @@ async def publicar_evento_no_grupo(
             photos = getattr(msg, "photo", None) or []
             file_id = photos[-1].file_id if photos else ""
             _agendar_finalizacao(_finalizar_publicacao_visual_sync, dict(evento), midia, file_id)
+            sucesso_envio = True
             return msg, "photo"
         except Exception as e:
             logger.warning("Falha ao enviar card visual; usando texto fallback: %s", e)
+        finally:
+            if not sucesso_envio:
+                try:
+                    if midia.path and os.path.exists(midia.path):
+                        os.remove(midia.path)
+                except Exception as e_rm:
+                    logger.warning("Falha ao remover arquivo temporário após falha de envio %s: %s", midia.path, e_rm)
 
     logger.info("Enviando mensagem de texto fallback para %s...", chat_id)
     msg = await context.bot.send_message(
@@ -210,7 +232,7 @@ async def enviar_previa_evento(
     reply_markup,
     texto_fallback: str,
 ):
-    midia = preparar_midia_evento(evento)
+    midia = await asyncio.to_thread(preparar_midia_evento, evento)
     if midia.path:
         try:
             with open(midia.path, "rb") as photo:
@@ -222,6 +244,13 @@ async def enviar_previa_evento(
                 )
         except Exception as e:
             logger.warning("Falha ao enviar prévia visual; usando texto: %s", e)
+        finally:
+            try:
+                if midia.path and os.path.exists(midia.path):
+                    os.remove(midia.path)
+            except Exception as e_rm:
+                logger.warning("Falha ao remover arquivo de prévia temporário %s: %s", midia.path, e_rm)
+
     return await context.bot.send_message(
         chat_id=chat_id,
         text=texto_fallback,
@@ -238,7 +267,8 @@ async def editar_ou_republicar_evento_visual(
     texto_fallback: str,
     reply_markup,
 ) -> bool:
-    midia = preparar_midia_evento(evento)
+    midia = await asyncio.to_thread(preparar_midia_evento, evento)
+    sucesso = False
     if midia.path:
         try:
             with open(midia.path, "rb") as photo:
@@ -253,9 +283,16 @@ async def editar_ou_republicar_evento_visual(
                 "Modo visual": midia.modo,
                 "Telegram tipo mensagem grupo": "photo",
             })
+            sucesso = True
             return True
         except Exception as e:
             logger.warning("Falha ao editar card visual do evento %s: %s", evento.get("ID Evento"), e)
+        finally:
+            try:
+                if midia.path and os.path.exists(midia.path):
+                    os.remove(midia.path)
+            except Exception as e_rm:
+                logger.warning("Falha ao remover arquivo temporário após edição %s: %s", midia.path, e_rm)
 
     try:
         await context.bot.edit_message_text(
