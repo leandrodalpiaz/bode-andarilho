@@ -108,15 +108,11 @@ async def ajuda_nivel1_notificacoes(update, context):
 async def ajuda_nivel1_filtros(update, context):
 	texto = (
 		"*Como Encontrar Sessões:*\n\n"
-		"Ao acessar '📅 Ver Sessões', você verá opções para buscar por:\n"
-		" - calendário do mês\n"
-		" - período (data, esta semana, etc.)\n"
-		" - grau\n"
-		" - rito\n"
-		" - localização (raio atual ou cidade cadastrada)\n"
-		" - potência\n"
-		" - estado (UF)\n\n"
-		"Use o filtro mais rápido para chegar na sessão que deseja."
+		"Você pode encontrar sessões de duas formas:\n\n"
+		"1. *Por Filtros Estruturados:* Ao acessar '📅 Ver Sessões', você pode filtrar por calendário, data, grau, rito, potência, estado (UF) ou localização (raio atual).\n"
+		"2. *Pelo Assistente IA (Linguagem Natural):* No menu principal, clique em 'Assistente IA' e fale com o bot. Ele aceita frases informais, janelas temporais e até corrige pequenos erros de digitação!\n"
+		"   • Exemplo: _\"sessões de mestre essa semana em Curitiba\"_ ou _\"buscar York em SP\"_\n\n"
+		"💡 *Dica:* A busca herda automaticamente o Oriente (cidade/UF) do seu perfil cadastrado se você não informar a região."
 	)
 	teclado = InlineKeyboardMarkup(
 		[[InlineKeyboardButton("🔙 Voltar ao Guia do Membro", callback_data="ajuda_guia")]]

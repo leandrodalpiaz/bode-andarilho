@@ -702,6 +702,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if membro and membro_esta_ativo(membro):
         await _limpar_mensagens_anteriores(context, telegram_id)
         
+        # Interceptar comando de busca do grupo
+        if raw_arg.upper().startswith("BUSCA_"):
+            from src.ia_assistente import obter_busca_grupo, _executar_busca_eventos_ia
+            id_busca = raw_arg[6:]
+            entities = obter_busca_grupo(id_busca)
+            if entities:
+                nivel_membro = get_nivel(telegram_id) or "1"
+                await _executar_busca_eventos_ia(update, context, entities, telegram_id, nivel_membro)
+                return
+            else:
+                await _enviar_ou_editar_mensagem(
+                    context,
+                    telegram_id,
+                    TIPO_RESULTADO,
+                    "⚠️ *Busca Expirada*\n\nEsta busca realizada no grupo expirou devido ao tempo. Por favor, digite o que você procura aqui no privado para que eu pesquise agora!",
+                    limpar_conteudo=True
+                )
+                return
+
         # Interceptar o comando de secretário para membros ativos Nível 1
         if raw_arg.upper() == "CADASTRO_SECRETARIO" and get_nivel(telegram_id) == "1":
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -1111,6 +1130,12 @@ async def botao_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "ia_cancelar_evento":
         from src.ia_assistente import ia_cancelar_evento
         await ia_cancelar_evento(update, context)
+    elif data == "ia_ambiguo_buscar":
+        from src.ia_assistente import ia_ambiguo_buscar
+        await ia_ambiguo_buscar(update, context)
+    elif data == "ia_ambiguo_criar":
+        from src.ia_assistente import ia_ambiguo_criar
+        await ia_ambiguo_criar(update, context)
 
     # --- Gestão de Eventos e Visitas ---
     elif data in ("ver_eventos", "voltar_eventos"):

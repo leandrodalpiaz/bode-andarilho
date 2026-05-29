@@ -707,20 +707,67 @@ async def _executar_assistente_ia(update: Update, context: ContextTypes.DEFAULT_
 			logger.warning("Falha ao registrar exibicao de apoio na IA: %s", e)
 		return
 
-	# ── 4) Sem match → fallback original ──────────────────────────────
+	# ── 4) Sem match → fallback educativo ─────────────────────────────
 	_auditar_evento("unmatched", user_id, nivel, texto_entrada, topic_hint=_extrair_topic_hint(texto_entrada))
 	teclado = InlineKeyboardMarkup(
 		[
-			[InlineKeyboardButton("Central de Ajuda", callback_data="menu_ajuda")],
-			[InlineKeyboardButton("Menu principal", callback_data="menu_principal")],
+			[InlineKeyboardButton("📚 Central de Ajuda", callback_data="menu_ajuda")],
+			[InlineKeyboardButton("🏠 Menu principal", callback_data="menu_principal")],
 		]
 	)
 	await navegar_para(
 		update,
 		context,
 		"Assistente IA",
-		"Não consegui identificar com segurança sua intenção. Posso te guiar pela Central de Ajuda ou abrir o menu principal.",
+		_obter_texto_fallback_educativo(texto_entrada),
 		teclado,
+	)
+
+
+def _data_no_periodo(ev_date: datetime, f_data: str) -> bool:
+	"""Verifica se a data do evento se enquadra no filtro temporal f_data."""
+	if not ev_date:
+		return False
+	hoje = datetime.now().date()
+	ev_date_only = ev_date.date()
+	
+	if f_data == "hoje":
+		return ev_date_only == hoje
+	elif f_data == "amanha":
+		return ev_date_only == (hoje + timedelta(days=1))
+	elif f_data in ("essa_semana", "esta_semana", "proximos_dias"):
+		return hoje <= ev_date_only <= (hoje + timedelta(days=6))
+	elif f_data in ("semana_que_vem", "proxima_semana"):
+		return (hoje + timedelta(days=7)) <= ev_date_only <= (hoje + timedelta(days=13))
+	elif f_data in ("esse_mes", "este_mes"):
+		import calendar
+		_, last_day = calendar.monthrange(hoje.year, hoje.month)
+		fim_mes = datetime(hoje.year, hoje.month, last_day).date()
+		return hoje <= ev_date_only <= fim_mes
+	
+	try:
+		dt_spec = datetime.strptime(f_data, "%d/%m/%Y").date()
+		return ev_date_only == dt_spec
+	except:
+		return False
+
+
+def _obter_texto_fallback_educativo(texto: str) -> str:
+	t = (texto or "").strip()
+	palavras = t.split()
+	if len(palavras) < 3:
+		return (
+			"Meu Irmão, pode ser mais específico na sua mensagem? 🧐\n\n"
+			"Tente escrever uma frase completa. Exemplos:\n"
+			"• _\"sessões de mestre essa semana em Curitiba\"_\n"
+			"• _\"criar sessão de aprendiz 11/11 às 20:00\"_\n"
+			"• _\"buscar rito York em São Paulo\"_"
+		)
+	return (
+		"Não consegui compreender a sua solicitação. 🧭\n\n"
+		"Tente utilizar termos como:\n"
+		"• Para buscar: _\"sessões mestre sexta\"_, _\"buscar rito emulador\"_, _\"sessões em SP\"_\n"
+		"• Para criar: _\"aprendiz 11/11 às 20h\"_, _\"nova sessão ordinária\"_"
 	)
 
 

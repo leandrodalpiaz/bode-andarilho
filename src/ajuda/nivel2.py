@@ -79,8 +79,8 @@ async def ajuda_nivel2_criar_sessao(update, context):
 		"1. Você pode criar a sessão pelo fluxo oficial em '📌 Cadastrar evento' ou descrevendo a sessão de forma natural no Assistente IA.\n"
 		"2. Exemplos válidos: 'Sessão de aprendiz dia 15/11 às 20h', 'Sessão de companheiro com ágape pago' ou 'Sessão magna de iniciação dia 10/01 às 20h'.\n"
 		"3. Se faltar alguma informação, o bot perguntará apenas o que falta para completar o rascunho.\n"
-		"4. Quando tudo estiver completo, revise o resumo e confirme a publicação.\n"
-		"5. Na IA, a loja do secretário é usada automaticamente. Você não precisa informar a loja na frase, salvo se quiser usar o fluxo manual de cadastro."
+		"4. Quando o rascunho estiver pronto, o bot oferecerá um botão para você abrir a tela de revisão final no Mini App, onde você poderá selecionar o template da sessão e publicá-la.\n"
+		"5. Na IA, a loja do secretário é usada automaticamente. Você não precisa informar a loja na frase."
 	)
 	teclado = InlineKeyboardMarkup(
 		[[InlineKeyboardButton("🔙 Voltar ao Guia do Secretário", callback_data="ajuda_guia")]]

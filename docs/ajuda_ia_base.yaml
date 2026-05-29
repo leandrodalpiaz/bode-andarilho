@@ -1,4 +1,4 @@
-version: "2026-05-12"
+version: "2026-05-29"
 fonte_principal:
   - "main.py"
   - "src/bot.py"
@@ -103,7 +103,7 @@ intencoes:
     resposta_oficial: "Para evitar erros de digitação, o caminho preferencial é o formulário (Mini App). Vou abrir o fluxo oficial de cadastro."
     acao_recomendada:
       tipo: callback
-      valor: "abrir_miniapp_cadastro_evento"
+      valor: "ia_editar_evento"
     origem: ["src/miniapp.py", "src/cadastro_evento.py", "main.py"]
 
   - intent_id: menu_lojas
@@ -186,6 +186,42 @@ intencoes:
       tipo: informacao
       valor: "recusa_trolhamento_fluxo"
     origem: ["src/eventos_secretario.py"]
+
+  - intent_id: criar_evento_implicito
+    nivel_permitido: ["2", "3"]
+    gatilhos: ["aprendiz dia", "mestre amanha", "ordinaria sexta", "magna dia"]
+    resposta_oficial: "Detectei informações de sessão. Abrindo rascunho para revisão..."
+    acao_recomendada:
+      tipo: callback
+      valor: "ia_editar_evento"
+    origem: ["src/ia_assistente.py"]
+
+  - intent_id: buscar_essa_semana
+    nivel_permitido: ["1", "2", "3"]
+    gatilhos: ["essa semana", "esta semana", "proximos dias", "semana atual"]
+    resposta_oficial: "Buscando sessões para os próximos 7 dias..."
+    acao_recomendada:
+      tipo: callback
+      valor: "ver_eventos"
+    origem: ["src/eventos.py", "main.py"]
+
+  - intent_id: buscar_sessoes_grau
+    nivel_permitido: ["1", "2", "3"]
+    gatilhos: ["sessoes mestre", "sessoes aprendiz", "sessoes companheiro"]
+    resposta_oficial: "Buscando sessões pelo grau informado..."
+    acao_recomendada:
+      tipo: callback
+      valor: "ver_eventos"
+    origem: ["src/eventos.py", "main.py"]
+
+  - intent_id: ia_fallback_educativo
+    nivel_permitido: ["1", "2", "3"]
+    gatilhos: []
+    resposta_oficial: "Não reconheci o formato. Tente: *sessões de mestre essa semana* ou *aprendiz 11/11 20h*."
+    acao_recomendada:
+      tipo: informacao
+      valor: "fallback_educativo"
+    origem: ["src/ia_assistente.py"]
 
 regras_de_roteamento:
   sem_permissao:

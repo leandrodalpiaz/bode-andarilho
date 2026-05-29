@@ -55,6 +55,41 @@ def _norm(value: str) -> str:
     return texto
 
 
+def _levenshtein(a: str, b: str) -> int:
+    if len(a) < len(b):
+        return _levenshtein(b, a)
+    if not b:
+        return len(a)
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a):
+        curr = [i + 1]
+        for j, cb in enumerate(b):
+            curr.append(min(prev[j+1]+1, curr[j]+1, prev[j]+(ca != cb)))
+        prev = curr
+    return prev[-1]
+
+
+def _fuzzy_match(palavra: str, candidatos: Dict[str, str], max_dist: int = 2) -> Optional[str]:
+    p = _norm(palavra)
+    melhor_dist, melhor_valor = max_dist + 1, None
+    for chave, valor in candidatos.items():
+        d = _levenshtein(p, _norm(chave))
+        if d < melhor_dist:
+            melhor_dist, melhor_valor = d, valor
+    return melhor_valor if melhor_dist <= max_dist else None
+
+
+def _extrair_template(texto: str) -> Optional[str]:
+    t = _norm(texto)
+    if any(k in t for k in ["template do sistema", "padrao", "bode"]):
+        return "sistema"
+    if any(k in t for k in ["template da loja", "fundo loja", "template loja"]):
+        return "loja"
+    if any(k in t for k in ["arte pronta", "canva", "arte completa"]):
+        return "completo"
+    return None
+
+
 # ============================================
 # EXTRAÇÃO DE ENTIDADES — DATA
 # ============================================
@@ -80,11 +115,21 @@ _MESES = {
 
 
 def _extrair_data(texto: str) -> Optional[str]:
-    """Extrai data no formato DD/MM/AAAA de linguagem natural."""
+    """Extrai data ou token de janela temporal de linguagem natural."""
     t = _norm(texto)
 
-    # Formato DD/MM/AAAA ou DD/MM
-    m = re.search(r"(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?", t)
+    # 1. Janelas temporais (verificadas primeiro)
+    if "essa semana" in t or "esta semana" in t or "semana atual" in t:
+        return "essa_semana"
+    if "proximos dias" in t:
+        return "proximos_dias"
+    if "semana que vem" in t or "proxima semana" in t:
+        return "semana_que_vem"
+    if "esse mes" in t or "este mes" in t:
+        return "esse_mes"
+
+    # 2. Formato DD/MM/AAAA, DD/MM com / ou -
+    m = re.search(r"(\d{1,2})[-/](\d{1,2})(?:[-/](\d{2,4}))?", t)
     if m:
         dd = int(m.group(1))
         mm = int(m.group(2))
@@ -177,7 +222,7 @@ _GRAUS_MAP = {
 }
 
 
-def _extrair_grau(texto: str) -> Optional[str]:
+def _extrair_grau(texto: str, tracking: Optional[Dict[str, str]] = None) -> Optional[str]:
     t = _norm(texto)
     
     # Remove pontos e colons colados para normalizar abreviações como a:.m:. -> am
@@ -201,6 +246,27 @@ def _extrair_grau(texto: str) -> Optional[str]:
     for chave in ("mestre instalado", "mi", "companheiro", "aprendiz", "mestre"):
         if chave in t:
             return _GRAUS_MAP[chave]
+
+    # Fuzzy word matching
+    graus_fuzzy = {
+        "aprendiz": "Aprendiz",
+        "companheiro": "Companheiro",
+        "mestre": "Mestre",
+        "instalado": "Mestre Instalado",
+    }
+    palavras = t.split()
+    for pal in palavras:
+        # Pular pontuações puras ou palavras muito curtas
+        pal_clean = re.sub(r"[^a-z]", "", pal)
+        if len(pal_clean) < 4:
+            continue
+        m = _fuzzy_match(pal_clean, graus_fuzzy, max_dist=2)
+        if m:
+            val = "Mestre Instalado" if m == "Mestre Instalado" or (m == "Mestre" and "instalado" in t) else m
+            if tracking is not None:
+                tracking["grau"] = f"Detectei Grau *{val}* a partir de `{pal}`."
+            return val
+
     return None
 
 
@@ -283,6 +349,17 @@ def _extrair_nome_alvo(texto: str) -> Optional[str]:
 # CLASSIFICADOR MULTINÍVEL
 # ============================================
 
+def _eh_busca_ou_criacao_ambiguo(t: str) -> bool:
+    # Palavras fortemente indicativas de busca
+    palavras_busca = ["buscar", "procurar", "achar", "encontrar", "listar", "ver", "agenda", "calendario"]
+    if any(p in t for p in palavras_busca):
+        return True
+    # Uso de plural e janelas temporais sem dia/hora específicos
+    if ("sessoes" in t or "eventos" in t or "trabalhos" in t) and ("semana" in t or "mes" in t or "dias" in t):
+        return True
+    return False
+
+
 def classificar_intencao_multinivel(
     texto: str,
     nivel: str,
@@ -306,6 +383,23 @@ def classificar_intencao_multinivel(
 
     # ── NÍVEL 2/3: Criação de evento por linguagem natural ──────────
     if nivel in ("2", "3") and _parece_criacao_evento(t):
+        # Desambiguação de Busca vs Criação
+        if _eh_busca_ou_criacao_ambiguo(t):
+            result.intent = "ambiguo_busca_criacao"
+            result.confidence = "medium"
+            result.preview_text = "Meu respeitável Irmão, identifiquei que sua mensagem pode ser tanto uma busca de sessões quanto a criação de uma nova sessão. O que você deseja fazer?"
+            result.entities = {
+                "grau": _extrair_grau(texto),
+                "data": _extrair_data(texto),
+                "cidade": _extrair_cidade(texto),
+                "uf": _extrair_uf(texto),
+                "rito": _extrair_rito(texto),
+                "potencia": _extrair_potencia(texto),
+            }
+            # Remove None values
+            result.entities = {k: v for k, v in result.entities.items() if v is not None}
+            return result
+
         return _classificar_criacao_evento(texto, nivel, result, lojas_do_secretario)
 
     # ── QUALQUER NÍVEL: Edição cadastral ────────────────────────────
@@ -346,7 +440,36 @@ _GATILHOS_CRIACAO_EVENTO = [
 
 
 def _parece_criacao_evento(t: str) -> bool:
-    return any(g in t for g in _GATILHOS_CRIACAO_EVENTO)
+    # 1. Gatilhos explícitos
+    if any(g in t for g in _GATILHOS_CRIACAO_EVENTO):
+        return True
+
+    # 2. Gatilhos implícitos (combinações de campos)
+    tem_grau = _extrair_grau(t) is not None
+    tem_data = _extrair_data(t) is not None
+    tem_hora = _extrair_hora(t) is not None
+    
+    # Tipo de sessão normal ou magna
+    tem_tipo = False
+    tipos_sessao = ["magna", "ordinaria", "extraordinaria", "branca", "funebre"]
+    if any(tipo in t for tipo in tipos_sessao):
+        tem_tipo = True
+
+    if tem_grau and tem_data:
+        return True
+    if tem_grau and tem_hora:
+        return True
+    if tem_tipo and tem_data:
+        return True
+    if tem_tipo and tem_hora:
+        return True
+
+    # Geral: pelo menos 2 campos quaisquer detectados
+    campos_detectados = sum([tem_grau, tem_data, tem_hora, tem_tipo])
+    if campos_detectados >= 2:
+        return True
+
+    return False
 
 
 def _classificar_criacao_evento(
@@ -360,11 +483,14 @@ def _classificar_criacao_evento(
     result.confidence = "high"
     result.needs_confirmation = True
 
+    tracking: Dict[str, str] = {}
+
     # Extrair entidades
     data = _extrair_data(texto)
     hora = _extrair_hora(texto)
-    grau = _extrair_grau(texto)
+    grau = _extrair_grau(texto, tracking)
     agape_tem, agape_tipo = _extrair_agape(texto)
+    template = _extrair_template(texto)
 
     entities: Dict[str, str] = {}
     if data:
@@ -377,6 +503,8 @@ def _classificar_criacao_evento(
         entities["agape"] = agape_tem
     if agape_tipo:
         entities["agape_tipo"] = agape_tipo
+    if template:
+        entities["template"] = template
 
     if nivel == "2":
         _aplicar_loja_em_entities(_obter_loja_padrao_secretario(lojas_do_secretario), entities)
@@ -386,7 +514,15 @@ def _classificar_criacao_evento(
         _aplicar_loja_em_entities(loja_match, entities)
 
     # Extrair campos soltos do texto: tipo_sessao, rito, potencia, traje, observacoes
-    _extrair_campos_evento_extras(texto, entities)
+    _extrair_campos_evento_extras(texto, entities, tracking)
+    
+    # Extrair rito e potencia explicitamente se vieram de forma avulsa
+    rito = _extrair_rito(texto, tracking)
+    if rito:
+        entities["rito"] = rito
+    potencia = _extrair_potencia(texto)
+    if potencia:
+        entities["potencia"] = potencia
 
     result.entities = entities
 
@@ -401,6 +537,11 @@ def _classificar_criacao_evento(
     else:
         result.preview_text = _montar_preview_evento_completo(entities)
         result.target_callback = "ia_confirmar_evento"
+
+    # Se houve interpretação fuzzy, acrescenta a nota informativa (Regra 4)
+    if tracking:
+        notas = "\n\n💡 *Notas do Assistente IA:*\n" + "\n".join(f"• {v}" for v in tracking.values())
+        result.preview_text += notas
 
     return result
 
@@ -545,7 +686,7 @@ def _montar_preview_evento_completo(entities: Dict[str, str]) -> str:
     return "\n".join(linhas)
 
 
-def _extrair_campos_evento_extras(texto: str, entities: Dict[str, str]) -> None:
+def _extrair_campos_evento_extras(texto: str, entities: Dict[str, str], tracking: Optional[Dict[str, str]] = None) -> None:
     """Extrai campos opcionais de evento do texto."""
     t = _norm(texto)
 
@@ -575,10 +716,33 @@ def _extrair_campos_evento_extras(texto: str, entities: Dict[str, str]) -> None:
             "sessao branca": "Branca", "branca": "Branca",
             "sessao funebre": "Fúnebre", "funebre": "Fúnebre",
         }
+        foi_tipo_sessao = False
         for chave, valor in tipos_sessao.items():
             if chave in t:
                 entities.setdefault("tipo_sessao", valor)
+                foi_tipo_sessao = True
                 break
+
+        # Fuzzy matching for tipo_sessao if not detected exactly
+        if not foi_tipo_sessao:
+            tipos_fuzzy = {
+                "magna": "Magna",
+                "ordinaria": "Ordinária",
+                "extraordinaria": "Extraordinária",
+                "branca": "Branca",
+                "funebre": "Fúnebre",
+            }
+            palavras = t.split()
+            for pal in palavras:
+                pal_clean = re.sub(r"[^a-z]", "", pal)
+                if len(pal_clean) < 4:
+                    continue
+                m = _fuzzy_match(pal_clean, tipos_fuzzy, max_dist=2)
+                if m:
+                    entities.setdefault("tipo_sessao", m)
+                    if tracking is not None:
+                        tracking["tipo_sessao"] = f"Detectei Sessão *{m}* a partir de `{pal}`."
+                    break
 
     # Traje
     trajes = {
@@ -1040,7 +1204,7 @@ def _extrair_uf(texto: str) -> Optional[str]:
     return None
 
 
-def _extrair_rito(texto: str) -> Optional[str]:
+def _extrair_rito(texto: str, tracking: Optional[Dict[str, str]] = None) -> Optional[str]:
     t = _norm(texto)
     ritos_map = {
         "reaa": "REAA",
@@ -1056,6 +1220,27 @@ def _extrair_rito(texto: str) -> Optional[str]:
     for chave, valor in ritos_map.items():
         if chave in t:
             return valor
+
+    # Fuzzy matching for ritos
+    ritos_fuzzy = {
+        "escoces": "REAA",
+        "york": "York",
+        "emulacao": "Emulação",
+        "schroder": "Schröder",
+        "brasileiro": "Brasileiro",
+        "adonhiramita": "Adonhiramita",
+        "moderno": "Moderno",
+    }
+    palavras = t.split()
+    for pal in palavras:
+        pal_clean = re.sub(r"[^a-z]", "", pal)
+        if len(pal_clean) < 4:
+            continue
+        m = _fuzzy_match(pal_clean, ritos_fuzzy, max_dist=2)
+        if m:
+            if tracking is not None:
+                tracking["rito"] = f"Detectei Rito *{m}* a partir de `{pal}`."
+            return m
     return None
 
 

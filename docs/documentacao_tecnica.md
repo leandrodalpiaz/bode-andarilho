@@ -320,3 +320,15 @@ Para validar o diploma, gerar preview local em `tmp/diploma_preview_p1.png` e
 - Fluxos atualizados: `docs/fluxos_atualizados_2026_04.md`
 - Ajuda/FAQ: `src/ajuda/faq.py`
 - Manutenção da base de IA/ajuda: `docs/manutencao_ajuda_e_ia.md`
+
+## 14. Assistente IA
+
+### Arquitetura de Motores
+*   **ia_multinivel.py (Motor de IA):** Classifica a intenção com base no perfil (Níveis 1, 2, 3), realiza a extração de entidades (datas, ritos, graus, etc.), resolve ambiguidades de fluxo e executa fuzzy matching (Levenshtein <= 2) em campos como Grau, Rito e Tipo de Sessão.
+*   **ia_assistente.py (Orquestrador):** Conduz o fluxo e o ciclo de vida da IA. É responsável por persistir o rascunho de criação, desambiguar intenções conflitantes, renderizar respostas educativas e intermediar a interceptação de buscas realizadas em grupos públicos.
+
+### Criação e Revisão
+*   Todo rascunho de criação de evento, seja ele detectado por gatilhos explícitos ou implícitos, é direcionado obrigatoriamente para a tela de revisão no Mini App. O bot nunca realiza a postagem de eventos diretamente a partir de respostas do chat privado.
+
+### IA em Grupos
+*   O bot monitora mensagens em grupos. Caso identifique um padrão de busca natural que retorne resultados ativos na base, exibe um link privado (deep link) seguro do tipo `/start BUSCA_xxxx` que expira após 30 minutos em memória. O aviso no grupo é apagado automaticamente após 120 segundos. Apenas membros autenticados e ativos podem ver os detalhes das sessões no chat privado.

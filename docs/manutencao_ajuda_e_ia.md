@@ -47,15 +47,16 @@ Sem os 4 passos, a tarefa não deve ser considerada concluída.
 - Atualizar o YAML na chave `nivel_permitido`.
 - Revisar itens de ajuda por nível.
 
-### 4) Mudança do Mini App (formulários)
+### 5) Funcionalidade de criação/busca por IA
 
-- Atualizar o YAML para direcionar ao Mini App sempre que o fluxo conversacional for apenas fallback.
-- Garantir que os textos oficiais não incentivem digitação livre quando o formulário já existe.
+- Atualizar `_GATILHOS_CRIACAO_EVENTO`, `_parece_criacao_evento()` e gatilhos no YAML. Garantir que nenhum fluxo publique sem passar pelo Mini App.
+- Atualizar regex de formato de data e janelas temporais de busca.
+- Garantir que buscas interceptadas em grupos nunca revelem dados de sessões no grupo aberto.
 
-### 5) Mudança da camada visual (cards)
+### 6) Fuzzy matching
 
-- Atualizar a documentação técnica (camada visual, assets, migrações).
-- Atualizar FAQ/tutoriais se o usuário/secretário perceber alteração na publicação.
+- Ao adicionar novos valores de grau, rito ou tipo de sessão: incluir variações de typo mais comuns nos candidatos de fuzzy matching.
+- Garantir que o bot sempre informe o usuário quando uma palavra for corrigida via fuzzy matching.
 
 ## Regras para respostas de IA
 

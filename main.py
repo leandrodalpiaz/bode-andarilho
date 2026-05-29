@@ -442,6 +442,11 @@ async def mensagem_grupo_handler(update: Update, context):
             )
             return
 
+        # Interceptar busca por IA no grupo
+        from src.ia_assistente import processar_busca_grupo_ia
+        if await processar_busca_grupo_ia(update, context):
+            return
+
         if _parece_postagem_manual_sessao(update.message.text or update.message.caption or "", has_media):
             link_privado = _link_privado_bot(getattr(context.bot, "username", None), "start")
             teclado = InlineKeyboardMarkup([
