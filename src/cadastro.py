@@ -986,9 +986,11 @@ async def _finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     dados_membro = _dados_para_salvar(update, context)
     salvo = cadastrar_membro(dados_membro)
+    is_sec2 = False
     if salvo:
         token_sec2 = context.user_data.get("convite_secretario_n2")
         if token_sec2:
+            is_sec2 = True
             try:
                 from src.sheets_supabase import consumir_convite_secretario_n2
                 ok_sec2 = consumir_convite_secretario_n2(token_sec2, update.effective_user.id)
@@ -1028,15 +1030,39 @@ async def _finalizar_cadastro(update: Update, context: ContextTypes.DEFAULT_TYPE
     if pos:
         context.user_data["pos_cadastro"] = pos
 
-    await navegar_para(
-        update,
-        context,
-        "Cadastro Concluído",
-        CADASTRO_CONCLUIDO,
-        InlineKeyboardMarkup(
-            [[InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")]]
-        ),
-    )
+    if is_sec2:
+        texto_bv = (
+            "🏛️ *Bem-vindo ao Malhete Digital, Ir.·. Secretário!*\n\n"
+            "Seu acesso de Secretário (Nível 2) está ativo.\n\n"
+            "Antes de usar as ferramentas do bot, é necessário cadastrar sua *Loja Maçônica*.\n\n"
+            "O cadastro da loja é o que permite:\n"
+            "• 📅 Criar e publicar sessões para sua Oficina\n"
+            "• 🎫 Gerar convites com vínculo correto à loja\n"
+            "• 👥 Receber e validar novos irmãos\n"
+            "• 📍 Disponibilizar o endereço da sua Loja (com link para Maps/Waze)\n\n"
+            "Toque no botão abaixo para iniciar o cadastro:"
+        )
+        teclado_bv = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🏛️ Cadastrar minha Loja", callback_data="loja_cadastrar")],
+            [InlineKeyboardButton("📖 Guia do Secretário", callback_data="ajuda_guia")],
+        ])
+        await navegar_para(
+            update,
+            context,
+            "Boas-vindas ao Secretário",
+            texto_bv,
+            teclado_bv,
+        )
+    else:
+        await navegar_para(
+            update,
+            context,
+            "Cadastro Concluído",
+            CADASTRO_CONCLUIDO,
+            InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")]]
+            ),
+        )
 
     # Executa ação pós-cadastro se existir (após a confirmação para não sobrescrevê-la)
     if pos and isinstance(pos, dict) and pos.get("acao") == "confirmar":

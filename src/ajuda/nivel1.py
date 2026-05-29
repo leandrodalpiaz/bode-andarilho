@@ -110,11 +110,12 @@ async def ajuda_nivel1_filtros(update, context):
 		"*Como Encontrar Sessões:*\n\n"
 		"Ao acessar '📅 Ver Sessões', você verá opções para buscar por:\n"
 		" - calendário do mês\n"
-		" - esta semana\n"
-		" - próxima semana\n"
-		" - este mês\n"
-		" - próximos meses\n"
-		" - grau\n\n"
+		" - período (data, esta semana, etc.)\n"
+		" - grau\n"
+		" - rito\n"
+		" - localização (raio atual ou cidade cadastrada)\n"
+		" - potência\n"
+		" - estado (UF)\n\n"
 		"Use o filtro mais rápido para chegar na sessão que deseja."
 	)
 	teclado = InlineKeyboardMarkup(

@@ -907,6 +907,53 @@ def contar_sessoes_ativas_loja(loja_id: Any = None, nome_loja: Any = None, numer
         return 0
 
 
+def contar_sessoes_ativas_secretario(secretario_id: Any) -> int:
+    """
+    Retorna o número de sessões (eventos) futuros/ativos criadas ou de responsabilidade de um secretário.
+    Considera "ativa" a sessão com Status ativo/vazio e data igual ou posterior à data atual (hoje).
+    """
+    target_id = _norm_intlike(secretario_id)
+    if not target_id:
+        return 0
+    try:
+        query = supabase.table("eventos").select("*")
+        resp = query.execute()
+        rows = resp.data or []
+        
+        from datetime import date
+        hoje = date.today()
+        ativos = 0
+        target_id_int = int(float(target_id))
+        
+        for row in rows:
+            status = _norm_text(row.get("status")).lower()
+            if status in ("cancelado", "inativo"):
+                continue
+                
+            sec_id = _norm_intlike(row.get("secretario_telegram_id") or row.get("criado_por_id"))
+            if not sec_id:
+                continue
+            try:
+                sec_id_int = int(float(sec_id))
+            except Exception:
+                continue
+                
+            if sec_id_int != target_id_int:
+                continue
+                
+            data_raw = row.get("data_evento")
+            if not data_raw:
+                continue
+                
+            dt = _parse_data_generica(data_raw)
+            if dt and dt.date() >= hoje:
+                ativos += 1
+        return ativos
+    except Exception as e:
+        logger.error("Erro ao contar sessões ativas do secretário %s: %s", secretario_id, e)
+        return 0
+
+
 def cadastrar_evento(evento: dict) -> Optional[str]:
     """
     Insere um novo evento.

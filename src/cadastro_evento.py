@@ -1086,22 +1086,25 @@ async def confirmar_loja_callback(update: Update, context: ContextTypes.DEFAULT_
         loja = context.user_data.get("loja_selecionada")
         if loja:
             loja_id = _norm_text(loja.get("ID") or loja.get("id"))
-            from src.sheets_supabase import contar_sessoes_ativas_loja
-            if contar_sessoes_ativas_loja(loja_id) >= 4:
-                msg_limite = (
-                    "⚠️ *LIMITE DE SESSÕES ATIVAS ATINGIDO*\n\n"
-                    "Ir.·. Secretário, identificamos que sua Oficina já possui 4 ou mais sessões futuras/ativas cadastradas.\n\n"
-                    "Para manter o calendário dinâmico e evitar o acúmulo de informações, o sistema limita a publicação a no máximo 4 sessões futuras ativas por Loja.\n\n"
-                    "Aguarde a realização de alguma sessão atual ou cancele uma existente para cadastrar novos convites. Publicar poucas sessões mantém a agenda útil e evita despejar o calendário anual de uma vez."
-                )
-                await navegar_para(
-                    update, context,
-                    "Cadastro de Evento > Limite Atingido",
-                    msg_limite,
-                    InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")]]),
-                    limpar_conteudo=True
-                )
-                return ConversationHandler.END
+            from src.permissoes import get_nivel
+            nivel = get_nivel(user_id)
+            if str(nivel) != "3":
+                from src.sheets_supabase import contar_sessoes_ativas_loja, contar_sessoes_ativas_secretario
+                if contar_sessoes_ativas_loja(loja_id) >= 4 or contar_sessoes_ativas_secretario(user_id) >= 4:
+                    msg_limite = (
+                        "⚠️ *LIMITE DE SESSÕES ATIVAS ATINGIDO*\n\n"
+                        "Ir.·. Secretário, identificamos que você ou sua Oficina já possui 4 ou mais sessões futuras/ativas cadastradas.\n\n"
+                        "Para manter o calendário dinâmico e evitar o acúmulo de informações, o sistema limita a publicação a no máximo 4 sessões futuras ativas por Loja ou por Secretário.\n\n"
+                        "Aguarde a realização de alguma sessão atual ou cancele uma existente para cadastrar novos convites. Publicar poucas sessões mantém a agenda útil e evita despejar o calendário anual de uma vez."
+                    )
+                    await navegar_para(
+                        update, context,
+                        "Cadastro de Evento > Limite Atingido",
+                        msg_limite,
+                        InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")]]),
+                        limpar_conteudo=True
+                    )
+                    return ConversationHandler.END
 
             # Pré-preenche os dados da loja
             context.user_data["novo_evento_loja_id"] = loja_id
@@ -1711,27 +1714,30 @@ async def confirmar_publicacao_forcar(update: Update, context: ContextTypes.DEFA
 async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TYPE, evento: Dict[str, Any], forcar: bool = False):
     """Salva o evento na planilha e publica no grupo."""
     user_id = update.effective_user.id
-    # Validação do limite de 4 sessões ativas por Loja
-    from src.sheets_supabase import contar_sessoes_ativas_loja
-    loja_id = evento.get("ID da loja") or evento.get("loja_id")
-    nome_loja = evento.get("Nome da loja")
-    numero_loja = evento.get("Número da loja")
-    
-    if contar_sessoes_ativas_loja(loja_id, nome_loja, numero_loja) >= 4:
-        msg_limite = (
-            "⚠️ *LIMITE DE SESSÕES ATIVAS ATINGIDO*\n\n"
-            "Ir.·. Secretário, identificamos que esta Oficina já possui 4 ou mais sessões futuras/ativas cadastradas.\n\n"
-            "Para manter o calendário dinâmico e evitar o acúmulo de informações, o sistema limita a publicação a no máximo 4 sessões futuras ativas por Loja.\n\n"
-            "Aguarde a realização de alguma sessão atual ou cancele uma existente para cadastrar novos convites. Publicar poucas sessões mantém a agenda útil e evita despejar o calendário anual de uma vez."
-        )
-        await _enviar_ou_editar_mensagem(
-            context, user_id, TIPO_RESULTADO,
-            msg_limite,
-            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")]]),
-            limpar_conteudo=True
-        )
-        _limpar_contexto_evento(context)
-        return
+    # Validação do limite de 4 sessões ativas por Loja ou Secretário
+    from src.permissoes import get_nivel
+    nivel = get_nivel(user_id)
+    if str(nivel) != "3":
+        from src.sheets_supabase import contar_sessoes_ativas_loja, contar_sessoes_ativas_secretario
+        loja_id = evento.get("ID da loja") or evento.get("loja_id")
+        nome_loja = evento.get("Nome da loja")
+        numero_loja = evento.get("Número da loja")
+        
+        if contar_sessoes_ativas_loja(loja_id, nome_loja, numero_loja) >= 4 or contar_sessoes_ativas_secretario(user_id) >= 4:
+            msg_limite = (
+                "⚠️ *LIMITE DE SESSÕES ATIVAS ATINGIDO*\n\n"
+                "Ir.·. Secretário, identificamos que você ou esta Oficina já possui 4 ou mais sessões futuras/ativas cadastradas.\n\n"
+                "Para manter o calendário dinâmico e evitar o acúmulo de informações, o sistema limita a publicação a no máximo 4 sessões futuras ativas por Loja ou por Secretário.\n\n"
+                "Aguarde a realização de alguma sessão atual ou cancele uma existente para cadastrar novos convites. Publicar poucas sessões mantém a agenda útil e evita despejar o calendário anual de uma vez."
+            )
+            await _enviar_ou_editar_mensagem(
+                context, user_id, TIPO_RESULTADO,
+                msg_limite,
+                InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")]]),
+                limpar_conteudo=True
+            )
+            _limpar_contexto_evento(context)
+            return
 
     # 1) Salva no Sheets
     try:

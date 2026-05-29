@@ -17,7 +17,11 @@ async def guia_nivel2(update, context):
 	texto += "*5. Copiar Lista para Ágape:*\n"
 	texto += "   Em 'Meus eventos', escolha o evento e clique em '📋 Copiar lista de confirmados'. O bot gera um texto formatado que você pode copiar e colar para compartilhar com quem organiza o ágape.\n\n"
 	texto += "*6. Configurar Notificações:*\n"
-	texto += "   Na 'Área do Secretário', em '🔔 Configurar notificações', você pode ativar ou desativar os avisos no privado sobre novas confirmações nos seus eventos."
+	texto += "   Na 'Área do Secretário', em '🔔 Configurar notificações', você pode ativar ou desativar os avisos no privado sobre novas confirmações nos seus eventos.\n\n"
+	texto += "*7. Novos Irmãos:*\n"
+	texto += "   Em 'Novos Irmãos', você verá todos os cadastros pendentes vinculados à sua Oficina.\n"
+	texto += "   Membros com ✅ já têm os dados de Loja confirmados — basta aprovar ou recusar.\n"
+	texto += "   Membros com ⚠️ têm dados a conferir — o bot mostra a comparação e permite regularizar e incorporar."
 
 	teclado = InlineKeyboardMarkup(
 		[

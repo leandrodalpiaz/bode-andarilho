@@ -792,7 +792,10 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
     """Executa o cancelamento do evento."""
     query = update.callback_query
     if query:
-        await query.answer("Cancelando evento...")
+        try:
+            await query.answer("Cancelando evento...")
+        except Exception as e:
+            logger.warning("Falha ao responder callback query de cancelamento: %s", e)
     _, id_evento_cod = query.data.split("|", 1)
     id_evento = _decode_cb(id_evento_cod)
 
@@ -1418,6 +1421,55 @@ editar_evento_secretario_handler = ConversationHandler(
 # CÂMARA DE REFLEXÃO - VALIDAÇÃO DE NOVOS IRMÃOS
 # ============================================
 
+def _obter_e_classificar_pendentes(user_id, nivel, loja_vinculada):
+    from src.sheets_supabase import listar_membros
+    membros_brutos = listar_membros(include_inativos=True) or []
+    
+    pendentes_geral = []
+    for m in membros_brutos:
+        st = str(m.get("Status") or m.get("status") or "").strip().lower()
+        if st == "pendente":
+            pendentes_geral.append(m)
+            
+    if not pendentes_geral:
+        return []
+        
+    if nivel == "3":
+        resultado = []
+        for m in pendentes_geral:
+            loja_id_membro = str(m.get("ID da loja") or m.get("loja_id") or "").strip()
+            tipo = "vinculado" if loja_id_membro else "conferir"
+            resultado.append((m, tipo))
+        return resultado
+        
+    if not loja_vinculada:
+        return []
+        
+    loja_id_sec = str(loja_vinculada.get("ID da loja") or loja_vinculada.get("id") or "").strip()
+    
+    resultado = []
+    for m in pendentes_geral:
+        loja_id_membro = str(m.get("ID da loja") or m.get("loja_id") or "").strip()
+        
+        if loja_id_membro and loja_id_membro == loja_id_sec:
+            resultado.append((m, "vinculado"))
+        elif obreiro_corresponde_a_loja(m, loja_vinculada):
+            resultado.append((m, "conferir"))
+            
+    return resultado
+
+
+def _contar_pendentes_label(user_id, loja_vinculada) -> str:
+    nivel = get_nivel(user_id)
+    try:
+        pendentes = _obter_e_classificar_pendentes(user_id, nivel, loja_vinculada)
+        count = len(pendentes)
+        return f" ({count})" if count > 0 else ""
+    except Exception as e:
+        logger.warning("Erro ao contar pendentes: %s", e)
+        return ""
+
+
 async def listar_membros_pendentes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Lista os cadastros com status Pendente filtrando por responsabilidade de oficina."""
     user_id = update.effective_user.id
@@ -1430,85 +1482,38 @@ async def listar_membros_pendentes(update: Update, context: ContextTypes.DEFAULT
         )
         return
 
-    from src.sheets_supabase import listar_membros, listar_lojas
-    
-    membros_brutos = listar_membros(include_inativos=True) or []
-    # Normalização do status Pendente
-    pendentes_geral = []
-    for m in membros_brutos:
-        st = str(m.get("Status") or m.get("status") or "").strip().lower()
-        if st == "pendente":
-            pendentes_geral.append(m)
+    from src.sheets_supabase import get_loja_por_secretario
+    loja_vinculada = None
+    if nivel == "2":
+        loja_vinculada = get_loja_por_secretario(user_id)
 
-    if not pendentes_geral:
+    pendentes_classificados = _obter_e_classificar_pendentes(user_id, nivel, loja_vinculada)
+
+    if not pendentes_classificados:
+        titulo_painel = "Administração > Pendentes" if nivel == "3" else "Validar Novos Irmãos"
+        msg = "🎉 Nenhum cadastro aguarda validação na Câmara de Reflexão neste momento."
+        if nivel == "2":
+            msg = "📋 Não há cadastros pendentes de validação vinculados à(s) sua(s) oficina(s) no momento."
+            
         await navegar_para(
             update, context,
-            "Validar Novos Irmãos",
-            "🎉 Nenhum cadastro aguarda validação na Câmara de Reflexão neste momento.",
-            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data=_callback_voltar_area(nivel))]])
-        )
-        return
-
-    # Filtro de escopo
-    filtrados = []
-    if nivel == "3":
-        filtrados = pendentes_geral
-    else:
-        # Secretário: Buscar apenas os que pertencem à loja que ele administra
-        lojas_admin = listar_lojas(user_id, include_todas=False) or []
-        
-        # Cria chaves de correspondência resilientes
-        import unicodedata
-        import re
-        def _key(txt: Any) -> str:
-            b = unicodedata.normalize("NFKD", str(txt or "").strip())
-            b = "".join(ch for ch in b if not unicodedata.combining(ch))
-            return re.sub(r"\s+", "", b).lower()
-
-        chaves_lojas_sec = set()
-        for l in lojas_admin:
-            lid = _key(l.get("ID") or l.get("id"))
-            if lid:
-                chaves_lojas_sec.add(f"id:{lid}")
-            nome = _key(l.get("Nome da Loja") or l.get("nome_loja"))
-            num = _key(l.get("Número") or l.get("numero") or "0")
-            if nome:
-                chaves_lojas_sec.add(f"nn:{nome}:{num}")
-                
-        for m in pendentes_geral:
-            mid = _key(m.get("ID da loja") or m.get("loja_id"))
-            mnome = _key(m.get("Loja") or m.get("loja"))
-            mnum = _key(m.get("Número da loja") or m.get("numero_loja") or "0")
-            
-            match = False
-            if mid and f"id:{mid}" in chaves_lojas_sec:
-                match = True
-            elif mnome and f"nn:{mnome}:{mnum}" in chaves_lojas_sec:
-                match = True
-            
-            if match:
-                filtrados.append(m)
-
-    if not filtrados:
-        await navegar_para(
-            update, context,
-            "Validar Novos Irmãos",
-            "📋 Não há cadastros pendentes de validação vinculados à(s) sua(s) oficina(s) no momento.",
+            titulo_painel,
+            msg,
             InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data=_callback_voltar_area(nivel))]])
         )
         return
 
     botoes = []
-    for m in filtrados[:50]:  # Limite de segurança
+    for m, tipo in pendentes_classificados[:50]:  # Limite de segurança
         nome = m.get("Nome", "Novo Obreiro")
-        loja_label = m.get("Loja", "Sem Loja")
         tid = m.get("Telegram ID")
         
-        label = f"👤 {nome} ({loja_label})"
+        emoji = "✅" if tipo == "vinculado" else "⚠️"
+        label = f"👤 {nome} {emoji}"
         if len(label) > 36:
             label = label[:33] + "..."
             
-        botoes.append([InlineKeyboardButton(label, callback_data=f"detalhe_pendente|{tid}")])
+        botoes.append([InlineKeyboardButton(label, callback_data=f"detalhe_pendente|{tid}|{tipo}")])
 
     botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data=_callback_voltar_area(nivel))])
 
@@ -1516,7 +1521,10 @@ async def listar_membros_pendentes(update: Update, context: ContextTypes.DEFAULT
     await navegar_para(
         update, context,
         titulo_painel,
-        f"📋 *Cadastros Pendentes ({len(filtrados)})*\n\nSelecione um Irmão para analisar dados e ativar:",
+        f"📋 *Cadastros Pendentes ({len(pendentes_classificados)})*\n\n"
+        f"Selecione um Irmão para analisar dados e ativar:\n\n"
+        f"✅ *Vinculados* (registro simples)\n"
+        f"⚠️ *Conferir* (incorporar e corrigir dados)",
         InlineKeyboardMarkup(botoes)
     )
 
@@ -1531,7 +1539,9 @@ async def detalhe_pendente(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "⛔ Sem permissão.")
         return
 
-    _, tid = query.data.split("|", 1)
+    partes = query.data.split("|")
+    tid = partes[1]
+    tipo = partes[2] if len(partes) > 2 else "vinculado"
     
     from src.sheets_supabase import buscar_membro
     membro = buscar_membro(int(float(tid)))
@@ -1540,6 +1550,44 @@ async def detalhe_pendente(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("❌ Registro pendente não encontrado.")
         await listar_membros_pendentes(update, context)
         return
+
+    if tipo == "conferir":
+        from src.sheets_supabase import get_loja_por_secretario
+        loja_vinculada = get_loja_por_secretario(user_id)
+        if not loja_vinculada:
+            tipo = "vinculado"
+        else:
+            from src.potencias import formatar_potencia_exibicao
+            pot_membro = formatar_potencia_exibicao(membro.get('Potência'), membro.get('Potência complemento'), modo="completo")
+            pot_loja = formatar_potencia_exibicao(loja_vinculada.get('Potência'), loja_vinculada.get('Potência complemento'), modo="completo")
+
+            texto_confirmacao = (
+                f"👥 *Confirmar Incorporação Cadastral*\n\n"
+                f"Deseja incorporar o Ir.·. *{membro.get('Nome')}* à sua Oficina\n\n"
+                f"📋 *Dados digitados pelo Obreiro:*\n"
+                f"• Loja: {membro.get('Loja')} nº {membro.get('Número da loja')}\n"
+                f"• Potência: {pot_membro}\n"
+                f"• Oriente: {membro.get('Oriente')}\n\n"
+                f"🏛️ *Dados Oficiais que serão aplicados:*\n"
+                f"• Loja: {loja_vinculada.get('Nome da loja')} nº {loja_vinculada.get('Número da loja')}\n"
+                f"• Potência: {pot_loja}\n"
+                f"• Oriente: {loja_vinculada.get('Oriente')}\n\n"
+                f"Ao confirmar, o cadastro do obreiro será atualizado para *Ativo (Nível 1)* e travado para edição externa."
+            )
+            
+            teclado = InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ Sim, Incorporar", callback_data=f"admin_executar_incorporacao|{tid}")],
+                [InlineKeyboardButton("❌ Recusar e Deletar", callback_data=f"confirmar_recusar_membro|{tid}")],
+                [InlineKeyboardButton("🔙 Voltar", callback_data="listar_membros_pendentes")]
+            ])
+            
+            await navegar_para(
+                update, context,
+                "Secretário > Confirmar Incorporação",
+                texto_confirmacao,
+                teclado
+            )
+            return
 
     nome = membro.get("Nome", "-")
     grau = membro.get("Grau", "-")
@@ -1610,8 +1658,18 @@ async def aprovar_membro(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _enviar_ou_editar_mensagem(context, user_id, TIPO_RESULTADO, "❌ Obreiro não localizado no banco.")
         return
 
-    # Atualiza
-    sucesso = atualizar_membro(tid, {"Status": "Ativo"}, preservar_nivel=True)
+    # Atualiza - Ao aprovar, garantir loja_id vinculado se estiver vazio
+    updates = {"Status": "Ativo"}
+    loja_id_membro = str(membro.get("ID da loja") or membro.get("loja_id") or "").strip()
+    if not loja_id_membro:
+        from src.sheets_supabase import get_loja_por_secretario
+        loja_vinculada = get_loja_por_secretario(user_id)
+        if loja_vinculada:
+            lid = str(loja_vinculada.get("ID da loja") or loja_vinculada.get("id") or "").strip()
+            if lid:
+                updates["ID da loja"] = lid
+
+    sucesso = atualizar_membro(tid, updates, preservar_nivel=True)
     
     if sucesso:
         _cache_membros.pop(tid, None) # Invalida cache explicitamente
@@ -1776,7 +1834,7 @@ async def _exibir_menu_secretario_seguro(update: Update, context: ContextTypes.D
             )
             teclado_trava = InlineKeyboardMarkup([
                 [InlineKeyboardButton("🏛️ Cadastrar Minha Loja", callback_data="loja_cadastrar")],
-                [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
+                [InlineKeyboardButton("📖 Guia do Secretário", callback_data="ajuda_guia")],
             ])
             await navegar_para(update, context, "Área do Secretário", texto_trava, teclado_trava)
             return
@@ -1819,10 +1877,10 @@ async def _exibir_menu_secretario_seguro(update: Update, context: ContextTypes.D
             logger.warning("Erro ao obter trolhamentos pendentes admin: %s", e_tr)
 
     # Construção do Teclado
+    label_novos_irmaos = f"✅ Novos Irmãos{_contar_pendentes_label(user_id, loja_vinculada)}"
     opcoes = [
         [_botao_cadastrar_evento()],
-        [InlineKeyboardButton("✅ Validar Novos Irmãos", callback_data="listar_membros_pendentes")],
-        [InlineKeyboardButton("👥 Incorporar Obreiros", callback_data="admin_incorporar_obreiros")],
+        [InlineKeyboardButton(label_novos_irmaos, callback_data="listar_membros_pendentes")],
     ]
     if trolhamentos_count > 0:
         opcoes.append([InlineKeyboardButton(f"📋 Trolhamento Solidário ({trolhamentos_count})", callback_data="trolhamento_coletivo_listar")])
@@ -2979,7 +3037,7 @@ async def admin_executar_incorporacao(update: Update, context: ContextTypes.DEFA
             "Secretário > Incorporado",
             f"✅ Obreiro *{membro.get('Nome')}* foi incorporado com sucesso!\n\n"
             f"Seus dados de Loja foram padronizados de acordo com os registros oficiais da sua Oficina e o acesso dele foi liberado.",
-            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="admin_incorporar_obreiros")]])
+            InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="listar_membros_pendentes")]])
         )
     else:
         await _enviar_ou_editar_mensagem(

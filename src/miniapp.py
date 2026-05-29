@@ -865,13 +865,15 @@ async def api_rascunho_evento(request: Request) -> JSONResponse:
     lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
     dados = _aplicar_loja_cadastrada_ao_evento(dados, lojas_existentes)
     
-    # Validação do limite de 4 sessões ativas por Loja
-    from src.sheets_supabase import contar_sessoes_ativas_loja
-    if contar_sessoes_ativas_loja(dados.get("loja_id"), dados.get("nome_loja"), dados.get("numero_loja"), dados.get("potencia")) >= 4:
-        return _json_error(
-            "Limite de 4 sessões futuras/ativas atingido para esta Loja. Publicar poucas sessões mantém a agenda útil e evita despejar o calendário anual de uma vez.",
-            400
-        )
+    # Validação do limite de 4 sessões ativas por Loja ou por Secretário
+    if nivel != "3":
+        from src.sheets_supabase import contar_sessoes_ativas_loja, contar_sessoes_ativas_secretario
+        if (contar_sessoes_ativas_loja(dados.get("loja_id"), dados.get("nome_loja"), dados.get("numero_loja"), dados.get("potencia")) >= 4 or
+            contar_sessoes_ativas_secretario(telegram_id) >= 4):
+            return _json_error(
+                "Limite de 4 sessões futuras/ativas atingido para esta Loja ou Secretário. Publicar poucas sessões mantém a agenda útil e evita despejar o calendário anual de uma vez.",
+                400
+            )
         
     mensagem_loja = _validar_loja_para_evento(dados)
     if mensagem_loja:
@@ -1248,21 +1250,23 @@ async def _confirmar_evento(update: Update, context, salvar_loja: bool) -> None:
     lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
     dados = _aplicar_loja_cadastrada_ao_evento(dados, lojas_existentes)
     
-    # Validação do limite de 4 sessões ativas por Loja
-    from src.sheets_supabase import contar_sessoes_ativas_loja
-    if contar_sessoes_ativas_loja(dados.get("loja_id"), dados.get("nome_loja"), dados.get("numero_loja"), dados.get("potencia")) >= 4:
-        msg_limite = (
-            "⚠️ *LIMITE DE SESSÕES ATIVAS ATINGIDO*\n\n"
-            "Ir.·. Secretário, identificamos que esta Oficina já possui 4 ou mais sessões futuras/ativas cadastradas.\n\n"
-            "Para manter o calendário dinâmico e evitar o acúmulo de informações, o sistema limita a publicação a no máximo 4 sessões futuras ativas por Loja.\n\n"
-            "Aguarde a realização de alguma sessão atual ou cancele uma existente para cadastrar novos convites. Publicar poucas sessões mantém a agenda útil e evita despejar o calendário anual de uma vez."
-        )
-        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-        await query.edit_message_text(
-            text=msg_limite,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="menu_principal")]])
-        )
-        return
+    # Validação do limite de 4 sessões ativas por Loja ou por Secretário
+    if nivel != "3":
+        from src.sheets_supabase import contar_sessoes_ativas_loja, contar_sessoes_ativas_secretario
+        if (contar_sessoes_ativas_loja(dados.get("loja_id"), dados.get("nome_loja"), dados.get("numero_loja"), dados.get("potencia")) >= 4 or
+            contar_sessoes_ativas_secretario(telegram_id) >= 4):
+            msg_limite = (
+                "⚠️ *LIMITE DE SESSÕES ATIVAS ATINGIDO*\n\n"
+                "Ir.·. Secretário, identificamos que você ou esta Oficina já possui 4 ou mais sessões futuras/ativas cadastradas.\n\n"
+                "Para manter o calendário dinâmico e evitar o acúmulo de informações, o sistema limita a publicação a no máximo 4 sessões futuras ativas por Loja ou por Secretário.\n\n"
+                "Aguarde a realização de alguma sessão atual ou cancele uma existente para cadastrar novos convites. Publicar poucas sessões mantém a agenda útil e evita despejar o calendário anual de uma vez."
+            )
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            await query.edit_message_text(
+                text=msg_limite,
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="menu_principal")]])
+            )
+            return
         
     secretario_id = _norm_text(dados.get("secretario_responsavel_id")) or secretario_id
     loja_existente = not _evento_tem_loja_nova(dados, lojas_existentes)
@@ -4708,14 +4712,17 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
     if not all([data_str, horario, grau, tipo_sessao, traje, agape, nome_loja, oriente, rito, potencia, endereco]):
         return JSONResponse({"ok": False, "error": "Preencha todos os campos obrigatórios."}, status_code=400)
         
-    # Validação do limite de 4 sessões ativas por Loja
-    loja_id = body.get("loja_id") or body.get("ID da loja")
-    from src.sheets_supabase import contar_sessoes_ativas_loja
-    if contar_sessoes_ativas_loja(loja_id, nome_loja, numero_loja, potencia) >= 4:
-        return JSONResponse({
-            "ok": False,
-            "error": "Limite de 4 sessões futuras/ativas atingido para esta Loja. Publicar poucas sessões mantém a agenda útil e evita despejar o calendário anual de uma vez."
-        }, status_code=400)
+    # Validação do limite de 4 sessões ativas por Loja ou por Secretário
+    nivel = str(get_nivel(int(telegram_id)))
+    if nivel != "3":
+        loja_id = body.get("loja_id") or body.get("ID da loja")
+        from src.sheets_supabase import contar_sessoes_ativas_loja, contar_sessoes_ativas_secretario
+        if (contar_sessoes_ativas_loja(loja_id, nome_loja, numero_loja, potencia) >= 4 or
+            contar_sessoes_ativas_secretario(telegram_id) >= 4):
+            return JSONResponse({
+                "ok": False,
+                "error": "Limite de 4 sessões futuras/ativas atingido para esta Loja ou Secretário. Publicar poucas sessões mantém a agenda útil e evita despejar o calendário anual de uma vez."
+            }, status_code=400)
         
     if not validar_potencia(potencia, potencia_complemento):
         return JSONResponse({"ok": False, "error": "Informe a potência principal e a potência local."}, status_code=400)

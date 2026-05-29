@@ -907,8 +907,21 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
         loja_id = _norm_text((loja or {}).get("ID") or (loja or {}).get("id"))
         texto = (
             "✅ *Loja cadastrada com sucesso!*\n\n"
-            "Agora você pode usar este cadastro como atalho ao criar novos eventos.\n\n"
-            "Deseja enviar o template visual oficial desta Loja agora?"
+            "Agora configure o *template visual* das sessões publicadas pela sua Oficina.\n"
+            "Existem 3 modos — entenda a diferença:\n\n"
+            "🎨 *Padrão do sistema*\n"
+            "Arte oficial do Bode Andarilho com selos maçônicos.\n"
+            "O bot injeta automaticamente os dados da sessão (data, grau, horário etc.) por cima da arte.\n"
+            "_Sempre disponível, sem necessidade de envio de imagem._\n\n"
+            "🖼 *Template da loja (fundo personalizado)*\n"
+            "Você envia uma imagem de fundo da sua Oficina (logo, brasão, arte em branco).\n"
+            "O bot escreve os dados da sessão por cima da sua imagem.\n"
+            "_Personalização visual com dados gerados pelo bot._\n\n"
+            "✨ *Template da loja (arte completa)*\n"
+            "Você envia uma arte já finalizada com todos os dados impressos (ex: card do Canva).\n"
+            "O bot não injeta nenhum texto — apenas adiciona os botões de gerenciamento.\n"
+            "_Ideal para palestras e eventos com design próprio._\n\n"
+            "Deseja enviar agora o template da sua Loja?"
         )
         teclado = _teclado_template_pos_cadastro(loja_id)
     else:

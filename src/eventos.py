@@ -1161,6 +1161,17 @@ def gerar_calendario_mes(ano: int, mes: int, eventos: List[dict]) -> str:
 # HANDLERS PRINCIPAIS
 # ============================================
 
+def _obter_eventos_busca_ativos() -> List[dict]:
+    """Retorna apenas sessões futuras, ativas e não canceladas."""
+    from datetime import datetime
+    eventos_todos = listar_eventos() or []
+    agora = datetime.now()
+    return [
+        ev for ev in eventos_todos
+        if (dt := _data_hora_evento(ev)) and dt >= agora and _status_evento_normalizado(ev) != "cancelado"
+    ]
+
+
 async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     eventos = listar_eventos() or []
     agora = datetime.now()
@@ -1183,6 +1194,10 @@ async def mostrar_eventos(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [
             InlineKeyboardButton("📜 Por Rito", callback_data=f"data|{TOKEN_POR_RITO_MENU}"),
             InlineKeyboardButton("📍 Por Localização", callback_data=f"data|{TOKEN_GEO_RAIO_MENU}"),
+        ],
+        [
+            InlineKeyboardButton("🏛️ Por Potência", callback_data=f"data|{TOKEN_POR_POTENCIA_MENU}"),
+            InlineKeyboardButton("📍 Por Estado (UF)", callback_data=f"data|{TOKEN_POR_LOCALIDADE_MENU}"),
         ],
         [InlineKeyboardButton("🔙 Voltar ao menu", callback_data="menu_principal")],
     ])
@@ -1260,6 +1275,10 @@ async def calendario_atual(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     _, token_or_data = query.data.split("|", 1)
+    
+    eventos = _obter_eventos_busca_ativos()
+    agora = datetime.now()
+
     if token_or_data == TOKEN_POR_DATA_MENU:
         teclado = InlineKeyboardMarkup([
             [InlineKeyboardButton("📅 Esta Semana", callback_data=f"data|{TOKEN_SEMANA_ATUAL}")],
@@ -1277,14 +1296,7 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         return
 
     if token_or_data == TOKEN_TODAS_DISPONIVEIS:
-        eventos = listar_eventos() or []
-        agora = datetime.now()
-        filtrados = []
-        for ev in eventos:
-            dt = _data_hora_evento(ev)
-            if dt and dt >= agora and _status_evento_normalizado(ev) != "cancelado":
-                filtrados.append(ev)
-        
+        filtrados = list(eventos)
         filtrados.sort(key=lambda x: _data_hora_evento(x) or agora)
         
         if not filtrados:
@@ -1319,10 +1331,6 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         from src.location_service import filtrar_locais_por_raio, filtrar_locais_por_coordenadas
         
         partes_geo = token_or_data.split("|")
-        # partes_geo pode ser:
-        # 1. ["geo_raio_menu"] -> Mostrar menu de escolha
-        # 2. ["geo_raio_menu", "oriente", raio] -> Calcular por Oriente
-        # 3. ["geo_raio_menu", "gps", raio] -> Calcular por GPS
         
         if len(partes_geo) == 1:
             teclado = InlineKeyboardMarkup([
@@ -1371,7 +1379,6 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
             cidade_origem = "GPS Temporário"
             uf_origem = "GPS"
         else:
-            # Modo Oriente
             membro = buscar_membro(update.effective_user.id)
             if not membro:
                 await _enviar_ou_editar_mensagem(
@@ -1400,7 +1407,6 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
                 l_num = membro.get("Número da loja") or membro.get("numero_loja")
                 l_pot = membro.get("Potência") or membro.get("potencia")
                 if l_nome:
-                    # TODO (Fase de Otimização de Queries): Substituir busca por texto por pesquisa simples utilizando a Foreign Key loja_id (UUID).
                     loja = buscar_loja_por_nome_numero(l_nome, l_num, l_pot)
             if loja:
                 uf_origem = str(loja.get("Estado UF") or loja.get("estado_uf") or "").strip().upper()
@@ -1419,40 +1425,36 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
                 return
 
         await query.answer(f"Calculando raio de {int(raio_km)}km...", show_alert=False)
-                 
-        eventos = listar_eventos() or []
-        agora = datetime.now()
+                  
         eventos_futuros = []
         cidades_com_eventos = []
         
         lojas_map = _lojas_map_cache()
         
         for ev in eventos:
-            dt = _data_hora_evento(ev)
-            if dt and dt >= agora and _status_evento_normalizado(ev) != "cancelado":
-                l_id = ev.get("ID da loja") or ev.get("loja_id")
-                loja_ev = lojas_map.get(l_id) if l_id else None
+            l_id = ev.get("ID da loja") or ev.get("loja_id")
+            loja_ev = lojas_map.get(l_id) if l_id else None
+            
+            ori_ev_raw = str(ev.get("Oriente") or "").strip()
+            cid_ev = re.split(r"[-/]", ori_ev_raw)[0].strip()
+            
+            uf_ev = ""
+            if loja_ev:
+                uf_ev = str(loja_ev.get("Estado UF") or loja_ev.get("estado_uf") or "").strip().upper()
+            if not uf_ev:
+                m_uf = re.search(r"[-/]\s*([A-Za-z]{2})\b", ori_ev_raw)
+                uf_ev = m_uf.group(1).upper() if m_uf else ""
                 
-                ori_ev_raw = str(ev.get("Oriente") or "").strip()
-                cid_ev = re.split(r"[-/]", ori_ev_raw)[0].strip()
-                
-                uf_ev = ""
-                if loja_ev:
-                    uf_ev = str(loja_ev.get("Estado UF") or loja_ev.get("estado_uf") or "").strip().upper()
-                if not uf_ev:
-                    m_uf = re.search(r"[-/]\s*([A-Za-z]{2})\b", ori_ev_raw)
-                    uf_ev = m_uf.group(1).upper() if m_uf else ""
-                    
-                if cid_ev and uf_ev:
-                    eventos_futuros.append({
-                        "evento": ev,
-                        "cidade": cid_ev,
-                        "uf": uf_ev
-                    })
-                    cidades_com_eventos.append({
-                        "cidade": cid_ev,
-                        "uf": uf_ev
-                    })
+            if cid_ev and uf_ev:
+                eventos_futuros.append({
+                    "evento": ev,
+                    "cidade": cid_ev,
+                    "uf": uf_ev
+                })
+                cidades_com_eventos.append({
+                    "cidade": cid_ev,
+                    "uf": uf_ev
+                })
                     
         if not cidades_com_eventos:
             await _enviar_ou_editar_mensagem(
@@ -1534,27 +1536,35 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         return
 
     if token_or_data == TOKEN_POR_GRAU_MENU:
-        teclado = InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"🔺 {GRAU_APRENDIZ}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_APRENDIZ}")],
-            [InlineKeyboardButton(f"🔺 {GRAU_COMPANHEIRO}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_COMPANHEIRO}")],
-            [InlineKeyboardButton(f"🔺 {GRAU_MESTRE}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_MESTRE}")],
-            [InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")],
-        ])
+        graus_ativos = set()
+        for ev in eventos:
+            g = normalizar_grau_nome(str(ev.get("Grau") or "").strip())
+            if g:
+                graus_ativos.add(g)
+
+        botoes = []
+        if "Aprendiz" in graus_ativos:
+            botoes.append([InlineKeyboardButton(f"🔺 {GRAU_APRENDIZ}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_APRENDIZ}")])
+        if "Companheiro" in graus_ativos:
+            botoes.append([InlineKeyboardButton(f"🔺 {GRAU_COMPANHEIRO}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_COMPANHEIRO}")])
+        if "Mestre" in graus_ativos:
+            botoes.append([InlineKeyboardButton(f"🔺 {GRAU_MESTRE}", callback_data=f"grau|{TOKEN_POR_GRAU_MENU}|{GRAU_MESTRE}")])
+            
+        botoes.append([InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")])
         await navegar_para(
             update, context,
             "Ver Sessões > Por Grau",
-            "🔺 *Selecione o grau:*",
-            teclado
+            "🔺 *Selecione o grau:*" if graus_ativos else "📋 Não há sessões agendadas para nenhum grau no momento.",
+            InlineKeyboardMarkup(botoes)
         )
         return
 
     if token_or_data == TOKEN_POR_RITO_MENU:
-        eventos = listar_eventos() or []
         ritos = _ritos_disponiveis(eventos)
         if not ritos:
             await _enviar_ou_editar_mensagem(
                 context, update.effective_user.id, TIPO_RESULTADO,
-                "*Sessões por Rito*\n\nAinda não há ritos vinculados às sessões disponíveis.",
+                "📜 *Sessões por Rito*\n\nNão há sessões agendadas para nenhum rito no momento.",
                 InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
             )
             return
@@ -1573,13 +1583,16 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         return
 
     if token_or_data == TOKEN_POR_LOCALIDADE_MENU:
-        eventos = listar_eventos() or []
         lojas_map = _lojas_map_cache()
         ufs = _ufs_ativas_eventos(eventos, lojas_map)
         
         if not ufs:
-            ufs_todas = buscar_estados_uf()
-            ufs = [u["sigla"] for u in ufs_todas]
+            await _enviar_ou_editar_mensagem(
+                context, update.effective_user.id, TIPO_RESULTADO,
+                "📍 *Busca por Localidade*\n\nNão há sessões agendadas em nenhum estado no momento.",
+                InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
+            )
+            return
 
         linhas_uf = []
         linha_atual = []
@@ -1602,13 +1615,12 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
         return
 
     if token_or_data == TOKEN_POR_POTENCIA_MENU:
-        eventos = listar_eventos() or []
         potencias = _potencias_ativas_eventos(eventos)
         
         if not potencias:
              await _enviar_ou_editar_mensagem(
                 context, update.effective_user.id, TIPO_RESULTADO,
-                "🏛️ *Sessões por Potência*\n\nAinda não há potências vinculadas às sessões disponíveis.",
+                "🏛️ *Sessões por Potência*\n\nNão há sessões agendadas para nenhuma potência no momento.",
                 InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Voltar", callback_data="ver_eventos")]])
             )
              return
@@ -1626,8 +1638,6 @@ async def mostrar_eventos_por_data(update: Update, context: ContextTypes.DEFAULT
             InlineKeyboardMarkup(botoes)
         )
         return
-
-    eventos = listar_eventos() or []
 
     if token_or_data in (TOKEN_SEMANA_ATUAL, TOKEN_PROXIMA_SEMANA, TOKEN_MES_ATUAL, TOKEN_PROXIMOS_MESES):
         titulo, filtrados = _filtrar_por_periodo(eventos, token_or_data)
@@ -1671,7 +1681,7 @@ async def mostrar_eventos_por_grau(update: Update, context: ContextTypes.DEFAULT
 
     _, data_or_menu, grau_raw = partes
     grau = normalizar_grau_nome(grau_raw)
-    eventos = listar_eventos() or []
+    eventos = _obter_eventos_busca_ativos()
 
     if data_or_menu == TOKEN_POR_GRAU_MENU:
         titulo, filtrados = _filtrar_por_grau(eventos, grau)
@@ -1714,7 +1724,7 @@ async def mostrar_eventos_por_rito(update: Update, context: ContextTypes.DEFAULT
 
     _, data_or_menu, rito_cod = partes
     rito = _decode_cb(rito_cod)
-    eventos = listar_eventos() or []
+    eventos = _obter_eventos_busca_ativos()
 
     if data_or_menu == TOKEN_POR_RITO_MENU:
         titulo, filtrados = _filtrar_por_rito(eventos, rito)
@@ -2945,7 +2955,7 @@ async def mostrar_eventos_por_uf(update: Update, context: ContextTypes.DEFAULT_T
         return
         
     uf = partes[1].upper()
-    eventos = listar_eventos() or []
+    eventos = _obter_eventos_busca_ativos()
     lojas_map = _lojas_map_cache()
     
     cidades = _cidades_ativas_eventos(eventos, lojas_map, uf)
@@ -2984,7 +2994,7 @@ async def mostrar_eventos_por_cidade(update: Update, context: ContextTypes.DEFAU
     uf = partes[1].upper()
     cidade = partes[2]
     
-    eventos = listar_eventos() or []
+    eventos = _obter_eventos_busca_ativos()
     lojas_map = _lojas_map_cache()
     
     titulo, filtrados = _filtrar_por_cidade(eventos, lojas_map, uf, cidade)
@@ -3026,7 +3036,7 @@ async def mostrar_eventos_por_potencia_filtro(update: Update, context: ContextTy
         return
         
     potencia = partes[1]
-    eventos = listar_eventos() or []
+    eventos = _obter_eventos_busca_ativos()
     
     titulo, filtrados = _filtrar_por_potencia(eventos, potencia)
     
