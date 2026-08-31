@@ -84,6 +84,25 @@ class EventCommandService:
             raise DomainValidationError("nenhum campo para atualizar")
         return values
 
+    @staticmethod
+    def rotate_public_token(
+        current: dict[str, Any],
+        context: CommandContext,
+        *,
+        public_token_hash: str,
+    ) -> dict[str, str]:
+        """Gera o hash de um novo link público sem expor o token persistido."""
+
+        store_id = int(current["loja_id"])
+        if not context.actor.can_manage_events(store_id):
+            raise ApplicationAuthorizationError("sem vínculo autorizado para esta loja")
+        status = str(current.get("status") or "draft").lower()
+        if status in {"cancelled", "closed"}:
+            raise ApplicationConflictError("evento encerrado não pode receber novo link público")
+        if not public_token_hash:
+            raise DomainValidationError("hash do link público ausente")
+        return {"public_token_hash": public_token_hash}
+
 
 class PresenceCommandService:
     @staticmethod

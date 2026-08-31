@@ -118,6 +118,7 @@ class PwaAPI:
             Route("/api/v1/eventos", self._wrap(self.create_event), methods=["POST"]),
             Route("/api/v1/eventos/{event_id:int}", self._wrap(self.get_event), methods=["GET"]),
             Route("/api/v1/eventos/{event_id:int}", self._wrap(self.update_event), methods=["PATCH"]),
+            Route("/api/v1/eventos/{event_id:int}/link-publico", self._wrap(self.rotate_public_link), methods=["POST"]),
             Route("/api/v1/eventos/{event_id:int}", self._wrap(self.cancel_event), methods=["DELETE"]),
             Route("/api/v1/eventos/{event_id:int}/card", self._wrap(self.generate_card), methods=["POST"]),
             Route("/api/v1/publicacoes/{publication_id:int}/estado", self._wrap(self.update_publication_state), methods=["POST"]),
@@ -493,6 +494,35 @@ class PwaAPI:
         row = await self._run("update_event", event_id, values)
         await self._audit(request, actor, "event_updated", "eventos", event_id, "pwa", {"idempotency_key": key})
         return JSONResponse(self._redact_event(row))
+
+    async def rotate_public_link(self, request: Request) -> Response:
+        _, actor = await self._actor(request)
+        key = idempotency_key(request)
+        event_id = positive_int(request.path_params["event_id"], "evento_id")
+        current = await self._run("get_event", event_id)
+        if not current:
+            raise ApiError(404, "evento não encontrado", code="not_found")
+        context = CommandContext(actor=actor, request_id=getattr(request.state, "request_id", None), origin="pwa")
+        public_token = generate_opaque_token()
+        values = EventCommandService.rotate_public_token(
+            current,
+            context,
+            public_token_hash=hash_secret(public_token, self.settings.token_pepper),
+        )
+        row = await self._run("update_event", event_id, values)
+        await self._audit(
+            request,
+            actor,
+            "event_public_link_rotated",
+            "eventos",
+            event_id,
+            "pwa",
+            {"idempotency_key": key},
+        )
+        response = self._redact_event(dict(row))
+        response["public_url"] = self._public_event_url(public_token)
+        response["public_link_rotated"] = True
+        return JSONResponse(response)
 
     async def cancel_event(self, request: Request) -> Response:
         _, actor = await self._actor(request)

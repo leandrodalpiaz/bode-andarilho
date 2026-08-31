@@ -58,6 +58,12 @@ class FakeRepository:
     def get_event(self, event_id):
         return self.event if event_id == 10 else None
 
+    def update_event(self, event_id, values):
+        if event_id != 10:
+            return None
+        self.event.update(values)
+        return self.event
+
     def get_public_event(self, token_hash):
         return self.event
 
@@ -161,6 +167,23 @@ async def test_evento_criado_nao_retorna_hashes_de_bearer():
     assert "public_token_hash" not in response.json()
     assert "idempotency_key_hash" not in response.json()
     assert response.json()["public_url"].startswith("https://pwa.example/evento/")
+
+
+@pytest.mark.asyncio
+async def test_evento_pode_rotacionar_link_publico_sem_expor_hash():
+    repo = FakeRepository()
+    async with make_client(repo) as client:
+        response = await client.post(
+            "/api/v1/eventos/10/link-publico",
+            headers={"Authorization": "Bearer secretary", "Idempotency-Key": "link-001"},
+            json={},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["public_link_rotated"] is True
+    assert body["public_url"].startswith("https://pwa.example/evento/")
+    assert "public_token_hash" not in body
+    assert repo.audits[-1]["acao"] == "event_public_link_rotated"
 
 
 @pytest.mark.asyncio

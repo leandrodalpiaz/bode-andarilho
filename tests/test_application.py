@@ -49,6 +49,24 @@ def test_servico_preserva_transicao_de_estado():
         )
 
 
+def test_servico_gera_hash_de_novo_link_sem_expor_token():
+    data = EventCommandService.rotate_public_token(
+        {"loja_id": 1, "status": "published"},
+        context_for(),
+        public_token_hash="new-public-hash",
+    )
+    assert data == {"public_token_hash": "new-public-hash"}
+
+
+def test_servico_nao_rotaciona_link_de_evento_encerrado():
+    with pytest.raises(ApplicationConflictError):
+        EventCommandService.rotate_public_token(
+            {"loja_id": 1, "status": "closed"},
+            context_for(),
+            public_token_hash="new-public-hash",
+        )
+
+
 def test_servico_nao_cancela_evento_fechado():
     with pytest.raises(ApplicationConflictError):
         EventCommandService.cancel(
