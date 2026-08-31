@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from src.pwa.flags import FeatureFlags
+
 
 def _public_base_url() -> str:
     return (os.getenv("PWA_PUBLIC_BASE_URL") or os.getenv("RENDER_EXTERNAL_URL") or "").strip().rstrip("/")
@@ -17,6 +19,62 @@ def _api_error(payload: Any) -> str:
         if isinstance(error, dict) and error.get("message"):
             return str(error["message"])
     return "não foi possível concluir a associação"
+
+
+def telegram_mutations_to_pwa_enabled() -> bool:
+    """Retorna a chave de corte sem inferir autorização a partir do Telegram."""
+
+    return FeatureFlags.from_env().telegram_mutations_to_pwa
+
+
+def _mutation_pwa_url() -> str:
+    return _public_base_url()
+
+
+async def redirect_mutation_to_pwa(update: Any, operation: str) -> bool:
+    """Interrompe o fluxo legado e orienta a operação equivalente na PWA.
+
+    O retorno ``True`` é deliberado também quando a PWA está mal configurada:
+    com a flag de corte ativa, falhar fechado evita uma gravação acidental no
+    schema legado.
+    """
+
+    if not telegram_mutations_to_pwa_enabled():
+        return False
+
+    message = getattr(update, "effective_message", None)
+    if not message:
+        return True
+    chat = getattr(update, "effective_chat", None)
+    if chat and getattr(chat, "type", "") != "private":
+        await message.reply_text("Por segurança, abra o chat privado do bot para acessar a PWA.")
+        return True
+
+    base_url = _mutation_pwa_url()
+    if not base_url:
+        await message.reply_text(
+            "Esta operação já foi direcionada para a PWA, mas o endereço público ainda não está configurado."
+        )
+        return True
+
+    text = (
+        f"O {operation} foi direcionado para a PWA. "
+        "O bot continua disponível para notificações e contingência."
+    )
+    try:
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    except ImportError:
+        # Permite testar o adaptador sem importar o framework inteiro; no
+        # runtime do bot o pacote está presente e o botão é exibido.
+        await message.reply_text(f"{text}\n\nAcesse: {base_url}")
+    else:
+        await message.reply_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("Abrir PWA", url=base_url)]]
+            ),
+        )
+    return True
 
 
 async def vincular_telegram(update: Any, context: Any) -> None:

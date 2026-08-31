@@ -13,7 +13,7 @@ local. Não existe autorização para apontar produção para este código.
 ## Evidências concluídas
 
 - worktree original preservado e branch de migração isolada;
-- 42 testes Python aprovados nesta revisão, além de compilação sintática em cache
+- 44 testes Python aprovados nesta revisão, além de compilação sintática em cache
   temporário;
 - typecheck e build React aprovados;
 - schema local com RLS/FORCE RLS, grants e lint sem erro;
@@ -45,3 +45,7 @@ Até todos os gates acima estarem registrados, `TELEGRAM_MUTATIONS_TO_PWA` deve
 permanecer desligada. `PWA_ENABLED` pode ser ativada em ambiente isolado para
 testes, mas não implica corte operacional. Push, workflow, deploy, migration
 remota e publicação no Instagram são marcos independentes.
+
+Com a flag de corte ligada, os pontos de entrada de cadastro de sessão e loja
+não escrevem no legado: orientam o operador para a PWA e falham fechado quando
+`PWA_PUBLIC_BASE_URL` não está configurada.

@@ -38,6 +38,7 @@ from src.sheets_supabase import (
 from src.evento_midia import BUCKET_EVENT_CARDS
 from src.permissoes import get_nivel
 from src.ritos import normalizar_rito
+from src.adapters.telegram_pwa import redirect_mutation_to_pwa
 
 from src.bot import (
     navegar_para,
@@ -426,6 +427,8 @@ async def confirmar_exclusao_loja(update: Update, context: ContextTypes.DEFAULT_
 
 async def executar_exclusao_loja(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Executa a exclusão da loja após confirmação."""
+    if await redirect_mutation_to_pwa(update, "arquivamento de loja"):
+        return ConversationHandler.END
     query = update.callback_query
     await _safe_answer(query)
 
@@ -487,6 +490,8 @@ async def configurar_template_menu(update: Update, context: ContextTypes.DEFAULT
 
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
+    if await redirect_mutation_to_pwa(update, "configuração visual da loja"):
+        return ConversationHandler.END
     lojas = listar_lojas_visiveis(user_id, nivel)
     if not lojas:
         await navegar_para(
@@ -654,6 +659,9 @@ async def cadastrar_loja_inicio(update: Update, context: ContextTypes.DEFAULT_TY
             context, user_id, TIPO_RESULTADO,
             "⛔ Permissão negada."
         )
+        return ConversationHandler.END
+
+    if await redirect_mutation_to_pwa(update, "cadastro de loja"):
         return ConversationHandler.END
 
     context.user_data["nova_loja"] = {}
@@ -852,6 +860,9 @@ async def confirmar_cadastro_loja(update: Update, context: ContextTypes.DEFAULT_
     """Confirma e salva a loja na planilha."""
     query = update.callback_query
     user_id = update.effective_user.id
+
+    if await redirect_mutation_to_pwa(update, "cadastro de loja"):
+        return ConversationHandler.END
 
     # Responde primeiro para evitar expiração do callback em operações mais lentas.
     await _safe_answer(query, "✅ Processando...")

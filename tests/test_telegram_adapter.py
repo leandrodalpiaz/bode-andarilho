@@ -8,8 +8,8 @@ class _FakeMessage:
     def __init__(self):
         self.replies = []
 
-    async def reply_text(self, text):
-        self.replies.append(text)
+    async def reply_text(self, text, **kwargs):
+        self.replies.append((text, kwargs))
 
 
 class _FakeClient:
@@ -79,6 +79,50 @@ async def test_comando_vincular_usa_somente_chat_privado(monkeypatch):
 
     await telegram_pwa.vincular_telegram(update, context)
 
-    assert "associado" in message.replies[0]
+    assert "associado" in message.replies[0][0]
     assert _FakeClient.calls[0][0] == "https://pwa.example/api/v1/public/identidades/telegram/associar"
     assert _FakeClient.calls[0][2] == {"codigo": "one-time-code", "telegram_id": "12345"}
+
+
+@pytest.mark.asyncio
+async def test_flag_de_corte_redireciona_mutacao_para_pwa_e_falha_fechado(monkeypatch):
+    from src.adapters import telegram_pwa
+
+    message = _FakeMessage()
+    update = type(
+        "Update",
+        (),
+        {
+            "effective_message": message,
+            "effective_user": type("User", (), {"id": 12345})(),
+            "effective_chat": type("Chat", (), {"type": "private"})(),
+        },
+    )()
+    monkeypatch.setenv("TELEGRAM_MUTATIONS_TO_PWA", "true")
+    monkeypatch.setenv("PWA_PUBLIC_BASE_URL", "https://pwa.example")
+
+    assert await telegram_pwa.redirect_mutation_to_pwa(update, "cadastro de sessão")
+    assert "direcionado para a PWA" in message.replies[0][0]
+    assert "https://pwa.example" in message.replies[0][0] or message.replies[0][1].get("reply_markup") is not None
+
+
+@pytest.mark.asyncio
+async def test_flag_de_corte_sem_url_nao_retorna_ao_fluxo_legado(monkeypatch):
+    from src.adapters import telegram_pwa
+
+    message = _FakeMessage()
+    update = type(
+        "Update",
+        (),
+        {
+            "effective_message": message,
+            "effective_user": type("User", (), {"id": 12345})(),
+            "effective_chat": type("Chat", (), {"type": "private"})(),
+        },
+    )()
+    monkeypatch.setenv("TELEGRAM_MUTATIONS_TO_PWA", "true")
+    monkeypatch.delenv("PWA_PUBLIC_BASE_URL", raising=False)
+    monkeypatch.delenv("RENDER_EXTERNAL_URL", raising=False)
+
+    assert await telegram_pwa.redirect_mutation_to_pwa(update, "cadastro de loja")
+    assert "endereço público" in message.replies[0][0]

@@ -53,6 +53,7 @@ from src.evento_midia import BUCKET_EVENT_CARDS, enviar_previa_evento, publicar_
 from src.sheets_supabase import upload_storage_publico
 from src.ajuda.dicas import enviar_dica_contextual
 from src.permissoes import get_nivel
+from src.adapters.telegram_pwa import redirect_mutation_to_pwa
 from src.potencias import formatar_potencia, potencia_de_dados
 from src.ritos import normalizar_rito
 from src.bot import (
@@ -745,6 +746,9 @@ async def novo_evento_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Você não tem permissão para cadastrar eventos.",
             limpar_conteudo=True
         )
+        return ConversationHandler.END
+
+    if await redirect_mutation_to_pwa(update, "cadastro de sessão"):
         return ConversationHandler.END
 
     # Trava de Segurança Administrativa: Nível 2 exige Loja

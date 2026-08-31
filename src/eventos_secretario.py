@@ -58,6 +58,7 @@ from src.eventos import (
 from src.permissoes import get_nivel
 from src.ajuda.dicas import enviar_dica_contextual
 from src.miniapp import WEBAPP_URL_EVENTO
+from src.adapters.telegram_pwa import redirect_mutation_to_pwa
 
 from src.bot import (
     navegar_para,
@@ -738,6 +739,8 @@ async def copiar_lista_confirmados(update: Update, context: ContextTypes.DEFAULT
 async def confirmar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Primeiro passo: pede confirmação para cancelar o evento."""
     query = update.callback_query
+    if await redirect_mutation_to_pwa(update, "cancelamento de sessão"):
+        return ConversationHandler.END
     _, id_evento_cod = query.data.split("|", 1)
     id_evento = _decode_cb(id_evento_cod)
 
@@ -791,6 +794,8 @@ async def confirmar_cancelamento(update: Update, context: ContextTypes.DEFAULT_T
 async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Executa o cancelamento do evento."""
     query = update.callback_query
+    if await redirect_mutation_to_pwa(update, "cancelamento de sessão"):
+        return ConversationHandler.END
     if query:
         try:
             await query.answer("Cancelando evento...")
@@ -875,6 +880,9 @@ async def editar_evento_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
     """Inicia o processo de edição de um evento."""
     query = update.callback_query
     await query.answer()
+
+    if await redirect_mutation_to_pwa(update, "edição de sessão"):
+        return ConversationHandler.END
 
     if query.data != "editar_evento_secretario":
         return ConversationHandler.END
