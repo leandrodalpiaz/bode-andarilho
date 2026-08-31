@@ -125,6 +125,21 @@ async def test_secretario_cria_evento_somente_na_loja_vinculada():
 
 
 @pytest.mark.asyncio
+async def test_evento_criado_nao_retorna_hashes_de_bearer():
+    repo = FakeRepository()
+    async with make_client(repo) as client:
+        response = await client.post(
+            "/api/v1/eventos",
+            headers={"Authorization": "Bearer secretary", "Idempotency-Key": "event-002"},
+            json={"titulo": "Sessão", "evento_at": "2026-09-10T20:00:00-03:00", "loja_id": 1},
+        )
+    assert response.status_code == 201
+    assert "public_token_hash" not in response.json()
+    assert "idempotency_key_hash" not in response.json()
+    assert response.json()["public_url"].startswith("https://pwa.example/evento/")
+
+
+@pytest.mark.asyncio
 async def test_endpoint_publico_cria_presenca_pendente_e_nao_expoe_hashes():
     repo = FakeRepository()
     async with make_client(repo) as client:

@@ -21,13 +21,18 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
+from src.application.services import (
+    ApplicationAuthorizationError,
+    ApplicationConflictError,
+    CommandContext,
+    EventCommandService,
+    PresenceCommandService,
+    validate_publication_transition,
+)
 from src.domain.authorization import Actor
-from src.domain.states import PUBLICATION_STATES, can_transition_event, can_transition_publication
 from src.domain.validation import (
     DomainValidationError,
     normalize_email,
-    normalize_event_payload,
-    normalize_presence_payload,
     optional_text,
     positive_int,
     required_text,
@@ -134,6 +139,10 @@ class PwaAPI:
                 response = self._error(400, str(exc), "invalid_header")
             except DomainValidationError as exc:
                 response = self._error(422, str(exc), "validation_error")
+            except ApplicationAuthorizationError as exc:
+                response = self._error(403, str(exc), "forbidden")
+            except ApplicationConflictError as exc:
+                response = self._error(409, str(exc), "conflict")
             except RepositoryConflict as exc:
                 response = self._error(409, str(exc), "conflict")
             except PwaConfigurationError as exc:
@@ -405,7 +414,8 @@ class PwaAPI:
 
     async def list_events(self, request: Request) -> Response:
         _, actor = await self._actor(request)
-        return JSONResponse({"items": await self._run("list_events", actor)})
+        rows = await self._run("list_events", actor)
+        return JSONResponse({"items": [self._redact_event(row) for row in rows]})
 
     async def get_event(self, request: Request) -> Response:
         _, actor = await self._actor(request)
@@ -414,35 +424,24 @@ class PwaAPI:
         if not event:
             raise ApiError(404, "evento não encontrado", code="not_found")
         self._require_role(actor, int(event["loja_id"]))
-        return JSONResponse(event)
+        return JSONResponse(self._redact_event(event))
 
     async def create_event(self, request: Request) -> Response:
         _, actor = await self._actor(request)
         key = idempotency_key(request)
         payload = await self._json(request)
-        values = normalize_event_payload(payload)
-        store_id = int(values["loja_id"])
-        self._require_role(actor, store_id, events=True)
-        status = str(payload.get("status") or "draft").lower()
-        visibility = str(payload.get("visibilidade") or "private").lower()
-        if status not in {"draft", "published", "cancelled", "closed"}:
-            raise DomainValidationError("status de evento inválido")
-        if visibility not in {"public", "private"}:
-            raise DomainValidationError("visibilidade deve ser public ou private")
+        context = CommandContext(actor=actor, request_id=getattr(request.state, "request_id", None), origin="pwa")
         public_token = generate_opaque_token()
-        data = {
-            **values,
-            "status": status,
-            "visibilidade": visibility,
-            "criado_por_id": actor.profile_id,
-            "secretario_id": actor.profile_id,
-            "secretario_snapshot_nome": optional_text(payload.get("secretario_snapshot_nome"), "nome do secretário", max_length=160),
-            "public_token_hash": hash_secret(public_token, self.settings.token_pepper),
-            "idempotency_key_hash": hash_secret(key, self.settings.token_pepper),
-        }
+        data = EventCommandService.create(
+            payload,
+            context,
+            public_token_hash=hash_secret(public_token, self.settings.token_pepper),
+            idempotency_key_hash=hash_secret(key, self.settings.token_pepper),
+        )
+        store_id = int(data["loja_id"])
         row = await self._run("create_event", data)
         await self._audit(request, actor, "event_created", "eventos", row.get("id"), "pwa", {"loja_id": store_id, "idempotency_key": key})
-        response = dict(row)
+        response = self._redact_event(dict(row))
         response["public_url"] = self._public_event_url(public_token)
         return JSONResponse(response, status_code=201)
 
@@ -456,17 +455,11 @@ class PwaAPI:
         store_id = int(current["loja_id"])
         self._require_role(actor, store_id, events=True)
         payload = await self._json(request)
-        values = normalize_event_payload(payload, partial=True)
-        if "loja_id" in values and int(values["loja_id"]) != store_id:
-            raise ApiError(403, "evento não pode ser movido de loja por esta operação", code="forbidden")
-        target_status = values.get("status")
-        if target_status and not can_transition_event(str(current.get("status") or "draft"), target_status):
-            raise ApiError(409, "transição de estado do evento não permitida", code="invalid_transition")
-        if not values:
-            raise DomainValidationError("nenhum campo para atualizar")
+        context = CommandContext(actor=actor, request_id=getattr(request.state, "request_id", None), origin="pwa")
+        values = EventCommandService.update(current, payload, context)
         row = await self._run("update_event", event_id, values)
         await self._audit(request, actor, "event_updated", "eventos", event_id, "pwa", {"idempotency_key": key})
-        return JSONResponse(row)
+        return JSONResponse(self._redact_event(row))
 
     async def cancel_event(self, request: Request) -> Response:
         _, actor = await self._actor(request)
@@ -478,7 +471,7 @@ class PwaAPI:
         self._require_role(actor, int(current["loja_id"]), events=True)
         row = await self._run("cancel_event", event_id)
         await self._audit(request, actor, "event_cancelled", "eventos", event_id, "pwa", {"idempotency_key": key})
-        return JSONResponse(row)
+        return JSONResponse(self._redact_event(row))
 
     async def generate_card(self, request: Request) -> Response:
         _, actor = await self._actor(request)
@@ -540,7 +533,7 @@ class PwaAPI:
                 },
             )
             await self._audit(request, actor, "event_card_prepared", "publicacoes_canal", publication.get("id"), "pwa", {"evento_id": event_id, "canal": channel})
-            return JSONResponse({"publication": publication, "artifact": uploaded, "warnings": rendered.warnings})
+            return JSONResponse({"publication": self._redact_publication(publication), "artifact": uploaded, "warnings": rendered.warnings})
         finally:
             shutil.rmtree(output_dir, ignore_errors=True)
 
@@ -557,19 +550,14 @@ class PwaAPI:
         self._require_role(actor, int(event["loja_id"]), events=True)
         payload = await self._json(request)
         target = optional_text(payload.get("estado"), "estado", max_length=30).lower()
-        if target not in PUBLICATION_STATES:
-            raise DomainValidationError("estado de publicação inválido")
-        if target == "api_published":
-            raise ApiError(403, "publicação via API exige adaptador externo com evidência", code="external_evidence_required")
         current = str(publication.get("estado") or "prepared")
-        if not can_transition_publication(current, target):
-            raise ApiError(409, "transição de publicação não permitida", code="invalid_transition")
+        validate_publication_transition(current, target)
         values = {"estado": target}
         if "erro" in payload:
             values["erro"] = optional_text(payload.get("erro"), "erro", max_length=1000)
         row = await self._run("update_publication", publication_id, values)
         await self._audit(request, actor, f"publication_{target}", "publicacoes_canal", publication_id, "pwa", {"idempotency_key": key})
-        return JSONResponse(row)
+        return JSONResponse(self._redact_publication(row))
 
     async def list_presence(self, request: Request) -> Response:
         _, actor = await self._actor(request)
@@ -578,7 +566,8 @@ class PwaAPI:
         if not event:
             raise ApiError(404, "evento não encontrado", code="not_found")
         self._require_role(actor, int(event["loja_id"]), events=True)
-        return JSONResponse({"items": await self._run("list_presence", event_id)})
+        rows = await self._run("list_presence", event_id)
+        return JSONResponse({"items": [self._redact_presence(row) for row in rows]})
 
     async def _review_presence(self, request: Request, target_status: str) -> Response:
         _, actor = await self._actor(request)
@@ -597,7 +586,7 @@ class PwaAPI:
             {"status": target_status, "revisado_por_id": actor.profile_id, "revisado_at": datetime.now(timezone.utc).isoformat()},
         )
         await self._audit(request, actor, f"presence_{target_status}", "solicitacoes_presenca", presence_id, "pwa", {"idempotency_key": key})
-        return JSONResponse(row)
+        return JSONResponse(self._redact_presence(row))
 
     async def approve_presence(self, request: Request) -> Response:
         return await self._review_presence(request, "approved")
@@ -620,6 +609,18 @@ class PwaAPI:
             "status": event.get("status"),
             "visibilidade": event.get("visibilidade"),
         }
+
+    @staticmethod
+    def _redact_event(event: dict[str, Any]) -> dict[str, Any]:
+        return {key: value for key, value in event.items() if key not in {"public_token_hash", "idempotency_key_hash"}}
+
+    @staticmethod
+    def _redact_presence(presence: dict[str, Any]) -> dict[str, Any]:
+        return {key: value for key, value in presence.items() if key not in {"recibo_hash", "idempotency_key_hash"}}
+
+    @staticmethod
+    def _redact_publication(publication: dict[str, Any]) -> dict[str, Any]:
+        return {key: value for key, value in publication.items() if key != "idempotency_key_hash"}
 
     async def public_event(self, request: Request) -> Response:
         token = required_text(request.path_params.get("token"), "token", max_length=512)
@@ -661,21 +662,16 @@ class PwaAPI:
         limiter_key = f"{request_client_ip(request)}:{event_id}"
         if not self._public_limiter.allow(limiter_key):
             raise ApiError(429, "muitas tentativas; tente novamente mais tarde", code="rate_limited")
-        normalized = normalize_presence_payload(payload)
         receipt = generate_opaque_token()
+        normalized = PresenceCommandService.public_request(
+            payload,
+            event_id=event_id,
+            receipt_hash=hash_secret(receipt, self.settings.token_pepper),
+            idempotency_key_hash=hash_secret(key, self.settings.token_pepper),
+        )
         row = await self._run(
             "create_presence",
-            {
-                "evento_id": event_id,
-                "visitante_nome": normalized["visitante_nome"],
-                "visitante_email": normalized.get("visitante_email"),
-                "visitante_telefone": normalized.get("visitante_telefone"),
-                "agape": normalized["agape"],
-                "status": "pending",
-                "origem": "public",
-                "idempotency_key_hash": hash_secret(key, self.settings.token_pepper),
-                "recibo_hash": hash_secret(receipt, self.settings.token_pepper),
-            },
+            normalized,
         )
         await self._audit(request, None, "public_presence_requested", "solicitacoes_presenca", row.get("id"), "public", {"evento_id": event_id})
         return JSONResponse({"id": row.get("id"), "status": row.get("status", "pending"), "receipt": receipt}, status_code=201)
