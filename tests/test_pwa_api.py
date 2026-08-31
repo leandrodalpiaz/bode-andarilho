@@ -172,6 +172,24 @@ async def test_endpoint_publico_cria_presenca_pendente_e_nao_expoe_hashes():
 
 
 @pytest.mark.asyncio
+async def test_evento_publico_expoe_identidade_institucional_segura():
+    repo = FakeRepository()
+    repo.event["loja"] = {
+        "id": 1,
+        "nome": "Loja Piloto",
+        "numero_loja": "101",
+        "cidade": "São Paulo",
+        "uf": "SP",
+        "endereco": "não deve ser exposto neste endpoint",
+    }
+    async with make_client(repo) as client:
+        response = await client.get("/api/v1/public/eventos/public-token")
+    assert response.status_code == 200
+    assert response.json()["loja"]["nome"] == "Loja Piloto"
+    assert "endereco" not in response.json()["loja"]
+
+
+@pytest.mark.asyncio
 async def test_publicacao_registra_compartilhamento_sem_fingir_publicacao_externa():
     repo = FakeRepository()
     async with make_client(repo) as client:
