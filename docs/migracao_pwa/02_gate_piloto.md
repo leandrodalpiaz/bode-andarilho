@@ -13,7 +13,7 @@ local. Não existe autorização para apontar produção para este código.
 ## Evidências concluídas
 
 - worktree original preservado e branch de migração isolada;
-- 39 testes Python aprovados nesta revisão, além de compilação sintática em cache
+- 41 testes Python aprovados nesta revisão, além de compilação sintática em cache
   temporário;
 - typecheck e build React aprovados;
 - schema local com RLS/FORCE RLS, grants e lint sem erro;

@@ -29,6 +29,7 @@ from src.application.services import (
     PresenceCommandService,
     validate_publication_transition,
 )
+from src.application.publication import build_event_caption
 from src.adapters.cards import to_legacy_card_payload
 from src.domain.authorization import Actor
 from src.domain.validation import (
@@ -580,7 +581,14 @@ class PwaAPI:
                 },
             )
             await self._audit(request, actor, "event_card_prepared", "publicacoes_canal", publication.get("id"), "pwa", {"evento_id": event_id, "canal": channel})
-            return JSONResponse({"publication": self._redact_publication(publication), "artifact": uploaded, "warnings": rendered.warnings})
+            return JSONResponse(
+                {
+                    "publication": self._redact_publication(publication),
+                    "artifact": uploaded,
+                    "caption": build_event_caption(event, store),
+                    "warnings": rendered.warnings,
+                }
+            )
         finally:
             shutil.rmtree(output_dir, ignore_errors=True)
 
