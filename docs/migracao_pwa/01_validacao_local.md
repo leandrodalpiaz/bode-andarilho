@@ -45,11 +45,12 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - Reset local após fixture do RPC de associação — código consumido uma vez, identidade criada e auditoria registrada; banco retornou vazio.
 - `docker build -t bode-andarilho-pwa:local .` — aprovado.
 - Importação de `main` e construção das rotas PWA dentro da imagem Python 3.12 — aprovada com placeholders locais.
+- Branch `codex/pwa-foundation` publicada em `origin`; CI `33433191325` concluído com sucesso nos jobs Python 3.12 e Node 22.
 
 ## Limites ainda não executados
 
 - Nenhuma migration, configuração ou leitura foi feita no Supabase remoto.
-- Nenhum push, workflow, deploy ou teste de runtime público foi executado.
+- Nenhum deploy, teste de runtime público ou homologação autenticada externa foi executado.
 - OTP real, Android/iPhone, compartilhamento real, 2FA do Instagram, perfil público e publicações permanecem gates do piloto.
 - Telegram continua no fluxo legado; somente `/vincular` usa o endpoint opcional e `TELEGRAM_MUTATIONS_TO_PWA` permanece desligada. Quando ativada, a flag redireciona os cadastros centrais de evento e loja para a PWA e falha fechado se a URL pública estiver ausente.
 - O corte também aceita `TELEGRAM_MUTATIONS_TO_PWA_STORES` como allowlist de IDs do piloto: a decisão é reavaliada antes da persistência de evento, cancelamento, edição, arquivamento e template; lojas não incluídas continuam no legado.
