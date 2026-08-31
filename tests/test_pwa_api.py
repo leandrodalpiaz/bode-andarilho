@@ -73,7 +73,13 @@ class FakeRepository:
         return row
 
     def get_public_receipt(self, receipt_hash):
-        return None
+        return {
+            "id": 30,
+            "evento_id": 10,
+            "visitante_nome": "Visitante",
+            "status": "pending",
+            "created_at": "2026-09-10T20:00:00+00:00",
+        } if receipt_hash else None
 
     def insert_audit(self, values):
         self.audits.append(values)
@@ -201,6 +207,18 @@ async def test_endpoint_publico_cria_presenca_pendente_e_nao_expoe_hashes():
     assert body["receipt"]
     assert "recibo_hash" not in body
     assert repo.audits[-1]["origem"] == "public"
+
+
+@pytest.mark.asyncio
+async def test_endpoint_publico_consulta_recibo_sem_expor_contato():
+    async with make_client(FakeRepository()) as client:
+        response = await client.get("/api/v1/public/presencas/receipt-token")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "pending"
+    assert body["visitante_nome"] == "Visitante"
+    assert "visitante_email" not in body
+    assert "recibo_hash" not in body
 
 
 @pytest.mark.asyncio

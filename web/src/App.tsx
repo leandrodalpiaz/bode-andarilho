@@ -68,6 +68,14 @@ type PublicEvent = {
   loja?: Pick<Store, "id" | "nome" | "numero_loja" | "cidade" | "uf" | "rito" | "instagram_handle">;
 };
 
+type PublicReceipt = {
+  id: number;
+  evento_id: number;
+  visitante_nome: string;
+  status: string;
+  created_at: string;
+};
+
 type Presence = {
   id: number;
   visitante_nome: string;
@@ -157,10 +165,11 @@ function eventDraft(event: PublicEvent): EventDraft {
   };
 }
 
-function routeInfo(): { kind: "public" | "invite" | "dashboard"; token?: string } {
+function routeInfo(): { kind: "public" | "receipt" | "invite" | "dashboard"; token?: string } {
   const path = window.location.pathname;
   const params = new URLSearchParams(window.location.search);
   if (path.startsWith("/evento/")) return { kind: "public", token: decodeURIComponent(path.slice("/evento/".length)) };
+  if (path.startsWith("/recibo/")) return { kind: "receipt", token: decodeURIComponent(path.slice("/recibo/".length)) };
   if (path === "/convite") return { kind: "invite", token: params.get("token") || undefined };
   return { kind: "dashboard" };
 }
@@ -169,7 +178,7 @@ export function App() {
   const route = useMemo(routeInfo, []);
   const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig | null>(null);
   const [configError, setConfigError] = useState("");
-  const [configLoading, setConfigLoading] = useState(route.kind !== "public");
+  const [configLoading, setConfigLoading] = useState(!["public", "receipt"].includes(route.kind));
   const [session, setSession] = useState<Session | null>(null);
   const supabase = useMemo<SupabaseClient | null>(() => {
     if (!runtimeConfig?.supabase_url || !runtimeConfig.supabase_publishable_key) return null;
@@ -177,7 +186,7 @@ export function App() {
   }, [runtimeConfig]);
 
   useEffect(() => {
-    if (route.kind === "public") return;
+    if (route.kind === "public" || route.kind === "receipt") return;
     apiFetch("/api/v1/config")
       .then((data) => setRuntimeConfig(data as RuntimeConfig))
       .catch((reason: Error) => setConfigError(reason.message))
@@ -194,6 +203,7 @@ export function App() {
   }, [supabase]);
 
   if (route.kind === "public") return <PublicEventPage token={route.token || ""} />;
+  if (route.kind === "receipt") return <PublicReceiptPage receipt={route.token || ""} />;
   if (configLoading) return <Shell><p className="muted">Carregando a configuração segura…</p></Shell>;
   if (configError) return <Shell><Notice tone="warning" title="PWA indisponível">{configError}</Notice></Shell>;
   if (!supabase) return <Shell><Notice tone="warning" title="Configuração pendente">A chave publicável do Supabase ainda não foi configurada neste ambiente.</Notice></Shell>;
@@ -571,5 +581,28 @@ function PublicEventPage({ token }: { token: string }) {
   }
 
   if (error && !event) return <Shell><Notice tone="warning" title="Link indisponível">{error}</Notice></Shell>;
-  return <Shell><section className="panel public-card"><p className="eyebrow">Convite público</p><h2>{event?.titulo || "Carregando evento…"}</h2>{event && <><p className="date-line">{event.loja?.nome || `Loja ${event.loja_id}`}</p><p className="date-line">{formatDate(event.evento_at)}</p>{event.descricao && <p className="muted">{event.descricao}</p>}{event.rito && <p className="muted">Rito: {event.rito}</p>}{event.traje_obrigatorio && <p className="muted">Traje: {event.traje_obrigatorio}</p>}{receipt ? <Notice tone="success" title="Solicitação recebida">Guarde este recibo: <code>{receipt}</code>. A confirmação ficará pendente de revisão.</Notice> : <form onSubmit={submit} className="stack"><label>Seu nome<input required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></label><label>E-mail (opcional)<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label>Telefone (opcional)<input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} /></label><label>Ágape<select value={form.agape} onChange={(e) => setForm({ ...form, agape: e.target.value })}><option value="sem">Sem ágape</option><option value="com">Com ágape</option><option value="gratuito">Ágape gratuito</option><option value="pago">Ágape pago</option></select></label><button disabled={busy}>{busy ? "Enviando…" : "Solicitar presença"}</button></form>}</>}</section>{error && <Notice tone="warning" title="Não foi possível enviar">{error}</Notice>}</Shell>;
+  return <Shell><section className="panel public-card"><p className="eyebrow">Convite público</p><h2>{event?.titulo || "Carregando evento…"}</h2>{event && <><p className="date-line">{event.loja?.nome || `Loja ${event.loja_id}`}</p><p className="date-line">{formatDate(event.evento_at)}</p>{event.descricao && <p className="muted">{event.descricao}</p>}{event.rito && <p className="muted">Rito: {event.rito}</p>}{event.traje_obrigatorio && <p className="muted">Traje: {event.traje_obrigatorio}</p>}{receipt ? <Notice tone="success" title="Solicitação recebida">Guarde este recibo: <code>{receipt}</code>. A confirmação ficará pendente de revisão. <a href={`/recibo/${encodeURIComponent(receipt)}`}>Consultar status do recibo</a></Notice> : <form onSubmit={submit} className="stack"><label>Seu nome<input required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></label><label>E-mail (opcional)<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label>Telefone (opcional)<input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} /></label><label>Ágape<select value={form.agape} onChange={(e) => setForm({ ...form, agape: e.target.value })}><option value="sem">Sem ágape</option><option value="com">Com ágape</option><option value="gratuito">Ágape gratuito</option><option value="pago">Ágape pago</option></select></label><button disabled={busy}>{busy ? "Enviando…" : "Solicitar presença"}</button></form>}</>}</section>{error && <Notice tone="warning" title="Não foi possível enviar">{error}</Notice>}</Shell>;
+}
+
+function receiptStatusLabel(status: string): string {
+  return {
+    pending: "Pendente de revisão",
+    approved: "Presença aprovada",
+    rejected: "Solicitação recusada",
+    cancelled: "Solicitação cancelada",
+  }[status] || status;
+}
+
+function PublicReceiptPage({ receipt }: { receipt: string }) {
+  const [data, setData] = useState<PublicReceipt | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    apiFetch(`/api/v1/public/presencas/${encodeURIComponent(receipt)}`)
+      .then((value) => setData(value as PublicReceipt))
+      .catch((reason: Error) => setError(reason.message));
+  }, [receipt]);
+
+  if (error) return <Shell><Notice tone="warning" title="Recibo indisponível">{error}</Notice></Shell>;
+  return <Shell><section className="panel public-card"><p className="eyebrow">Consulta pública</p><h2>{data ? "Status da solicitação" : "Carregando recibo…"}</h2>{data && <><p className="date-line">{receiptStatusLabel(data.status)}</p><p className="muted">Visitante: {data.visitante_nome}</p><p className="muted">Solicitado em {formatDate(data.created_at)}</p><p className="muted">Evento: {data.evento_id}</p><code>{receipt}</code></>}</section></Shell>;
 }
