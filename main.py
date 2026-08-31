@@ -32,208 +32,218 @@ from starlette.routing import Route
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse, Response
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-from telegram.error import InvalidToken
+_TELEGRAM_MODULES_ENABLED = os.getenv("TELEGRAM_ENABLED", "true").strip().lower() in {
+    "1", "true", "yes", "on"
+}
 
-from src.miniapp import (
-    get_cadastro_membro,
-    get_cadastro_evento,
-    get_cadastro_loja,
-    get_apoios_admin,
-    get_apoios_apoiadores,
-    get_apoios_contratos,
-    get_apoios_financeiro,
-    get_apoios_criativos,
-    api_cadastro_membro,
-    api_cadastro_evento,
-    api_cadastro_loja,
-    api_apoios_dashboard,
-    api_apoios_apoiadores,
-    api_apoios_contratos,
-    api_apoios_pagamentos,
-    api_apoios_criativos,
-    get_galeria,
-    api_galeria,
-    api_rascunho_membro,
-    api_rascunho_loja,
-    api_rascunho_evento,
-    api_listar_lojas,
-    draft_membro_confirmar,
-    draft_membro_cancelar,
-    draft_loja_escolher_secretario,
-    draft_loja_set_secretario,
-    draft_loja_set_secretario_cancelar,
-    draft_loja_confirmar,
-    draft_loja_cancelar,
-    draft_evento_escolher_secretario,
-    draft_evento_set_secretario,
-    draft_evento_set_secretario_cancelar,
-    draft_evento_escolher_visual_com_loja,
-    draft_evento_escolher_visual_sem_loja,
-    draft_evento_visual_voltar,
-    draft_evento_definir_visual,
-    receber_arte_pronta_evento,
-    draft_evento_confirmar_com_loja,
-    draft_evento_confirmar_sem_loja,
-    draft_evento_cancelar,
-    WEBAPP_URL_MEMBRO,
-)
-from telegram.ext import (
-    Application,
-    CallbackQueryHandler,
-    ChatMemberHandler,
-    MessageHandler,
-    CommandHandler,
-    filters,
-)
+if _TELEGRAM_MODULES_ENABLED:
+    from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+    from telegram.error import InvalidToken
+    from telegram.ext import (
+        Application,
+        CallbackQueryHandler,
+        ChatMemberHandler,
+        MessageHandler,
+        CommandHandler,
+        filters,
+    )
 
 from src.pwa.api import PwaAPI
 from src.pwa.flags import FeatureFlags
 from src.pwa.static import frontend_index_response, frontend_routes
 from src.adapters.telegram_pwa import vincular_telegram
 
+# Os módulos legados carregam o cliente Supabase antigo durante o import. No
+# modo somente-PWA eles não devem ser necessários nem bloquear a inicialização
+# por ausência de SUPABASE_KEY/TELEGRAM_TOKEN.
+if _TELEGRAM_MODULES_ENABLED:
+    from src.miniapp import (
+        get_cadastro_membro,
+        get_cadastro_evento,
+        get_cadastro_loja,
+        get_apoios_admin,
+        get_apoios_apoiadores,
+        get_apoios_contratos,
+        get_apoios_financeiro,
+        get_apoios_criativos,
+        api_cadastro_membro,
+        api_cadastro_evento,
+        api_cadastro_loja,
+        api_apoios_dashboard,
+        api_apoios_apoiadores,
+        api_apoios_contratos,
+        api_apoios_pagamentos,
+        api_apoios_criativos,
+        get_galeria,
+        api_galeria,
+        api_rascunho_membro,
+        api_rascunho_loja,
+        api_rascunho_evento,
+        api_listar_lojas,
+        draft_membro_confirmar,
+        draft_membro_cancelar,
+        draft_loja_escolher_secretario,
+        draft_loja_set_secretario,
+        draft_loja_set_secretario_cancelar,
+        draft_loja_confirmar,
+        draft_loja_cancelar,
+        draft_evento_escolher_secretario,
+        draft_evento_set_secretario,
+        draft_evento_set_secretario_cancelar,
+        draft_evento_escolher_visual_com_loja,
+        draft_evento_escolher_visual_sem_loja,
+        draft_evento_visual_voltar,
+        draft_evento_definir_visual,
+        receber_arte_pronta_evento,
+        draft_evento_confirmar_com_loja,
+        draft_evento_confirmar_sem_loja,
+        draft_evento_cancelar,
+        WEBAPP_URL_MEMBRO,
+    )
+
 # ============================================
 # IMPORTAÇÕES DOS MÓDULOS
 # ============================================
 
-# Cadastro de membros
-from src.cadastro import cadastro_start
+if _TELEGRAM_MODULES_ENABLED:
+    # Cadastro de membros
+    from src.cadastro import cadastro_start
 
-# Menus e navegação principal
-from src.bot import (
-    botao_handler,
-    menu_principal_teclado,
-    start,
-    texto_privado_router,
-    _enviar_ou_editar_mensagem,
-    TIPO_RESULTADO,
-    executar_comando_seguro,
-)
+    # Menus e navegação principal
+    from src.bot import (
+        botao_handler,
+        menu_principal_teclado,
+        start,
+        texto_privado_router,
+        _enviar_ou_editar_mensagem,
+        TIPO_RESULTADO,
+        executar_comando_seguro,
+    )
 
-# Eventos (visualização, confirmação, etc.)
-from src.eventos import (
-    mostrar_eventos,
-    mostrar_detalhes_evento,
-    cancelar_presenca,
-    ver_confirmados,
-    fechar_mensagem,
-    minhas_confirmacoes,
-    minhas_confirmacoes_futuro,
-    minhas_confirmacoes_historico,
-    mostrar_eventos_por_data,
-    mostrar_eventos_por_grau,
-    mostrar_eventos_por_rito,
-    detalhes_confirmado,
-    detalhes_historico,
-    confirmacao_presenca_handler,
-    mostrar_calendario,
-    calendario_atual,
-    mostrar_eventos_por_uf,
-    mostrar_eventos_por_cidade,
-    mostrar_eventos_por_potencia_filtro,
-    receber_gps_busca_callback,
-)
+    # Eventos (visualização, confirmação, etc.)
+    from src.eventos import (
+        mostrar_eventos,
+        mostrar_detalhes_evento,
+        cancelar_presenca,
+        ver_confirmados,
+        fechar_mensagem,
+        minhas_confirmacoes,
+        minhas_confirmacoes_futuro,
+        minhas_confirmacoes_historico,
+        mostrar_eventos_por_data,
+        mostrar_eventos_por_grau,
+        mostrar_eventos_por_rito,
+        detalhes_confirmado,
+        detalhes_historico,
+        confirmacao_presenca_handler,
+        mostrar_calendario,
+        calendario_atual,
+        mostrar_eventos_por_uf,
+        mostrar_eventos_por_cidade,
+        mostrar_eventos_por_potencia_filtro,
+        receber_gps_busca_callback,
+    )
 
-# Cadastro de eventos (com integração com lojas)
-from src.cadastro_evento import cadastro_evento_handler
+    # Cadastro de eventos (com integração com lojas)
+    from src.cadastro_evento import cadastro_evento_handler
 
-# Ações administrativas
-from src.admin_acoes import (
-    processar_auditoria_validar,
-    processar_auditoria_recusar,
-    processar_pedido_fundacao_usuario,
-    confirmar_pedido_fundacao_usuario,
-    outorgar_malhete_admin,
-    recusar_outorga_admin,
-    promover_handler,
-    rebaixar_handler,
-    editar_membro_handler,
-    broadcast_handler,
-    admin_toggle_comunicacao,
-    ver_todos_membros,
-    membros_pagina_anterior,
-    membros_pagina_proxima,
-    menu_notificacoes,
-    notificacoes_ativar,
-    notificacoes_desativar,
-    exibir_menu_admin,
-    aprovar_secretario_callback,
-    recusar_secretario_callback,
-    admin_gerar_convite_sec_callback,
-)
+    # Ações administrativas
+    from src.admin_acoes import (
+        processar_auditoria_validar,
+        processar_auditoria_recusar,
+        processar_pedido_fundacao_usuario,
+        confirmar_pedido_fundacao_usuario,
+        outorgar_malhete_admin,
+        recusar_outorga_admin,
+        promover_handler,
+        rebaixar_handler,
+        editar_membro_handler,
+        broadcast_handler,
+        admin_toggle_comunicacao,
+        ver_todos_membros,
+        membros_pagina_anterior,
+        membros_pagina_proxima,
+        menu_notificacoes,
+        notificacoes_ativar,
+        notificacoes_desativar,
+        exibir_menu_admin,
+        aprovar_secretario_callback,
+        recusar_secretario_callback,
+        admin_gerar_convite_sec_callback,
+    )
 
-# Edição do próprio perfil
-from src.editar_perfil import editar_perfil_handler, alerta_cadastro_bloqueado
-from src.apoio import registrar_handlers_apoio
+    # Edição do próprio perfil
+    from src.editar_perfil import editar_perfil_handler, alerta_cadastro_bloqueado
+    from src.apoio import registrar_handlers_apoio
 
-# Área do secretário
-from src.eventos_secretario import (
-    editar_evento_secretario_handler,
-    meus_eventos,
-    menu_gerenciar_evento,
-    confirmar_cancelamento,
-    executar_cancelamento,
-    resumo_confirmados,
-    copiar_lista_confirmados,
-    ver_confirmados_secretario,
-    visualizar_confirmados,
-    listar_eventos_cancelados,
-    confirmar_refazer_evento,
-    executar_refazer_evento,
-    exibir_menu_secretario,
-    listar_membros_pendentes,
-    detalhe_pendente,
-    aprovar_membro,
-    confirmar_recusar_membro,
-    recusar_membro,
-    cmd_convidar,
-    trolhamento_coletivo_listar,
-    trolhamento_coletivo_detalhe,
-    trolhamento_coletivo_aprovar,
-    trolhamento_coletivo_recusar_irreg,
-    trolhamento_coletivo_recusar_notfound,
-    admin_incorporar_obreiros,
-    admin_confirmar_incorporacao,
-    admin_executar_incorporacao,
-)
+    # Área do secretário
+    from src.eventos_secretario import (
+        editar_evento_secretario_handler,
+        meus_eventos,
+        menu_gerenciar_evento,
+        confirmar_cancelamento,
+        executar_cancelamento,
+        resumo_confirmados,
+        copiar_lista_confirmados,
+        ver_confirmados_secretario,
+        visualizar_confirmados,
+        listar_eventos_cancelados,
+        confirmar_refazer_evento,
+        executar_refazer_evento,
+        exibir_menu_secretario,
+        listar_membros_pendentes,
+        detalhe_pendente,
+        aprovar_membro,
+        confirmar_recusar_membro,
+        recusar_membro,
+        cmd_convidar,
+        trolhamento_coletivo_listar,
+        trolhamento_coletivo_detalhe,
+        trolhamento_coletivo_aprovar,
+        trolhamento_coletivo_recusar_irreg,
+        trolhamento_coletivo_recusar_notfound,
+        admin_incorporar_obreiros,
+        admin_confirmar_incorporacao,
+        admin_executar_incorporacao,
+    )
 
-# Gerenciamento de lojas (com exclusão)
-from src.lojas import (
-    cadastro_loja_handler,
-    menu_lojas,
-    listar_lojas_handler,
-    ver_membros_da_loja,
-    excluir_loja_menu,
-    confirmar_exclusao_loja,
-    executar_exclusao_loja,
-)
+    # Gerenciamento de lojas (com exclusão)
+    from src.lojas import (
+        cadastro_loja_handler,
+        menu_lojas,
+        listar_lojas_handler,
+        ver_membros_da_loja,
+        excluir_loja_menu,
+        confirmar_exclusao_loja,
+        executar_exclusao_loja,
+    )
 
-# Ajuda contextual e gamificação
-from src.ajuda.menus import ajuda_handlers
-from src.ajuda.conquistas import mostrar_marcos_secretario, mostrar_conquistas_membro
-from src.membro_lembretes import (
-    menu_lembretes_membro,
-    lembretes_membro_ativar,
-    lembretes_membro_desativar,
-)
+    # Ajuda contextual e gamificação
+    from src.ajuda.menus import ajuda_handlers
+    from src.ajuda.conquistas import mostrar_marcos_secretario, mostrar_conquistas_membro
+    from src.membro_lembretes import (
+        menu_lembretes_membro,
+        lembretes_membro_ativar,
+        lembretes_membro_desativar,
+    )
 
-# Utilitários
-from src.sheets_supabase import buscar_membro, membro_esta_ativo, atualizar_status_membro
-from src.permissoes import get_nivel
-from src.messages import (
-    GRUPO_ONBOARDING_SEM_CADASTRO,
-    GRUPO_FALLBACK_ABRIR_PRIVADO,
-    GRUPO_COMANDO_PRIVADO,
-    GRUPO_COMANDO_NAO_RECONHECIDO,
-    GRUPO_BOAS_VINDAS_RETORNO_TMPL,
-    GRUPO_ONBOARDING_NOVO_MEMBRO_TMPL,
-    GRUPO_FALLBACK_NOVO_MEMBRO_TMPL,
-)
-from src.ia_assistente import (
-    assistente_ia,
-    assistente_ia_stats,
-    assistente_ia_relatorio,
-)
+    # Utilitários
+    from src.sheets_supabase import buscar_membro, membro_esta_ativo, atualizar_status_membro
+    from src.permissoes import get_nivel
+    from src.messages import (
+        GRUPO_ONBOARDING_SEM_CADASTRO,
+        GRUPO_FALLBACK_ABRIR_PRIVADO,
+        GRUPO_COMANDO_PRIVADO,
+        GRUPO_COMANDO_NAO_RECONHECIDO,
+        GRUPO_BOAS_VINDAS_RETORNO_TMPL,
+        GRUPO_ONBOARDING_NOVO_MEMBRO_TMPL,
+        GRUPO_FALLBACK_NOVO_MEMBRO_TMPL,
+    )
+    from src.ia_assistente import (
+        assistente_ia,
+        assistente_ia_stats,
+        assistente_ia_relatorio,
+    )
 
 # ============================================
 # CONFIGURAÇÃO INICIAL
@@ -999,7 +1009,7 @@ def register_handlers(app: Application) -> None:
 # CONFIGURAÇÃO DO WEBHOOK E SERVIDOR
 # ============================================
 
-async def shutdown(server, telegram_app: Application):
+async def shutdown(server, telegram_app: Application | None):
     """Encerramento gracioso do servidor e do bot."""
     try:
         logger.info("Shutdown iniciado...")
@@ -1009,16 +1019,17 @@ async def shutdown(server, telegram_app: Application):
         except Exception:
             pass
 
-        try:
-            await telegram_app.bot.delete_webhook(drop_pending_updates=False)
-        except Exception:
-            pass
+        if telegram_app is not None:
+            try:
+                await telegram_app.bot.delete_webhook(drop_pending_updates=False)
+            except Exception:
+                pass
 
-        try:
-            await telegram_app.stop()
-            await telegram_app.shutdown()
-        except Exception:
-            pass
+            try:
+                await telegram_app.stop()
+                await telegram_app.shutdown()
+            except Exception:
+                pass
 
         logger.info("Shutdown concluído.")
     except Exception as e:
@@ -1026,24 +1037,30 @@ async def shutdown(server, telegram_app: Application):
 
 
 async def main():
-    """Função principal que inicia o bot e o servidor webhook."""
-    from src.telegram_sender import patch_telegram_bot_classes
-    patch_telegram_bot_classes()
+    """Função principal que inicia o servidor e, quando habilitado, o bot."""
+    feature_flags = FeatureFlags.from_env()
+    token: Optional[str] = None
+    render_url = ""
+    webhook_secret = ""
+    secret_explicit = False
 
-    token = _require_env("TELEGRAM_TOKEN", _clean_env_text(TOKEN))
-    render_url = _require_env("RENDER_EXTERNAL_URL", _clean_env_text(RENDER_URL))
-    webhook_secret, secret_explicit = _resolver_webhook_secret(token, WEBHOOK_SECRET)
+    if feature_flags.telegram_enabled:
+        from src.telegram_sender import patch_telegram_bot_classes
+
+        patch_telegram_bot_classes()
+        token = _require_env("TELEGRAM_TOKEN", _clean_env_text(TOKEN))
+        render_url = _require_env("RENDER_EXTERNAL_URL", _clean_env_text(RENDER_URL))
+        webhook_secret, secret_explicit = _resolver_webhook_secret(token, WEBHOOK_SECRET)
+
     webhook_path = _clean_env_text(WEBHOOK_PATH) or "/telegram/webhook"
     webhook_path = webhook_path if webhook_path.startswith("/") else f"/{webhook_path}"
-
-    webhook_url = _join_url(render_url, webhook_path)
     drop_pending_updates = _env_bool(DROP_PENDING_UPDATES_ON_BOOT, default=False)
 
     logger.info("TOKEN carregado: %s", "SIM" if token else "NAO")
     logger.info("RENDER_URL: %s", render_url)
     logger.info("PORT: %s", PORT)
     logger.info("WEBHOOK_PATH normalizado: %r", webhook_path)
-    logger.info("WEBHOOK_URL: %s", webhook_url)
+    logger.info("WEBHOOK_URL: %s", _join_url(render_url, webhook_path) if render_url else "desativada")
     logger.info("DROP_PENDING_UPDATES_ON_BOOT: %s", drop_pending_updates)
     logger.info("WEBHOOK_MAX_CONNECTIONS: %s", WEBHOOK_MAX_CONNECTIONS)
     render_commit = os.getenv("RENDER_GIT_COMMIT", "").strip()
@@ -1053,45 +1070,48 @@ async def main():
         logger.info("Build commit ativo (RENDER_GIT_COMMIT): nao informado")
     logger.info(
         "TELEGRAM_WEBHOOK_SECRET: %s",
-        "EXPLICITO" if secret_explicit else "DERIVADO_DO_TOKEN",
+        "EXPLICITO" if secret_explicit else ("DERIVADO_DO_TOKEN" if token else "DESATIVADO"),
     )
-    if not secret_explicit:
+    if token and not secret_explicit:
         logger.warning(
             "TELEGRAM_WEBHOOK_SECRET ausente. Usando segredo derivado do TELEGRAM_TOKEN; "
             "recomenda-se configurar TELEGRAM_WEBHOOK_SECRET no provider."
         )
 
-    feature_flags = FeatureFlags.from_env()
-    if not feature_flags.telegram_enabled:
-        raise RuntimeError("TELEGRAM_ENABLED=false ainda não possui modo somente PWA neste entrypoint.")
+    telegram_app: Application | None = None
+    if feature_flags.telegram_enabled:
+        assert token is not None
+        telegram_app = Application.builder().token(token).build()
+        register_handlers(telegram_app)
 
-    telegram_app = Application.builder().token(token).build()
-    register_handlers(telegram_app)
+        try:
+            await telegram_app.initialize()
+        except InvalidToken:
+            logger.error(
+                "TELEGRAM_TOKEN inválido ou revogado. Atualize a variável de ambiente no provider."
+            )
+            raise RuntimeError("Falha de autenticação no Telegram.") from None
 
-    try:
-        await telegram_app.initialize()
-    except InvalidToken:
-        logger.error(
-            "TELEGRAM_TOKEN inválido ou revogado. Atualize a variável de ambiente no provider."
+        await telegram_app.start()
+
+        await telegram_app.bot.set_webhook(
+            url=_join_url(render_url, webhook_path),
+            allowed_updates=Update.ALL_TYPES,
+            drop_pending_updates=drop_pending_updates,
+            max_connections=WEBHOOK_MAX_CONNECTIONS,
+            secret_token=webhook_secret,
         )
-        raise RuntimeError("Falha de autenticação no Telegram.") from None
 
-    await telegram_app.start()
-
-    await telegram_app.bot.set_webhook(
-        url=webhook_url,
-        allowed_updates=Update.ALL_TYPES,
-        drop_pending_updates=drop_pending_updates,
-        max_connections=WEBHOOK_MAX_CONNECTIONS,
-        secret_token=webhook_secret,
-    )
-
-    info = await telegram_app.bot.get_webhook_info()
-    logger.info("Webhook configurado: %s", info.url)
-    logger.info("Pending updates: %s", info.pending_update_count)
+        info = await telegram_app.bot.get_webhook_info()
+        logger.info("Webhook configurado: %s", info.url)
+        logger.info("Pending updates: %s", info.pending_update_count)
+    else:
+        logger.info("TELEGRAM_ENABLED=false: iniciando em modo somente PWA.")
 
     async def webhook(request: Request) -> Response:
         """Endpoint que recebe as atualizações do Telegram."""
+        if telegram_app is None:
+            return Response(status_code=404)
         try:
             secret_header = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
             if not hmac.compare_digest(secret_header, webhook_secret):
@@ -1113,37 +1133,41 @@ async def main():
         return frontend_index_response(request) if feature_flags.pwa_enabled else PlainTextResponse("Bode Andarilho Bot - Online")
 
     pwa_api = PwaAPI() if feature_flags.pwa_enabled else None
-    starlette_app = Starlette(
-        routes=[
-            Route("/", root, methods=["GET"]),
-            Route("/health", health, methods=["GET"]),
-            Route(webhook_path, webhook, methods=["POST"]),
-            Route("/webapp/cadastro_membro", get_cadastro_membro, methods=["GET"]),
-            Route("/webapp/cadastro_evento", get_cadastro_evento, methods=["GET"]),
-            Route("/webapp/cadastro_loja", get_cadastro_loja, methods=["GET"]),
-            Route("/webapp/apoios", get_apoios_admin, methods=["GET"]),
-            Route("/webapp/apoios/apoiadores", get_apoios_apoiadores, methods=["GET"]),
-            Route("/webapp/apoios/contratos", get_apoios_contratos, methods=["GET"]),
-            Route("/webapp/apoios/financeiro", get_apoios_financeiro, methods=["GET"]),
-            Route("/webapp/apoios/criativos", get_apoios_criativos, methods=["GET"]),
-            Route("/webapp/galeria", get_galeria, methods=["GET"]),
-            Route("/api/cadastro_membro", api_cadastro_membro, methods=["POST"]),
-            Route("/api/cadastro_evento", api_cadastro_evento, methods=["POST"]),
-            Route("/api/cadastro_loja", api_cadastro_loja, methods=["POST"]),
-            Route("/api/apoios/dashboard", api_apoios_dashboard, methods=["GET", "POST"]),
-            Route("/api/apoios/apoiadores", api_apoios_apoiadores, methods=["GET", "POST", "PATCH"]),
-            Route("/api/apoios/contratos", api_apoios_contratos, methods=["GET", "POST", "PATCH"]),
-            Route("/api/apoios/pagamentos", api_apoios_pagamentos, methods=["GET", "POST", "PATCH"]),
-            Route("/api/apoios/criativos", api_apoios_criativos, methods=["GET", "POST", "PATCH"]),
-            Route("/api/galeria", api_galeria, methods=["POST"]),
-            Route("/api/rascunho_membro", api_rascunho_membro, methods=["POST"]),
-            Route("/api/rascunho_evento", api_rascunho_evento, methods=["POST"]),
-            Route("/api/rascunho_loja", api_rascunho_loja, methods=["POST"]),
-            Route("/api/lojas", api_listar_lojas, methods=["POST"]),
-            *(pwa_api.routes() if pwa_api else []),
-            *(frontend_routes() if feature_flags.pwa_enabled else []),
-        ]
-    )
+    routes = [
+        Route("/", root, methods=["GET"]),
+        Route("/health", health, methods=["GET"]),
+    ]
+    if telegram_app is not None:
+        routes.extend(
+            [
+                Route(webhook_path, webhook, methods=["POST"]),
+                Route("/webapp/cadastro_membro", get_cadastro_membro, methods=["GET"]),
+                Route("/webapp/cadastro_evento", get_cadastro_evento, methods=["GET"]),
+                Route("/webapp/cadastro_loja", get_cadastro_loja, methods=["GET"]),
+                Route("/webapp/apoios", get_apoios_admin, methods=["GET"]),
+                Route("/webapp/apoios/apoiadores", get_apoios_apoiadores, methods=["GET"]),
+                Route("/webapp/apoios/contratos", get_apoios_contratos, methods=["GET"]),
+                Route("/webapp/apoios/financeiro", get_apoios_financeiro, methods=["GET"]),
+                Route("/webapp/apoios/criativos", get_apoios_criativos, methods=["GET"]),
+                Route("/webapp/galeria", get_galeria, methods=["GET"]),
+                Route("/api/cadastro_membro", api_cadastro_membro, methods=["POST"]),
+                Route("/api/cadastro_evento", api_cadastro_evento, methods=["POST"]),
+                Route("/api/cadastro_loja", api_cadastro_loja, methods=["POST"]),
+                Route("/api/apoios/dashboard", api_apoios_dashboard, methods=["GET", "POST"]),
+                Route("/api/apoios/apoiadores", api_apoios_apoiadores, methods=["GET", "POST", "PATCH"]),
+                Route("/api/apoios/contratos", api_apoios_contratos, methods=["GET", "POST", "PATCH"]),
+                Route("/api/apoios/pagamentos", api_apoios_pagamentos, methods=["GET", "POST", "PATCH"]),
+                Route("/api/apoios/criativos", api_apoios_criativos, methods=["GET", "POST", "PATCH"]),
+                Route("/api/galeria", api_galeria, methods=["POST"]),
+                Route("/api/rascunho_membro", api_rascunho_membro, methods=["POST"]),
+                Route("/api/rascunho_evento", api_rascunho_evento, methods=["POST"]),
+                Route("/api/rascunho_loja", api_rascunho_loja, methods=["POST"]),
+                Route("/api/lojas", api_listar_lojas, methods=["POST"]),
+            ]
+        )
+    routes.extend(pwa_api.routes() if pwa_api else [])
+    routes.extend(frontend_routes() if feature_flags.pwa_enabled else [])
+    starlette_app = Starlette(routes=routes)
     starlette_app.state.telegram_app = telegram_app
     starlette_app.state.bot_token = token
     starlette_app.state.pwa_api = pwa_api
@@ -1160,17 +1184,20 @@ async def main():
     )
     server = uvicorn.Server(config)
 
-    from src.scheduler import iniciar_scheduler
-    await iniciar_scheduler(telegram_app)
-    
-    # Configurar o botão nativo Menu do Telegram (Acessibilidade Sênior)
-    try:
-        from telegram import BotCommand
-        await telegram_app.bot.set_my_commands([
-            BotCommand("start", "🏠 Abrir Menu Principal")
-        ])
-    except Exception as e:
-        logger.warning(f"Erro ao configurar botão nativo Menu: {e}")
+    if telegram_app is not None and feature_flags.telegram_notifications_enabled:
+        from src.scheduler import iniciar_scheduler
+
+        await iniciar_scheduler(telegram_app)
+
+        # Configurar o botão nativo Menu do Telegram (Acessibilidade Sênior)
+        try:
+            from telegram import BotCommand
+
+            await telegram_app.bot.set_my_commands([
+                BotCommand("start", "🏠 Abrir Menu Principal")
+            ])
+        except Exception as e:
+            logger.warning(f"Erro ao configurar botão nativo Menu: {e}")
 
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):

@@ -14,6 +14,8 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - PWA React/TypeScript com login OTP, consumo de convite, dashboard, cadastro/edição de loja, edição de evento, operação de evento, revisão de presenças, consulta pública de recibo e compartilhamento assistido.
 - Migrations vazias `pwa_v2` com `pwa_private`, grants explícitos, RLS/FORCE RLS, índices de FKs e Storage privado.
 - Dockerfile multiestágio: Node compila a PWA e Python serve API, PWA e webhook na mesma origem.
+- Entry point aceita modo somente PWA (`TELEGRAM_ENABLED=false`), no qual webhook,
+  scheduler e rotas legadas do Telegram não são registrados.
 
 ## Verificações executadas
 

@@ -47,6 +47,11 @@ permanecer desligada. `PWA_ENABLED` pode ser ativada em ambiente isolado para
 testes, mas não implica corte operacional. Push, workflow, deploy, migration
 remota e publicação no Instagram são marcos independentes.
 
+Quando necessário, `TELEGRAM_ENABLED=false` inicia o mesmo serviço em modo
+somente PWA: o webhook, scheduler e rotas legadas do Telegram deixam de ser
+registrados, sem alterar dados. Esse modo só deve ser usado depois do piloto e
+do ensaio de rollback.
+
 Com a flag de corte ligada, os pontos de entrada de cadastro de sessão e loja
 não escrevem no legado: orientam o operador para a PWA e falham fechado quando
 `PWA_PUBLIC_BASE_URL` não está configurada.
