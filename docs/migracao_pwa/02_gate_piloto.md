@@ -13,7 +13,7 @@ local. Não existe autorização para apontar produção para este código.
 ## Evidências concluídas
 
 - worktree original preservado e branch de migração isolada;
-- 50 testes Python aprovados nesta revisão, além de compilação sintática em cache
+- 51 testes Python aprovados nesta revisão, além de compilação sintática em cache
   temporário;
 - typecheck e build React aprovados;
 - schema local com RLS/FORCE RLS, grants e lint sem erro;
@@ -26,8 +26,9 @@ local. Não existe autorização para apontar produção para este código.
 
 ## Gates ainda abertos
 
-1. Revisar e aprovar variáveis do ambiente remoto sem expor service role ou
-   pepper no navegador.
+1. Revisar e aprovar variáveis do ambiente remoto sem expor service role,
+   pepper ou segredo de CAPTCHA no navegador; se o CAPTCHA for ativado,
+   configurar também sua chave pública.
 2. Aplicar a migration somente no projeto Supabase autorizado, depois de
    backup técnico e janela de corte.
 3. Criar o primeiro administrador e a loja piloto novamente; enviar convites

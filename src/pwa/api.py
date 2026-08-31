@@ -291,6 +291,8 @@ class PwaAPI:
                 "supabase_url": self.settings.supabase_url,
                 "supabase_publishable_key": self.settings.supabase_anon_key,
                 "public_base_url": self.settings.public_base_url,
+                "captcha_required": self.settings.captcha_required,
+                "captcha_site_key": self.settings.captcha_site_key,
             }
         )
 

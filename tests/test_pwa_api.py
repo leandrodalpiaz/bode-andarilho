@@ -153,6 +153,27 @@ async def test_config_expoe_apenas_parametros_publicos():
 
 
 @pytest.mark.asyncio
+async def test_config_pode_expor_somente_a_chave_publica_do_captcha():
+    settings = PwaSettings(
+        supabase_url="https://example.supabase.co",
+        supabase_anon_key="public",
+        supabase_service_role_key="server",
+        token_pepper="test-pepper",
+        public_base_url="https://pwa.example",
+        frontend_dist=Path("web/dist"),
+        captcha_required=True,
+        captcha_site_key="site-public-key",
+    )
+    async with make_client(FakeRepository(), settings) as client:
+        response = await client.get("/api/v1/config")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["captcha_required"] is True
+    assert body["captcha_site_key"] == "site-public-key"
+    assert "captcha_secret" not in body
+
+
+@pytest.mark.asyncio
 async def test_api_rejeita_mutacao_sem_idempotencia():
     async with make_client(FakeRepository()) as client:
         response = await client.post(

@@ -7,4 +7,5 @@ web/node_modules/
 web/dist/
 .pytest_cache/
 htmlcov/
+.playwright-cli/
 *.tsbuildinfo

@@ -28,6 +28,7 @@ class PwaSettings:
     public_rate_limit: int = 8
     public_rate_window_seconds: int = 300
     captcha_required: bool = False
+    captcha_site_key: str = ""
     captcha_verify_url: str = "https://hcaptcha.com/siteverify"
 
     @classmethod
@@ -47,6 +48,7 @@ class PwaSettings:
             ),
             captcha_required=_env("PWA_PUBLIC_CAPTCHA_REQUIRED", "false").lower()
             in {"1", "true", "yes", "on"},
+            captcha_site_key=_env("PWA_CAPTCHA_SITE_KEY"),
             captcha_verify_url=_env("PWA_CAPTCHA_VERIFY_URL", "https://hcaptcha.com/siteverify"),
         )
 

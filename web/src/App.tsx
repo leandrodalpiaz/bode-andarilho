@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createClient, Session, SupabaseClient } from "@supabase/supabase-js";
 
 type Store = {
@@ -94,6 +94,8 @@ type RuntimeConfig = {
   supabase_url: string;
   supabase_publishable_key: string;
   public_base_url?: string;
+  captcha_required?: boolean;
+  captcha_site_key?: string;
 };
 
 function newKey(): string {
@@ -179,12 +181,13 @@ export function App() {
   const [configLoading, setConfigLoading] = useState(!["public", "receipt"].includes(route.kind));
   const [session, setSession] = useState<Session | null>(null);
   const supabase = useMemo<SupabaseClient | null>(() => {
+    if (route.kind === "public" || route.kind === "receipt") return null;
     if (!runtimeConfig?.supabase_url || !runtimeConfig.supabase_publishable_key) return null;
     return createClient(runtimeConfig.supabase_url, runtimeConfig.supabase_publishable_key);
-  }, [runtimeConfig]);
+  }, [runtimeConfig, route.kind]);
 
   useEffect(() => {
-    if (route.kind === "public" || route.kind === "receipt") return;
+    if (route.kind === "receipt") return;
     apiFetch("/api/v1/config")
       .then((data) => setRuntimeConfig(data as RuntimeConfig))
       .catch((reason: Error) => setConfigError(reason.message))
@@ -200,7 +203,7 @@ export function App() {
     return () => data.subscription.unsubscribe();
   }, [supabase]);
 
-  if (route.kind === "public") return <PublicEventPage token={route.token || ""} />;
+  if (route.kind === "public") return <PublicEventPage token={route.token || ""} runtimeConfig={runtimeConfig} />;
   if (route.kind === "receipt") return <PublicReceiptPage receipt={route.token || ""} />;
   if (configLoading) return <Shell><p className="muted">Carregando a configuração segura…</p></Shell>;
   if (configError) return <Shell><Notice tone="warning" title="PWA indisponível">{configError}</Notice></Shell>;
@@ -564,25 +567,66 @@ function TelegramAssociationPanel({ session }: { session: Session }) {
   return <section className="panel"><div className="section-title"><div><p className="eyebrow">Coexistência de canais</p><h3>Associar Telegram</h3></div><span className="status">opcional</span></div><p className="muted">Gere um código temporário e use <strong>/vincular código</strong> no chat privado do bot. A associação não migra registros antigos nem ativa mutações do Telegram na PWA.</p>{code && <Notice tone="success" title="Código de uso único"><code>{code}</code><span>Válido até {new Date(validUntil).toLocaleString("pt-BR")}.</span></Notice>}<button onClick={generateCode} disabled={busy}>{busy ? "Gerando…" : code ? "Gerar novo código" : "Gerar código"}</button>{error && <Notice tone="warning" title="Não foi possível gerar">{error}</Notice>}</section>;
 }
 
-function PublicEventPage({ token }: { token: string }) {
+function PublicEventPage({ token, runtimeConfig }: { token: string; runtimeConfig: RuntimeConfig | null }) {
   const [event, setEvent] = useState<PublicEvent | null>(null);
   const [form, setForm] = useState({ nome: "", email: "", telefone: "", agape: "sem" });
   const [receipt, setReceipt] = useState("");
+  const [captchaToken, setCaptchaToken] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const captchaContainer = useRef<HTMLDivElement>(null);
+  const captchaWidget = useRef<number | null>(null);
+
+  const captchaRequired = Boolean(runtimeConfig?.captcha_required);
+  const captchaSiteKey = runtimeConfig?.captcha_site_key || "";
 
   useEffect(() => { apiFetch(`/api/v1/public/eventos/${encodeURIComponent(token)}`).then(setEvent).catch((reason: Error) => setError(reason.message)); }, [token]);
 
-  async function submit(eventSubmit: FormEvent) {
+  useEffect(() => {
+    if (!captchaRequired || !captchaSiteKey) return;
+    let cancelled = false;
+    const render = () => {
+      if (cancelled || !window.hcaptcha || !captchaContainer.current || captchaWidget.current !== null) return;
+      captchaWidget.current = window.hcaptcha.render(captchaContainer.current, {
+        sitekey: captchaSiteKey,
+        callback: setCaptchaToken,
+        "expired-callback": () => setCaptchaToken(""),
+        "error-callback": () => setCaptchaToken(""),
+      });
+    };
+    const existing = document.querySelector<HTMLScriptElement>('script[data-bode-hcaptcha="true"]');
+    const script = existing || document.createElement("script");
+    script.async = true;
+    script.defer = true;
+    script.src = "https://js.hcaptcha.com/1/api.js?render=explicit";
+    script.dataset.bodeHcaptcha = "true";
+    script.addEventListener("load", render);
+    if (!existing) document.head.appendChild(script);
+    render();
+    return () => {
+      cancelled = true;
+      script.removeEventListener("load", render);
+      if (window.hcaptcha && captchaWidget.current !== null) window.hcaptcha.reset(captchaWidget.current);
+      captchaWidget.current = null;
+      setCaptchaToken("");
+    };
+  }, [captchaRequired, captchaSiteKey]);
+
+  async function submit(eventSubmit: FormEvent<HTMLFormElement>) {
     eventSubmit.preventDefault(); setBusy(true); setError("");
+    if (captchaRequired && !captchaSiteKey) { setBusy(false); setError("A proteção antispam está habilitada, mas a chave pública não foi configurada."); return; }
+    if (captchaRequired && !captchaToken) { setBusy(false); setError("Confirme a proteção antispam antes de enviar."); return; }
     try {
-      const data = await apiFetch(`/api/v1/public/eventos/${encodeURIComponent(token)}/presencas`, { method: "POST", headers: { "Idempotency-Key": newKey() }, body: JSON.stringify(form) });
+      const honeypot = String(new FormData(eventSubmit.currentTarget).get("website") || "");
+      const data = await apiFetch(`/api/v1/public/eventos/${encodeURIComponent(token)}/presencas`, { method: "POST", headers: { "Idempotency-Key": newKey() }, body: JSON.stringify({ ...form, website: honeypot, ...(captchaToken ? { captcha_token: captchaToken } : {}) }) });
       setReceipt(data.receipt); setForm({ nome: "", email: "", telefone: "", agape: "sem" });
+      if (window.hcaptcha && captchaWidget.current !== null) window.hcaptcha.reset(captchaWidget.current);
+      setCaptchaToken("");
     } catch (reason) { setError((reason as Error).message); } finally { setBusy(false); }
   }
 
   if (error && !event) return <Shell><Notice tone="warning" title="Link indisponível">{error}</Notice></Shell>;
-  return <Shell><section className="panel public-card"><p className="eyebrow">Convite público</p><h2>{event?.titulo || "Carregando evento…"}</h2>{event && <><p className="date-line">{event.loja?.nome || `Loja ${event.loja_id}`}</p><p className="date-line">{formatDate(event.evento_at)}</p>{event.descricao && <p className="muted">{event.descricao}</p>}{event.rito && <p className="muted">Rito: {event.rito}</p>}{event.traje_obrigatorio && <p className="muted">Traje: {event.traje_obrigatorio}</p>}{receipt ? <Notice tone="success" title="Solicitação recebida">Guarde este recibo: <code>{receipt}</code>. A confirmação ficará pendente de revisão. <a href={`/recibo/${encodeURIComponent(receipt)}`}>Consultar status do recibo</a></Notice> : <form onSubmit={submit} className="stack"><label>Seu nome<input required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></label><label>E-mail (opcional)<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label>Telefone (opcional)<input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} /></label><label>Ágape<select value={form.agape} onChange={(e) => setForm({ ...form, agape: e.target.value })}><option value="sem">Sem ágape</option><option value="com">Com ágape</option><option value="gratuito">Ágape gratuito</option><option value="pago">Ágape pago</option></select></label><button disabled={busy}>{busy ? "Enviando…" : "Solicitar presença"}</button></form>}</>}</section>{error && <Notice tone="warning" title="Não foi possível enviar">{error}</Notice>}</Shell>;
+  return <Shell><section className="panel public-card"><p className="eyebrow">Convite público</p><h2>{event?.titulo || "Carregando evento…"}</h2>{event && <><p className="date-line">{event.loja?.nome || `Loja ${event.loja_id}`}</p><p className="date-line">{formatDate(event.evento_at)}</p>{event.descricao && <p className="muted">{event.descricao}</p>}{event.rito && <p className="muted">Rito: {event.rito}</p>}{event.traje_obrigatorio && <p className="muted">Traje: {event.traje_obrigatorio}</p>}{receipt ? <Notice tone="success" title="Solicitação recebida">Guarde este recibo: <code>{receipt}</code>. A confirmação ficará pendente de revisão. <a href={`/recibo/${encodeURIComponent(receipt)}`}>Consultar status do recibo</a></Notice> : <form onSubmit={submit} className="stack"><div className="honeypot" hidden><input name="website" tabIndex={-1} autoComplete="off" /></div><label>Seu nome<input required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></label><label>E-mail (opcional)<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label>Telefone (opcional)<input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} /></label><label>Ágape<select value={form.agape} onChange={(e) => setForm({ ...form, agape: e.target.value })}><option value="sem">Sem ágape</option><option value="com">Com ágape</option><option value="gratuito">Ágape gratuito</option><option value="pago">Ágape pago</option></select></label>{captchaRequired && (captchaSiteKey ? <div className="captcha-box"><div ref={captchaContainer} /><span className="muted">Confirme a proteção antispam para continuar.</span></div> : <Notice tone="warning" title="Proteção indisponível">O desafio antispam ainda não foi configurado neste ambiente.</Notice>)}<button disabled={busy || (captchaRequired && !captchaToken)}>{busy ? "Enviando…" : "Solicitar presença"}</button></form>}</>}</section>{error && <Notice tone="warning" title="Não foi possível enviar">{error}</Notice>}</Shell>;
 }
 
 function receiptStatusLabel(status: string): string {
