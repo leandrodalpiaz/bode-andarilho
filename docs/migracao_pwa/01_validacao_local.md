@@ -26,6 +26,10 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - `npx supabase db reset` — executado com sucesso; `supabase/seed.sql` mantém o schema vazio.
 - `npx supabase db lint --local --schema pwa_v2,pwa_private --level error --fail-on error` — nenhum erro de schema.
 - Catalogo local: dez tabelas com RLS e FORCE RLS ativos; depois do reset, perfis, lojas, eventos e presenças estão vazios.
+- Auditoria do catálogo: as dez tabelas retornaram `relrowsecurity=true` e
+  `relforcerowsecurity=true`; não há grants de tabela para `anon`, `authenticated`
+  recebe somente `SELECT`, `service_role` concentra as mutações e todas as FKs
+  possuem índice dedicado.
 - RLS com fixtures descartáveis: secretário vê somente a própria loja/evento; outra loja fica invisível; administrador global vê as duas; `anon` não possui grants diretos de leitura/escrita.
 - Smoke integrado: configuração pública, `/me`, criação/publicação de evento, link público, presença pendente, recibo, aprovação e geração/upload de card.
 - Smoke real local com Auth/REST/Storage/RPC: usuário descartável, bootstrap, loja, associação Telegram, evento público, presença, recibo, aprovação e card — todos os passos retornaram sucesso; o banco foi resetado depois.
