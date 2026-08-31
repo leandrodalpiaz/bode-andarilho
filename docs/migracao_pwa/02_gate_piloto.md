@@ -13,7 +13,7 @@ local. Não existe autorização para apontar produção para este código.
 ## Evidências concluídas
 
 - worktree original preservado e branch de migração isolada;
-- 51 testes Python aprovados nesta revisão, além de compilação sintática em cache
+- 52 testes Python aprovados nesta revisão, além de compilação sintática em cache
   temporário;
 - typecheck e build React aprovados;
 - schema local com RLS/FORCE RLS, grants e lint sem erro;
@@ -39,6 +39,11 @@ local. Não existe autorização para apontar produção para este código.
 5. Executar OTP real, teste autenticado em Android e iPhone, compartilhamento
    real e dois ciclos operacionais completos.
 6. Ensaiar rollback com Telegram como fallback antes de tornar a PWA oficial.
+
+O endpoint `GET /api/v1/metrics` deve ser consultado pelo administrador global
+durante cada ciclo para conferir requisições, autenticação, cards, presenças e
+falhas. Os contadores são locais ao processo; antes de escalar horizontalmente,
+devem ser encaminhados a um coletor externo.
 
 ## Critério de corte
 

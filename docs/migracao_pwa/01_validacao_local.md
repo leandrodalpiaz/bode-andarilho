@@ -11,6 +11,9 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - Adapter explícito do payload legado do Telegram, sem associação automática de registros.
 - Associação opcional Telegram ↔ perfil por código temporário de uso único, sem expor hash.
 - API Starlette `/api/v1` com autenticação Supabase, convites, eventos, rotação segura de link público, cards com legenda reutilizável, presenças, auditoria e endpoint público.
+- Auditoria de comandos preserva somente o hash da `Idempotency-Key`; a chave original não é armazenada no metadata.
+- Contadores operacionais ficam disponíveis em `GET /api/v1/metrics` somente
+  para administrador global; no piloto de uma instância são mantidos em memória.
 - PWA React/TypeScript com login OTP, consumo de convite, dashboard, cadastro/edição de loja, edição de evento, operação de evento, revisão de presenças, consulta pública de recibo e compartilhamento assistido.
 - Migrations vazias `pwa_v2` com `pwa_private`, grants explícitos, RLS/FORCE RLS, índices de FKs e Storage privado.
 - Dockerfile multiestágio: Node compila a PWA e Python serve API, PWA e webhook na mesma origem.
@@ -26,7 +29,7 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - RLS com fixtures descartáveis: secretário vê somente a própria loja/evento; outra loja fica invisível; administrador global vê as duas; `anon` não possui grants diretos de leitura/escrita.
 - Smoke integrado: configuração pública, `/me`, criação/publicação de evento, link público, presença pendente, recibo, aprovação e geração/upload de card.
 - Smoke real local com Auth/REST/Storage/RPC: usuário descartável, bootstrap, loja, associação Telegram, evento público, presença, recibo, aprovação e card — todos os passos retornaram sucesso; o banco foi resetado depois.
-- `python -m pytest -q` — 51 testes aprovados nesta revisão, cobrindo também 404/409 de convite, 429 de rate limit, propagação de request ID, allowlist de lojas-piloto e separação da chave pública do CAPTCHA.
+- `python -m pytest -q` — 52 testes aprovados nesta revisão, cobrindo também 404/409 de convite, 429 de rate limit, propagação de request ID, métricas restritas, allowlist de lojas-piloto e separação da chave pública do CAPTCHA.
 - Compilação sintática dos 61 arquivos Python — aprovada.
 - `npm run typecheck` e `npm run build` — aprovados.
 - Playwright local com mocks — dashboard autenticado conferido em desktop e viewport móvel; editor e controles de compartilhamento sem erro de console da aplicação.

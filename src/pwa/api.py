@@ -53,6 +53,7 @@ from .security import (
     idempotency_key,
     request_client_ip,
 )
+from .observability import PwaMetrics
 
 
 logger = logging.getLogger(__name__)
@@ -82,10 +83,12 @@ class PwaAPI:
         *,
         repository: Any | None = None,
         authenticator: Authenticator | None = None,
+        metrics: PwaMetrics | None = None,
     ) -> None:
         self.settings = settings or PwaSettings.from_env()
         self._repository = repository
         self._authenticator = authenticator
+        self._metrics = metrics or PwaMetrics()
         self._public_limiter = FixedWindowRateLimiter(
             self.settings.public_rate_limit, self.settings.public_rate_window_seconds
         )
@@ -105,6 +108,7 @@ class PwaAPI:
     def routes(self) -> list[Route]:
         return [
             Route("/api/v1/config", self._wrap(self.config), methods=["GET"]),
+            Route("/api/v1/metrics", self._wrap(self.metrics), methods=["GET"]),
             Route("/api/v1/me", self._wrap(self.me), methods=["GET"]),
             Route("/api/v1/bootstrap/admin", self._wrap(self.bootstrap_admin), methods=["POST"]),
             Route("/api/v1/convites", self._wrap(self.create_invite), methods=["POST"]),
@@ -163,6 +167,14 @@ class PwaAPI:
                 response = self._error(500, "erro interno", "internal_error")
             response.headers["X-Request-ID"] = request_id
             response.headers.setdefault("Cache-Control", "no-store")
+            operation = getattr(handler, "__name__", "unknown")
+            self._metrics.increment(
+                "api_requests_total",
+                operation=operation,
+                status=response.status_code,
+            )
+            if response.status_code >= 500:
+                self._metrics.increment("api_failures_total", operation=operation)
             return response
 
         endpoint.__name__ = getattr(handler, "__name__", "pwa_endpoint")
@@ -209,15 +221,20 @@ class PwaAPI:
         try:
             token = bearer_token(request)
         except SecurityInputError as exc:
+            self._metrics.increment("auth_failures_total")
             raise ApiError(401, str(exc), code="unauthorized") from exc
         try:
-            return await self.authenticator.authenticate(token)
+            user = await self.authenticator.authenticate(token)
         except AuthenticationError:
+            self._metrics.increment("auth_failures_total")
             raise
         except PwaConfigurationError:
             raise
         except Exception as exc:
+            self._metrics.increment("auth_failures_total")
             raise AuthenticationError("falha ao validar a sessão") from exc
+        self._metrics.increment("auth_success_total")
+        return user
 
     async def _actor(self, request: Request) -> tuple[AuthUser, Actor]:
         user = await self._auth_user(request)
@@ -263,6 +280,11 @@ class PwaAPI:
             # finge que a mutação foi auditada.
             logger.exception("Auditoria indisponível request_id=%s", values["request_id"])
 
+    def _idempotency_metadata(self, key: str) -> dict[str, str]:
+        """Retorna somente a representação não reversível da chave do comando."""
+
+        return {"idempotency_key_hash": hash_secret(key, self.settings.token_pepper)}
+
     async def me(self, request: Request) -> Response:
         user, actor = await self._actor(request)
         profile = {
@@ -295,6 +317,18 @@ class PwaAPI:
                 "captcha_site_key": self.settings.captcha_site_key,
             }
         )
+
+    async def metrics(self, request: Request) -> Response:
+        """Expõe contadores sem dados de negócio somente ao administrador global."""
+
+        _, actor = await self._actor(request)
+        if not actor.is_global_admin:
+            raise ApiError(
+                403,
+                "somente administrador global pode consultar métricas",
+                code="forbidden",
+            )
+        return JSONResponse(self._metrics.snapshot())
 
     async def create_invite(self, request: Request) -> Response:
         _, actor = await self._actor(request)
@@ -332,7 +366,16 @@ class PwaAPI:
                 "created_by_profile_id": actor.profile_id,
             },
         )
-        await self._audit(request, actor, "invite_created", "convites_conta", row.get("id"), "pwa", {"papel": papel, "loja_id": store_id})
+        await self._audit(
+            request,
+            actor,
+            "invite_created",
+            "convites_conta",
+            row.get("id"),
+            "pwa",
+            {"papel": papel, "loja_id": store_id, **self._idempotency_metadata(key)},
+        )
+        self._metrics.increment("invites_created_total")
         base = self.settings.public_base_url.rstrip("/")
         invite_url = f"{base}/convite?token={token}" if base else f"/convite?token={token}"
         return JSONResponse({"id": row.get("id"), "email": email, "papel": papel, "loja_id": store_id, "valid_until": valid_until.isoformat(), "invite_url": invite_url})
@@ -351,6 +394,7 @@ class PwaAPI:
             user.email,
             getattr(request.state, "request_id", None),
         )
+        self._metrics.increment("invites_consumed_total")
         return JSONResponse(result)
 
     async def create_association_code(self, request: Request) -> Response:
@@ -380,6 +424,7 @@ class PwaAPI:
             "pwa",
             {"provedor": provider, "valid_until": valid_until.isoformat()},
         )
+        self._metrics.increment("association_codes_created_total", provider=provider)
         return JSONResponse(
             {"provedor": provider, "codigo": token, "valid_until": valid_until.isoformat()},
             status_code=201,
@@ -401,6 +446,7 @@ class PwaAPI:
             name,
             getattr(request.state, "request_id", None),
         )
+        self._metrics.increment("admins_bootstrapped_total")
         return JSONResponse(result, status_code=201)
 
     async def list_stores(self, request: Request) -> Response:
@@ -428,7 +474,16 @@ class PwaAPI:
             values["slug"] = _slugify(name)
         values["created_by"] = actor.profile_id
         row = await self._run("create_store", values)
-        await self._audit(request, actor, "store_created", "lojas", row.get("id"), "pwa", {"idempotency_key": key})
+        await self._audit(
+            request,
+            actor,
+            "store_created",
+            "lojas",
+            row.get("id"),
+            "pwa",
+            self._idempotency_metadata(key),
+        )
+        self._metrics.increment("stores_created_total")
         return JSONResponse(row, status_code=201)
 
     async def update_store(self, request: Request) -> Response:
@@ -443,7 +498,16 @@ class PwaAPI:
         if not values:
             raise DomainValidationError("nenhum campo para atualizar")
         row = await self._run("update_store", store_id, values)
-        await self._audit(request, actor, "store_updated", "lojas", store_id, "pwa", {"idempotency_key": key})
+        await self._audit(
+            request,
+            actor,
+            "store_updated",
+            "lojas",
+            store_id,
+            "pwa",
+            self._idempotency_metadata(key),
+        )
+        self._metrics.increment("stores_updated_total")
         return JSONResponse(row)
 
     async def archive_store(self, request: Request) -> Response:
@@ -452,7 +516,16 @@ class PwaAPI:
         store_id = positive_int(request.path_params["store_id"], "loja_id")
         self._require_role(actor, store_id, store=True)
         row = await self._run("archive_store", store_id)
-        await self._audit(request, actor, "store_archived", "lojas", store_id, "pwa", {"idempotency_key": key})
+        await self._audit(
+            request,
+            actor,
+            "store_archived",
+            "lojas",
+            store_id,
+            "pwa",
+            self._idempotency_metadata(key),
+        )
+        self._metrics.increment("stores_archived_total")
         return JSONResponse(row)
 
     async def list_events(self, request: Request) -> Response:
@@ -483,7 +556,16 @@ class PwaAPI:
         )
         store_id = int(data["loja_id"])
         row = await self._run("create_event", data)
-        await self._audit(request, actor, "event_created", "eventos", row.get("id"), "pwa", {"loja_id": store_id, "idempotency_key": key})
+        await self._audit(
+            request,
+            actor,
+            "event_created",
+            "eventos",
+            row.get("id"),
+            "pwa",
+            {"loja_id": store_id, **self._idempotency_metadata(key)},
+        )
+        self._metrics.increment("events_created_total")
         response = self._redact_event(dict(row))
         response["public_url"] = self._public_event_url(public_token)
         return JSONResponse(response, status_code=201)
@@ -501,7 +583,16 @@ class PwaAPI:
         context = CommandContext(actor=actor, request_id=getattr(request.state, "request_id", None), origin="pwa")
         values = EventCommandService.update(current, payload, context)
         row = await self._run("update_event", event_id, values)
-        await self._audit(request, actor, "event_updated", "eventos", event_id, "pwa", {"idempotency_key": key})
+        await self._audit(
+            request,
+            actor,
+            "event_updated",
+            "eventos",
+            event_id,
+            "pwa",
+            self._idempotency_metadata(key),
+        )
+        self._metrics.increment("events_updated_total")
         return JSONResponse(self._redact_event(row))
 
     async def rotate_public_link(self, request: Request) -> Response:
@@ -526,8 +617,9 @@ class PwaAPI:
             "eventos",
             event_id,
             "pwa",
-            {"idempotency_key": key},
+            self._idempotency_metadata(key),
         )
+        self._metrics.increment("public_links_rotated_total")
         response = self._redact_event(dict(row))
         response["public_url"] = self._public_event_url(public_token)
         response["public_link_rotated"] = True
@@ -544,7 +636,16 @@ class PwaAPI:
         context = CommandContext(actor=actor, request_id=getattr(request.state, "request_id", None), origin="pwa")
         values = EventCommandService.cancel(current, context)
         row = await self._run("update_event", event_id, values)
-        await self._audit(request, actor, "event_cancelled", "eventos", event_id, "pwa", {"idempotency_key": key})
+        await self._audit(
+            request,
+            actor,
+            "event_cancelled",
+            "eventos",
+            event_id,
+            "pwa",
+            self._idempotency_metadata(key),
+        )
+        self._metrics.increment("events_cancelled_total")
         return JSONResponse(self._redact_event(row))
 
     async def generate_card(self, request: Request) -> Response:
@@ -588,7 +689,16 @@ class PwaAPI:
                     "criado_por_id": actor.profile_id,
                 },
             )
-            await self._audit(request, actor, "event_card_prepared", "publicacoes_canal", publication.get("id"), "pwa", {"evento_id": event_id, "canal": channel})
+            await self._audit(
+                request,
+                actor,
+                "event_card_prepared",
+                "publicacoes_canal",
+                publication.get("id"),
+                "pwa",
+                {"evento_id": event_id, "canal": channel, **self._idempotency_metadata(key)},
+            )
+            self._metrics.increment("cards_prepared_total", channel=channel)
             return JSONResponse(
                 {
                     "publication": self._redact_publication(publication),
@@ -619,7 +729,16 @@ class PwaAPI:
         if "erro" in payload:
             values["erro"] = optional_text(payload.get("erro"), "erro", max_length=1000)
         row = await self._run("update_publication", publication_id, values)
-        await self._audit(request, actor, f"publication_{target}", "publicacoes_canal", publication_id, "pwa", {"idempotency_key": key})
+        await self._audit(
+            request,
+            actor,
+            f"publication_{target}",
+            "publicacoes_canal",
+            publication_id,
+            "pwa",
+            self._idempotency_metadata(key),
+        )
+        self._metrics.increment("publication_states_total", state=target)
         return JSONResponse(self._redact_publication(row))
 
     async def list_presence(self, request: Request) -> Response:
@@ -647,7 +766,16 @@ class PwaAPI:
         values = PresenceCommandService.review(presence, event, context, target_status)
         values["revisado_at"] = datetime.now(timezone.utc).isoformat()
         row = await self._run("update_presence", presence_id, values)
-        await self._audit(request, actor, f"presence_{target_status}", "solicitacoes_presenca", presence_id, "pwa", {"idempotency_key": key})
+        await self._audit(
+            request,
+            actor,
+            f"presence_{target_status}",
+            "solicitacoes_presenca",
+            presence_id,
+            "pwa",
+            self._idempotency_metadata(key),
+        )
+        self._metrics.increment("presence_reviews_total", state=target_status)
         return JSONResponse(self._redact_presence(row))
 
     async def approve_presence(self, request: Request) -> Response:
@@ -751,6 +879,7 @@ class PwaAPI:
             normalized,
         )
         await self._audit(request, None, "public_presence_requested", "solicitacoes_presenca", row.get("id"), "public", {"evento_id": event_id})
+        self._metrics.increment("public_presence_requests_total")
         return JSONResponse({"id": row.get("id"), "status": row.get("status", "pending"), "receipt": receipt}, status_code=201)
 
     async def public_receipt(self, request: Request) -> Response:

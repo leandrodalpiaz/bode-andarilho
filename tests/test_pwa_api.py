@@ -9,7 +9,9 @@ from src.domain.authorization import Actor
 from src.pwa.auth import AuthUser
 from src.pwa.api import PwaAPI
 from src.pwa.config import PwaSettings
+from src.pwa.observability import PwaMetrics
 from src.pwa.repository import RepositoryConflict
+from src.pwa.security import hash_secret
 
 
 @dataclass
@@ -105,7 +107,11 @@ class FakeRepository:
         return {"perfil_id": "p-secretary", "provedor": provider, "external_user_id": external_user_id}
 
 
-def make_client(repo: FakeRepository, settings: PwaSettings | None = None) -> httpx.AsyncClient:
+def make_client(
+    repo: FakeRepository,
+    settings: PwaSettings | None = None,
+    metrics: PwaMetrics | None = None,
+) -> httpx.AsyncClient:
     settings = settings or PwaSettings(
         supabase_url="https://example.supabase.co",
         supabase_anon_key="public",
@@ -114,7 +120,7 @@ def make_client(repo: FakeRepository, settings: PwaSettings | None = None) -> ht
         public_base_url="https://pwa.example",
         frontend_dist=Path("web/dist"),
     )
-    pwa = PwaAPI(settings, repository=repo, authenticator=FakeAuthenticator())
+    pwa = PwaAPI(settings, repository=repo, authenticator=FakeAuthenticator(), metrics=metrics)
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=Starlette(routes=pwa.routes())), base_url="http://test")
 
 
@@ -150,6 +156,31 @@ async def test_config_expoe_apenas_parametros_publicos():
     assert body["supabase_publishable_key"] == "public"
     assert "supabase_service_role_key" not in body
     assert "token_pepper" not in body
+
+
+@pytest.mark.asyncio
+async def test_metricas_sao_restritas_ao_administrador_global():
+    metrics = PwaMetrics()
+    async with make_client(FakeRepository(), metrics=metrics) as client:
+        await client.get("/api/v1/config")
+        forbidden = await client.get(
+            "/api/v1/metrics",
+            headers={"Authorization": "Bearer secretary"},
+        )
+        response = await client.get(
+            "/api/v1/metrics",
+            headers={"Authorization": "Bearer admin"},
+        )
+    assert forbidden.status_code == 403
+    assert response.status_code == 200
+    counters = response.json()["counters"]
+    assert any(item["name"] == "auth_success_total" for item in counters)
+    assert any(
+        item["name"] == "api_requests_total"
+        and item["labels"].get("operation") == "config"
+        and item["labels"].get("status") == "200"
+        for item in counters
+    )
 
 
 @pytest.mark.asyncio
@@ -245,6 +276,9 @@ async def test_evento_criado_nao_retorna_hashes_de_bearer():
     assert "public_token_hash" not in response.json()
     assert "idempotency_key_hash" not in response.json()
     assert response.json()["public_url"].startswith("https://pwa.example/evento/")
+    audit = repo.audits[-1]
+    assert "idempotency_key" not in audit["metadata"]
+    assert audit["metadata"]["idempotency_key_hash"] == hash_secret("event-002", "test-pepper")
 
 
 @pytest.mark.asyncio
@@ -381,6 +415,8 @@ async def test_edicao_de_loja_normaliza_dados_antes_do_repository():
     assert response.status_code == 200
     assert response.json()["nome"] == "Loja Atualizada"
     assert response.json()["uf"] == "RJ"
+    assert "idempotency_key" not in repo.audits[-1]["metadata"]
+    assert repo.audits[-1]["metadata"]["idempotency_key_hash"] == hash_secret("store-001", "test-pepper")
 
 
 @pytest.mark.asyncio
