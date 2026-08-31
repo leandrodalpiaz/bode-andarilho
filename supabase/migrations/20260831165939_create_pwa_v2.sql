@@ -102,6 +102,13 @@ create table if not exists pwa_v2.eventos (
     evento_at timestamptz not null,
     titulo text not null check (char_length(btrim(titulo)) between 2 and 160),
     descricao text,
+    grau text check (grau is null or char_length(btrim(grau)) between 1 and 100),
+    tipo_sessao text check (tipo_sessao is null or char_length(btrim(tipo_sessao)) between 1 and 200),
+    rito text check (rito is null or char_length(btrim(rito)) between 1 and 120),
+    traje_obrigatorio text check (traje_obrigatorio is null or char_length(btrim(traje_obrigatorio)) between 1 and 200),
+    agape text check (agape is null or char_length(btrim(agape)) between 1 and 100),
+    ordem_do_dia text check (ordem_do_dia is null or char_length(btrim(ordem_do_dia)) between 1 and 4000),
+    endereco_sessao text check (endereco_sessao is null or char_length(btrim(endereco_sessao)) between 1 and 400),
     status text not null default 'draft'
         check (status in ('draft', 'published', 'cancelled', 'closed')),
     visibilidade text not null default 'private'

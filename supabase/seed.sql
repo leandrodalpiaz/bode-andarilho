@@ -1,0 +1,2 @@
+-- O schema v2 começa vazio por decisão de migração.
+-- Fixtures de teste devem ser criadas apenas no ambiente local e descartável.

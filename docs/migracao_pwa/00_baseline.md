@@ -23,8 +23,8 @@ Base: `origin/main` em `c7c57bf8561a180272fc3f5c2594370eac860ee8`
 
 ## Riscos ainda abertos
 
-- O Supabase CLI não está instalado neste ambiente; a migration será criada de forma versionada e só poderá ser aplicada após validação com o CLI/ambiente isolado.
-- O projeto ainda não dispõe de um banco Supabase local executável neste worktree para rodar as políticas como `anon` e `authenticated`.
+- O Supabase CLI foi executado via `npx` e o schema foi validado no ambiente local; ainda não existe autorização para aplicar a migration no projeto remoto.
+- Os testes locais de RLS usam fixtures descartáveis e não substituem a validação no projeto remoto isolado antes do corte.
 - A proteção 2FA, os códigos de recuperação e a separação do Accounts Center do Instagram exigem execução manual pelo proprietário da conta antes do piloto.
 - A publicação do Instagram permanecerá manual no MVP; abrir a folha de compartilhamento não será tratado como publicação comprovada.
 

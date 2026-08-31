@@ -29,6 +29,7 @@ from src.application.services import (
     PresenceCommandService,
     validate_publication_transition,
 )
+from src.adapters.cards import to_legacy_card_payload
 from src.domain.authorization import Actor
 from src.domain.validation import (
     DomainValidationError,
@@ -101,6 +102,7 @@ class PwaAPI:
 
     def routes(self) -> list[Route]:
         return [
+            Route("/api/v1/config", self._wrap(self.config), methods=["GET"]),
             Route("/api/v1/me", self._wrap(self.me), methods=["GET"]),
             Route("/api/v1/bootstrap/admin", self._wrap(self.bootstrap_admin), methods=["POST"]),
             Route("/api/v1/convites", self._wrap(self.create_invite), methods=["POST"]),
@@ -172,6 +174,14 @@ class PwaAPI:
     @staticmethod
     def _error(status_code: int, message: str, code: str) -> JSONResponse:
         return JSONResponse({"error": {"code": code, "message": message}}, status_code=status_code)
+
+    @staticmethod
+    def _invite_validity_days(value: Any) -> int:
+        try:
+            days = int(value or 7)
+        except (TypeError, ValueError) as exc:
+            raise DomainValidationError("validade_dias deve ser um número inteiro") from exc
+        return min(30, max(1, days))
 
     @staticmethod
     async def _json(request: Request) -> dict[str, Any]:
@@ -268,6 +278,17 @@ class PwaAPI:
             }
         )
 
+    async def config(self, request: Request) -> Response:
+        """Entrega somente configuração pública necessária para o navegador."""
+
+        return JSONResponse(
+            {
+                "supabase_url": self.settings.supabase_url,
+                "supabase_publishable_key": self.settings.supabase_anon_key,
+                "public_base_url": self.settings.public_base_url,
+            }
+        )
+
     async def create_invite(self, request: Request) -> Response:
         _, actor = await self._actor(request)
         key = idempotency_key(request)
@@ -285,7 +306,7 @@ class PwaAPI:
             raise ApiError(403, "somente administrador autorizado pode criar convites", code="forbidden")
         token = generate_opaque_token()
         valid_until = datetime.now(timezone.utc) + timedelta(
-            days=min(30, max(1, int(payload.get("validade_dias") or 7)))
+            days=self._invite_validity_days(payload.get("validade_dias"))
         )
         row = await self._run(
             "create_invite",
@@ -469,7 +490,9 @@ class PwaAPI:
         if not current:
             raise ApiError(404, "evento não encontrado", code="not_found")
         self._require_role(actor, int(current["loja_id"]), events=True)
-        row = await self._run("cancel_event", event_id)
+        context = CommandContext(actor=actor, request_id=getattr(request.state, "request_id", None), origin="pwa")
+        values = EventCommandService.cancel(current, context)
+        row = await self._run("update_event", event_id, values)
         await self._audit(request, actor, "event_cancelled", "eventos", event_id, "pwa", {"idempotency_key": key})
         return JSONResponse(self._redact_event(row))
 
@@ -494,25 +517,7 @@ class PwaAPI:
 
         output_dir = Path(tempfile.mkdtemp(prefix="bode-pwa-card-"))
         try:
-            legacy_event = {
-                "ID Evento": event.get("id"),
-                "ID da loja": store_id,
-                "Nome da loja": store.get("nome"),
-                "Número da loja": store.get("numero_loja"),
-                "Data do evento": event.get("evento_at"),
-                "Título": event.get("titulo"),
-                "Observações": event.get("descricao"),
-                "Potência": store.get("potencia"),
-                "Potência complemento": store.get("potencia_complemento"),
-                "Rito": store.get("rito"),
-            }
-            legacy_store = {
-                "ID": store_id,
-                "Nome da Loja": store.get("nome"),
-                "Número": store.get("numero_loja"),
-                "Template sessão URL": store.get("template_card_path"),
-                "Cor texto padrão": (store.get("layout_config") or {}).get("cor_texto_padrao", ""),
-            }
+            legacy_event, legacy_store = to_legacy_card_payload(event, store)
             rendered = await asyncio.to_thread(
                 render_event_card, legacy_event, legacy_store, str(output_dir)
             )
@@ -580,11 +585,10 @@ class PwaAPI:
         if not event:
             raise ApiError(404, "evento não encontrado", code="not_found")
         self._require_role(actor, int(event["loja_id"]), events=True)
-        row = await self._run(
-            "update_presence",
-            presence_id,
-            {"status": target_status, "revisado_por_id": actor.profile_id, "revisado_at": datetime.now(timezone.utc).isoformat()},
-        )
+        context = CommandContext(actor=actor, request_id=getattr(request.state, "request_id", None), origin="pwa")
+        values = PresenceCommandService.review(presence, event, context, target_status)
+        values["revisado_at"] = datetime.now(timezone.utc).isoformat()
+        row = await self._run("update_presence", presence_id, values)
         await self._audit(request, actor, f"presence_{target_status}", "solicitacoes_presenca", presence_id, "pwa", {"idempotency_key": key})
         return JSONResponse(self._redact_presence(row))
 
@@ -606,6 +610,13 @@ class PwaAPI:
             "evento_at": event.get("evento_at"),
             "titulo": event.get("titulo"),
             "descricao": event.get("descricao"),
+            "grau": event.get("grau"),
+            "tipo_sessao": event.get("tipo_sessao"),
+            "rito": event.get("rito"),
+            "traje_obrigatorio": event.get("traje_obrigatorio"),
+            "agape": event.get("agape"),
+            "ordem_do_dia": event.get("ordem_do_dia"),
+            "endereco_sessao": event.get("endereco_sessao"),
             "status": event.get("status"),
             "visibilidade": event.get("visibilidade"),
         }

@@ -49,6 +49,14 @@ def test_servico_preserva_transicao_de_estado():
         )
 
 
+def test_servico_nao_cancela_evento_fechado():
+    with pytest.raises(ApplicationConflictError):
+        EventCommandService.cancel(
+            {"loja_id": 1, "status": "closed"},
+            context_for(),
+        )
+
+
 def test_servico_de_presenca_produz_pendente_e_snapshot():
     data = PresenceCommandService.public_request(
         {"nome": "Visitante", "email": "v@example.com", "agape": "sem"},
@@ -59,3 +67,13 @@ def test_servico_de_presenca_produz_pendente_e_snapshot():
     assert data["status"] == "pending"
     assert data["evento_id"] == 10
     assert data["visitante_nome"] == "Visitante"
+
+
+def test_servico_de_presenca_impede_revisao_dupla():
+    with pytest.raises(ApplicationConflictError):
+        PresenceCommandService.review(
+            {"status": "approved"},
+            {"loja_id": 1},
+            context_for(),
+            "rejected",
+        )

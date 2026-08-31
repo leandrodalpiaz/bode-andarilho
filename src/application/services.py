@@ -61,6 +61,15 @@ class EventCommandService:
         }
 
     @staticmethod
+    def cancel(current: dict[str, Any], context: CommandContext) -> dict[str, str]:
+        store_id = int(current["loja_id"])
+        if not context.actor.can_manage_events(store_id):
+            raise ApplicationAuthorizationError("sem vínculo autorizado para esta loja")
+        if not can_transition_event(str(current.get("status") or "draft"), "cancelled"):
+            raise ApplicationConflictError("evento não pode ser cancelado neste estado")
+        return {"status": "cancelled"}
+
+    @staticmethod
     def update(current: dict[str, Any], payload: dict[str, Any], context: CommandContext) -> dict[str, Any]:
         store_id = int(current["loja_id"])
         if not context.actor.can_manage_events(store_id):
@@ -112,6 +121,8 @@ class PresenceCommandService:
         current = str(presence.get("status") or "pending")
         if current not in {"pending", "approved", "rejected"}:
             raise ApplicationConflictError("solicitação não pode ser revisada neste estado")
+        if current != "pending":
+            raise ApplicationConflictError("solicitação já foi revisada")
         return {
             "status": target_status,
             "revisado_por_id": context.actor.profile_id,

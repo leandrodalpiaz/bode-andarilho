@@ -1,18 +1,15 @@
 # Supabase local — PWA v2
 
-O ambiente de execução desta primeira etapa não possui o binário `supabase`.
-Por isso a migration foi revisada e versionada manualmente, mas não foi aplicada
-ao projeto remoto.
-
-Antes de qualquer aplicação, instalar uma versão suportada do Supabase CLI e
-executar no repositório:
+A migration foi criada pelo Supabase CLI via `npx` e validada no ambiente local.
+Ela não foi aplicada ao projeto remoto. Antes de qualquer aplicação remota,
+confirme a versão suportada do CLI e execute no repositório:
 
 ```bash
-supabase --version
-supabase migration --help
-supabase start
-supabase db reset
-supabase db lint
+npx supabase --version
+npx supabase migration --help
+npx supabase start
+npx supabase db reset
+npx supabase db lint --local --schema pwa_v2,pwa_private --level error --fail-on error
 ```
 
 O reset local deve ser a primeira validação. Depois dele, testar as políticas

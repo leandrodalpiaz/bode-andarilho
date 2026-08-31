@@ -7,6 +7,24 @@ type PublicEvent = {
   evento_at: string;
   titulo: string;
   descricao?: string;
+  grau?: string;
+  tipo_sessao?: string;
+  rito?: string;
+  traje_obrigatorio?: string;
+  agape?: string;
+  ordem_do_dia?: string;
+  endereco_sessao?: string;
+  status: string;
+  visibilidade?: string;
+  public_url?: string;
+};
+
+type Presence = {
+  id: number;
+  visitante_nome: string;
+  visitante_email?: string;
+  visitante_telefone?: string;
+  agape: string;
   status: string;
 };
 
@@ -17,9 +35,11 @@ type Me = {
   stores: Array<{ id: number; nome: string; cidade?: string; uf?: string }>;
 };
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabaseKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY) as string | undefined;
-const supabase: SupabaseClient | null = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+type RuntimeConfig = {
+  supabase_url: string;
+  supabase_publishable_key: string;
+  public_base_url?: string;
+};
 
 function newKey(): string {
   return typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
@@ -58,24 +78,38 @@ function routeInfo(): { kind: "public" | "invite" | "dashboard"; token?: string 
 
 export function App() {
   const route = useMemo(routeInfo, []);
+  const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig | null>(null);
+  const [configError, setConfigError] = useState("");
+  const [configLoading, setConfigLoading] = useState(route.kind !== "public");
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(Boolean(supabase));
+  const supabase = useMemo<SupabaseClient | null>(() => {
+    if (!runtimeConfig?.supabase_url || !runtimeConfig.supabase_publishable_key) return null;
+    return createClient(runtimeConfig.supabase_url, runtimeConfig.supabase_publishable_key);
+  }, [runtimeConfig]);
+
+  useEffect(() => {
+    if (route.kind === "public") return;
+    apiFetch("/api/v1/config")
+      .then((data) => setRuntimeConfig(data as RuntimeConfig))
+      .catch((reason: Error) => setConfigError(reason.message))
+      .finally(() => setConfigLoading(false));
+  }, [route.kind]);
 
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      setLoading(false);
     });
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
     return () => data.subscription.unsubscribe();
-  }, []);
+  }, [supabase]);
 
   if (route.kind === "public") return <PublicEventPage token={route.token || ""} />;
-  if (!supabase) return <Shell><Notice tone="warning" title="Configuração pendente">O frontend está pronto, mas as variáveis públicas do Supabase ainda não foram configuradas neste ambiente.</Notice></Shell>;
-  if (loading) return <Shell><p className="muted">Carregando sua sessão…</p></Shell>;
-  if (!session) return <LoginPage inviteToken={route.kind === "invite" ? route.token : undefined} />;
-  return <Dashboard session={session} inviteToken={route.kind === "invite" ? route.token : undefined} />;
+  if (configLoading) return <Shell><p className="muted">Carregando a configuração segura…</p></Shell>;
+  if (configError) return <Shell><Notice tone="warning" title="PWA indisponível">{configError}</Notice></Shell>;
+  if (!supabase) return <Shell><Notice tone="warning" title="Configuração pendente">A chave publicável do Supabase ainda não foi configurada neste ambiente.</Notice></Shell>;
+  if (!session) return <LoginPage inviteToken={route.kind === "invite" ? route.token : undefined} supabaseClient={supabase} />;
+  return <Dashboard session={session} inviteToken={route.kind === "invite" ? route.token : undefined} supabaseClient={supabase} />;
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -86,7 +120,7 @@ function Notice({ title, children, tone = "info" }: { title: string; children: R
   return <div className={`notice notice-${tone}`}><strong>{title}</strong><span>{children}</span></div>;
 }
 
-function LoginPage({ inviteToken }: { inviteToken?: string }) {
+function LoginPage({ inviteToken, supabaseClient }: { inviteToken?: string; supabaseClient: SupabaseClient }) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [code, setCode] = useState("");
@@ -99,7 +133,7 @@ function LoginPage({ inviteToken }: { inviteToken?: string }) {
     setBusy(true);
     const redirect = new URL(inviteToken ? "/convite" : "/", window.location.origin);
     if (inviteToken) redirect.searchParams.set("token", inviteToken);
-    const result = await supabase!.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { emailRedirectTo: redirect.toString() } });
+    const result = await supabaseClient.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { emailRedirectTo: redirect.toString() } });
     setBusy(false);
     if (result.error) setError(result.error.message);
     else setSent(true);
@@ -109,7 +143,7 @@ function LoginPage({ inviteToken }: { inviteToken?: string }) {
     event.preventDefault();
     setError("");
     setBusy(true);
-    const result = await supabase!.auth.verifyOtp({ email: email.trim().toLowerCase(), token: code.trim(), type: "email" });
+    const result = await supabaseClient.auth.verifyOtp({ email: email.trim().toLowerCase(), token: code.trim(), type: "email" });
     setBusy(false);
     if (result.error) setError(result.error.message);
   }
@@ -128,29 +162,44 @@ function LoginPage({ inviteToken }: { inviteToken?: string }) {
   </Shell>;
 }
 
-function Dashboard({ session, inviteToken }: { session: Session; inviteToken?: string }) {
+function Dashboard({ session, inviteToken, supabaseClient }: { session: Session; inviteToken?: string; supabaseClient: SupabaseClient }) {
   const [me, setMe] = useState<Me | null>(null);
   const [events, setEvents] = useState<PublicEvent[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+  const [presences, setPresences] = useState<Presence[]>([]);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [artifactUrl, setArtifactUrl] = useState("");
   const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState("");
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([apiFetch("/api/v1/me", {}, session), apiFetch("/api/v1/eventos", {}, session)])
-      .then(([meData, eventData]) => { if (!cancelled) { setMe(meData); setEvents(eventData.items || []); } })
-      .catch((reason: Error) => { if (!cancelled) setError(reason.message); });
-    return () => { cancelled = true; };
-  }, [session]);
 
-  useEffect(() => {
-    if (!inviteToken) return;
-    apiFetch("/api/v1/convites/consumir", { method: "POST", headers: { "Idempotency-Key": newKey() }, body: JSON.stringify({ token: inviteToken }) }, session)
-      .then(() => setMessage("Convite consumido. Seu vínculo está ativo."))
-      .catch((reason: Error) => setError(reason.message));
+    async function load() {
+      try {
+        if (inviteToken) {
+          try {
+            await apiFetch("/api/v1/convites/consumir", { method: "POST", headers: { "Idempotency-Key": newKey() }, body: JSON.stringify({ token: inviteToken }) }, session);
+            if (!cancelled) setMessage("Convite consumido. Seu vínculo está ativo.");
+          } catch (reason) {
+            // O link pode ser reaberto depois do consumo; nesse caso o perfil
+            // já está criado e o painel deve continuar carregando.
+            if (!String((reason as Error).message || "").toLowerCase().includes("já consumido")) throw reason;
+          }
+        }
+        const [meData, eventData] = await Promise.all([apiFetch("/api/v1/me", {}, session), apiFetch("/api/v1/eventos", {}, session)]);
+        if (!cancelled) { setMe(meData); setEvents(eventData.items || []); }
+      } catch (reason) {
+        if (!cancelled) setError((reason as Error).message);
+      }
+    }
+
+    void load();
+    return () => { cancelled = true; };
   }, [inviteToken, session]);
 
-  async function logout() { await supabase!.auth.signOut(); }
+  async function logout() { await supabaseClient.auth.signOut(); }
 
   async function createDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -158,9 +207,58 @@ function Dashboard({ session, inviteToken }: { session: Session; inviteToken?: s
     setBusy(true); setError("");
     try {
       const localDate = String(form.get("evento_at") || "");
-      const created = await apiFetch("/api/v1/eventos", { method: "POST", headers: { "Idempotency-Key": newKey() }, body: JSON.stringify({ titulo: form.get("titulo"), evento_at: new Date(localDate).toISOString(), loja_id: Number(form.get("loja_id")) }) }, session);
-      setEvents((current) => [...current, created]); setMessage("Rascunho de evento criado."); event.currentTarget.reset();
+      const parsedDate = new Date(localDate);
+      if (Number.isNaN(parsedDate.getTime())) throw new Error("Informe uma data e hora válidas.");
+      const created = await apiFetch("/api/v1/eventos", { method: "POST", headers: { "Idempotency-Key": newKey() }, body: JSON.stringify({
+        titulo: form.get("titulo"), evento_at: parsedDate.toISOString(), loja_id: Number(form.get("loja_id")),
+        grau: form.get("grau"), tipo_sessao: form.get("tipo_sessao"), rito: form.get("rito"),
+        traje_obrigatorio: form.get("traje_obrigatorio"), agape: form.get("agape"), ordem_do_dia: form.get("ordem_do_dia"),
+        status: form.get("publicar") === "on" ? "published" : "draft", visibilidade: form.get("publicar") === "on" ? "public" : "private",
+      }) }, session);
+      setEvents((current) => [created, ...current]); setMessage(created.status === "published" ? "Evento publicado e link público criado." : "Rascunho de evento criado."); setArtifactUrl(""); event.currentTarget.reset();
     } catch (reason) { setError((reason as Error).message); } finally { setBusy(false); }
+  }
+
+  async function updateEvent(eventId: number, status: "published" | "cancelled") {
+    setBusyAction(`event-${eventId}-${status}`); setError("");
+    try {
+      const updated = await apiFetch(`/api/v1/eventos/${eventId}`, { method: "PATCH", headers: { "Idempotency-Key": newKey() }, body: JSON.stringify({ status, ...(status === "published" ? { visibilidade: "public" } : {}) }) }, session);
+      setEvents((current) => current.map((item) => item.id === eventId ? { ...item, ...updated } : item));
+      setMessage(status === "published" ? "Evento publicado." : "Evento cancelado.");
+    } catch (reason) { setError((reason as Error).message); } finally { setBusyAction(""); }
+  }
+
+  async function generateCard(eventId: number) {
+    setBusyAction(`card-${eventId}`); setError(""); setArtifactUrl("");
+    try {
+      const data = await apiFetch(`/api/v1/eventos/${eventId}/card`, { method: "POST", headers: { "Idempotency-Key": newKey() }, body: JSON.stringify({ canal: "instagram" }) }, session);
+      setArtifactUrl(data.artifact?.url || ""); setMessage("Card preparado. A publicação externa ainda precisa ser confirmada pelo usuário.");
+    } catch (reason) { setError((reason as Error).message); } finally { setBusyAction(""); }
+  }
+
+  async function loadPresences(eventId: number) {
+    setSelectedEventId(eventId); setBusyAction(`presence-${eventId}`); setError("");
+    try { const data = await apiFetch(`/api/v1/eventos/${eventId}/presencas`, {}, session); setPresences(data.items || []); }
+    catch (reason) { setError((reason as Error).message); } finally { setBusyAction(""); }
+  }
+
+  async function reviewPresence(presenceId: number, status: "aprovar" | "recusar") {
+    setBusyAction(`review-${presenceId}`); setError("");
+    try {
+      const data = await apiFetch(`/api/v1/presencas/${presenceId}/${status}`, { method: "POST", headers: { "Idempotency-Key": newKey() }, body: "{}" }, session);
+      setPresences((current) => current.map((item) => item.id === presenceId ? { ...item, ...data } : item)); setMessage("Solicitação atualizada.");
+    } catch (reason) { setError((reason as Error).message); } finally { setBusyAction(""); }
+  }
+
+  async function createInvite(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusyAction("invite"); setError("");
+    try {
+      const form = new FormData(event.currentTarget); const storeValue = String(form.get("loja_id") || "");
+      const body: Record<string, unknown> = { email: form.get("email"), papel: form.get("papel") };
+      if (storeValue) body.loja_id = Number(storeValue);
+      const data = await apiFetch("/api/v1/convites", { method: "POST", headers: { "Idempotency-Key": newKey() }, body: JSON.stringify(body) }, session);
+      setMessage("Convite criado. Copie o link antes de fechar esta tela."); setArtifactUrl(data.invite_url || ""); event.currentTarget.reset();
+    } catch (reason) { setError((reason as Error).message); } finally { setBusyAction(""); }
   }
 
   return <Shell>
@@ -168,8 +266,11 @@ function Dashboard({ session, inviteToken }: { session: Session; inviteToken?: s
     {message && <Notice tone="success" title="Tudo certo">{message}</Notice>}
     {error && <Notice tone="warning" title="Atenção">{error}</Notice>}
     {me && <section className="grid two"><div className="panel"><p className="eyebrow">Lojas autorizadas</p><h3>{me.stores.length}</h3><div className="chips">{me.stores.map((store) => <span className="chip" key={store.id}>{store.nome}</span>)}</div></div><div className="panel"><p className="eyebrow">Eventos visíveis</p><h3>{events.length}</h3><p className="muted">Telegram continua disponível durante o piloto.</p></div></section>}
-    {me && <section className="panel"><div className="section-title"><div><p className="eyebrow">Próximo núcleo</p><h3>Criar sessão</h3></div><span className="status">rascunho</span></div><form onSubmit={createDraft} className="form-grid"><label>Título<input name="titulo" required placeholder="Sessão de trabalho" /></label><label>Data e hora<input name="evento_at" required type="datetime-local" /></label><label>Loja<select name="loja_id" required defaultValue=""> <option value="" disabled>Selecione</option>{me.stores.map((store) => <option key={store.id} value={store.id}>{store.nome}</option>)}</select></label><button disabled={busy}>{busy ? "Salvando…" : "Salvar rascunho"}</button></form></section>}
-    <section className="panel"><div className="section-title"><div><p className="eyebrow">Agenda</p><h3>Eventos</h3></div></div>{events.length === 0 ? <p className="muted">Nenhum evento disponível ainda.</p> : <div className="event-list">{events.map((event) => <article className="event-row" key={event.id}><div><strong>{event.titulo}</strong><span>{formatDate(event.evento_at)}</span></div><span className="status">{event.status}</span></article>)}</div>}</section>
+    {me && <section className="panel"><div className="section-title"><div><p className="eyebrow">Núcleo operacional</p><h3>Criar sessão</h3></div><span className="status">rascunho</span></div><form onSubmit={createDraft} className="form-grid"><label>Título<input name="titulo" required placeholder="Sessão de trabalho" /></label><label>Data e hora<input name="evento_at" required type="datetime-local" /></label><label>Loja<select name="loja_id" required defaultValue=""> <option value="" disabled>Selecione</option>{me.stores.map((store) => <option key={store.id} value={store.id}>{store.nome}</option>)}</select></label><label>Grau<select name="grau" defaultValue=""><option value="">Não informado</option><option>Aprendiz</option><option>Companheiro</option><option>Mestre</option></select></label><label>Tipo de sessão<input name="tipo_sessao" placeholder="Ordinária, magna…" /></label><label>Rito<input name="rito" placeholder="REAA" /></label><label>Traje<input name="traje_obrigatorio" placeholder="Livre ou traje maçônico" /></label><label>Ágape<input name="agape" placeholder="Sem ágape" /></label><label className="wide">Ordem do dia<textarea name="ordem_do_dia" rows={2} placeholder="Pauta ou observações (opcional)" /></label><label className="check wide"><input name="publicar" type="checkbox" /> Publicar agora e gerar link público</label><button disabled={busy}>{busy ? "Salvando…" : "Salvar sessão"}</button></form></section>}
+    {me?.is_global_admin && <section className="panel"><div className="section-title"><div><p className="eyebrow">Acesso controlado</p><h3>Enviar convite</h3></div></div><form onSubmit={createInvite} className="form-grid"><label>E-mail<input name="email" required type="email" placeholder="secretario@exemplo.com" /></label><label>Papel<select name="papel" defaultValue="secretary"><option value="secretary">Secretário</option><option value="member">Membro</option><option value="admin">Administrador</option></select></label><label>Loja<select name="loja_id" defaultValue=""><option value="">Administrador global</option>{me.stores.map((store) => <option key={store.id} value={store.id}>{store.nome}</option>)}</select></label><button disabled={busyAction === "invite"}>{busyAction === "invite" ? "Criando…" : "Criar convite"}</button></form></section>}
+    {message && artifactUrl && <Notice tone="success" title="Resultado"><a href={artifactUrl} target="_blank" rel="noreferrer">Abrir resultado seguro</a></Notice>}
+    <section className="panel"><div className="section-title"><div><p className="eyebrow">Agenda</p><h3>Eventos</h3></div></div>{events.length === 0 ? <p className="muted">Nenhum evento disponível ainda.</p> : <div className="event-list">{events.map((event) => <article className="event-row" key={event.id}><div className="event-main"><strong>{event.titulo}</strong><span>{formatDate(event.evento_at)}</span>{event.public_url && <a href={event.public_url} target="_blank" rel="noreferrer">Abrir link público</a>}</div><div className="event-actions"><span className="status">{event.status}</span>{event.status === "draft" && <button className="button-small" disabled={busyAction === `event-${event.id}-published`} onClick={() => updateEvent(event.id, "published")}>Publicar</button>}{event.status !== "cancelled" && event.status !== "closed" && <button className="button-small button-quiet" disabled={busyAction === `event-${event.id}-cancelled`} onClick={() => updateEvent(event.id, "cancelled")}>Cancelar</button>}<button className="button-small button-quiet" disabled={busyAction === `card-${event.id}`} onClick={() => generateCard(event.id)}>Card</button><button className="button-small button-quiet" disabled={busyAction === `presence-${event.id}`} onClick={() => loadPresences(event.id)}>Presenças</button></div></article>)}</div>}</section>
+    {selectedEventId !== null && <section className="panel"><div className="section-title"><div><p className="eyebrow">Revisão</p><h3>Solicitações de presença</h3></div><span className="status">{presences.length}</span></div>{presences.length === 0 ? <p className="muted">Nenhuma solicitação para este evento.</p> : <div className="event-list">{presences.map((presence) => <article className="event-row" key={presence.id}><div className="event-main"><strong>{presence.visitante_nome}</strong><span>{presence.visitante_email || presence.visitante_telefone || "Contato não informado"} · Ágape: {presence.agape}</span></div><div className="event-actions"><span className="status">{presence.status}</span>{presence.status === "pending" && <><button className="button-small" disabled={busyAction === `review-${presence.id}`} onClick={() => reviewPresence(presence.id, "aprovar")}>Aprovar</button><button className="button-small button-quiet" disabled={busyAction === `review-${presence.id}`} onClick={() => reviewPresence(presence.id, "recusar")}>Recusar</button></>}</div></article>)}</div>}</section>}
   </Shell>;
 }
 

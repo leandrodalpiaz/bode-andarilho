@@ -64,6 +64,17 @@ def normalize_event_payload(payload: dict[str, Any], *, partial: bool = False) -
         result["loja_id"] = positive_int(payload.get("loja_id"), "loja_id")
     if "descricao" in payload:
         result["descricao"] = optional_text(payload.get("descricao"), "descrição", max_length=4000)
+    for field_name, label, max_length in (
+        ("grau", "grau", 100),
+        ("tipo_sessao", "tipo de sessão", 200),
+        ("rito", "rito", 120),
+        ("traje_obrigatorio", "traje obrigatório", 200),
+        ("agape", "ágape", 100),
+        ("ordem_do_dia", "ordem do dia", 4000),
+        ("endereco_sessao", "endereço da sessão", 400),
+    ):
+        if field_name in payload:
+            result[field_name] = optional_text(payload.get(field_name), label, max_length=max_length)
     if "visibilidade" in payload:
         visibility = optional_text(payload.get("visibilidade"), "visibilidade", max_length=20).lower()
         if visibility not in {"public", "private"}:

@@ -61,7 +61,9 @@ class SupabaseRepository:
 
     def _insert_one(self, table: str, values: dict[str, Any]) -> dict[str, Any]:
         try:
-            row = self._one(self._table(table).insert(values).select("*"))
+            # supabase-py 2.x retorna a representação no próprio builder de
+            # insert; o builder resultante não possui .select().
+            row = self._one(self._table(table).insert(values))
         except Exception as exc:
             if "duplicate" in str(exc).lower() or "unique" in str(exc).lower():
                 raise RepositoryConflict(str(exc)) from exc
@@ -119,7 +121,6 @@ class SupabaseRepository:
                 self._table("lojas")
                 .update({**values, "updated_at": _utc_now()})
                 .eq("id", int(store_id))
-                .select("*")
             )
         except Exception as exc:
             raise RepositoryError(str(exc)) from exc
@@ -192,7 +193,6 @@ class SupabaseRepository:
                 self._table("eventos")
                 .update({**values, "updated_at": _utc_now()})
                 .eq("id", int(event_id))
-                .select("*")
             )
         except Exception as exc:
             raise RepositoryError(str(exc)) from exc
@@ -228,7 +228,6 @@ class SupabaseRepository:
                 self._table("solicitacoes_presenca")
                 .update({**values, "updated_at": _utc_now()})
                 .eq("id", int(presence_id))
-                .select("*")
             )
         except Exception as exc:
             raise RepositoryError(str(exc)) from exc
@@ -268,7 +267,6 @@ class SupabaseRepository:
                 self._table("publicacoes_canal")
                 .update(values)
                 .eq("id", int(publication_id))
-                .select("*")
             )
         except Exception as exc:
             raise RepositoryError(str(exc)) from exc

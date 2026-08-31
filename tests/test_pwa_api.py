@@ -101,6 +101,18 @@ async def test_api_rejeita_sessao_ausente():
 
 
 @pytest.mark.asyncio
+async def test_config_expoe_apenas_parametros_publicos():
+    async with make_client(FakeRepository()) as client:
+        response = await client.get("/api/v1/config")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["supabase_url"] == "https://example.supabase.co"
+    assert body["supabase_publishable_key"] == "public"
+    assert "supabase_service_role_key" not in body
+    assert "token_pepper" not in body
+
+
+@pytest.mark.asyncio
 async def test_api_rejeita_mutacao_sem_idempotencia():
     async with make_client(FakeRepository()) as client:
         response = await client.post(

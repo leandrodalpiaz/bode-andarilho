@@ -317,6 +317,10 @@ def _layout_config(loja: Dict[str, Any], width: int, height: int) -> Dict[str, A
 
 
 def obter_nome_formatado_loja(evento: Dict[str, Any]) -> str:
+    preformatted = _norm(_get_any(evento, "Nome formatado da loja", "nome_loja_formatado"))
+    if preformatted:
+        return preformatted
+
     from src.sheets_supabase import buscar_loja_por_id, buscar_loja_por_nome_numero, extrair_prefixo_e_nome, padronizar_nome_loja
     
     e_nome = _norm(_get_any(evento, "Nome da loja", "nome_loja"))

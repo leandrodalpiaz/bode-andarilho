@@ -30,8 +30,9 @@ do Supabase e envia escritas para o backend. Telegram continua sendo o canal
 legado durante a construção e o piloto.
 
 O schema novo está em `pwa_v2` e não reutiliza as tabelas legadas. A migration
-`supabase/migrations/20260831000000_create_pwa_v2.sql` é versionada, mas não foi
-aplicada automaticamente a nenhum ambiente remoto.
+`supabase/migrations/20260831165939_create_pwa_v2.sql` é versionada e foi
+validada apenas no Supabase local; não foi aplicada automaticamente a nenhum
+ambiente remoto.
 
 ## Execução
 
