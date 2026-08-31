@@ -307,6 +307,12 @@ class PwaAPI:
             store_id = positive_int(payload["loja_id"], "loja_id")
         if papel != "admin" and store_id is None:
             raise DomainValidationError("loja_id é obrigatório para este papel")
+        if store_id is not None:
+            store = await self._run("get_store", store_id)
+            if not store:
+                raise ApiError(404, "loja não encontrada", code="not_found")
+            if str(store.get("status") or "active") == "archived":
+                raise ApiError(409, "não é possível convidar usuários para uma loja arquivada", code="store_archived")
         if not actor.can_invite(store_id):
             raise ApiError(403, "somente administrador autorizado pode criar convites", code="forbidden")
         token = generate_opaque_token()

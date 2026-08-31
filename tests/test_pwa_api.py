@@ -9,6 +9,7 @@ from src.domain.authorization import Actor
 from src.pwa.auth import AuthUser
 from src.pwa.api import PwaAPI
 from src.pwa.config import PwaSettings
+from src.pwa.repository import RepositoryConflict
 
 
 @dataclass
@@ -104,8 +105,8 @@ class FakeRepository:
         return {"perfil_id": "p-secretary", "provedor": provider, "external_user_id": external_user_id}
 
 
-def make_client(repo: FakeRepository) -> httpx.AsyncClient:
-    settings = PwaSettings(
+def make_client(repo: FakeRepository, settings: PwaSettings | None = None) -> httpx.AsyncClient:
+    settings = settings or PwaSettings(
         supabase_url="https://example.supabase.co",
         supabase_anon_key="public",
         supabase_service_role_key="server",
@@ -115,6 +116,11 @@ def make_client(repo: FakeRepository) -> httpx.AsyncClient:
     )
     pwa = PwaAPI(settings, repository=repo, authenticator=FakeAuthenticator())
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=Starlette(routes=pwa.routes())), base_url="http://test")
+
+
+class ConflictRepository(FakeRepository):
+    def create_event(self, values):
+        raise RepositoryConflict("chave de idempotência já utilizada")
 
 
 @pytest.mark.asyncio
@@ -145,6 +151,18 @@ async def test_api_rejeita_mutacao_sem_idempotencia():
             json={"titulo": "Sessão", "evento_at": "2026-09-10T20:00:00-03:00", "loja_id": 1},
         )
     assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_api_converte_conflito_de_idempotencia_em_409():
+    async with make_client(ConflictRepository()) as client:
+        response = await client.post(
+            "/api/v1/eventos",
+            headers={"Authorization": "Bearer secretary", "Idempotency-Key": "event-conflict"},
+            json={"titulo": "Sessão", "evento_at": "2026-09-10T20:00:00-03:00", "loja_id": 1},
+        )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "conflict"
 
 
 @pytest.mark.asyncio
@@ -207,6 +225,43 @@ async def test_endpoint_publico_cria_presenca_pendente_e_nao_expoe_hashes():
     assert body["receipt"]
     assert "recibo_hash" not in body
     assert repo.audits[-1]["origem"] == "public"
+
+
+@pytest.mark.asyncio
+async def test_endpoint_publico_aplica_rate_limit_por_ip_e_evento():
+    settings = PwaSettings(
+        supabase_url="https://example.supabase.co",
+        supabase_anon_key="public",
+        supabase_service_role_key="server",
+        token_pepper="test-pepper",
+        public_base_url="https://pwa.example",
+        frontend_dist=Path("web/dist"),
+        public_rate_limit=1,
+        public_rate_window_seconds=300,
+    )
+    async with make_client(FakeRepository(), settings) as client:
+        first = await client.post(
+            "/api/v1/public/eventos/public-token/presencas",
+            headers={"Idempotency-Key": "presence-rate-1"},
+            json={"nome": "Visitante 1"},
+        )
+        second = await client.post(
+            "/api/v1/public/eventos/public-token/presencas",
+            headers={"Idempotency-Key": "presence-rate-2"},
+            json={"nome": "Visitante 2"},
+        )
+    assert first.status_code == 201
+    assert second.status_code == 429
+    assert second.json()["error"]["code"] == "rate_limited"
+
+
+@pytest.mark.asyncio
+async def test_api_preserva_request_id_valido_na_resposta():
+    request_id = "00000000-0000-4000-8000-000000000001"
+    async with make_client(FakeRepository()) as client:
+        response = await client.get("/api/v1/config", headers={"X-Request-ID": request_id})
+    assert response.status_code == 200
+    assert response.headers["X-Request-ID"] == request_id
 
 
 @pytest.mark.asyncio
