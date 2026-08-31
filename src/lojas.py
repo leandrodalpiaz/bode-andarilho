@@ -455,6 +455,10 @@ async def executar_exclusao_loja(update: Update, context: ContextTypes.DEFAULT_T
         return
 
     loja = lojas[indice]
+    if await redirect_mutation_to_pwa(update, "arquivamento de loja", loja.get("ID") or loja.get("id")):
+        context.user_data.pop("excluir_loja_indice", None)
+        context.user_data.pop("lojas_para_excluir", None)
+        return ConversationHandler.END
     # A função excluir_loja precisa do identificador único. Como a planilha pode não ter ID,
     # vamos usar uma combinação de nome e número ou assumir que excluir_loja usa o nome + número.
     # Vou adaptar: vamos passar o dicionário da loja.
@@ -579,6 +583,11 @@ async def receber_template_loja(update: Update, context: ContextTypes.DEFAULT_TY
     loja_id = _norm_text(context.user_data.get("loja_template_visual_id"))
     if not loja_id:
         await msg.reply_text("Não encontrei a loja selecionada. Recomece a configuração.")
+        return ConversationHandler.END
+    if await redirect_mutation_to_pwa(update, "configuração visual da loja", loja_id):
+        context.user_data.pop("lojas_template_visual", None)
+        context.user_data.pop("loja_template_visual_id", None)
+        context.user_data.pop("loja_template_visual_nome", None)
         return ConversationHandler.END
 
     tg_file = None

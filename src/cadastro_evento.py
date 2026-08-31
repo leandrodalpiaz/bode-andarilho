@@ -1718,6 +1718,9 @@ async def confirmar_publicacao_forcar(update: Update, context: ContextTypes.DEFA
 async def _publicar_e_finalizar(update: Update, context: ContextTypes.DEFAULT_TYPE, evento: Dict[str, Any], forcar: bool = False):
     """Salva o evento na planilha e publica no grupo."""
     user_id = update.effective_user.id
+    if await redirect_mutation_to_pwa(update, "cadastro de sessão", evento.get("ID da loja") or evento.get("loja_id")):
+        _limpar_contexto_evento(context)
+        return
     # Validação do limite de 4 sessões ativas por Loja ou Secretário
     from src.permissoes import get_nivel
     nivel = get_nivel(user_id)

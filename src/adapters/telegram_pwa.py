@@ -21,17 +21,26 @@ def _api_error(payload: Any) -> str:
     return "não foi possível concluir a associação"
 
 
-def telegram_mutations_to_pwa_enabled() -> bool:
-    """Retorna a chave de corte sem inferir autorização a partir do Telegram."""
+def telegram_mutations_to_pwa_enabled(store_id: Any | None = None) -> bool:
+    """Retorna a chave de corte global ou a habilitação do piloto por loja."""
 
-    return FeatureFlags.from_env().telegram_mutations_to_pwa
+    flags = FeatureFlags.from_env()
+    if flags.telegram_mutations_to_pwa:
+        return True
+    if store_id is None:
+        return False
+    try:
+        normalized = int(store_id)
+    except (TypeError, ValueError):
+        return False
+    return normalized > 0 and normalized in flags.telegram_mutations_to_pwa_store_ids
 
 
 def _mutation_pwa_url() -> str:
     return _public_base_url()
 
 
-async def redirect_mutation_to_pwa(update: Any, operation: str) -> bool:
+async def redirect_mutation_to_pwa(update: Any, operation: str, store_id: Any | None = None) -> bool:
     """Interrompe o fluxo legado e orienta a operação equivalente na PWA.
 
     O retorno ``True`` é deliberado também quando a PWA está mal configurada:
@@ -39,7 +48,7 @@ async def redirect_mutation_to_pwa(update: Any, operation: str) -> bool:
     schema legado.
     """
 
-    if not telegram_mutations_to_pwa_enabled():
+    if not telegram_mutations_to_pwa_enabled(store_id):
         return False
 
     message = getattr(update, "effective_message", None)

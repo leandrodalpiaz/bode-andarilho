@@ -126,3 +126,14 @@ async def test_flag_de_corte_sem_url_nao_retorna_ao_fluxo_legado(monkeypatch):
 
     assert await telegram_pwa.redirect_mutation_to_pwa(update, "cadastro de loja")
     assert "endereço público" in message.replies[0][0]
+
+
+def test_flag_de_corte_pode_ser_limitada_a_lojas_do_piloto(monkeypatch):
+    from src.adapters import telegram_pwa
+
+    monkeypatch.delenv("TELEGRAM_MUTATIONS_TO_PWA", raising=False)
+    monkeypatch.setenv("TELEGRAM_MUTATIONS_TO_PWA_STORES", "12, loja-invalida, -4, 0")
+
+    assert telegram_pwa.telegram_mutations_to_pwa_enabled(12)
+    assert not telegram_pwa.telegram_mutations_to_pwa_enabled(13)
+    assert not telegram_pwa.telegram_mutations_to_pwa_enabled()

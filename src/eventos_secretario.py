@@ -761,6 +761,9 @@ async def confirmar_cancelamento(update: Update, context: ContextTypes.DEFAULT_T
         )
         return
 
+    if await redirect_mutation_to_pwa(update, "cancelamento de sessão", evento.get("ID da loja") or evento.get("loja_id")):
+        return ConversationHandler.END
+
     # Verifica permissão
     user_id = update.effective_user.id
     nivel = get_nivel(user_id)
@@ -820,6 +823,9 @@ async def executar_cancelamento(update: Update, context: ContextTypes.DEFAULT_TY
             "Evento não encontrado."
         )
         return
+
+    if await redirect_mutation_to_pwa(update, "cancelamento de sessão", evento.get("ID da loja") or evento.get("loja_id")):
+        return ConversationHandler.END
 
     # Verifica permissão
     user_id = update.effective_user.id
@@ -893,6 +899,9 @@ async def editar_evento_inicio(update: Update, context: ContextTypes.DEFAULT_TYP
             context, update.effective_user.id, TIPO_RESULTADO,
             "Dados do evento não encontrados. Tente novamente."
         )
+        return ConversationHandler.END
+
+    if await redirect_mutation_to_pwa(update, "edição de sessão", evento.get("ID da loja") or evento.get("loja_id")):
         return ConversationHandler.END
 
     botoes = []

@@ -13,7 +13,7 @@ local. Não existe autorização para apontar produção para este código.
 ## Evidências concluídas
 
 - worktree original preservado e branch de migração isolada;
-- 47 testes Python aprovados nesta revisão, além de compilação sintática em cache
+- 48 testes Python aprovados nesta revisão, além de compilação sintática em cache
   temporário;
 - typecheck e build React aprovados;
 - schema local com RLS/FORCE RLS, grants e lint sem erro;
@@ -49,3 +49,7 @@ remota e publicação no Instagram são marcos independentes.
 Com a flag de corte ligada, os pontos de entrada de cadastro de sessão e loja
 não escrevem no legado: orientam o operador para a PWA e falham fechado quando
 `PWA_PUBLIC_BASE_URL` não está configurada.
+
+Para um piloto gradual, `TELEGRAM_MUTATIONS_TO_PWA_STORES` pode listar IDs de
+lojas separados por vírgula. A allowlist é avaliada no ponto de persistência;
+uma loja fora dela permanece no Telegram até novo gate.

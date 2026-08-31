@@ -24,7 +24,7 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - RLS com fixtures descartáveis: secretário vê somente a própria loja/evento; outra loja fica invisível; administrador global vê as duas; `anon` não possui grants diretos de leitura/escrita.
 - Smoke integrado: configuração pública, `/me`, criação/publicação de evento, link público, presença pendente, recibo, aprovação e geração/upload de card.
 - Smoke real local com Auth/REST/Storage/RPC: usuário descartável, bootstrap, loja, associação Telegram, evento público, presença, recibo, aprovação e card — todos os passos retornaram sucesso; o banco foi resetado depois.
-- `python -m pytest -q` — 47 testes aprovados nesta revisão, cobrindo também 409 de conflito, 429 de rate limit e propagação de request ID.
+- `python -m pytest -q` — 48 testes aprovados nesta revisão, cobrindo também 409 de conflito, 429 de rate limit, propagação de request ID e allowlist de lojas-piloto.
 - Compilação sintática dos 61 arquivos Python — aprovada.
 - `npm run typecheck` e `npm run build` — aprovados.
 - Playwright local com mocks — dashboard autenticado conferido em desktop e viewport móvel; editor e controles de compartilhamento sem erro de console da aplicação.
@@ -43,4 +43,5 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - Nenhum push, workflow, deploy ou teste de runtime público foi executado.
 - OTP real, Android/iPhone, compartilhamento real, 2FA do Instagram, perfil público e publicações permanecem gates do piloto.
 - Telegram continua no fluxo legado; somente `/vincular` usa o endpoint opcional e `TELEGRAM_MUTATIONS_TO_PWA` permanece desligada. Quando ativada, a flag redireciona os cadastros centrais de evento e loja para a PWA e falha fechado se a URL pública estiver ausente.
+- O corte também aceita `TELEGRAM_MUTATIONS_TO_PWA_STORES` como allowlist de IDs do piloto: a decisão é reavaliada antes da persistência de evento, cancelamento, edição, arquivamento e template; lojas não incluídas continuam no legado.
 - As fixtures usadas na validação foram locais e descartáveis; não houve backfill dos registros atuais.
