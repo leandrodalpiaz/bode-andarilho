@@ -71,6 +71,7 @@ from src.potencias import (
     validar_potencia,
 )
 from src.ritos import normalizar_rito
+from src.adapters.telegram_pwa import telegram_mutations_to_pwa_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -245,6 +246,27 @@ def _teclado_template_loja_pos_cadastro(loja_id: str = "") -> InlineKeyboardMark
 
 def _json_error(mensagem: str, status_code: int = 400) -> JSONResponse:
     return JSONResponse({"ok": False, "error": mensagem}, status_code=status_code)
+
+
+def _pwa_cutover_response(operation: str, store_id: Any | None = None) -> Optional[JSONResponse]:
+    """Bloqueia mutações do Mini App legado durante o corte para a PWA.
+
+    O Mini App do Telegram também grava diretamente nas tabelas legadas. Por
+    isso, precisa respeitar a mesma chave de corte dos handlers de conversa;
+    caso contrário, um formulário já aberto poderia reintroduzir gravações
+    antigas depois que a PWA assumisse uma loja.
+    """
+
+    if not telegram_mutations_to_pwa_enabled(store_id):
+        return None
+    base_url = (os.getenv("PWA_PUBLIC_BASE_URL") or os.getenv("RENDER_EXTERNAL_URL") or "").strip().rstrip("/")
+    payload = {
+        "ok": False,
+        "code": "pwa_cutover_required",
+        "error": f"O {operation} foi direcionado para a PWA. O Mini App legado não aceita novas gravações neste corte.",
+        "pwa_url": base_url or None,
+    }
+    return JSONResponse(payload, status_code=409)
 
 
 async def _usuario_esta_no_grupo(bot, telegram_id: int) -> bool:
@@ -532,6 +554,9 @@ async def api_rascunho_loja(request: Request) -> JSONResponse:
     body, telegram_id, erro = await _validar_requisicao_webapp(request)
     if erro:
         return erro
+    cutover = _pwa_cutover_response("cadastro de loja")
+    if cutover:
+        return cutover
     if _norm_text((body or {}).get("action")).lower() == "get":
         return JSONResponse({"ok": True, "draft": _obter_rascunho(_RASCUNHOS_LOJA, telegram_id)})
     dados = _extrair_dados_loja(body or {})
@@ -608,6 +633,9 @@ async def draft_loja_confirmar(update: Update, context) -> None:
     dados = _obter_rascunho(_RASCUNHOS_LOJA, telegram_id)
     if not dados:
         await query.answer("Não encontrei um rascunho de loja.", show_alert=True)
+        return
+    if telegram_mutations_to_pwa_enabled():
+        await query.answer("Este cadastro agora deve ser concluído na PWA.", show_alert=True)
         return
     nivel = str(get_nivel(telegram_id))
     if nivel == "3" and not _norm_text(dados.get("secretario_responsavel_id")):
@@ -857,6 +885,12 @@ async def api_rascunho_evento(request: Request) -> JSONResponse:
     body, telegram_id, erro = await _validar_requisicao_webapp(request)
     if erro:
         return erro
+    cutover = _pwa_cutover_response(
+        "cadastro de sessão",
+        (body or {}).get("loja_id") or (body or {}).get("ID da loja"),
+    )
+    if cutover:
+        return cutover
     if _norm_text((body or {}).get("action")).lower() == "get":
         return JSONResponse({"ok": True, "draft": _obter_rascunho(_RASCUNHOS_EVENTO, telegram_id)})
     logger.info("miniapp.evento.rascunho.inicio telegram_id=%s", telegram_id)
@@ -864,6 +898,13 @@ async def api_rascunho_evento(request: Request) -> JSONResponse:
     nivel = str(get_nivel(telegram_id))
     lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
     dados = _aplicar_loja_cadastrada_ao_evento(dados, lojas_existentes)
+
+    cutover = _pwa_cutover_response(
+        "cadastro de sessão",
+        dados.get("loja_id") or dados.get("ID da loja"),
+    )
+    if cutover:
+        return cutover
     
     # Validação do limite de 4 sessões ativas por Loja ou por Secretário
     if nivel != "3":
@@ -1249,6 +1290,10 @@ async def _confirmar_evento(update: Update, context, salvar_loja: bool) -> None:
         return
     lojas_existentes = listar_lojas(telegram_id, include_todas=(nivel == "3")) or []
     dados = _aplicar_loja_cadastrada_ao_evento(dados, lojas_existentes)
+
+    if telegram_mutations_to_pwa_enabled(dados.get("loja_id") or dados.get("ID da loja")):
+        await query.answer("Este cadastro agora deve ser concluído na PWA.", show_alert=True)
+        return
     
     # Validação do limite de 4 sessões ativas por Loja ou por Secretário
     if nivel != "3":
@@ -4612,6 +4657,10 @@ async def api_cadastro_loja(request: Request) -> JSONResponse:
     if not telegram_id:
         return JSONResponse({"ok": False, "error": "Usuário não identificado."}, status_code=403)
 
+    cutover = _pwa_cutover_response("cadastro de loja")
+    if cutover:
+        return cutover
+
     nome     = (body.get("nome")     or "").strip()[:200]
     numero   = (body.get("numero")   or "0").strip()[:10]
     oriente  = (body.get("oriente")  or "").strip()[:200]
@@ -4686,6 +4735,13 @@ async def api_cadastro_evento(request: Request) -> JSONResponse:
     telegram_id = user.get("id")
     if not telegram_id:
         return JSONResponse({"ok": False, "error": "Usuário não identificado."}, status_code=403)
+
+    cutover = _pwa_cutover_response(
+        "cadastro de sessão",
+        body.get("loja_id") or body.get("ID da loja"),
+    )
+    if cutover:
+        return cutover
 
     # Sanitizar campos
     data_str    = (body.get("data")       or "").strip()[:10]

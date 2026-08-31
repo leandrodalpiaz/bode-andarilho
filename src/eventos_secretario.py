@@ -975,6 +975,12 @@ async def receber_novo_valor_evento(update: Update, context: ContextTypes.DEFAUL
         await update.message.reply_text(EDICAO_EVENTO_CONTEXTO_PERDIDO)
         return ConversationHandler.END
 
+    if await redirect_mutation_to_pwa(update, "edição de sessão", evento.get("ID da loja") or evento.get("loja_id")):
+        context.user_data.pop("editando_campo_evento", None)
+        context.user_data.pop("evento_gerenciado_id", None)
+        context.user_data.pop("evento_gerenciado_dados", None)
+        return ConversationHandler.END
+
     if campo_id == "rito":
         novo_valor = normalizar_rito(novo_valor) or novo_valor
 
@@ -1304,6 +1310,8 @@ async def listar_eventos_cancelados(update: Update, context: ContextTypes.DEFAUL
 async def confirmar_refazer_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mostra confirmação antes de refazer o evento."""
     query = update.callback_query
+    if await redirect_mutation_to_pwa(update, "reabertura de sessão"):
+        return ConversationHandler.END
     _, id_evento_cod = query.data.split("|", 1)
     id_evento = _decode_cb(id_evento_cod)
 
@@ -1323,6 +1331,9 @@ async def confirmar_refazer_evento(update: Update, context: ContextTypes.DEFAULT
             "Evento não encontrado."
         )
         return
+
+    if await redirect_mutation_to_pwa(update, "reabertura de sessão", evento.get("ID da loja") or evento.get("loja_id")):
+        return ConversationHandler.END
 
     # Verifica permissão
     user_id = update.effective_user.id
@@ -1361,6 +1372,8 @@ async def confirmar_refazer_evento(update: Update, context: ContextTypes.DEFAULT
 async def executar_refazer_evento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Executa a reabertura do evento (refazer)."""
     query = update.callback_query
+    if await redirect_mutation_to_pwa(update, "reabertura de sessão"):
+        return ConversationHandler.END
     _, id_evento_cod = query.data.split("|", 1)
     id_evento = _decode_cb(id_evento_cod)
 
@@ -1380,6 +1393,9 @@ async def executar_refazer_evento(update: Update, context: ContextTypes.DEFAULT_
             "Evento não encontrado."
         )
         return
+
+    if await redirect_mutation_to_pwa(update, "reabertura de sessão", evento.get("ID da loja") or evento.get("loja_id")):
+        return ConversationHandler.END
 
     # Verifica permissão
     user_id = update.effective_user.id

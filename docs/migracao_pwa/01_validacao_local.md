@@ -56,6 +56,6 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - Nenhum deploy, teste de runtime público ou homologação autenticada externa foi executado.
 - OTP real, Android/iPhone, compartilhamento real, 2FA do Instagram, perfil público e publicações permanecem gates do piloto.
 - Telegram continua no fluxo legado; somente `/vincular` usa o endpoint opcional e `TELEGRAM_MUTATIONS_TO_PWA` permanece desligada. Quando ativada, a flag redireciona os cadastros centrais de evento e loja para a PWA e falha fechado se a URL pública estiver ausente.
-- O corte também aceita `TELEGRAM_MUTATIONS_TO_PWA_STORES` como allowlist de IDs do piloto: a decisão é reavaliada antes da persistência de evento, cancelamento, edição, arquivamento e template; lojas não incluídas continuam no legado.
+- O corte também aceita `TELEGRAM_MUTATIONS_TO_PWA_STORES` como allowlist de IDs do piloto: a decisão é reavaliada antes da persistência de evento, cancelamento, edição, reabertura, arquivamento e template. Os handlers conversacionais e os Mini Apps legados de loja/sessão falham fechado; lojas não incluídas continuam no legado.
 - CAPTCHA público permanece desligado por padrão; quando `PWA_PUBLIC_CAPTCHA_REQUIRED=true`, a PWA carrega o desafio hCaptcha pela chave pública e envia o token, enquanto a chave secreta continua somente no backend.
 - As fixtures usadas na validação foram locais e descartáveis; não houve backfill dos registros atuais.
