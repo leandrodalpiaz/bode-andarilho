@@ -29,10 +29,9 @@ O backend expõe a API v1 em `/api/v1`; o navegador usa apenas a chave publicáv
 do Supabase e envia escritas para o backend. Telegram continua sendo o canal
 legado durante a construção e o piloto.
 
-O schema novo está em `pwa_v2` e não reutiliza as tabelas legadas. A migration
-`supabase/migrations/20260831165939_create_pwa_v2.sql` é versionada e foi
-validada apenas no Supabase local; não foi aplicada automaticamente a nenhum
-ambiente remoto.
+O schema novo está em `pwa_v2` e não reutiliza as tabelas legadas. As migrations
+em `supabase/migrations/` são versionadas e foram validadas apenas no Supabase
+local; não foram aplicadas automaticamente a nenhum ambiente remoto.
 
 ## Execução
 

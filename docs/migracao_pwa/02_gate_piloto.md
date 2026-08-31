@@ -5,17 +5,20 @@ Atualizado em 2026-08-31, na branch `codex/pwa-foundation`.
 ## Estado atual
 
 O lote local deixou a PWA operacional para o núcleo de lojas, eventos, cards,
-links públicos, solicitações de presença, revisão e convites. O Telegram legado
+links públicos, solicitações de presença, revisão, convites e associação opcional
+do Telegram por código de uso único. O Telegram legado
 continua intacto e o schema `pwa_v2` permanece separado e vazio após o reset
 local. Não existe autorização para apontar produção para este código.
 
 ## Evidências concluídas
 
 - worktree original preservado e branch de migração isolada;
-- 31 testes Python aprovados nesta revisão, além de compilação sintática em cache
+- 36 testes Python aprovados nesta revisão, além de compilação sintática em cache
   temporário;
 - typecheck e build React aprovados;
 - schema local com RLS/FORCE RLS, grants e lint sem erro;
+- RPC de associação validado com fixture descartável: consumo único, identidade
+  vinculada e auditoria; reset posterior deixou as tabelas vazias;
 - smoke integrado local de Auth/API/repository/Storage executado antes deste lote;
 - painel visual conferido em desktop e mobile com mocks, sem homologação externa.
 
@@ -36,7 +39,7 @@ local. Não existe autorização para apontar produção para este código.
 
 ## Critério de corte
 
-Até todos os gates acima estarem registrados, `PWA_ENABLED` pode permanecer
-desligada no ambiente operacional e `TELEGRAM_MUTATIONS_TO_PWA` deve permanecer
-desligada. Push, workflow, deploy, migration remota e publicação no Instagram
-são marcos independentes e não estão implícitos neste commit.
+Até todos os gates acima estarem registrados, `TELEGRAM_MUTATIONS_TO_PWA` deve
+permanecer desligada. `PWA_ENABLED` pode ser ativada em ambiente isolado para
+testes, mas não implica corte operacional. Push, workflow, deploy, migration
+remota e publicação no Instagram são marcos independentes.

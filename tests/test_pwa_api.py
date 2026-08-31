@@ -24,6 +24,7 @@ class FakeRepository:
         self.audits: list[dict] = []
         self.created_events: list[dict] = []
         self.presence: list[dict] = []
+        self.association_codes: list[dict] = []
         self.publication = {"id": 40, "evento_id": 10, "estado": "prepared", "canal": "instagram"}
         self.event = {
             "id": 10,
@@ -81,6 +82,14 @@ class FakeRepository:
 
     def update_store(self, store_id, values):
         return {"id": store_id, "nome": values.get("nome", "Loja Piloto"), **values}
+
+    def create_association_code(self, values):
+        row = {"id": "code-1", **values}
+        self.association_codes.append(row)
+        return row
+
+    def consume_external_identity(self, code_hash, provider, external_user_id, request_id=None):
+        return {"perfil_id": "p-secretary", "provedor": provider, "external_user_id": external_user_id}
 
 
 def make_client(repo: FakeRepository) -> httpx.AsyncClient:
@@ -232,3 +241,37 @@ async def test_edicao_de_loja_rejeita_campos_invalidos():
             json={"uf": "R"},
         )
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_usuario_autenticado_gera_codigo_telegram_opaco_e_temporario():
+    repo = FakeRepository()
+    async with make_client(repo) as client:
+        response = await client.post(
+            "/api/v1/identidades/telegram/codigo",
+            headers={"Authorization": "Bearer secretary", "Idempotency-Key": "identity-001"},
+        )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["provedor"] == "telegram"
+    assert body["codigo"]
+    assert repo.association_codes[0]["codigo_hash"] != body["codigo"]
+
+
+@pytest.mark.asyncio
+async def test_endpoint_publico_associa_telegram_apenas_com_id_numerico():
+    repo = FakeRepository()
+    async with make_client(repo) as client:
+        response = await client.post(
+            "/api/v1/public/identidades/telegram/associar",
+            headers={"Idempotency-Key": "identity-002"},
+            json={"codigo": "one-time-code", "telegram_id": "123456789"},
+        )
+        invalid = await client.post(
+            "/api/v1/public/identidades/telegram/associar",
+            headers={"Idempotency-Key": "identity-003"},
+            json={"codigo": "one-time-code", "telegram_id": "abc"},
+        )
+    assert response.status_code == 200
+    assert response.json()["external_user_id"] == "123456789"
+    assert invalid.status_code == 422

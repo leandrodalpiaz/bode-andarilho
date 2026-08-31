@@ -90,6 +90,7 @@ from telegram.ext import (
 from src.pwa.api import PwaAPI
 from src.pwa.flags import FeatureFlags
 from src.pwa.static import frontend_index_response, frontend_routes
+from src.adapters.telegram_pwa import vincular_telegram
 
 # ============================================
 # IMPORTAÇÕES DOS MÓDULOS
@@ -665,6 +666,7 @@ def register_handlers(app: Application) -> None:
     # ===== 2. COMMAND HANDLERS =====
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("convidar", cmd_convidar))
+    app.add_handler(CommandHandler("vincular", vincular_telegram))
     app.add_handler(CommandHandler(["ia", "assistente"], assistente_ia))
     app.add_handler(CommandHandler(["ia_stats", "assistente_stats"], assistente_ia_stats))
     app.add_handler(CommandHandler(["ia_relatorio", "assistente_relatorio"], assistente_ia_relatorio))

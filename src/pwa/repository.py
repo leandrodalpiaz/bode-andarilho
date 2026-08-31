@@ -79,11 +79,8 @@ class SupabaseRepository:
             raise RepositoryError(f"insert não retornou {table}")
         return row
 
-    def get_actor(self, user: AuthUser) -> Actor | None:
-        profile = self._one(
-            self._table("perfis").select("*").eq("auth_user_id", user.id).limit(1)
-        )
-        if not profile or profile.get("status") != "active":
+    def _actor_from_profile(self, profile: dict[str, Any], *, auth_user_id: str, email: str) -> Actor | None:
+        if profile.get("status") != "active":
             return None
         links = self._many(
             self._table("vinculos_loja")
@@ -101,10 +98,37 @@ class SupabaseRepository:
                 roles.setdefault(int(link["loja_id"]), set()).add(str(link.get("papel")))
         return Actor(
             profile_id=str(profile["id"]),
-            auth_user_id=user.id,
-            email=user.email,
+            auth_user_id=auth_user_id,
+            email=email,
             is_global_admin=global_admin,
             roles_by_store={store_id: frozenset(values) for store_id, values in roles.items()},
+        )
+
+    def get_actor(self, user: AuthUser) -> Actor | None:
+        profile = self._one(
+            self._table("perfis").select("*").eq("auth_user_id", user.id).limit(1)
+        )
+        return self._actor_from_profile(profile, auth_user_id=user.id, email=user.email) if profile else None
+
+    def get_actor_by_external_identity(self, provider: str, external_user_id: str) -> Actor | None:
+        identity = self._one(
+            self._table("identidades_externas")
+            .select("perfil_id")
+            .eq("provedor", provider)
+            .eq("external_user_id", external_user_id)
+            .limit(1)
+        )
+        if not identity:
+            return None
+        profile = self._one(
+            self._table("perfis").select("*").eq("id", identity["perfil_id"]).limit(1)
+        )
+        if not profile:
+            return None
+        return self._actor_from_profile(
+            profile,
+            auth_user_id=str(profile.get("auth_user_id") or ""),
+            email=str(profile.get("email") or ""),
         )
 
     def list_stores(self, actor: Actor) -> list[dict[str, Any]]:
@@ -140,6 +164,34 @@ class SupabaseRepository:
 
     def create_invite(self, values: dict[str, Any]) -> dict[str, Any]:
         return self._insert_one("convites_conta", values)
+
+    def create_association_code(self, values: dict[str, Any]) -> dict[str, Any]:
+        return self._insert_one("codigos_associacao", values)
+
+    def consume_external_identity(
+        self,
+        code_hash: str,
+        provider: str,
+        external_user_id: str,
+        request_id: str | None = None,
+    ) -> dict[str, Any]:
+        try:
+            response = self._schema.rpc(
+                "consume_external_identity",
+                {
+                    "association_code_hash": code_hash,
+                    "target_provider": provider,
+                    "external_user_id_value": external_user_id,
+                    "request_uuid": request_id,
+                },
+            ).execute()
+            data = _response_data(response)
+        except Exception as exc:
+            message = str(exc)
+            if "associa" in message.lower() or "identidade" in message.lower():
+                raise RepositoryConflict(message) from exc
+            raise RepositoryError(message) from exc
+        return data[0] if data else {}
 
     def consume_invite(self, token_hash: str, auth_user_id: str, email: str, request_id: str | None = None) -> dict[str, Any]:
         try:

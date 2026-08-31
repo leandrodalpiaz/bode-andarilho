@@ -108,6 +108,7 @@ class PwaAPI:
             Route("/api/v1/bootstrap/admin", self._wrap(self.bootstrap_admin), methods=["POST"]),
             Route("/api/v1/convites", self._wrap(self.create_invite), methods=["POST"]),
             Route("/api/v1/convites/consumir", self._wrap(self.consume_invite), methods=["POST"]),
+            Route("/api/v1/identidades/{provider}/codigo", self._wrap(self.create_association_code), methods=["POST"]),
             Route("/api/v1/lojas", self._wrap(self.list_stores), methods=["GET"]),
             Route("/api/v1/lojas", self._wrap(self.create_store), methods=["POST"]),
             Route("/api/v1/lojas/{store_id:int}", self._wrap(self.get_store), methods=["GET"]),
@@ -126,6 +127,7 @@ class PwaAPI:
             Route("/api/v1/public/eventos/{token}", self._wrap(self.public_event), methods=["GET"]),
             Route("/api/v1/public/eventos/{token}/presencas", self._wrap(self.create_public_presence), methods=["POST"]),
             Route("/api/v1/public/presencas/{receipt}", self._wrap(self.public_receipt), methods=["GET"]),
+            Route("/api/v1/public/identidades/{provider}/associar", self._wrap(self.consume_external_identity), methods=["POST"]),
         ]
 
     def _wrap(self, handler: Callable[[Request], Awaitable[Response]]) -> Callable[[Request], Awaitable[Response]]:
@@ -340,6 +342,38 @@ class PwaAPI:
             getattr(request.state, "request_id", None),
         )
         return JSONResponse(result)
+
+    async def create_association_code(self, request: Request) -> Response:
+        _, actor = await self._actor(request)
+        key = idempotency_key(request)
+        provider = required_text(request.path_params.get("provider"), "provedor", max_length=30).lower()
+        if provider != "telegram":
+            raise DomainValidationError("provedor de associação inválido")
+        token = generate_opaque_token()
+        valid_until = datetime.now(timezone.utc) + timedelta(minutes=15)
+        row = await self._run(
+            "create_association_code",
+            {
+                "perfil_id": actor.profile_id,
+                "provedor": provider,
+                "codigo_hash": hash_secret(token, self.settings.token_pepper),
+                "idempotency_key_hash": hash_secret(key, self.settings.token_pepper),
+                "valid_until": valid_until.isoformat(),
+            },
+        )
+        await self._audit(
+            request,
+            actor,
+            "external_identity_code_created",
+            "codigos_associacao",
+            row.get("id"),
+            "pwa",
+            {"provedor": provider, "valid_until": valid_until.isoformat()},
+        )
+        return JSONResponse(
+            {"provedor": provider, "codigo": token, "valid_until": valid_until.isoformat()},
+            status_code=201,
+        )
 
     async def bootstrap_admin(self, request: Request) -> Response:
         configured = self.settings.bootstrap_token
@@ -679,6 +713,34 @@ class PwaAPI:
         if not row:
             raise ApiError(404, "recibo não encontrado", code="not_found")
         return JSONResponse(row)
+
+    async def consume_external_identity(self, request: Request) -> Response:
+        provider = required_text(request.path_params.get("provider"), "provedor", max_length=30).lower()
+        if provider != "telegram":
+            raise DomainValidationError("provedor de associação inválido")
+        payload = await self._json(request)
+        if payload.get("website") or payload.get("homepage"):
+            raise ApiError(422, "solicitação rejeitada", code="spam_rejected")
+        token = required_text(payload.get("codigo") or payload.get("code"), "código", max_length=512)
+        external_user_id = required_text(
+            payload.get("telegram_id") or payload.get("external_user_id"),
+            "telegram_id",
+            max_length=30,
+        )
+        if not re.fullmatch(r"\d{1,30}", external_user_id):
+            raise DomainValidationError("telegram_id inválido")
+        key = idempotency_key(request)
+        limiter_key = f"identity:{request_client_ip(request)}:{provider}"
+        if not self._public_limiter.allow(limiter_key):
+            raise ApiError(429, "muitas tentativas; tente novamente mais tarde", code="rate_limited")
+        result = await self._run(
+            "consume_external_identity",
+            hash_secret(token, self.settings.token_pepper),
+            provider,
+            external_user_id,
+            getattr(request.state, "request_id", None),
+        )
+        return JSONResponse(result)
 
 
 def build_pwa_routes(

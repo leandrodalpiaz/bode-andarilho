@@ -17,5 +17,9 @@ como `anon`, usuário autenticado sem vínculo, secretário de outra loja,
 secretário autorizado e administrador global. A API REST precisa ter `pwa_v2`
 exposto como schema adicional; `pwa_private` não deve ser exposto.
 
+A associação do Telegram é opcional: a PWA gera um código temporário e o
+comando privado `/vincular` o consome uma única vez. Esse fluxo não faz backfill
+nem habilita `TELEGRAM_MUTATIONS_TO_PWA`.
+
 O deploy remoto exige aprovação específica. O corte previsto mantém as tabelas
 legadas somente leitura durante o piloto e não faz backfill dos dados de teste.
