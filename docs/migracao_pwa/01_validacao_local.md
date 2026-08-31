@@ -36,7 +36,8 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - `python -m pytest -q` — 52 testes aprovados nesta revisão, cobrindo também 404/409 de convite, 429 de rate limit, propagação de request ID, métricas restritas, allowlist de lojas-piloto e separação da chave pública do CAPTCHA.
 - Compilação sintática dos 61 arquivos Python — aprovada.
 - `npm run typecheck` e `npm run build` — aprovados.
-- Playwright local com mocks — dashboard autenticado conferido em desktop e viewport móvel; editor e controles de compartilhamento sem erro de console da aplicação.
+- Playwright CLI local com API mockada — visitante abriu o evento, enviou presença e consultou o recibo; secretário abriu o dashboard, listou a loja/evento, aprovou a presença, preparou o card e percorreu `prepared → share_initiated → confirmed_by_user`; console da aplicação sem erros.
+- A validação de navegador acima é determinística e mockada; não substitui OTP real, dispositivo Android/iPhone, compartilhamento externo ou publicação comprovada.
 - Service worker com detecção de atualização e ação explícita de recarga; requisições `/api/` continuam fora do cache.
 - Link público pode ser regenerado após recarregar a agenda; a rotação invalida o link anterior, mantém somente hash no banco e registra auditoria.
 - Geração de card retorna legenda independente de Telegram para revisão e cópia assistida no dashboard.

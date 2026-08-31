@@ -22,7 +22,9 @@ local. Não existe autorização para apontar produção para este código.
 - smoke integrado real local aprovado com Auth, REST, Storage e RPC, incluindo o
   fluxo completo de evento público, presença, recibo, aprovação e card;
 - smoke integrado local de Auth/API/repository/Storage executado antes deste lote;
-- painel visual conferido em desktop e mobile com mocks, sem homologação externa.
+- painel visual conferido em desktop e mobile com mocks, sem homologação externa;
+- Playwright local percorreu os fluxos mockados de visitante e secretário, incluindo
+  recibo, aprovação de presença, card e os estados de compartilhamento assistido.
 
 ## Gates ainda abertos
 
