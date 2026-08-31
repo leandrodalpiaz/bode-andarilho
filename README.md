@@ -20,11 +20,32 @@ eventos podem ser publicados no grupo como imagem (card) com os botões inline d
 - Supabase (PostgreSQL + Storage)
 - APScheduler
 - Pillow (renderização de cards)
+- React + TypeScript + Vite (PWA em `web/`)
+
+## PWA em coexistência gradual
+
+O shell da PWA é servido pela mesma aplicação Starlette quando `web/dist` existe.
+O backend expõe a API v1 em `/api/v1`; o navegador usa apenas a chave publicável
+do Supabase e envia escritas para o backend. Telegram continua sendo o canal
+legado durante a construção e o piloto.
+
+O schema novo está em `pwa_v2` e não reutiliza as tabelas legadas. A migration
+`supabase/migrations/20260831000000_create_pwa_v2.sql` é versionada, mas não foi
+aplicada automaticamente a nenhum ambiente remoto.
 
 ## Execução
 
 ```bash
 python main.py
+```
+
+Para validar o frontend:
+
+```bash
+cd web
+npm ci
+npm run typecheck
+npm run build
 ```
 
 ## Assets (camada visual)

@@ -87,6 +87,10 @@ from telegram.ext import (
     filters,
 )
 
+from src.pwa.api import PwaAPI
+from src.pwa.flags import FeatureFlags
+from src.pwa.static import frontend_index_response, frontend_routes
+
 # ============================================
 # IMPORTAÇÕES DOS MÓDULOS
 # ============================================
@@ -1055,6 +1059,10 @@ async def main():
             "recomenda-se configurar TELEGRAM_WEBHOOK_SECRET no provider."
         )
 
+    feature_flags = FeatureFlags.from_env()
+    if not feature_flags.telegram_enabled:
+        raise RuntimeError("TELEGRAM_ENABLED=false ainda não possui modo somente PWA neste entrypoint.")
+
     telegram_app = Application.builder().token(token).build()
     register_handlers(telegram_app)
 
@@ -1099,9 +1107,10 @@ async def main():
     async def health(request: Request) -> PlainTextResponse:
         return PlainTextResponse("OK")
 
-    async def root(request: Request) -> PlainTextResponse:
-        return PlainTextResponse("Bode Andarilho Bot - Online")
+    async def root(request: Request) -> Response:
+        return frontend_index_response(request) if feature_flags.pwa_enabled else PlainTextResponse("Bode Andarilho Bot - Online")
 
+    pwa_api = PwaAPI() if feature_flags.pwa_enabled else None
     starlette_app = Starlette(
         routes=[
             Route("/", root, methods=["GET"]),
@@ -1129,10 +1138,14 @@ async def main():
             Route("/api/rascunho_evento", api_rascunho_evento, methods=["POST"]),
             Route("/api/rascunho_loja", api_rascunho_loja, methods=["POST"]),
             Route("/api/lojas", api_listar_lojas, methods=["POST"]),
+            *(pwa_api.routes() if pwa_api else []),
+            *(frontend_routes() if feature_flags.pwa_enabled else []),
         ]
     )
     starlette_app.state.telegram_app = telegram_app
     starlette_app.state.bot_token = token
+    starlette_app.state.pwa_api = pwa_api
+    starlette_app.state.feature_flags = feature_flags
 
     import uvicorn
 

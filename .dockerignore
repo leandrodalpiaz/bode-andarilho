@@ -1,0 +1,11 @@
+.git
+.github
+.env
+.venv
+venv
+node_modules
+web/dist
+__pycache__
+*.pyc
+tmp
+scratch

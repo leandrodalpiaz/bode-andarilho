@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>Bode Andarilho</title>
+  <rect width="512" height="512" rx="112" fill="#17352c"/>
+  <circle cx="256" cy="256" r="164" fill="#d6b276"/>
+  <path d="M150 190c-45-82-24-106 28-48 17 19 35 31 54 36 16-8 32-8 48 0 19-5 37-17 54-36 52-58 73-34 28 48l-13 27c14 24 20 52 20 81 0 77-49 126-113 126s-113-49-113-126c0-29 6-57 20-81z" fill="#17352c"/>
+  <circle cx="205" cy="274" r="13" fill="#f5f0e7"/>
+  <circle cx="307" cy="274" r="13" fill="#f5f0e7"/>
+  <path d="M211 337c29 24 61 24 90 0" fill="none" stroke="#f5f0e7" stroke-width="12" stroke-linecap="round"/>
+  <path d="M256 295v24" stroke="#f5f0e7" stroke-width="10" stroke-linecap="round"/>
+</svg>

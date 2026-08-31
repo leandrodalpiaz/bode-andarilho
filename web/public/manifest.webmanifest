@@ -1,0 +1,13 @@
+{
+  "name": "Bode Andarilho",
+  "short_name": "Bode Andarilho",
+  "description": "Centro operacional de lojas, sessões e presenças.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f0e7",
+  "theme_color": "#17352c",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
