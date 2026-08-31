@@ -26,6 +26,8 @@ local. Não existe autorização para apontar produção para este código.
 - painel visual conferido em desktop e mobile com mocks, sem homologação externa;
 - Playwright local percorreu os fluxos mockados de visitante e secretário, incluindo
   recibo, aprovação de presença, card e os estados de compartilhamento assistido.
+- commit `7d95fea` publicado em `origin/codex/pwa-foundation`; CI `33436419072`
+  concluído com sucesso nos jobs Python 3.12 e Web Node 22.
 
 ## Gates ainda abertos
 
