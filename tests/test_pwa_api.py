@@ -219,6 +219,8 @@ async def test_endpoint_publico_consulta_recibo_sem_expor_contato():
     assert body["visitante_nome"] == "Visitante"
     assert "visitante_email" not in body
     assert "recibo_hash" not in body
+    assert "id" not in body
+    assert "evento_id" not in body
 
 
 @pytest.mark.asyncio

@@ -31,7 +31,7 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - Service worker com detecção de atualização e ação explícita de recarga; requisições `/api/` continuam fora do cache.
 - Link público pode ser regenerado após recarregar a agenda; a rotação invalida o link anterior, mantém somente hash no banco e registra auditoria.
 - Geração de card retorna legenda independente de Telegram para revisão e cópia assistida no dashboard.
-- Visitante pode consultar o status do recibo por token opaco, sem expor e-mail ou telefone.
+- Visitante pode consultar o status do recibo por token opaco, sem expor e-mail, telefone ou IDs internos.
 - Reset local após fixture do RPC de associação — código consumido uma vez, identidade criada e auditoria registrada; banco retornou vazio.
 - `docker build -t bode-andarilho-pwa:local .` — aprovado.
 - Importação de `main` e construção das rotas PWA dentro da imagem Python 3.12 — aprovada com placeholders locais.

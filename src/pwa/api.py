@@ -750,7 +750,13 @@ class PwaAPI:
         row = await self._run("get_public_receipt", hash_secret(receipt, self.settings.token_pepper))
         if not row:
             raise ApiError(404, "recibo não encontrado", code="not_found")
-        return JSONResponse(row)
+        return JSONResponse(
+            {
+                key: row.get(key)
+                for key in ("visitante_nome", "status", "created_at")
+                if row.get(key) is not None
+            }
+        )
 
     async def consume_external_identity(self, request: Request) -> Response:
         provider = required_text(request.path_params.get("provider"), "provedor", max_length=30).lower()

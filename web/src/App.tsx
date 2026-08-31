@@ -69,8 +69,6 @@ type PublicEvent = {
 };
 
 type PublicReceipt = {
-  id: number;
-  evento_id: number;
   visitante_nome: string;
   status: string;
   created_at: string;
@@ -604,5 +602,5 @@ function PublicReceiptPage({ receipt }: { receipt: string }) {
   }, [receipt]);
 
   if (error) return <Shell><Notice tone="warning" title="Recibo indisponível">{error}</Notice></Shell>;
-  return <Shell><section className="panel public-card"><p className="eyebrow">Consulta pública</p><h2>{data ? "Status da solicitação" : "Carregando recibo…"}</h2>{data && <><p className="date-line">{receiptStatusLabel(data.status)}</p><p className="muted">Visitante: {data.visitante_nome}</p><p className="muted">Solicitado em {formatDate(data.created_at)}</p><p className="muted">Evento: {data.evento_id}</p><code>{receipt}</code></>}</section></Shell>;
+  return <Shell><section className="panel public-card"><p className="eyebrow">Consulta pública</p><h2>{data ? "Status da solicitação" : "Carregando recibo…"}</h2>{data && <><p className="date-line">{receiptStatusLabel(data.status)}</p><p className="muted">Visitante: {data.visitante_nome}</p><p className="muted">Solicitado em {formatDate(data.created_at)}</p><code>{receipt}</code></>}</section></Shell>;
 }

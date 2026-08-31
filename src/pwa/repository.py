@@ -312,7 +312,7 @@ class SupabaseRepository:
     def get_public_receipt(self, receipt_hash: str) -> dict[str, Any] | None:
         return self._one(
             self._table("solicitacoes_presenca")
-            .select("id,evento_id,visitante_nome,status,created_at")
+            .select("visitante_nome,status,created_at")
             .eq("recibo_hash", receipt_hash)
             .limit(1)
         )
