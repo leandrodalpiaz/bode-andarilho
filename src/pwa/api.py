@@ -791,8 +791,6 @@ class PwaAPI:
     @staticmethod
     def _public_event_payload(event: dict[str, Any]) -> dict[str, Any]:
         payload = {
-            "id": event.get("id"),
-            "loja_id": event.get("loja_id"),
             "evento_at": event.get("evento_at"),
             "titulo": event.get("titulo"),
             "descricao": event.get("descricao"),
@@ -810,7 +808,7 @@ class PwaAPI:
         if isinstance(store, dict):
             payload["loja"] = {
                 key: store.get(key)
-                for key in ("id", "nome", "numero_loja", "cidade", "uf", "rito", "instagram_handle")
+                for key in ("nome", "numero_loja", "cidade", "uf", "rito", "instagram_handle")
                 if store.get(key) is not None
             }
         return payload
@@ -880,7 +878,7 @@ class PwaAPI:
         )
         await self._audit(request, None, "public_presence_requested", "solicitacoes_presenca", row.get("id"), "public", {"evento_id": event_id})
         self._metrics.increment("public_presence_requests_total")
-        return JSONResponse({"id": row.get("id"), "status": row.get("status", "pending"), "receipt": receipt}, status_code=201)
+        return JSONResponse({"status": row.get("status", "pending"), "receipt": receipt}, status_code=201)
 
     async def public_receipt(self, request: Request) -> Response:
         receipt = required_text(request.path_params.get("receipt"), "recibo", max_length=512)

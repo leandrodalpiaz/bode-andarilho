@@ -311,6 +311,7 @@ async def test_endpoint_publico_cria_presenca_pendente_e_nao_expoe_hashes():
     body = response.json()
     assert body["status"] == "pending"
     assert body["receipt"]
+    assert "id" not in body
     assert "recibo_hash" not in body
     assert repo.audits[-1]["origem"] == "public"
 
@@ -381,6 +382,9 @@ async def test_evento_publico_expoe_identidade_institucional_segura():
         response = await client.get("/api/v1/public/eventos/public-token")
     assert response.status_code == 200
     assert response.json()["loja"]["nome"] == "Loja Piloto"
+    assert "id" not in response.json()
+    assert "loja_id" not in response.json()
+    assert "id" not in response.json()["loja"]
     assert "endereco" not in response.json()["loja"]
 
 

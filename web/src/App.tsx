@@ -68,6 +68,10 @@ type PublicEvent = {
   loja?: Pick<Store, "id" | "nome" | "numero_loja" | "cidade" | "uf" | "rito" | "instagram_handle">;
 };
 
+type PublicEventDetails = Omit<PublicEvent, "id" | "loja_id" | "loja"> & {
+  loja?: Pick<Store, "nome" | "numero_loja" | "cidade" | "uf" | "rito" | "instagram_handle">;
+};
+
 type PublicReceipt = {
   visitante_nome: string;
   status: string;
@@ -568,7 +572,7 @@ function TelegramAssociationPanel({ session }: { session: Session }) {
 }
 
 function PublicEventPage({ token, runtimeConfig }: { token: string; runtimeConfig: RuntimeConfig | null }) {
-  const [event, setEvent] = useState<PublicEvent | null>(null);
+  const [event, setEvent] = useState<PublicEventDetails | null>(null);
   const [form, setForm] = useState({ nome: "", email: "", telefone: "", agape: "sem" });
   const [receipt, setReceipt] = useState("");
   const [captchaToken, setCaptchaToken] = useState("");
@@ -626,7 +630,7 @@ function PublicEventPage({ token, runtimeConfig }: { token: string; runtimeConfi
   }
 
   if (error && !event) return <Shell><Notice tone="warning" title="Link indisponível">{error}</Notice></Shell>;
-  return <Shell><section className="panel public-card"><p className="eyebrow">Convite público</p><h2>{event?.titulo || "Carregando evento…"}</h2>{event && <><p className="date-line">{event.loja?.nome || `Loja ${event.loja_id}`}</p><p className="date-line">{formatDate(event.evento_at)}</p>{event.descricao && <p className="muted">{event.descricao}</p>}{event.rito && <p className="muted">Rito: {event.rito}</p>}{event.traje_obrigatorio && <p className="muted">Traje: {event.traje_obrigatorio}</p>}{receipt ? <Notice tone="success" title="Solicitação recebida">Guarde este recibo: <code>{receipt}</code>. A confirmação ficará pendente de revisão. <a href={`/recibo/${encodeURIComponent(receipt)}`}>Consultar status do recibo</a></Notice> : <form onSubmit={submit} className="stack"><div className="honeypot" hidden><input name="website" tabIndex={-1} autoComplete="off" /></div><label>Seu nome<input required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></label><label>E-mail (opcional)<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label>Telefone (opcional)<input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} /></label><label>Ágape<select value={form.agape} onChange={(e) => setForm({ ...form, agape: e.target.value })}><option value="sem">Sem ágape</option><option value="com">Com ágape</option><option value="gratuito">Ágape gratuito</option><option value="pago">Ágape pago</option></select></label>{captchaRequired && (captchaSiteKey ? <div className="captcha-box"><div ref={captchaContainer} /><span className="muted">Confirme a proteção antispam para continuar.</span></div> : <Notice tone="warning" title="Proteção indisponível">O desafio antispam ainda não foi configurado neste ambiente.</Notice>)}<button disabled={busy || (captchaRequired && !captchaToken)}>{busy ? "Enviando…" : "Solicitar presença"}</button></form>}</>}</section>{error && <Notice tone="warning" title="Não foi possível enviar">{error}</Notice>}</Shell>;
+  return <Shell><section className="panel public-card"><p className="eyebrow">Convite público</p><h2>{event?.titulo || "Carregando evento…"}</h2>{event && <><p className="date-line">{event.loja?.nome || "Evento público"}</p><p className="date-line">{formatDate(event.evento_at)}</p>{event.descricao && <p className="muted">{event.descricao}</p>}{event.rito && <p className="muted">Rito: {event.rito}</p>}{event.traje_obrigatorio && <p className="muted">Traje: {event.traje_obrigatorio}</p>}{receipt ? <Notice tone="success" title="Solicitação recebida">Guarde este recibo: <code>{receipt}</code>. A confirmação ficará pendente de revisão. <a href={`/recibo/${encodeURIComponent(receipt)}`}>Consultar status do recibo</a></Notice> : <form onSubmit={submit} className="stack"><div className="honeypot" hidden><input name="website" tabIndex={-1} autoComplete="off" /></div><label>Seu nome<input required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} /></label><label>E-mail (opcional)<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label>Telefone (opcional)<input value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} /></label><label>Ágape<select value={form.agape} onChange={(e) => setForm({ ...form, agape: e.target.value })}><option value="sem">Sem ágape</option><option value="com">Com ágape</option><option value="gratuito">Ágape gratuito</option><option value="pago">Ágape pago</option></select></label>{captchaRequired && (captchaSiteKey ? <div className="captcha-box"><div ref={captchaContainer} /><span className="muted">Confirme a proteção antispam para continuar.</span></div> : <Notice tone="warning" title="Proteção indisponível">O desafio antispam ainda não foi configurado neste ambiente.</Notice>)}<button disabled={busy || (captchaRequired && !captchaToken)}>{busy ? "Enviando…" : "Solicitar presença"}</button></form>}</>}</section>{error && <Notice tone="warning" title="Não foi possível enviar">{error}</Notice>}</Shell>;
 }
 
 function receiptStatusLabel(status: string): string {
