@@ -61,7 +61,11 @@ def normalize_store_payload(payload: dict[str, Any], *, partial: bool = False) -
     if not partial or "nome" in payload:
         result["nome"] = required_text(payload.get("nome"), "nome", max_length=180)
     if "slug" in payload:
-        result["slug"] = _slug(payload.get("slug"), "slug")
+        raw_slug = optional_text(payload.get("slug"), "slug", max_length=120)
+        if raw_slug:
+            result["slug"] = _slug(raw_slug, "slug")
+        elif partial:
+            raise DomainValidationError("slug não pode ser vazio")
 
     for field_name, label, max_length in (
         ("numero_loja", "número da loja", 40),

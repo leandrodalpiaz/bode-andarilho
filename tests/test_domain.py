@@ -76,7 +76,10 @@ def test_loja_normaliza_campos_e_rejeita_configuracao_invalida():
     )
     assert result["uf"] == "SP"
     assert result["layout_config"]["cor"] == "#17352c"
+    assert "slug" not in normalize_store_payload({"nome": "Loja Piloto", "slug": ""})
     with pytest.raises(DomainValidationError):
         normalize_store_payload({"nome": "Loja Piloto", "slug": "não permitido"})
+    with pytest.raises(DomainValidationError):
+        normalize_store_payload({"nome": "Loja Piloto", "slug": ""}, partial=True)
     with pytest.raises(DomainValidationError):
         normalize_store_payload({"nome": "Loja Piloto", "uf": "S"})
