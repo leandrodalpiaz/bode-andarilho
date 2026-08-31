@@ -123,6 +123,16 @@ class ConflictRepository(FakeRepository):
         raise RepositoryConflict("chave de idempotência já utilizada")
 
 
+class MissingInviteStoreRepository(FakeRepository):
+    def get_store(self, store_id):
+        return None
+
+
+class ArchivedInviteStoreRepository(FakeRepository):
+    def get_store(self, store_id):
+        return {"id": store_id, "nome": "Loja Arquivada", "status": "archived"}
+
+
 @pytest.mark.asyncio
 async def test_api_rejeita_sessao_ausente():
     async with make_client(FakeRepository()) as client:
@@ -163,6 +173,29 @@ async def test_api_converte_conflito_de_idempotencia_em_409():
         )
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "conflict"
+
+
+@pytest.mark.asyncio
+async def test_convite_rejeita_loja_inexistente_antes_da_persistencia():
+    async with make_client(MissingInviteStoreRepository()) as client:
+        response = await client.post(
+            "/api/v1/convites",
+            headers={"Authorization": "Bearer admin", "Idempotency-Key": "invite-missing"},
+            json={"email": "secretario@example.com", "papel": "secretary", "loja_id": 404},
+        )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_convite_rejeita_loja_arquivada():
+    async with make_client(ArchivedInviteStoreRepository()) as client:
+        response = await client.post(
+            "/api/v1/convites",
+            headers={"Authorization": "Bearer admin", "Idempotency-Key": "invite-archived"},
+            json={"email": "secretario@example.com", "papel": "secretary", "loja_id": 7},
+        )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "store_archived"
 
 
 @pytest.mark.asyncio

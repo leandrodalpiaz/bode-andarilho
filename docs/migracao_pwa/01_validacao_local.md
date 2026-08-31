@@ -24,7 +24,7 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - RLS com fixtures descartáveis: secretário vê somente a própria loja/evento; outra loja fica invisível; administrador global vê as duas; `anon` não possui grants diretos de leitura/escrita.
 - Smoke integrado: configuração pública, `/me`, criação/publicação de evento, link público, presença pendente, recibo, aprovação e geração/upload de card.
 - Smoke real local com Auth/REST/Storage/RPC: usuário descartável, bootstrap, loja, associação Telegram, evento público, presença, recibo, aprovação e card — todos os passos retornaram sucesso; o banco foi resetado depois.
-- `python -m pytest -q` — 48 testes aprovados nesta revisão, cobrindo também 409 de conflito, 429 de rate limit, propagação de request ID e allowlist de lojas-piloto.
+- `python -m pytest -q` — 50 testes aprovados nesta revisão, cobrindo também 404/409 de convite, 429 de rate limit, propagação de request ID e allowlist de lojas-piloto.
 - Compilação sintática dos 61 arquivos Python — aprovada.
 - `npm run typecheck` e `npm run build` — aprovados.
 - Playwright local com mocks — dashboard autenticado conferido em desktop e viewport móvel; editor e controles de compartilhamento sem erro de console da aplicação.
