@@ -2,7 +2,12 @@ import pytest
 
 from src.domain.authorization import Actor
 from src.domain.states import can_transition_event, can_transition_publication, is_public_event
-from src.domain.validation import DomainValidationError, normalize_event_payload, normalize_presence_payload
+from src.domain.validation import (
+    DomainValidationError,
+    normalize_event_payload,
+    normalize_presence_payload,
+    normalize_store_payload,
+)
 
 
 def test_secretario_so_pode_operar_loja_vinculada():
@@ -58,3 +63,20 @@ def test_presenca_publica_nao_aceita_nome_vazio():
     assert result["visitante_email"] == "visitante@example.com"
     with pytest.raises(DomainValidationError):
         normalize_presence_payload({"nome": ""})
+
+
+def test_loja_normaliza_campos_e_rejeita_configuracao_invalida():
+    result = normalize_store_payload(
+        {
+            "nome": "Loja Piloto",
+            "slug": "loja-piloto",
+            "uf": "sp",
+            "layout_config": {"cor": "#17352c"},
+        }
+    )
+    assert result["uf"] == "SP"
+    assert result["layout_config"]["cor"] == "#17352c"
+    with pytest.raises(DomainValidationError):
+        normalize_store_payload({"nome": "Loja Piloto", "slug": "não permitido"})
+    with pytest.raises(DomainValidationError):
+        normalize_store_payload({"nome": "Loja Piloto", "uf": "S"})

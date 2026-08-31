@@ -35,6 +35,7 @@ from src.domain.validation import (
     DomainValidationError,
     normalize_email,
     optional_text,
+    normalize_store_payload,
     positive_int,
     required_text,
 )
@@ -378,24 +379,10 @@ class PwaAPI:
         key = idempotency_key(request)
         payload = await self._json(request)
         name = required_text(payload.get("nome"), "nome", max_length=180)
-        slug = optional_text(payload.get("slug"), "slug", max_length=120).lower() or _slugify(name)
-        if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug):
-            raise DomainValidationError("slug inválido")
-        values = {
-            "nome": name,
-            "slug": slug,
-            "numero_loja": optional_text(payload.get("numero_loja"), "número da loja", max_length=40),
-            "descricao": optional_text(payload.get("descricao"), "descrição", max_length=4000),
-            "cidade": optional_text(payload.get("cidade"), "cidade", max_length=120),
-            "uf": optional_text(payload.get("uf"), "UF", max_length=3).upper(),
-            "endereco": optional_text(payload.get("endereco"), "endereço", max_length=400),
-            "rito": optional_text(payload.get("rito"), "rito", max_length=80),
-            "potencia": optional_text(payload.get("potencia"), "potência", max_length=80),
-            "potencia_complemento": optional_text(payload.get("potencia_complemento"), "complemento da potência", max_length=120),
-            "instagram_handle": optional_text(payload.get("instagram_handle"), "Instagram", max_length=120),
-            "layout_config": payload.get("layout_config") if isinstance(payload.get("layout_config"), dict) else {},
-            "created_by": actor.profile_id,
-        }
+        values = normalize_store_payload({**payload, "nome": name}, partial=False)
+        if not values.get("slug"):
+            values["slug"] = _slugify(name)
+        values["created_by"] = actor.profile_id
         row = await self._run("create_store", values)
         await self._audit(request, actor, "store_created", "lojas", row.get("id"), "pwa", {"idempotency_key": key})
         return JSONResponse(row, status_code=201)
@@ -405,19 +392,10 @@ class PwaAPI:
         key = idempotency_key(request)
         store_id = positive_int(request.path_params["store_id"], "loja_id")
         self._require_role(actor, store_id, store=True)
+        if not await self._run("get_store", store_id):
+            raise ApiError(404, "loja não encontrada", code="not_found")
         payload = await self._json(request)
-        allowed = {"nome", "slug", "numero_loja", "descricao", "cidade", "uf", "endereco", "rito", "potencia", "potencia_complemento", "instagram_handle", "logo_path", "template_card_path", "layout_config", "status"}
-        values = {field: payload[field] for field in allowed if field in payload}
-        if "nome" in values:
-            values["nome"] = required_text(values["nome"], "nome", max_length=180)
-        if "slug" in values:
-            values["slug"] = optional_text(values["slug"], "slug", max_length=120).lower()
-            if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", values["slug"]):
-                raise DomainValidationError("slug inválido")
-        if "status" in values and values["status"] not in {"draft", "active", "archived"}:
-            raise DomainValidationError("status de loja inválido")
-        if "layout_config" in values and not isinstance(values["layout_config"], dict):
-            raise DomainValidationError("layout_config deve ser um objeto")
+        values = normalize_store_payload(payload, partial=True)
         if not values:
             raise DomainValidationError("nenhum campo para atualizar")
         row = await self._run("update_store", store_id, values)
@@ -604,7 +582,7 @@ class PwaAPI:
 
     @staticmethod
     def _public_event_payload(event: dict[str, Any]) -> dict[str, Any]:
-        return {
+        payload = {
             "id": event.get("id"),
             "loja_id": event.get("loja_id"),
             "evento_at": event.get("evento_at"),
@@ -620,6 +598,14 @@ class PwaAPI:
             "status": event.get("status"),
             "visibilidade": event.get("visibilidade"),
         }
+        store = event.get("loja")
+        if isinstance(store, dict):
+            payload["loja"] = {
+                key: store.get(key)
+                for key in ("id", "nome", "numero_loja", "cidade", "uf", "rito", "instagram_handle")
+                if store.get(key) is not None
+            }
+        return payload
 
     @staticmethod
     def _redact_event(event: dict[str, Any]) -> dict[str, Any]:

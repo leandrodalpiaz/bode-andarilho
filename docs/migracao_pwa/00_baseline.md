@@ -30,4 +30,6 @@ Base: `origin/main` em `c7c57bf8561a180272fc3f5c2594370eac860ee8`
 
 ## Critério de avanço
 
-Cada lote precisa deixar evidência separada de código, testes, commit, publicação, deploy, runtime e homologação visual. O primeiro commit desta branch cobre a rede de segurança e a fundação do núcleo; não autoriza corte nem deploy.
+Cada lote precisa deixar evidência separada de código, testes, commit, publicação, deploy, runtime e homologação visual. Os commits iniciais desta branch cobrem a rede de segurança, a fundação do núcleo e a operação local da PWA; não autorizam corte nem deploy.
+
+O estado detalhado dos gates locais e do piloto está em `docs/migracao_pwa/02_gate_piloto.md`.

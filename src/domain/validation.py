@@ -47,6 +47,58 @@ def positive_int(value: Any, field_name: str) -> int:
     return number
 
 
+def _slug(value: Any, field_name: str) -> str:
+    slug = optional_text(value, field_name, max_length=120).lower()
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug):
+        raise DomainValidationError(f"{field_name} inválido")
+    return slug
+
+
+def normalize_store_payload(payload: dict[str, Any], *, partial: bool = False) -> dict[str, Any]:
+    """Normaliza campos da loja antes de qualquer adapter ou persistência."""
+
+    result: dict[str, Any] = {}
+    if not partial or "nome" in payload:
+        result["nome"] = required_text(payload.get("nome"), "nome", max_length=180)
+    if "slug" in payload:
+        result["slug"] = _slug(payload.get("slug"), "slug")
+
+    for field_name, label, max_length in (
+        ("numero_loja", "número da loja", 40),
+        ("descricao", "descrição", 4000),
+        ("cidade", "cidade", 120),
+        ("endereco", "endereço", 400),
+        ("rito", "rito", 80),
+        ("potencia", "potência", 80),
+        ("potencia_complemento", "complemento da potência", 120),
+        ("instagram_handle", "Instagram", 120),
+        ("logo_path", "caminho da logo", 500),
+        ("template_card_path", "caminho do template", 500),
+    ):
+        if field_name in payload:
+            result[field_name] = optional_text(payload.get(field_name), label, max_length=max_length)
+
+    if "uf" in payload:
+        uf = optional_text(payload.get("uf"), "UF", max_length=3).upper()
+        if uf and len(uf) not in {2, 3}:
+            raise DomainValidationError("UF deve ter 2 ou 3 caracteres")
+        result["uf"] = uf
+
+    if "layout_config" in payload:
+        layout = payload.get("layout_config")
+        if not isinstance(layout, dict):
+            raise DomainValidationError("layout_config deve ser um objeto")
+        result["layout_config"] = layout
+
+    if "status" in payload:
+        status = optional_text(payload.get("status"), "status", max_length=20).lower()
+        if status not in {"draft", "active", "archived"}:
+            raise DomainValidationError("status de loja inválido")
+        result["status"] = status
+
+    return result
+
+
 def normalize_event_payload(payload: dict[str, Any], *, partial: bool = False) -> dict[str, Any]:
     result: dict[str, Any] = {}
     if not partial or "titulo" in payload:

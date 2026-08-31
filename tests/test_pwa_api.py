@@ -79,6 +79,9 @@ class FakeRepository:
         self.publication.update(values)
         return self.publication
 
+    def update_store(self, store_id, values):
+        return {"id": store_id, "nome": values.get("nome", "Loja Piloto"), **values}
+
 
 def make_client(repo: FakeRepository) -> httpx.AsyncClient:
     settings = PwaSettings(
@@ -185,3 +188,29 @@ async def test_publicacao_registra_compartilhamento_sem_fingir_publicacao_extern
     assert response.status_code == 200
     assert response.json()["estado"] == "share_initiated"
     assert forbidden.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_edicao_de_loja_normaliza_dados_antes_do_repository():
+    repo = FakeRepository()
+    async with make_client(repo) as client:
+        response = await client.patch(
+            "/api/v1/lojas/1",
+            headers={"Authorization": "Bearer admin", "Idempotency-Key": "store-001"},
+            json={"nome": "Loja Atualizada", "uf": "rj", "layout_config": {"cor": "#fff"}},
+        )
+    assert response.status_code == 200
+    assert response.json()["nome"] == "Loja Atualizada"
+    assert response.json()["uf"] == "RJ"
+
+
+@pytest.mark.asyncio
+async def test_edicao_de_loja_rejeita_campos_invalidos():
+    repo = FakeRepository()
+    async with make_client(repo) as client:
+        response = await client.patch(
+            "/api/v1/lojas/1",
+            headers={"Authorization": "Bearer admin", "Idempotency-Key": "store-002"},
+            json={"uf": "R"},
+        )
+    assert response.status_code == 422

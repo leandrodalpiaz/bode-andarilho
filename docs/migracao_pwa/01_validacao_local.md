@@ -10,7 +10,7 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - Serviços de comando independentes de canal para eventos e presenças.
 - Adapter explícito do payload legado do Telegram, sem associação automática de registros.
 - API Starlette `/api/v1` com autenticação Supabase, convites, eventos, cards, presenças, auditoria e endpoint público.
-- PWA React/TypeScript com login OTP, consumo de convite, dashboard, operação de evento e revisão de presenças.
+- PWA React/TypeScript com login OTP, consumo de convite, dashboard, cadastro/edição de loja, edição de evento, operação de evento, revisão de presenças e compartilhamento assistido.
 - Migration vazia `pwa_v2` com `pwa_private`, grants explícitos, RLS/FORCE RLS, índices de FKs e Storage privado.
 - Dockerfile multiestágio: Node compila a PWA e Python serve API, PWA e webhook na mesma origem.
 
@@ -25,6 +25,7 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - `python -m pytest -q` — 28 testes aprovados.
 - Compilação sintática dos 61 arquivos Python — aprovada.
 - `npm run typecheck` e `npm run build` — aprovados.
+- Playwright local com mocks — dashboard autenticado conferido em desktop e viewport móvel; editor e controles de compartilhamento sem erro de console da aplicação.
 - `docker build -t bode-andarilho-pwa:local .` — aprovado.
 - Importação de `main` e construção das rotas PWA dentro da imagem Python 3.12 — aprovada com placeholders locais.
 

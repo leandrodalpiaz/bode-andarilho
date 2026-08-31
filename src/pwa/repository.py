@@ -59,6 +59,13 @@ class SupabaseRepository:
     def _many(self, query: Any) -> list[dict[str, Any]]:
         return _response_data(query.execute())
 
+    @staticmethod
+    def _raise_write_error(exc: Exception) -> None:
+        message = str(exc)
+        if "duplicate" in message.lower() or "unique" in message.lower():
+            raise RepositoryConflict(message) from exc
+        raise RepositoryError(message) from exc
+
     def _insert_one(self, table: str, values: dict[str, Any]) -> dict[str, Any]:
         try:
             # supabase-py 2.x retorna a representação no próprio builder de
@@ -123,7 +130,7 @@ class SupabaseRepository:
                 .eq("id", int(store_id))
             )
         except Exception as exc:
-            raise RepositoryError(str(exc)) from exc
+            self._raise_write_error(exc)
         if not row:
             raise RepositoryError("loja não encontrada")
         return row
@@ -195,7 +202,7 @@ class SupabaseRepository:
                 .eq("id", int(event_id))
             )
         except Exception as exc:
-            raise RepositoryError(str(exc)) from exc
+            self._raise_write_error(exc)
         if not row:
             raise RepositoryError("evento não encontrado")
         return row
@@ -230,13 +237,13 @@ class SupabaseRepository:
                 .eq("id", int(presence_id))
             )
         except Exception as exc:
-            raise RepositoryError(str(exc)) from exc
+            self._raise_write_error(exc)
         if not row:
             raise RepositoryError("solicitação não encontrada")
         return row
 
     def get_public_event(self, token_hash: str) -> dict[str, Any] | None:
-        return self._one(
+        event = self._one(
             self._table("eventos")
             .select("*")
             .eq("public_token_hash", token_hash)
@@ -244,6 +251,11 @@ class SupabaseRepository:
             .eq("visibilidade", "public")
             .limit(1)
         )
+        if event:
+            store = self.get_store(int(event["loja_id"]))
+            if store:
+                event["loja"] = store
+        return event
 
     def get_public_receipt(self, receipt_hash: str) -> dict[str, Any] | None:
         return self._one(
@@ -269,7 +281,7 @@ class SupabaseRepository:
                 .eq("id", int(publication_id))
             )
         except Exception as exc:
-            raise RepositoryError(str(exc)) from exc
+            self._raise_write_error(exc)
         if not row:
             raise RepositoryError("publicação não encontrada")
         return row
