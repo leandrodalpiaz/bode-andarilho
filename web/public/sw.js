@@ -1,4 +1,4 @@
-const CACHE = "bode-andarilho-shell-v1";
+const CACHE = "bode-andarilho-shell-v2";
 const SHELL = ["/", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {

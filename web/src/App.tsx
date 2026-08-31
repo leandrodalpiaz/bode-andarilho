@@ -201,7 +201,14 @@ export function App() {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return <main className="shell"><header className="brand"><div className="brand-mark">BA</div><div><p className="eyebrow">Centro operacional</p><h1>Bode Andarilho</h1></div></header>{children}<footer>Construído em coexistência gradual com o Telegram.</footer></main>;
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  useEffect(() => {
+    const onUpdate = () => setUpdateAvailable(true);
+    window.addEventListener("pwa-update", onUpdate);
+    return () => window.removeEventListener("pwa-update", onUpdate);
+  }, []);
+
+  return <main className="shell"><header className="brand"><div className="brand-mark">BA</div><div><p className="eyebrow">Centro operacional</p><h1>Bode Andarilho</h1></div></header>{updateAvailable && <Notice tone="info" title="Nova versão disponível"><span>Atualize para carregar a versão mais recente da PWA.</span><button className="button-small" onClick={() => window.location.reload()}>Atualizar agora</button></Notice>}{children}<footer>Construído em coexistência gradual com o Telegram.</footer></main>;
 }
 
 function Notice({ title, children, tone = "info" }: { title: string; children: React.ReactNode; tone?: "info" | "warning" | "success" }) {

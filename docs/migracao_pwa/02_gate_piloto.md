@@ -19,6 +19,8 @@ local. Não existe autorização para apontar produção para este código.
 - schema local com RLS/FORCE RLS, grants e lint sem erro;
 - RPC de associação validado com fixture descartável: consumo único, identidade
   vinculada e auditoria; reset posterior deixou as tabelas vazias;
+- smoke integrado real local aprovado com Auth, REST, Storage e RPC, incluindo o
+  fluxo completo de evento público, presença, recibo, aprovação e card;
 - smoke integrado local de Auth/API/repository/Storage executado antes deste lote;
 - painel visual conferido em desktop e mobile com mocks, sem homologação externa.
 
