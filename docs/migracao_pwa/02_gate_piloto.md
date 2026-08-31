@@ -17,6 +17,7 @@ local. Não existe autorização para apontar produção para este código.
   temporário;
 - typecheck e build React aprovados;
 - schema local com RLS/FORCE RLS, grants e lint sem erro;
+- Security/Performance Advisors locais sem issues;
 - RPC de associação validado com fixture descartável: consumo único, identidade
   vinculada e auditoria; reset posterior deixou as tabelas vazias;
 - smoke integrado real local aprovado com Auth, REST, Storage e RPC, incluindo o

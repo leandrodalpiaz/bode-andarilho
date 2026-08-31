@@ -16,6 +16,7 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
   para administrador global; no piloto de uma instância são mantidos em memória.
 - PWA React/TypeScript com login OTP, consumo de convite, dashboard, cadastro/edição de loja, edição de evento, operação de evento, revisão de presenças, consulta pública de recibo e compartilhamento assistido.
 - Migrations vazias `pwa_v2` com `pwa_private`, grants explícitos, RLS/FORCE RLS, índices de FKs e Storage privado.
+- Migration incremental de otimização das políticas RLS (`(select auth.uid())`).
 - Dockerfile multiestágio: Node compila a PWA e Python serve API, PWA e webhook na mesma origem.
 - Entry point aceita modo somente PWA (`TELEGRAM_ENABLED=false`), no qual webhook,
   scheduler e rotas legadas do Telegram não são registrados.
@@ -25,6 +26,7 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - `npx supabase migration new create_pwa_v2` — migration gerada pelo CLI.
 - `npx supabase db reset` — executado com sucesso; `supabase/seed.sql` mantém o schema vazio.
 - `npx supabase db lint --local --schema pwa_v2,pwa_private --level error --fail-on error` — nenhum erro de schema.
+- `npx supabase db advisors --local --type all --level warn --fail-on error` — nenhum issue de Security/Performance.
 - Catalogo local: dez tabelas com RLS e FORCE RLS ativos; depois do reset, perfis, lojas, eventos e presenças estão vazios.
 - Auditoria do catálogo: as dez tabelas retornaram `relrowsecurity=true` e
   `relforcerowsecurity=true`; não há grants de tabela para `anon`, `authenticated`
