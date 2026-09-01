@@ -20,6 +20,8 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - Dockerfile multiestágio: Node compila a PWA e Python serve API, PWA e webhook na mesma origem.
 - Entry point aceita modo somente PWA (`TELEGRAM_ENABLED=false`), no qual webhook,
   scheduler e rotas legadas do Telegram não são registrados.
+- O runtime aceita a credencial histórica `SUPABASE_KEY` como fallback de
+  servidor, sem promovê-la à configuração pública entregue ao navegador.
 
 ## Verificações executadas
 
@@ -35,8 +37,8 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - RLS com fixtures descartáveis: secretário vê somente a própria loja/evento; outra loja fica invisível; administrador global vê as duas; `anon` não possui grants diretos de leitura/escrita.
 - Smoke integrado: configuração pública, `/me`, criação/publicação de evento, link público, presença pendente, recibo, aprovação e geração/upload de card.
 - Smoke real local com Auth/REST/Storage/RPC: usuário descartável, bootstrap, loja, associação Telegram, evento público, presença, recibo, aprovação e card — todos os passos retornaram sucesso; o banco foi resetado depois.
-- `python -m pytest -q --basetemp .tmp-pytest` — 62 testes aprovados nesta revisão, cobrindo também 404/409 de convite, 429 de rate limit, propagação de request ID, métricas restritas, allowlist de lojas-piloto, separação da chave pública do CAPTCHA, arquivamento de loja, visibilidade pública e preparação de card.
-- Compilação sintática dos 61 arquivos Python — aprovada.
+- `python -m pytest -q` — 64 testes aprovados nesta revisão, cobrindo também 404/409 de convite, 429 de rate limit, propagação de request ID, métricas restritas, allowlist de lojas-piloto, separação da chave pública do CAPTCHA, arquivamento de loja, visibilidade pública, preparação de card e compatibilidade de credencial.
+- Compilação sintática dos 61 arquivos Python — aprovada em cache temporário separado do `__pycache__` do worktree.
 - `npm run typecheck`, `npm test` (2 testes de componentes) e `npm run build` — aprovados com Vite 6.4.3; `npm audit` sem vulnerabilidades reportadas.
 - Validação de navegador mockada anterior — visitante abriu o evento, enviou presença e consultou o recibo; secretário abriu o dashboard, listou a loja/evento, aprovou a presença, preparou o card e percorreu `prepared → share_initiated → confirmed_by_user`; console da aplicação sem erros.
 - `npm run test:e2e` — 3 cenários Playwright aprovados no build de produção: visitante/recibo, secretário/OTP/criação/aprovação e contrato instalável com manifest, ícones, service worker e aviso de atualização; os cenários usam APIs simuladas e não substituem homologação externa.
@@ -48,9 +50,10 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - Visitante pode consultar o status do recibo por token opaco, sem expor e-mail, telefone ou IDs internos.
 - Administrador global ou administrador de loja pode emitir convites somente para lojas existentes e não arquivadas; a API rejeita esses casos antes da FK.
 - Reset local após fixture do RPC de associação — código consumido uma vez, identidade criada e auditoria registrada; banco retornou vazio.
+- Runtime local somente-PWA usando a URL/credencial de backend já existentes e chave pública separada: `/health` e `/` retornaram 200, `/api/v1/config` não incluiu segredo de servidor e `/api/v1/me` sem sessão retornou 401.
 - `docker build -t bode-andarilho-pwa:local .` — aprovado.
 - Importação de `main` e construção das rotas PWA dentro da imagem Python 3.12 — aprovada com placeholders locais.
-- Branch `codex/pwa-foundation` publicada em `origin`; CI `33503102728` e a execução final `33503271430` concluídos com sucesso nos jobs Python 3.12 e Node 22.
+- Branch `codex/pwa-foundation` publicada em `origin`; CI `33503102728`, `33503271430` e `33537073491` concluídos com sucesso nos jobs Python 3.12 e Node 22.
 
 ## Limites ainda não executados
 
