@@ -105,6 +105,14 @@ locais. Até reconciliar esse histórico com o CLI, não executar `supabase db p
 contra este projeto; novas aplicações devem usar o procedimento documentado e
 verificado para evitar reaplicação.
 
+Em 2026-09-01, a verificação somente de leitura confirmou o Supabase CLI `2.116.0`
+e a ajuda dos comandos `migration list`, `migration repair` e `db push --dry-run`.
+`npx supabase migration list --project-ref dvtbvgmpvfodurcwxnch` não pôde consultar
+o remoto porque esta sessão não possui `SUPABASE_ACCESS_TOKEN` (`LegacyPlatformAuthRequiredError`).
+Esse token não foi solicitado, exposto ou salvo; a reconciliação do histórico e o
+`db push` permanecem gates separados. A lista MCP acima e a definição remota da
+função são a evidência atual da última migration aplicada.
+
 ## Entradas necessárias para o runtime
 
 O repositório não contém configuração de deploy do provedor nem credenciais
