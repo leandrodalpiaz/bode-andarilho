@@ -78,6 +78,33 @@ locais. Até reconciliar esse histórico com o CLI, não executar `supabase db p
 contra este projeto; novas aplicações devem usar o procedimento documentado e
 verificado para evitar reaplicação.
 
+## Entradas necessárias para o runtime
+
+O repositório não contém configuração de deploy do provedor nem credenciais
+operacionais. Para o primeiro ambiente isolado, o administrador do serviço deve
+preencher no gerenciador de segredos:
+
+- `SUPABASE_URL`: URL do projeto remoto;
+- `SUPABASE_ANON_KEY` ou `SUPABASE_PUBLISHABLE_KEY`: somente chave publicável;
+- `SUPABASE_SERVICE_ROLE_KEY`: somente no backend;
+- `PWA_TOKEN_PEPPER`: segredo longo e aleatório;
+- `PWA_BOOTSTRAP_TOKEN`: token temporário para o primeiro administrador;
+- `PWA_PUBLIC_BASE_URL`: URL HTTPS real do serviço;
+- `PWA_FRONTEND_DIST=web/dist` no container, se o provider não usar o default;
+- `PWA_PUBLIC_CAPTCHA_REQUIRED=false` no ambiente inicial, ou as chaves pública
+  e secreta de hCaptcha antes de ligar a proteção;
+- `PWA_ENABLED=true`, `TELEGRAM_ENABLED=true`,
+  `TELEGRAM_MUTATIONS_TO_PWA=false` e
+  `TELEGRAM_MUTATIONS_TO_PWA_STORES=` durante a coexistência;
+- `TELEGRAM_TOKEN`, `GRUPO_PRINCIPAL_ID`, `ADMIN_TELEGRAM_ID` e
+  `TELEGRAM_WEBHOOK_SECRET` conforme a instalação legada, sem copiá-los para o
+  navegador.
+
+O build Node não precisa receber chave do Supabase: a PWA obtém a configuração
+publicável por `GET /api/v1/config` na mesma origem. O primeiro bootstrap ainda
+exige um e-mail real escolhido pelo operador; nenhum usuário Auth foi criado
+remotamente nesta etapa.
+
 ## Gates ainda abertos
 
 1. Gerar ou confirmar backup técnico restaurável antes da janela de corte e
