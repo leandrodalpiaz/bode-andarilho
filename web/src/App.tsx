@@ -348,6 +348,7 @@ function Dashboard({ session, inviteToken, supabaseClient }: { session: Session;
   async function createDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
     setBusy(true); setError("");
     try {
       const localDate = String(form.get("evento_at") || "");
@@ -359,7 +360,7 @@ function Dashboard({ session, inviteToken, supabaseClient }: { session: Session;
         traje_obrigatorio: form.get("traje_obrigatorio"), agape: form.get("agape"), ordem_do_dia: form.get("ordem_do_dia"),
         status: form.get("publicar") === "on" ? "published" : "draft", visibilidade: form.get("publicar") === "on" ? "public" : "private",
       }) }, session);
-      setEvents((current) => [created, ...current]); setMessage(created.status === "published" ? "Evento publicado e link público criado." : "Rascunho de evento criado."); setArtifactUrl(""); event.currentTarget.reset();
+      setEvents((current) => [created, ...current]); setMessage(created.status === "published" ? "Evento publicado e link público criado." : "Rascunho de evento criado."); setArtifactUrl(""); formElement.reset();
     } catch (reason) { setError((reason as Error).message); } finally { setBusy(false); }
   }
 
