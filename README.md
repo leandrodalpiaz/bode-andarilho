@@ -32,8 +32,8 @@ legado durante a construção e o piloto.
 O schema novo está em `pwa_v2` e não reutiliza as tabelas legadas. As migrations
 em `supabase/migrations/` são versionadas e foram validadas localmente; a
 fundação correspondente já foi aplicada de forma aditiva ao projeto remoto
-autorizado, sem backfill. A exposição do schema no Data API, o histórico do CLI
-e o runtime remoto continuam gates separados.
+autorizado, sem backfill. A exposição de `pwa_v2` no Data API foi confirmada;
+o histórico do CLI e o runtime remoto continuam gates separados.
 
 ## Execução
 

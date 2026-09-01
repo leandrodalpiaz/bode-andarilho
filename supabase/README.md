@@ -17,8 +17,11 @@ npx supabase db lint --local --schema pwa_v2,pwa_private --level error --fail-on
 
 O reset local deve ser a primeira validação. Depois dele, testar as políticas
 como `anon`, usuário autenticado sem vínculo, secretário de outra loja,
-secretário autorizado e administrador global. A API REST precisa ter `pwa_v2`
-exposto como schema adicional; `pwa_private` não deve ser exposto.
+secretário autorizado e administrador global. No projeto remoto, `pwa_v2` foi
+confirmado como schema adicional exposto e `pwa_private` permanece fora da
+exposição. A tentativa pública de ler uma tabela retorna `42501` por desenho:
+as tabelas não concedem grants diretos ao navegador, e as escritas passam pelo
+backend autorizado.
 
 No projeto remoto `bode-andarilho` (`dvtbvgmpvfodurcwxnch`), as migrations
 registradas são `20260901121956 create_pwa_v2`,

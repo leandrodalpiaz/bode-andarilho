@@ -67,19 +67,14 @@ Projeto Supabase `bode-andarilho`, ref
   por RLS ausente, além de avisos informativos nas tabelas legadas sem políticas.
   Isso foi separado do schema novo e não será corrigido neste lote para não
   interromper nem alterar o bot legado.
-- A configuração de exposição do PostgREST não pôde ser confirmada por
-  `current_setting` via SQL. Antes do runtime, o Dashboard/API deve confirmar
-  `pwa_v2` como schema exposto e `pwa_private` fora da exposição; a chave secreta
-  permanece somente no servidor.
-- Em 2026-09-01, a seleção de `pwa_v2` foi feita no Dashboard autenticado e o
-  botão de salvamento foi acionado por mais de uma forma; após recarregar, a
-  tela voltou para `2 of 4 schemas exposed`. A verificação externa no REST com
-  `Accept-Profile: pwa_v2` retornou `PGRST106`, listando somente `public` e
-  `graphql_public`. Portanto, a exposição não está comprovada e este gate
-  permanece aberto. Não foi aplicado `ALTER ROLE authenticator SET
-  pgrst.db_schemas`, pois a documentação atual trata esse caminho como override
-  manual que retira a gestão do Dashboard e exige autoridade de banco não
-  disponível neste fluxo.
+- A configuração de exposição não é refletida por `current_setting` via SQL,
+  pois é administrada pela configuração do serviço. Em 2026-09-01, o operador
+  salvou `pwa_v2` no Dashboard autenticado e a confirmação externa no REST com
+  `Accept-Profile: pwa_v2` deixou de retornar `PGRST106`; a consulta chegou à
+  tabela e retornou `42501 permission denied for table perfis`, conforme o
+  desenho de não conceder grants diretos ao navegador. `pwa_private` continuou
+  retornando `PGRST106`, com somente `public`, `graphql_public` e `pwa_v2`
+  expostos. A chave secreta permanece somente no servidor.
 
 Observação operacional: o MCP registrou as migrations com versões remotas
 geradas no momento da aplicação, diferentes dos prefixos de data dos arquivos
@@ -118,8 +113,9 @@ remotamente nesta etapa.
 
 1. Gerar ou confirmar backup técnico restaurável antes da janela de corte e
    registrar o artefato fora do chat.
-2. Confirmar no Dashboard a exposição do schema `pwa_v2`, mantendo
-   `pwa_private` não exposto, e reconciliar o histórico local/remoto de migrations.
+2. Reconciliar o histórico local/remoto de migrations antes de usar o CLI contra
+   o projeto remoto; a exposição de `pwa_v2` já foi confirmada e
+   `pwa_private` permanece não exposto.
 3. Revisar e aprovar variáveis do ambiente remoto sem expor service role,
    pepper ou segredo de CAPTCHA no navegador; se o CAPTCHA for ativado,
    configurar também sua chave pública.
