@@ -7,7 +7,9 @@ Base: `origin/main` em `c7c57bf8561a180272fc3f5c2594370eac860ee8`
 ## Limites desta etapa
 
 - O worktree original permanece separado e não é alterado por esta branch.
-- Nenhuma migration foi aplicada ao projeto Supabase remoto.
+- A fundação `pwa_v2` foi aplicada de forma aditiva ao projeto Supabase remoto
+  autorizado, sem backfill; o restante do runtime e o corte continuam fora
+  desta etapa.
 - Nenhum registro legado foi migrado, removido ou atualizado.
 - Nenhuma publicação ou alteração foi feita no Instagram.
 - Telegram continua sendo o canal operacional existente.
@@ -23,7 +25,10 @@ Base: `origin/main` em `c7c57bf8561a180272fc3f5c2594370eac860ee8`
 
 ## Riscos ainda abertos
 
-- O Supabase CLI foi executado via `npx` e o schema foi validado no ambiente local; ainda não existe autorização para aplicar a migration no projeto remoto.
+- O Supabase CLI foi executado via `npx` e o schema foi validado no ambiente local;
+  a aplicação remota foi realizada pelo MCP autorizado, com versões geradas no
+  remoto que ainda precisam ser reconciliadas com os nomes locais antes de usar
+  `supabase db push`.
 - Os testes locais de RLS usam fixtures descartáveis e não substituem a validação no projeto remoto isolado antes do corte.
 - A proteção 2FA, os códigos de recuperação e a separação do Accounts Center do Instagram exigem execução manual pelo proprietário da conta antes do piloto.
 - A publicação do Instagram permanecerá manual no MVP; abrir a folha de compartilhamento não será tratado como publicação comprovada.
