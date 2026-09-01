@@ -54,11 +54,30 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - `docker build -t bode-andarilho-pwa:local .` — aprovado.
 - Importação de `main` e construção das rotas PWA dentro da imagem Python 3.12 — aprovada com placeholders locais.
 - Branch `codex/pwa-foundation` publicada em `origin`; CI `33503102728`, `33503271430` e `33537073491` concluídos com sucesso nos jobs Python 3.12 e Node 22.
+- O commit `0698948` foi publicado em `origin/main` por fast-forward e recebeu
+  deploy controlado no serviço Render `bode-andarilho`, sem alteração do
+  Supabase e mantendo `TELEGRAM_ENABLED=true` e
+  `TELEGRAM_MUTATIONS_TO_PWA=false`.
+- O build remoto do Render usou Node 22.23.2, passou `typecheck`, gerou o
+  frontend Vite e iniciou `python main.py` com status `Deploy succeeded|Live`.
+- Smoke público remoto: `/health`, `/`, `/api/v1/config`,
+  `/manifest.webmanifest` e `/sw.js` retornaram 200; `/api/v1/me` sem sessão
+  retornou 401. A configuração pública informou somente a chave publicável,
+  URL do Supabase, URL pública e flags de CAPTCHA; nenhum segredo do backend
+  apareceu na resposta.
+- O boot remoto confirmou Scheduler iniciado, aplicação Telegram iniciada,
+  `setWebhook` e `getWebhookInfo` com HTTP 200, webhook configurado na URL
+  pública e zero atualizações pendentes.
+- Os loggers de transporte `httpx` e `httpcore` passaram a nível `WARNING` para
+  evitar que URLs com credenciais sejam registradas em novos logs operacionais;
+  rotação do token do Telegram permanece uma ação separada no BotFather.
 
 ## Limites ainda não executados
 
 - A fundação `pwa_v2` foi aplicada ao Supabase remoto autorizado de forma aditiva, sem backfill; os detalhes, a contagem prévia e os gates restantes estão em `docs/migracao_pwa/02_gate_piloto.md`.
-- Nenhum deploy, teste de runtime público ou homologação autenticada externa foi executado.
+- O deploy público controlado foi executado, mas ainda não representa
+  homologação autenticada externa: OTP real, Android/iPhone, compartilhamento
+  real e publicação comprovada permanecem pendentes.
 - OTP real, Android/iPhone, compartilhamento real, 2FA do Instagram, perfil público e publicações permanecem gates do piloto.
 - Telegram continua no fluxo legado; somente `/vincular` usa o endpoint opcional e `TELEGRAM_MUTATIONS_TO_PWA` permanece desligada. Quando ativada, a flag redireciona os cadastros centrais de evento e loja para a PWA e falha fechado se a URL pública estiver ausente.
 - O corte também aceita `TELEGRAM_MUTATIONS_TO_PWA_STORES` como allowlist de IDs do piloto: a decisão é reavaliada antes da persistência de evento, cancelamento, edição, reabertura, arquivamento e template. Os handlers conversacionais e os Mini Apps legados de loja/sessão falham fechado; lojas não incluídas continuam no legado.

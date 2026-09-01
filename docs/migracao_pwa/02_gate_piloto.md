@@ -9,13 +9,14 @@ links públicos, solicitações de presença, revisão, convites e associação 
 do Telegram por código de uso único. O Telegram legado
 continua intacto e o schema `pwa_v2` permanece separado e vazio após o reset
 local. A fundação do schema também foi aplicada, de forma aditiva, ao projeto
-Supabase autorizado; isso não representa corte operacional nem apontamento do
-bot ou da PWA para a nova base.
+Supabase autorizado; a PWA agora está publicada em coexistência e usa o núcleo
+novo, enquanto o bot Telegram continua apontando para o legado. Isso ainda não
+representa corte operacional nem migração de registros.
 
 ## Evidências concluídas
 
 - worktree original preservado e branch de migração isolada;
-- 62 testes Python aprovados nesta revisão, além de compilação sintática em cache
+- 64 testes Python aprovados nesta revisão, além de compilação sintática em cache
   temporário;
 - typecheck, 2 testes de componentes e build React aprovados;
 - schema local com RLS/FORCE RLS, grants e lint sem erro;
@@ -35,6 +36,17 @@ bot ou da PWA para a nova base.
 - commits `6eb85f6` e `9046946` publicados em `origin/codex/pwa-foundation`; CI
   `33503102728` e a execução final de documentação `33503271430` concluídos com
   sucesso nos jobs Python 3.12 e Web Node 22, incluindo os E2E.
+- commit `0698948` publicado em `origin/main` por fast-forward; o serviço Render
+  `bode-andarilho` recebeu deploy controlado com build remoto Node 22.23.2,
+  `typecheck` aprovado e status `Deploy succeeded|Live`.
+- Smoke remoto público aprovado: `/health`, `/`, `/api/v1/config`, manifest e
+  service worker retornaram 200; `/api/v1/me` sem sessão retornou 401; a
+  resposta de configuração não expõe service role, pepper ou token de
+  bootstrap.
+- Boot remoto confirmou Scheduler e aplicação Telegram iniciados, webhook
+  configurado com HTTP 200 e zero atualizações pendentes. As flags de
+  coexistência permanecem `TELEGRAM_ENABLED=true` e
+  `TELEGRAM_MUTATIONS_TO_PWA=false`.
 
 ## Evidências remotas — fundação do schema
 
@@ -115,6 +127,13 @@ publicável por `GET /api/v1/config` na mesma origem. A credencial histórica
 backend. O primeiro bootstrap ainda exige um e-mail real escolhido pelo
 operador; nenhum usuário Auth foi criado remotamente nesta etapa.
 
+No serviço Render autorizado, as variáveis do runtime foram configuradas sem
+substituir `SUPABASE_KEY`: a chave publicável foi adicionada separadamente,
+`PWA_TOKEN_PEPPER` e `PWA_BOOTSTRAP_TOKEN` foram gerados aleatoriamente e
+permanecem somente no provider, a URL pública aponta para
+`https://bode-andarilho-fv3m.onrender.com`, e o build compila `web` antes de
+iniciar `python main.py`.
+
 ## Gates ainda abertos
 
 1. Gerar ou confirmar backup técnico restaurável antes da janela de corte e
@@ -122,19 +141,18 @@ operador; nenhum usuário Auth foi criado remotamente nesta etapa.
 2. Reconciliar o histórico local/remoto de migrations antes de usar o CLI contra
    o projeto remoto; a exposição de `pwa_v2` já foi confirmada e
    `pwa_private` permanece não exposto.
-3. Revisar e aprovar variáveis do ambiente remoto sem expor service role,
-   pepper ou segredo de CAPTCHA no navegador; se o CAPTCHA for ativado,
-   configurar também sua chave pública.
-4. Publicar o serviço em ambiente isolado e confirmar `/health`, API, Auth,
-   Storage e webhook sem habilitar mutações do Telegram.
-5. Criar o primeiro administrador e a loja piloto novamente; enviar convites
+3. Criar o primeiro administrador e a loja piloto novamente; enviar convites
    novos aos secretários. Nenhum registro legado será associado por nome,
    Telegram ou número de loja.
-6. Configurar 2FA do Instagram e do Gmail, códigos de recuperação, foto, bio,
+4. Configurar 2FA do Instagram e do Gmail, códigos de recuperação, foto, bio,
    categoria, conta Business e duas publicações iniciais manualmente.
-7. Executar OTP real, teste autenticado em Android e iPhone, compartilhamento
+5. Executar OTP real, teste autenticado em Android e iPhone, compartilhamento
    real e dois ciclos operacionais completos.
-8. Ensaiar rollback com Telegram como fallback antes de tornar a PWA oficial.
+6. Ensaiar rollback com Telegram como fallback antes de tornar a PWA oficial.
+
+Os gates de configuração do provider, build, publicação inicial, API pública,
+Auth sem sessão, Storage estático e webhook foram fechados nesta retomada. Eles
+não equivalem à homologação autenticada do piloto.
 
 O Docker local estava parado após o reinício e não pôde ser aberto nesta sessão;
 essa indisponibilidade não alterou o Supabase remoto. O gate de reset, RLS,

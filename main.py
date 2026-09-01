@@ -255,6 +255,11 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
 )
+# As URLs das chamadas do bot podem conter o token do Telegram. O log de
+# transporte permanece disponível apenas em nível de diagnóstico local, sem
+# expor credenciais no log operacional do provider.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
