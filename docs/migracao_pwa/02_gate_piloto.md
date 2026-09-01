@@ -30,8 +30,8 @@ local. Não existe autorização para apontar produção para este código.
   build de produção, incluindo o contrato de instalação/atualização do PWA.
 - Manifest agora oferece PNG 180/192/512 e `apple-touch-icon`; `npm audit` não
   reporta vulnerabilidades nas dependências fixadas.
-- commit `7d95fea` publicado em `origin/codex/pwa-foundation`; CI `33436419072`
-  concluído com sucesso nos jobs Python 3.12 e Web Node 22.
+- commit `6eb85f6` publicado em `origin/codex/pwa-foundation`; CI `33503102728`
+  concluído com sucesso nos jobs Python 3.12 e Web Node 22, incluindo os E2E.
 
 ## Gates ainda abertos
 
