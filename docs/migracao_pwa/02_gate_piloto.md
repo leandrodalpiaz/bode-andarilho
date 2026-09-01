@@ -110,6 +110,8 @@ preencher no gerenciador de segredos:
   `SUPABASE_KEY`, que é o nome histórico da credencial já usada pelo bot;
 - `PWA_TOKEN_PEPPER`: segredo longo e aleatório;
 - `PWA_BOOTSTRAP_TOKEN`: token temporário para o primeiro administrador;
+- `PWA_BOOTSTRAP_EMAIL`: e-mail exato autorizado a concluir o primeiro
+  bootstrap pela PWA; manter vazio até o operador escolher a conta inicial;
 - `PWA_PUBLIC_BASE_URL`: URL HTTPS real do serviço;
 - `PWA_FRONTEND_DIST=web/dist` no container, se o provider não usar o default;
 - `PWA_PUBLIC_CAPTCHA_REQUIRED=false` no ambiente inicial, ou as chaves pública
@@ -126,6 +128,12 @@ publicável por `GET /api/v1/config` na mesma origem. A credencial histórica
 `SUPABASE_KEY` nunca é usada como chave pública; é consumida somente pelo
 backend. O primeiro bootstrap ainda exige um e-mail real escolhido pelo
 operador; nenhum usuário Auth foi criado remotamente nesta etapa.
+
+O endpoint de bootstrap continua aceitando o `X-Bootstrap-Token` para uma
+execução server-to-server. Quando `PWA_BOOTSTRAP_EMAIL` também está configurado,
+o primeiro usuário autenticado com esse e-mail pode concluir o passo na própria
+PWA, sem que o token secreto seja enviado ao navegador. A função transacional
+impede uma segunda configuração depois que o administrador global existir.
 
 No serviço Render autorizado, as variáveis do runtime foram configuradas sem
 substituir `SUPABASE_KEY`: a chave publicável foi adicionada separadamente,

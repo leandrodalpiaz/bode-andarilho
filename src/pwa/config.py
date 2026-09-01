@@ -33,6 +33,7 @@ class PwaSettings:
     public_base_url: str
     frontend_dist: Path
     bootstrap_token: str = ""
+    bootstrap_email: str = ""
     public_rate_limit: int = 8
     public_rate_window_seconds: int = 300
     captcha_required: bool = False
@@ -51,6 +52,12 @@ class PwaSettings:
             supabase_service_role_key=_env("SUPABASE_SERVICE_ROLE_KEY") or legacy_backend_key,
             token_pepper=_env("PWA_TOKEN_PEPPER"),
             bootstrap_token=_env("PWA_BOOTSTRAP_TOKEN"),
+            # O e-mail é uma allowlist operacional, não um segredo. Quando
+            # configurado junto do token, permite que o primeiro administrador
+            # conclua o bootstrap pela própria PWA sem enviar o token ao
+            # navegador. O endpoint continua aceitando o header para o
+            # procedimento de emergência server-to-server.
+            bootstrap_email=_env("PWA_BOOTSTRAP_EMAIL").casefold(),
             public_base_url=_env("PWA_PUBLIC_BASE_URL") or _env("RENDER_EXTERNAL_URL"),
             frontend_dist=Path(_env("PWA_FRONTEND_DIST") or str(default_dist)).resolve(),
             public_rate_limit=max(1, int(_env("PWA_PUBLIC_RATE_LIMIT", "8") or "8")),

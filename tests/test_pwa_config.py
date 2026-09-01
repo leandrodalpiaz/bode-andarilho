@@ -27,3 +27,11 @@ def test_pwa_nao_promove_chave_historica_a_chave_publica(monkeypatch):
 
     assert settings.supabase_anon_key == ""
     assert settings.supabase_service_role_key == "legacy-server-key"
+
+
+def test_bootstrap_email_eh_normalizado_sem_ser_enviado_ao_navegador(monkeypatch):
+    monkeypatch.setenv("PWA_BOOTSTRAP_EMAIL", "  ADMINISTRADOR@EXEMPLO.COM ")
+
+    settings = PwaSettings.from_env()
+
+    assert settings.bootstrap_email == "administrador@exemplo.com"

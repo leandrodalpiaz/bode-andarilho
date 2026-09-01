@@ -22,6 +22,9 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
   scheduler e rotas legadas do Telegram não são registrados.
 - O runtime aceita a credencial histórica `SUPABASE_KEY` como fallback de
   servidor, sem promovê-la à configuração pública entregue ao navegador.
+- O primeiro bootstrap pode ser concluído pela PWA somente quando o e-mail
+  autenticado coincide com `PWA_BOOTSTRAP_EMAIL`; o `PWA_BOOTSTRAP_TOKEN` fica
+  restrito ao backend e continua disponível para operação server-to-server.
 
 ## Verificações executadas
 

@@ -568,6 +568,51 @@ async def test_convite_e_bootstrap_exigem_otp_e_preservam_contexto():
 
 
 @pytest.mark.asyncio
+async def test_bootstrap_pode_usar_allowlist_de_email_sem_expor_token():
+    settings = PwaSettings(
+        supabase_url="https://example.supabase.co",
+        supabase_anon_key="public",
+        supabase_service_role_key="server",
+        token_pepper="test-pepper",
+        public_base_url="https://pwa.example",
+        frontend_dist=Path("web/dist"),
+        bootstrap_token="bootstrap-secret",
+        bootstrap_email="SECRETARY@example.com",
+    )
+    async with make_client(FakeRepository(), settings) as client:
+        response = await client.post(
+            "/api/v1/bootstrap/admin",
+            headers={"Authorization": "Bearer secretary", "Idempotency-Key": "bootstrap-email-1"},
+            json={"nome": "Administrador inicial"},
+        )
+
+    assert response.status_code == 201
+    assert response.json()["is_global_admin"] is True
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_rejeita_email_fora_da_allowlist_sem_token():
+    settings = PwaSettings(
+        supabase_url="https://example.supabase.co",
+        supabase_anon_key="public",
+        supabase_service_role_key="server",
+        token_pepper="test-pepper",
+        public_base_url="https://pwa.example",
+        frontend_dist=Path("web/dist"),
+        bootstrap_token="bootstrap-secret",
+        bootstrap_email="owner@example.com",
+    )
+    async with make_client(FakeRepository(), settings) as client:
+        response = await client.post(
+            "/api/v1/bootstrap/admin",
+            headers={"Authorization": "Bearer secretary", "Idempotency-Key": "bootstrap-email-2"},
+            json={"nome": "Administrador inicial"},
+        )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_admin_cria_loja_e_arquiva_loja_existente():
     repo = FakeRepository()
     async with make_client(repo) as client:

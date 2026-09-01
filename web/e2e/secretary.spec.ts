@@ -159,3 +159,92 @@ test("secretário entra por OTP, cria sessão e aprova presença", async ({ page
   expect(reviewAuthorization).toBe("Bearer secretary-access-token");
   expect(reviewIdempotencyKey).not.toBe("");
 });
+
+test("primeiro administrador conclui bootstrap sem enviar o token ao navegador", async ({ page }) => {
+  let bootstrapHeader = "";
+  let bootstrapIdempotencyKey = "";
+  let bootstrapped = false;
+
+  await page.route("**/supabase/auth/v1/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path.endsWith("/otp") && request.method() === "POST") {
+      await route.fulfill({ json: {} });
+      return;
+    }
+    if (path.endsWith("/verify") && request.method() === "POST") {
+      await route.fulfill({
+        json: {
+          access_token: "bootstrap-access-token",
+          token_type: "bearer",
+          expires_in: 3600,
+          expires_at: nowSeconds + 3600,
+          refresh_token: "bootstrap-refresh-token",
+          user: authUser,
+        },
+      });
+      return;
+    }
+    await route.fulfill({ status: 404, json: { message: `Auth simulado ausente: ${path}` } });
+  });
+
+  await page.route("**/api/v1/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path === "/api/v1/config") {
+      await route.fulfill({
+        json: {
+          supabase_url: "http://127.0.0.1:4173/supabase",
+          supabase_publishable_key: "publishable-test-key",
+        },
+      });
+      return;
+    }
+    if (path === "/api/v1/me" && request.method() === "GET") {
+      if (!bootstrapped) {
+        await route.fulfill({ status: 403, json: { error: { code: "invite_required", message: "conta sem vínculo" } } });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          profile: { id: "profile-admin", auth_user_id: authUser.id, email: authUser.email },
+          is_global_admin: true,
+          store_roles: {},
+          stores: [],
+        },
+      });
+      return;
+    }
+    if (path === "/api/v1/eventos" && request.method() === "GET") {
+      if (!bootstrapped) {
+        await route.fulfill({ status: 403, json: { error: { code: "invite_required", message: "conta sem vínculo" } } });
+        return;
+      }
+      await route.fulfill({ json: { items: [] } });
+      return;
+    }
+    if (path === "/api/v1/bootstrap/admin" && request.method() === "POST") {
+      bootstrapHeader = request.headers()["x-bootstrap-token"] || "";
+      bootstrapIdempotencyKey = request.headers()["idempotency-key"] || "";
+      bootstrapped = true;
+      await route.fulfill({ status: 201, json: { perfil_id: "profile-admin", papel: "admin" } });
+      return;
+    }
+    await route.fulfill({ status: 404, json: { error: { message: `Rota simulada ausente: ${path}` } } });
+  });
+
+  await page.goto("/");
+  await page.getByLabel("E-mail").fill("SECRETARIO@example.com");
+  await page.getByRole("button", { name: "Enviar código por e-mail" }).click();
+  await page.getByText("Código enviado").waitFor();
+  await page.getByLabel("Código").fill("123456");
+  await page.getByRole("button", { name: "Confirmar código" }).click();
+
+  await expect(page.getByRole("heading", { name: "Configurar administrador inicial" })).toBeVisible();
+  await page.getByLabel("Nome do administrador").fill("Administrador do Piloto");
+  await page.getByRole("button", { name: "Tornar-me administrador inicial" }).click();
+
+  await expect(page.getByRole("heading", { name: "secretario@example.com" })).toBeVisible();
+  expect(bootstrapHeader).toBe("");
+  expect(bootstrapIdempotencyKey).not.toBe("");
+});

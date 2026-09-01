@@ -38,6 +38,12 @@ A associação do Telegram é opcional: a PWA gera um código temporário e o
 comando privado `/vincular` o consome uma única vez. Esse fluxo não faz backfill
 nem habilita `TELEGRAM_MUTATIONS_TO_PWA`.
 
+O primeiro administrador pode usar o endpoint de bootstrap com o token
+temporário em uma operação server-to-server. Para permitir o mesmo passo pela
+PWA sem expor o token, configure no provider `PWA_BOOTSTRAP_EMAIL` junto de
+`PWA_BOOTSTRAP_TOKEN`; o e-mail autenticado por OTP precisa coincidir exatamente
+com essa allowlist.
+
 O deploy/runtime remoto e o corte exigem gates próprios. O procedimento mantém
 as tabelas legadas somente leitura durante o piloto e não faz backfill dos dados
 de teste.

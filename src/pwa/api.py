@@ -431,13 +431,21 @@ class PwaAPI:
         )
 
     async def bootstrap_admin(self, request: Request) -> Response:
+        user = await self._auth_user(request)
         configured = self.settings.bootstrap_token
         presented = request.headers.get("X-Bootstrap-Token", "")
-        if not configured or not presented or not hmac.compare_digest(presented, configured):
+        token_authorized = bool(
+            configured and presented and hmac.compare_digest(presented, configured)
+        )
+        email_authorized = bool(
+            configured
+            and self.settings.bootstrap_email
+            and hmac.compare_digest(user.email.casefold(), self.settings.bootstrap_email.casefold())
+        )
+        if not token_authorized and not email_authorized:
             raise ApiError(403, "token de bootstrap inválido", code="forbidden")
         idempotency_key(request)
         payload = await self._json(request)
-        user = await self._auth_user(request)
         name = optional_text(payload.get("nome"), "nome", max_length=160)
         result = await self._run(
             "bootstrap_admin",

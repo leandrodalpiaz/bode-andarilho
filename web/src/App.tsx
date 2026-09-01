@@ -106,12 +106,22 @@ function newKey(): string {
   return typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 }
 
-function apiError(data: unknown): string {
+function apiErrorDetails(data: unknown): { message: string; code?: string } {
   if (typeof data === "object" && data && "error" in data) {
-    const error = (data as { error?: { message?: string } }).error;
-    if (error?.message) return error.message;
+    const error = (data as { error?: { message?: unknown; code?: unknown } }).error;
+    return {
+      message: typeof error?.message === "string" && error.message ? error.message : "Não foi possível concluir a operação.",
+      code: typeof error?.code === "string" ? error.code : undefined,
+    };
   }
-  return "Não foi possível concluir a operação.";
+  return { message: "Não foi possível concluir a operação." };
+}
+
+class ApiRequestError extends Error {
+  constructor(message: string, readonly code?: string) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
 }
 
 async function apiFetch(path: string, init: RequestInit = {}, session?: Session | null): Promise<any> {
@@ -121,7 +131,10 @@ async function apiFetch(path: string, init: RequestInit = {}, session?: Session 
   if (session?.access_token) headers.set("Authorization", `Bearer ${session.access_token}`);
   const response = await fetch(path, { ...init, headers });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(apiError(data));
+  if (!response.ok) {
+    const details = apiErrorDetails(data);
+    throw new ApiRequestError(details.message, details.code);
+  }
   return data;
 }
 
@@ -276,6 +289,7 @@ function LoginPage({ inviteToken, supabaseClient }: { inviteToken?: string; supa
 
 function Dashboard({ session, inviteToken, supabaseClient }: { session: Session; inviteToken?: string; supabaseClient: SupabaseClient }) {
   const [me, setMe] = useState<Me | null>(null);
+  const [bootstrapAvailable, setBootstrapAvailable] = useState(false);
   const [events, setEvents] = useState<PublicEvent[]>([]);
   const [editingEvent, setEditingEvent] = useState<PublicEvent | null>(null);
   const [editForm, setEditForm] = useState<EventDraft | null>(null);
@@ -304,9 +318,16 @@ function Dashboard({ session, inviteToken, supabaseClient }: { session: Session;
           }
         }
         const [meData, eventData] = await Promise.all([apiFetch("/api/v1/me", {}, session), apiFetch("/api/v1/eventos", {}, session)]);
-        if (!cancelled) { setMe(meData); setEvents(eventData.items || []); }
+        if (!cancelled) {
+          setMe(meData);
+          setEvents(eventData.items || []);
+          setBootstrapAvailable(false);
+        }
       } catch (reason) {
-        if (!cancelled) setError((reason as Error).message);
+        if (!cancelled) {
+          if (reason instanceof ApiRequestError && reason.code === "invite_required") setBootstrapAvailable(true);
+          setError((reason as Error).message);
+        }
       }
     }
 
@@ -321,7 +342,7 @@ function Dashboard({ session, inviteToken, supabaseClient }: { session: Session;
       apiFetch("/api/v1/me", {}, session),
       apiFetch("/api/v1/eventos", {}, session),
     ]);
-    setMe(meData); setEvents(eventData.items || []);
+    setMe(meData); setEvents(eventData.items || []); setBootstrapAvailable(false); setError("");
   }
 
   async function createDraft(event: FormEvent<HTMLFormElement>) {
@@ -503,6 +524,11 @@ function Dashboard({ session, inviteToken, supabaseClient }: { session: Session;
     <section className="dashboard-head"><div><p className="eyebrow">Painel autenticado</p><h2>{me?.profile.email || "Sua operação"}</h2><p className="muted">Acesso filtrado pelos vínculos reais de loja.</p></div><button className="button-quiet" onClick={logout}>Sair</button></section>
     {message && <Notice tone="success" title="Tudo certo">{message}</Notice>}
     {error && <Notice tone="warning" title="Atenção">{error}</Notice>}
+    {bootstrapAvailable && !me && <BootstrapPanel session={session} onCompleted={async () => {
+      setBootstrapAvailable(false);
+      await refreshWorkspace();
+      setMessage("Administrador inicial configurado. O ambiente agora está pronto para cadastrar a loja piloto.");
+    }} />}
     {me && <section className="grid two"><div className="panel"><p className="eyebrow">Lojas autorizadas</p><h3>{me.stores.length}</h3><div className="chips">{me.stores.map((store) => <span className="chip" key={store.id}>{store.nome}</span>)}</div></div><div className="panel"><p className="eyebrow">Eventos visíveis</p><h3>{events.length}</h3><p className="muted">Telegram continua disponível durante o piloto.</p></div></section>}
     {me && <section className="panel"><div className="section-title"><div><p className="eyebrow">Núcleo operacional</p><h3>Criar sessão</h3></div><span className="status">rascunho</span></div><form onSubmit={createDraft} className="form-grid"><label>Título<input name="titulo" required placeholder="Sessão de trabalho" /></label><label>Data e hora<input name="evento_at" required type="datetime-local" /></label><label>Loja<select name="loja_id" required defaultValue=""> <option value="" disabled>Selecione</option>{me.stores.map((store) => <option key={store.id} value={store.id}>{store.nome}</option>)}</select></label><label>Grau<select name="grau" defaultValue=""><option value="">Não informado</option><option>Aprendiz</option><option>Companheiro</option><option>Mestre</option></select></label><label>Tipo de sessão<input name="tipo_sessao" placeholder="Ordinária, magna…" /></label><label>Rito<input name="rito" placeholder="REAA" /></label><label>Traje<input name="traje_obrigatorio" placeholder="Livre ou traje maçônico" /></label><label>Ágape<input name="agape" placeholder="Sem ágape" /></label><label className="wide">Ordem do dia<textarea name="ordem_do_dia" rows={2} placeholder="Pauta ou observações (opcional)" /></label><label className="check wide"><input name="publicar" type="checkbox" /> Publicar agora e gerar link público</label><button disabled={busy}>{busy ? "Salvando…" : "Salvar sessão"}</button></form></section>}
     {me && (me.is_global_admin || Object.values(me.store_roles).some((roles) => roles.includes("admin"))) && <StoreAdminPanel me={me} session={session} onSaved={refreshWorkspace} />}
@@ -514,6 +540,28 @@ function Dashboard({ session, inviteToken, supabaseClient }: { session: Session;
     {editingEvent && editForm && <section className="panel"><div className="section-title"><div><p className="eyebrow">Edição operacional</p><h3>{editingEvent.titulo}</h3></div><button className="button-small button-quiet" onClick={() => { setEditingEvent(null); setEditForm(null); }}>Fechar</button></div><form onSubmit={saveEventEdit} className="form-grid"><label>Título<input required value={editForm.titulo} onChange={(event) => updateEventDraft("titulo", event.target.value)} /></label><label>Data e hora<input required type="datetime-local" value={editForm.evento_at} onChange={(event) => updateEventDraft("evento_at", event.target.value)} /></label><label>Grau<select value={editForm.grau} onChange={(event) => updateEventDraft("grau", event.target.value)}><option value="">Não informado</option><option>Aprendiz</option><option>Companheiro</option><option>Mestre</option></select></label><label>Tipo de sessão<input value={editForm.tipo_sessao} onChange={(event) => updateEventDraft("tipo_sessao", event.target.value)} /></label><label>Rito<input value={editForm.rito} onChange={(event) => updateEventDraft("rito", event.target.value)} /></label><label>Traje<input value={editForm.traje_obrigatorio} onChange={(event) => updateEventDraft("traje_obrigatorio", event.target.value)} /></label><label>Ágape<input value={editForm.agape} onChange={(event) => updateEventDraft("agape", event.target.value)} /></label><label className="wide">Descrição<textarea rows={2} value={editForm.descricao} onChange={(event) => updateEventDraft("descricao", event.target.value)} /></label><label className="wide">Ordem do dia<textarea rows={3} value={editForm.ordem_do_dia} onChange={(event) => updateEventDraft("ordem_do_dia", event.target.value)} /></label><label className="wide">Endereço da sessão<textarea rows={2} value={editForm.endereco_sessao} onChange={(event) => updateEventDraft("endereco_sessao", event.target.value)} /></label><button disabled={busyAction === `edit-event-${editingEvent.id}`}>{busyAction === `edit-event-${editingEvent.id}` ? "Salvando…" : "Salvar alterações"}</button></form></section>}
     {selectedEventId !== null && <section className="panel"><div className="section-title"><div><p className="eyebrow">Revisão</p><h3>Solicitações de presença</h3></div><span className="status">{presences.length}</span></div>{presences.length === 0 ? <p className="muted">Nenhuma solicitação para este evento.</p> : <div className="event-list">{presences.map((presence) => <article className="event-row" key={presence.id}><div className="event-main"><strong>{presence.visitante_nome}</strong><span>{presence.visitante_email || presence.visitante_telefone || "Contato não informado"} · Ágape: {presence.agape}</span></div><div className="event-actions"><span className="status">{presence.status}</span>{presence.status === "pending" && <><button className="button-small" disabled={busyAction === `review-${presence.id}`} onClick={() => reviewPresence(presence.id, "aprovar")}>Aprovar</button><button className="button-small button-quiet" disabled={busyAction === `review-${presence.id}`} onClick={() => reviewPresence(presence.id, "recusar")}>Recusar</button></>}</div></article>)}</div>}</section>}
   </Shell>;
+}
+
+function BootstrapPanel({ session, onCompleted }: { session: Session; onCompleted: () => Promise<void> }) {
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setError("");
+    try {
+      await apiFetch("/api/v1/bootstrap/admin", {
+        method: "POST",
+        headers: { "Idempotency-Key": newKey() },
+        body: JSON.stringify({ nome: name.trim() }),
+      }, session);
+      await onCompleted();
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally { setBusy(false); }
+  }
+
+  return <section className="panel"><div className="section-title"><div><p className="eyebrow">Primeiro acesso</p><h3>Configurar administrador inicial</h3></div><span className="status">bootstrap</span></div><p className="muted">Este passo só é aceito para o e-mail autorizado no servidor. O token de bootstrap permanece privado e nunca é enviado ao navegador.</p><form onSubmit={submit} className="form-grid"><label>Nome do administrador<input required minLength={2} value={name} onChange={(event) => setName(event.target.value)} placeholder="Nome para o painel" autoComplete="name" /></label><button disabled={busy}>{busy ? "Configurando…" : "Tornar-me administrador inicial"}</button></form>{error && <Notice tone="warning" title="Bootstrap não autorizado">{error}</Notice>}</section>;
 }
 
 function StoreAdminPanel({ me, session, onSaved }: { me: Me; session: Session; onSaved: () => Promise<void> }) {
