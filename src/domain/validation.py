@@ -80,13 +80,14 @@ def normalize_store_payload(payload: dict[str, Any], *, partial: bool = False) -
         ("template_card_path", "caminho do template", 500),
     ):
         if field_name in payload:
-            result[field_name] = optional_text(payload.get(field_name), label, max_length=max_length)
+            normalized = optional_text(payload.get(field_name), label, max_length=max_length)
+            result[field_name] = normalized or None
 
     if "uf" in payload:
         uf = optional_text(payload.get("uf"), "UF", max_length=3).upper()
         if uf and len(uf) not in {2, 3}:
             raise DomainValidationError("UF deve ter 2 ou 3 caracteres")
-        result["uf"] = uf
+        result["uf"] = uf or None
 
     if "layout_config" in payload:
         layout = payload.get("layout_config")

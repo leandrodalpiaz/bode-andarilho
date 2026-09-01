@@ -83,3 +83,18 @@ def test_loja_normaliza_campos_e_rejeita_configuracao_invalida():
         normalize_store_payload({"nome": "Loja Piloto", "slug": ""}, partial=True)
     with pytest.raises(DomainValidationError):
         normalize_store_payload({"nome": "Loja Piloto", "uf": "S"})
+
+
+def test_loja_converte_campos_opcionais_vazios_em_nulo():
+    result = normalize_store_payload(
+        {
+            "nome": "Loja Piloto",
+            "cidade": "",
+            "descricao": "",
+            "uf": "",
+        }
+    )
+
+    assert result["cidade"] is None
+    assert result["descricao"] is None
+    assert result["uf"] is None
