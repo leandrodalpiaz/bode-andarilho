@@ -305,8 +305,9 @@ class SupabaseRepository:
         )
         if event:
             store = self.get_store(int(event["loja_id"]))
-            if store:
-                event["loja"] = store
+            if not store or str(store.get("status") or "active") != "active":
+                return None
+            event["loja"] = store
         return event
 
     def get_public_receipt(self, receipt_hash: str) -> dict[str, Any] | None:

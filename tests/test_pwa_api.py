@@ -27,6 +27,7 @@ class FakeRepository:
         self.audits: list[dict] = []
         self.created_events: list[dict] = []
         self.presence: list[dict] = []
+        self.invites: list[dict] = []
         self.association_codes: list[dict] = []
         self.publication = {"id": 40, "evento_id": 10, "estado": "prepared", "canal": "instagram"}
         self.event = {
@@ -51,7 +52,24 @@ class FakeRepository:
         return self.created_events
 
     def get_store(self, store_id):
-        return {"id": store_id, "nome": "Loja Piloto", "template_card_path": "", "layout_config": {}}
+        return {"id": store_id, "nome": "Loja Piloto", "status": "active", "template_card_path": "", "layout_config": {}}
+
+    def create_store(self, values):
+        return {"id": 2, **values}
+
+    def archive_store(self, store_id):
+        return {"id": store_id, "nome": "Loja Piloto", "status": "archived"}
+
+    def create_invite(self, values):
+        row = {"id": "invite-1", **values}
+        self.invites.append(row)
+        return row
+
+    def consume_invite(self, token_hash, auth_user_id, email, request_id=None):
+        return {"perfil_id": "p-secretary", "auth_user_id": auth_user_id, "email": email, "papel": "secretary", "loja_id": 1}
+
+    def bootstrap_admin(self, auth_user_id, email, name, request_id=None):
+        return {"perfil_id": "p-admin", "auth_user_id": auth_user_id, "email": email, "nome": name, "is_global_admin": True}
 
     def create_event(self, values):
         row = {"id": 20, **values}
@@ -98,6 +116,30 @@ class FakeRepository:
     def update_store(self, store_id, values):
         return {"id": store_id, "nome": values.get("nome", "Loja Piloto"), **values}
 
+    def get_presence(self, presence_id):
+        return next((row for row in self.presence if row.get("id") == presence_id), {
+            "id": presence_id,
+            "evento_id": 10,
+            "visitante_nome": "Visitante",
+            "status": "pending",
+            "agape": "sem",
+        })
+
+    def list_presence(self, event_id):
+        return [row for row in self.presence if row.get("evento_id") == event_id]
+
+    def update_presence(self, presence_id, values):
+        row = self.get_presence(presence_id)
+        row.update(values)
+        return row
+
+    def insert_publication(self, values):
+        self.publication.update({"id": 40, **values})
+        return self.publication
+
+    def upload_artifact(self, bucket, path, content, content_type):
+        return {"bucket": bucket, "path": path, "url": f"https://storage.example/{path}"}
+
     def create_association_code(self, values):
         row = {"id": "code-1", **values}
         self.association_codes.append(row)
@@ -137,6 +179,11 @@ class MissingInviteStoreRepository(FakeRepository):
 class ArchivedInviteStoreRepository(FakeRepository):
     def get_store(self, store_id):
         return {"id": store_id, "nome": "Loja Arquivada", "status": "archived"}
+
+
+class PublicPresenceConflictRepository(FakeRepository):
+    def create_presence(self, values):
+        raise RepositoryConflict("chave de idempotência já utilizada")
 
 
 @pytest.mark.asyncio
@@ -467,3 +514,168 @@ async def test_endpoint_publico_associa_telegram_apenas_com_id_numerico():
     assert response.status_code == 200
     assert response.json()["external_user_id"] == "123456789"
     assert invalid.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_admin_cria_convite_com_link_opaco_e_auditoria():
+    repo = FakeRepository()
+    async with make_client(repo) as client:
+        response = await client.post(
+            "/api/v1/convites",
+            headers={"Authorization": "Bearer admin", "Idempotency-Key": "invite-ok"},
+            json={"email": "SECRETARIO@example.com", "papel": "secretary", "loja_id": 1},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["email"] == "secretario@example.com"
+    assert body["papel"] == "secretary"
+    assert body["loja_id"] == 1
+    assert "token_hash" not in body
+    assert "token=" in body["invite_url"]
+    assert repo.audits[-1]["acao"] == "invite_created"
+
+
+@pytest.mark.asyncio
+async def test_convite_e_bootstrap_exigem_otp_e_preservam_contexto():
+    settings = PwaSettings(
+        supabase_url="https://example.supabase.co",
+        supabase_anon_key="public",
+        supabase_service_role_key="server",
+        token_pepper="test-pepper",
+        public_base_url="https://pwa.example",
+        frontend_dist=Path("web/dist"),
+        bootstrap_token="bootstrap-secret",
+    )
+    async with make_client(FakeRepository(), settings) as client:
+        consumed = await client.post(
+            "/api/v1/convites/consumir",
+            headers={"Authorization": "Bearer secretary", "Idempotency-Key": "consume-1"},
+            json={"token": "opaque-invite"},
+        )
+        bootstrapped = await client.post(
+            "/api/v1/bootstrap/admin",
+            headers={
+                "Authorization": "Bearer secretary",
+                "X-Bootstrap-Token": "bootstrap-secret",
+                "Idempotency-Key": "bootstrap-1",
+            },
+            json={"nome": "Administrador inicial"},
+        )
+    assert consumed.status_code == 200
+    assert consumed.json()["papel"] == "secretary"
+    assert bootstrapped.status_code == 201
+    assert bootstrapped.json()["is_global_admin"] is True
+
+
+@pytest.mark.asyncio
+async def test_admin_cria_loja_e_arquiva_loja_existente():
+    repo = FakeRepository()
+    async with make_client(repo) as client:
+        created = await client.post(
+            "/api/v1/lojas",
+            headers={"Authorization": "Bearer admin", "Idempotency-Key": "store-create"},
+            json={"nome": "Loja Nova"},
+        )
+        archived = await client.delete(
+            "/api/v1/lojas/1",
+            headers={"Authorization": "Bearer admin", "Idempotency-Key": "store-archive"},
+        )
+    assert created.status_code == 201
+    assert created.json()["slug"] == "loja-nova"
+    assert archived.status_code == 200
+    assert archived.json()["status"] == "archived"
+    assert repo.audits[-1]["acao"] == "store_archived"
+
+
+@pytest.mark.asyncio
+async def test_arquivamento_de_loja_inexistente_retorna_404():
+    async with make_client(MissingInviteStoreRepository()) as client:
+        response = await client.delete(
+            "/api/v1/lojas/404",
+            headers={"Authorization": "Bearer admin", "Idempotency-Key": "store-missing"},
+        )
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_evento_pode_ser_atualizado_e_cancelado_com_auditoria():
+    repo = FakeRepository()
+    async with make_client(repo) as client:
+        updated = await client.patch(
+            "/api/v1/eventos/10",
+            headers={"Authorization": "Bearer secretary", "Idempotency-Key": "event-update"},
+            json={"titulo": "Sessão atualizada"},
+        )
+        cancelled = await client.delete(
+            "/api/v1/eventos/10",
+            headers={"Authorization": "Bearer secretary", "Idempotency-Key": "event-cancel"},
+        )
+    assert updated.status_code == 200
+    assert updated.json()["titulo"] == "Sessão atualizada"
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+    assert repo.audits[-1]["acao"] == "event_cancelled"
+
+
+@pytest.mark.asyncio
+async def test_secretario_lista_aprova_presenca_com_idempotencia():
+    repo = FakeRepository()
+    repo.presence = [
+        {"id": 30, "evento_id": 10, "visitante_nome": "Visitante", "status": "pending", "agape": "sem"},
+    ]
+    async with make_client(repo) as client:
+        listed = await client.get(
+            "/api/v1/eventos/10/presencas",
+            headers={"Authorization": "Bearer secretary"},
+        )
+        approved = await client.post(
+            "/api/v1/presencas/30/aprovar",
+            headers={"Authorization": "Bearer secretary", "Idempotency-Key": "presence-review"},
+            json={},
+        )
+    assert listed.status_code == 200
+    assert listed.json()["items"][0]["visitante_nome"] == "Visitante"
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approved"
+    assert repo.audits[-1]["acao"] == "presence_approved"
+
+
+@pytest.mark.asyncio
+async def test_presenca_publica_nao_duplica_quando_repository_retorna_conflito():
+    async with make_client(PublicPresenceConflictRepository()) as client:
+        response = await client.post(
+            "/api/v1/public/eventos/public-token/presencas",
+            headers={"Idempotency-Key": "presence-duplicate"},
+            json={"nome": "Visitante"},
+        )
+    assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_secretario_prepara_card_e_publicacao_sem_expor_artefato_privado(monkeypatch):
+    from types import SimpleNamespace
+
+    card_path = Path(__file__).resolve().parents[1] / "assets" / "templates" / "default_event_card.png"
+    monkeypatch.setattr(
+        "src.render_cards.render_event_card",
+        lambda *_args, **_kwargs: SimpleNamespace(path=str(card_path), warnings=[]),
+    )
+    monkeypatch.setattr(
+        "src.pwa.api.to_legacy_card_payload",
+        lambda event, store: (event, store),
+    )
+    repo = FakeRepository()
+
+    async with make_client(repo) as client:
+        response = await client.post(
+            "/api/v1/eventos/10/card",
+            headers={"Authorization": "Bearer secretary", "Idempotency-Key": "card-001"},
+            json={"canal": "instagram"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["publication"]["estado"] == "prepared"
+    assert body["artifact"]["bucket"] == "pwa-private"
+    assert "public_token_hash" not in body
+    assert repo.audits[-1]["acao"] == "event_card_prepared"

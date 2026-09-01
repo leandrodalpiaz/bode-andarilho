@@ -1,6 +1,6 @@
 # Gate de prontidão do piloto
 
-Atualizado em 2026-08-31, na branch `codex/pwa-foundation`.
+Atualizado em 2026-09-01, na branch `codex/pwa-foundation`.
 
 ## Estado atual
 
@@ -13,9 +13,9 @@ local. Não existe autorização para apontar produção para este código.
 ## Evidências concluídas
 
 - worktree original preservado e branch de migração isolada;
-- 52 testes Python aprovados nesta revisão, além de compilação sintática em cache
+- 62 testes Python aprovados nesta revisão, além de compilação sintática em cache
   temporário;
-- typecheck e build React aprovados;
+- typecheck, 2 testes de componentes e build React aprovados;
 - schema local com RLS/FORCE RLS, grants e lint sem erro;
 - Security/Performance Advisors locais sem issues;
 - RPC de associação validado com fixture descartável: consumo único, identidade
@@ -26,6 +26,10 @@ local. Não existe autorização para apontar produção para este código.
 - painel visual conferido em desktop e mobile com mocks, sem homologação externa;
 - Playwright local percorreu os fluxos mockados de visitante e secretário, incluindo
   recibo, aprovação de presença, card e os estados de compartilhamento assistido.
+- Vitest passou com 2 testes de componentes; Playwright passou com 3 cenários no
+  build de produção, incluindo o contrato de instalação/atualização do PWA.
+- Manifest agora oferece PNG 180/192/512 e `apple-touch-icon`; `npm audit` não
+  reporta vulnerabilidades nas dependências fixadas.
 - commit `7d95fea` publicado em `origin/codex/pwa-foundation`; CI `33436419072`
   concluído com sucesso nos jobs Python 3.12 e Web Node 22.
 
@@ -44,6 +48,11 @@ local. Não existe autorização para apontar produção para este código.
 5. Executar OTP real, teste autenticado em Android e iPhone, compartilhamento
    real e dois ciclos operacionais completos.
 6. Ensaiar rollback com Telegram como fallback antes de tornar a PWA oficial.
+
+O Docker local estava parado após o reinício e não pôde ser aberto nesta sessão;
+essa indisponibilidade não alterou o Supabase remoto. O gate de reset, RLS,
+Storage e Advisors permanece sustentado pela validação local anterior e pelo CI,
+mas deve ser reexecutado quando o daemon estiver disponível antes do corte.
 
 O endpoint `GET /api/v1/metrics` deve ser consultado pelo administrador global
 durante cada ciclo para conferir requisições, autenticação, cards, presenças e

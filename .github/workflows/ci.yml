@@ -39,5 +39,11 @@ jobs:
         run: npm ci
       - name: Verificar tipos
         run: npm run typecheck
+      - name: Testes de componentes
+        run: npm test
       - name: Build PWA
         run: npm run build
+      - name: Instalar Chromium do Playwright
+        run: npx playwright install --with-deps chromium
+      - name: E2E visitante e secretário
+        run: npm run test:e2e

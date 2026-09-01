@@ -8,4 +8,6 @@ web/dist/
 .pytest_cache/
 htmlcov/
 .playwright-cli/
+web/test-results/
+web/playwright-report/
 *.tsbuildinfo

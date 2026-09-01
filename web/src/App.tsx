@@ -227,8 +227,9 @@ function Shell({ children }: { children: React.ReactNode }) {
   return <main className="shell"><header className="brand"><div className="brand-mark">BA</div><div><p className="eyebrow">Centro operacional</p><h1>Bode Andarilho</h1></div></header>{updateAvailable && <Notice tone="info" title="Nova versão disponível"><span>Atualize para carregar a versão mais recente da PWA.</span><button className="button-small" onClick={() => window.location.reload()}>Atualizar agora</button></Notice>}{children}<footer>Construído em coexistência gradual com o Telegram.</footer></main>;
 }
 
-function Notice({ title, children, tone = "info" }: { title: string; children: React.ReactNode; tone?: "info" | "warning" | "success" }) {
-  return <div className={`notice notice-${tone}`}><strong>{title}</strong><span>{children}</span></div>;
+export function Notice({ title, children, tone = "info" }: { title: string; children: React.ReactNode; tone?: "info" | "warning" | "success" }) {
+  const liveRole = tone === "warning" ? "alert" : "status";
+  return <div className={`notice notice-${tone}`} role={liveRole} aria-live={tone === "warning" ? "assertive" : "polite"}><strong>{title}</strong><span>{children}</span></div>;
 }
 
 function LoginPage({ inviteToken, supabaseClient }: { inviteToken?: string; supabaseClient: SupabaseClient }) {

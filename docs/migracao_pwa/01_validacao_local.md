@@ -1,6 +1,6 @@
 # Migração Telegram → PWA — evidências locais
 
-Data da validação: 2026-08-31
+Data da validação: 2026-09-01
 Branch: `codex/pwa-foundation`
 Worktree: `D:\Repos\bode-andarilho-pwa`
 
@@ -35,12 +35,14 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - RLS com fixtures descartáveis: secretário vê somente a própria loja/evento; outra loja fica invisível; administrador global vê as duas; `anon` não possui grants diretos de leitura/escrita.
 - Smoke integrado: configuração pública, `/me`, criação/publicação de evento, link público, presença pendente, recibo, aprovação e geração/upload de card.
 - Smoke real local com Auth/REST/Storage/RPC: usuário descartável, bootstrap, loja, associação Telegram, evento público, presença, recibo, aprovação e card — todos os passos retornaram sucesso; o banco foi resetado depois.
-- `python -m pytest -q` — 52 testes aprovados nesta revisão, cobrindo também 404/409 de convite, 429 de rate limit, propagação de request ID, métricas restritas, allowlist de lojas-piloto e separação da chave pública do CAPTCHA.
+- `python -m pytest -q --basetemp .tmp-pytest` — 62 testes aprovados nesta revisão, cobrindo também 404/409 de convite, 429 de rate limit, propagação de request ID, métricas restritas, allowlist de lojas-piloto, separação da chave pública do CAPTCHA, arquivamento de loja, visibilidade pública e preparação de card.
 - Compilação sintática dos 61 arquivos Python — aprovada.
-- `npm run typecheck` e `npm run build` — aprovados.
-- Playwright CLI local com API mockada — visitante abriu o evento, enviou presença e consultou o recibo; secretário abriu o dashboard, listou a loja/evento, aprovou a presença, preparou o card e percorreu `prepared → share_initiated → confirmed_by_user`; console da aplicação sem erros.
+- `npm run typecheck`, `npm test` (2 testes de componentes) e `npm run build` — aprovados com Vite 6.4.3; `npm audit` sem vulnerabilidades reportadas.
+- Validação de navegador mockada anterior — visitante abriu o evento, enviou presença e consultou o recibo; secretário abriu o dashboard, listou a loja/evento, aprovou a presença, preparou o card e percorreu `prepared → share_initiated → confirmed_by_user`; console da aplicação sem erros.
+- `npm run test:e2e` — 3 cenários Playwright aprovados no build de produção: visitante/recibo, secretário/OTP/criação/aprovação e contrato instalável com manifest, ícones, service worker e aviso de atualização; os cenários usam APIs simuladas e não substituem homologação externa.
 - A validação de navegador acima é determinística e mockada; não substitui OTP real, dispositivo Android/iPhone, compartilhamento externo ou publicação comprovada.
 - Service worker com detecção de atualização e ação explícita de recarga; requisições `/api/` continuam fora do cache.
+- Manifest inclui ícones PNG 180/192/512 derivados do ícone institucional e `apple-touch-icon` para instalação em iOS.
 - Link público pode ser regenerado após recarregar a agenda; a rotação invalida o link anterior, mantém somente hash no banco e registra auditoria.
 - Geração de card retorna legenda independente de Telegram para revisão e cópia assistida no dashboard.
 - Visitante pode consultar o status do recibo por token opaco, sem expor e-mail, telefone ou IDs internos.
@@ -59,3 +61,4 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - O corte também aceita `TELEGRAM_MUTATIONS_TO_PWA_STORES` como allowlist de IDs do piloto: a decisão é reavaliada antes da persistência de evento, cancelamento, edição, reabertura, arquivamento e template. Os handlers conversacionais e os Mini Apps legados de loja/sessão falham fechado; lojas não incluídas continuam no legado.
 - CAPTCHA público permanece desligado por padrão; quando `PWA_PUBLIC_CAPTCHA_REQUIRED=true`, a PWA carrega o desafio hCaptcha pela chave pública e envia o token, enquanto a chave secreta continua somente no backend.
 - As fixtures usadas na validação foram locais e descartáveis; não houve backfill dos registros atuais.
+- Nesta retomada, Python 3.12 não estava instalado no host e o Docker local permaneceu indisponível após o reinício; por isso a suíte local Python executou em 3.14 e a reprodução atual de RLS/Storage permanece dependente do CI/Docker, sem alteração no Supabase remoto.

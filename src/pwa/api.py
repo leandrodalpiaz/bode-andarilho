@@ -515,6 +515,8 @@ class PwaAPI:
         key = idempotency_key(request)
         store_id = positive_int(request.path_params["store_id"], "loja_id")
         self._require_role(actor, store_id, store=True)
+        if not await self._run("get_store", store_id):
+            raise ApiError(404, "loja não encontrada", code="not_found")
         row = await self._run("archive_store", store_id)
         await self._audit(
             request,
