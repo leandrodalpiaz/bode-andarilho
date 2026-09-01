@@ -65,9 +65,10 @@ Projeto Supabase `bode-andarilho`, ref
   aditiva, a aplicação prosseguiu sem tocar nas tabelas legadas. Esse fato mantém
   o backup completo como gate aberto para o corte, e não como evidência de backup.
 - Migrations remotas registradas pelo MCP:
-  - `20260901121956 create_pwa_v2`;
-  - `20260901122542 add_external_identity_association_codes`;
-  - `20260901122613 optimize_pwa_v2_rls_auth_uid`.
+- `20260901121956 create_pwa_v2`;
+- `20260901122542 add_external_identity_association_codes`;
+- `20260901122613 optimize_pwa_v2_rls_auth_uid`.
+- `20260901184758 harden_bootstrap_admin_lock`.
 - O catálogo remoto contém 10 tabelas `pwa_v2`, todas com RLS e `FORCE RLS`; as
   tabelas novas permanecem vazias; o bucket `pwa-private` existe e é privado.
 - As funções de privilégio elevado ficam em `pwa_private`, com `SECURITY DEFINER`
@@ -75,6 +76,11 @@ Projeto Supabase `bode-andarilho`, ref
   `consume_external_identity` não podem ser executadas por `anon` ou
   `authenticated`. As políticas de negócio usam `auth.uid()` e os grants não
   concedem escrita direta ao navegador.
+- A função remota `pwa_private.bootstrap_admin(uuid,text,text,uuid)` foi verificada
+  após a última migration com `pg_advisory_xact_lock` presente e sem o filtro de
+  administrador ativo que permitiria reabrir o bootstrap depois de uma eventual
+  desativação. As contagens de `perfis`, `lojas`, `eventos`, `solicitacoes_presenca`
+  e `auditoria` continuam em zero.
 - O Security Advisor ainda aponta erros nas tabelas legadas públicas
   (`public.confirmacoes`, `public.membros`, `public.eventos` e `public.lojas`)
   por RLS ausente, além de avisos informativos nas tabelas legadas sem políticas.
