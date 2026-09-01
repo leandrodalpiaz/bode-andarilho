@@ -40,11 +40,11 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - RLS com fixtures descartáveis: secretário vê somente a própria loja/evento; outra loja fica invisível; administrador global vê as duas; `anon` não possui grants diretos de leitura/escrita.
 - Smoke integrado: configuração pública, `/me`, criação/publicação de evento, link público, presença pendente, recibo, aprovação e geração/upload de card.
 - Smoke real local com Auth/REST/Storage/RPC: usuário descartável, bootstrap, loja, associação Telegram, evento público, presença, recibo, aprovação e card — todos os passos retornaram sucesso; o banco foi resetado depois.
-- `python -m pytest -q` — 64 testes aprovados nesta revisão, cobrindo também 404/409 de convite, 429 de rate limit, propagação de request ID, métricas restritas, allowlist de lojas-piloto, separação da chave pública do CAPTCHA, arquivamento de loja, visibilidade pública, preparação de card e compatibilidade de credencial.
+- `python -m pytest -q` — 67 testes aprovados nesta revisão, cobrindo também 404/409 de convite, 429 de rate limit, propagação de request ID, métricas restritas, allowlist de lojas-piloto, separação da chave pública do CAPTCHA, arquivamento de loja, visibilidade pública, preparação de card, compatibilidade de credencial e o bootstrap por e-mail autorizado.
 - Compilação sintática dos 61 arquivos Python — aprovada em cache temporário separado do `__pycache__` do worktree.
-- `npm run typecheck`, `npm test` (2 testes de componentes) e `npm run build` — aprovados com Vite 6.4.3; `npm audit` sem vulnerabilidades reportadas.
+- `npm run typecheck`, Vitest (2 testes de componentes) e `npm run build` — aprovados com Vite 6.4.3; a validação usou o carregador de configuração do runner e diretório de saída isolado por causa da restrição local de escrita do Vite; `npm audit` sem vulnerabilidades reportadas.
 - Validação de navegador mockada anterior — visitante abriu o evento, enviou presença e consultou o recibo; secretário abriu o dashboard, listou a loja/evento, aprovou a presença, preparou o card e percorreu `prepared → share_initiated → confirmed_by_user`; console da aplicação sem erros.
-- `npm run test:e2e` — 3 cenários Playwright aprovados no build de produção: visitante/recibo, secretário/OTP/criação/aprovação e contrato instalável com manifest, ícones, service worker e aviso de atualização; os cenários usam APIs simuladas e não substituem homologação externa.
+- Playwright — 4 cenários aprovados no build de produção: visitante/recibo, secretário/OTP/criação/aprovação, bootstrap do primeiro administrador sem enviar o token ao navegador e contrato instalável com manifest, ícones, service worker e aviso de atualização; os cenários usam APIs simuladas e não substituem homologação externa.
 - A validação de navegador acima é determinística e mockada; não substitui OTP real, dispositivo Android/iPhone, compartilhamento externo ou publicação comprovada.
 - Service worker com detecção de atualização e ação explícita de recarga; requisições `/api/` continuam fora do cache.
 - Manifest inclui ícones PNG 180/192/512 derivados do ícone institucional e `apple-touch-icon` para instalação em iOS.
@@ -56,13 +56,14 @@ Worktree: `D:\Repos\bode-andarilho-pwa`
 - Runtime local somente-PWA usando a URL/credencial de backend já existentes e chave pública separada: `/health` e `/` retornaram 200, `/api/v1/config` não incluiu segredo de servidor e `/api/v1/me` sem sessão retornou 401.
 - `docker build -t bode-andarilho-pwa:local .` — aprovado.
 - Importação de `main` e construção das rotas PWA dentro da imagem Python 3.12 — aprovada com placeholders locais.
-- Branch `codex/pwa-foundation` publicada em `origin`; CI `33503102728`, `33503271430` e `33537073491` concluídos com sucesso nos jobs Python 3.12 e Node 22.
-- O commit `0698948` foi publicado em `origin/main` por fast-forward e recebeu
+- Branch `codex/pwa-foundation` publicada em `origin`; a CI `33543798445` concluiu com sucesso nos jobs Python 3.12 e Node 22 para o lote de bootstrap.
+- O commit `81e23b2` foi publicado em `origin/main` por fast-forward e recebeu
   deploy controlado no serviço Render `bode-andarilho`, sem alteração do
   Supabase e mantendo `TELEGRAM_ENABLED=true` e
   `TELEGRAM_MUTATIONS_TO_PWA=false`.
 - O build remoto do Render usou Node 22.23.2, passou `typecheck`, gerou o
-  frontend Vite e iniciou `python main.py` com status `Deploy succeeded|Live`.
+  frontend Vite e iniciou `python main.py` com status `Deploy succeeded|Live` no
+  SHA `81e23b2`.
 - Smoke público remoto: `/health`, `/`, `/api/v1/config`,
   `/manifest.webmanifest` e `/sw.js` retornaram 200; `/api/v1/me` sem sessão
   retornou 401. A configuração pública informou somente a chave publicável,

@@ -16,7 +16,7 @@ representa corte operacional nem migração de registros.
 ## Evidências concluídas
 
 - worktree original preservado e branch de migração isolada;
-- 64 testes Python aprovados nesta revisão, além de compilação sintática em cache
+- 67 testes Python aprovados nesta revisão, além de compilação sintática em cache
   temporário;
 - typecheck, 2 testes de componentes e build React aprovados;
 - schema local com RLS/FORCE RLS, grants e lint sem erro;
@@ -29,14 +29,15 @@ representa corte operacional nem migração de registros.
 - painel visual conferido em desktop e mobile com mocks, sem homologação externa;
 - Playwright local percorreu os fluxos mockados de visitante e secretário, incluindo
   recibo, aprovação de presença, card e os estados de compartilhamento assistido.
-- Vitest passou com 2 testes de componentes; Playwright passou com 3 cenários no
-  build de produção, incluindo o contrato de instalação/atualização do PWA.
+- Vitest passou com 2 testes de componentes; Playwright passou com 4 cenários no
+  build de produção, incluindo bootstrap do primeiro administrador sem expor o
+  token ao navegador e o contrato de instalação/atualização do PWA.
 - Manifest agora oferece PNG 180/192/512 e `apple-touch-icon`; `npm audit` não
   reporta vulnerabilidades nas dependências fixadas.
-- commits `6eb85f6` e `9046946` publicados em `origin/codex/pwa-foundation`; CI
-  `33503102728` e a execução final de documentação `33503271430` concluídos com
-  sucesso nos jobs Python 3.12 e Web Node 22, incluindo os E2E.
-- commit `0698948` publicado em `origin/main` por fast-forward; o serviço Render
+- commit `81e23b2` publicado em `origin/codex/pwa-foundation`; CI `33543798445`
+  concluída com sucesso nos jobs Python 3.12 e Web Node 22, incluindo os E2E do
+  bootstrap.
+- commit `81e23b2` publicado em `origin/main` por fast-forward; o serviço Render
   `bode-andarilho` recebeu deploy controlado com build remoto Node 22.23.2,
   `typecheck` aprovado e status `Deploy succeeded|Live`.
 - Smoke remoto público aprovado: `/health`, `/`, `/api/v1/config`, manifest e
