@@ -1,8 +1,11 @@
 # Supabase local — PWA v2
 
 A migration foi criada pelo Supabase CLI via `npx` e validada no ambiente local.
-Ela não foi aplicada ao projeto remoto. Antes de qualquer aplicação remota,
-confirme a versão suportada do CLI e execute no repositório:
+A fundação `pwa_v2` já foi aplicada de forma aditiva ao projeto remoto autorizado
+por meio do MCP, sem backfill e sem alteração das tabelas legadas. O backup
+técnico restaurável, a exposição do schema no PostgREST e a reconciliação do
+histórico local/remoto ainda são gates antes do runtime/corte. Antes de usar o
+CLI novamente, confirme a versão suportada e leia o `--help`:
 
 ```bash
 npx supabase --version
@@ -17,9 +20,21 @@ como `anon`, usuário autenticado sem vínculo, secretário de outra loja,
 secretário autorizado e administrador global. A API REST precisa ter `pwa_v2`
 exposto como schema adicional; `pwa_private` não deve ser exposto.
 
+No projeto remoto `bode-andarilho` (`dvtbvgmpvfodurcwxnch`), as migrations
+registradas são `20260901121956 create_pwa_v2`,
+`20260901122542 add_external_identity_association_codes` e
+`20260901122613 optimize_pwa_v2_rls_auth_uid`. Como essas versões foram geradas
+no momento da aplicação remota pelo MCP e não coincidem com os prefixos dos
+arquivos locais, não execute `npx supabase db push` até reconciliar o histórico.
+
+O dump técnico remoto não foi produzido nesta sessão porque não havia token de
+acesso do CLI nem URL/senha de banco disponível. A contagem prévia foi somente
+leitura e não substitui um backup restaurável.
+
 A associação do Telegram é opcional: a PWA gera um código temporário e o
 comando privado `/vincular` o consome uma única vez. Esse fluxo não faz backfill
 nem habilita `TELEGRAM_MUTATIONS_TO_PWA`.
 
-O deploy remoto exige aprovação específica. O corte previsto mantém as tabelas
-legadas somente leitura durante o piloto e não faz backfill dos dados de teste.
+O deploy/runtime remoto e o corte exigem gates próprios. O procedimento mantém
+as tabelas legadas somente leitura durante o piloto e não faz backfill dos dados
+de teste.
