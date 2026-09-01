@@ -75,6 +75,10 @@ Projeto Supabase `bode-andarilho`, ref
   desenho de não conceder grants diretos ao navegador. `pwa_private` continuou
   retornando `PGRST106`, com somente `public`, `graphql_public` e `pwa_v2`
   expostos. A chave secreta permanece somente no servidor.
+- Após a configuração, a leitura de controle confirmou `auth.users=0`,
+  `auth.identities=0` e zero registros nas tabelas operacionais consultadas de
+  `pwa_v2`; as tabelas legadas consultadas permaneceram em 1 loja, 2 membros,
+  4 eventos e 0 confirmações. Não houve criação, backfill ou alteração de dados.
 
 Observação operacional: o MCP registrou as migrations com versões remotas
 geradas no momento da aplicação, diferentes dos prefixos de data dos arquivos
