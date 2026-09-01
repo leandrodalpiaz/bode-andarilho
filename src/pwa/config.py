@@ -4,6 +4,14 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+
+# O modo somente-PWA também precisa carregar o mesmo .env usado pelo bot.
+# Variáveis já definidas pelo provider têm precedência sobre o arquivo local.
+_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(dotenv_path=_ENV_FILE, override=False)
+
 
 class PwaConfigurationError(RuntimeError):
     """Configuração obrigatória ausente no backend."""
@@ -34,10 +42,13 @@ class PwaSettings:
     @classmethod
     def from_env(cls) -> "PwaSettings":
         default_dist = Path(__file__).resolve().parents[2] / "web" / "dist"
+        # SUPABASE_KEY é o nome histórico usado pelo bot. O valor fica
+        # exclusivamente no backend; nunca é reutilizado como chave pública.
+        legacy_backend_key = _env("SUPABASE_KEY")
         return cls(
             supabase_url=_env("SUPABASE_URL"),
             supabase_anon_key=_env("SUPABASE_ANON_KEY") or _env("SUPABASE_PUBLISHABLE_KEY"),
-            supabase_service_role_key=_env("SUPABASE_SERVICE_ROLE_KEY"),
+            supabase_service_role_key=_env("SUPABASE_SERVICE_ROLE_KEY") or legacy_backend_key,
             token_pepper=_env("PWA_TOKEN_PEPPER"),
             bootstrap_token=_env("PWA_BOOTSTRAP_TOKEN"),
             public_base_url=_env("PWA_PUBLIC_BASE_URL") or _env("RENDER_EXTERNAL_URL"),

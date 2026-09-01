@@ -94,7 +94,8 @@ preencher no gerenciador de segredos:
 
 - `SUPABASE_URL`: URL do projeto remoto;
 - `SUPABASE_ANON_KEY` ou `SUPABASE_PUBLISHABLE_KEY`: somente chave publicável;
-- `SUPABASE_SERVICE_ROLE_KEY`: somente no backend;
+- `SUPABASE_SERVICE_ROLE_KEY`: somente no backend; se ausente, o código aceita
+  `SUPABASE_KEY`, que é o nome histórico da credencial já usada pelo bot;
 - `PWA_TOKEN_PEPPER`: segredo longo e aleatório;
 - `PWA_BOOTSTRAP_TOKEN`: token temporário para o primeiro administrador;
 - `PWA_PUBLIC_BASE_URL`: URL HTTPS real do serviço;
@@ -109,9 +110,10 @@ preencher no gerenciador de segredos:
   navegador.
 
 O build Node não precisa receber chave do Supabase: a PWA obtém a configuração
-publicável por `GET /api/v1/config` na mesma origem. O primeiro bootstrap ainda
-exige um e-mail real escolhido pelo operador; nenhum usuário Auth foi criado
-remotamente nesta etapa.
+publicável por `GET /api/v1/config` na mesma origem. A credencial histórica
+`SUPABASE_KEY` nunca é usada como chave pública; é consumida somente pelo
+backend. O primeiro bootstrap ainda exige um e-mail real escolhido pelo
+operador; nenhum usuário Auth foi criado remotamente nesta etapa.
 
 ## Gates ainda abertos
 
